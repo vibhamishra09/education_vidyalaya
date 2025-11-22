@@ -7,7 +7,6 @@ import { Navigation } from "@/components/layout/navigation";
 import { HeroSection } from "@/components/sections/hero";
 import { StudyRoomCard } from "@/components/cards/study-room-card";
 import { DebateRoomCard } from "@/components/cards/debate-room-card";
-import { FloatingActionButtons } from "@/components/ui/floating-action-buttons";
 import { Footer } from "@/components/layout/footer";
 import { FadeIn } from "@/components/ui/fade-in";
 import { Button } from "@/components/ui/button";
@@ -182,7 +181,6 @@ export default function Home() {
       </main>
 
       <Footer />
-      <FloatingActionButtons />
     </div>
   );
 }
