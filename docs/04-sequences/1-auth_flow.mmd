@@ -1,0 +1,60 @@
+sequenceDiagram
+    participant User
+    participant Frontend
+    participant Clerk
+    participant Backend
+    participant DB
+
+    Note over User,DB: Sign Up Flow
+    
+    User->>Frontend: Click "Sign Up"
+    Frontend->>Clerk: Redirect to Clerk sign-up
+    User->>Clerk: Enter email/password or OAuth
+    Clerk->>Clerk: Create user account
+    Clerk->>Frontend: Return to app with session token
+    Frontend->>Backend: POST /api/webhooks/clerk<br/>(user.created event)
+    Backend->>Backend: Verify webhook signature
+    Backend->>DB: Create user record<br/>(clerkId, email, name, coins: 100)
+    DB-->>Backend: User created
+    Backend-->>Frontend: 200 OK
+    Frontend->>Frontend: Store Clerk session token
+    Frontend->>Frontend: Redirect to /onboarding
+    
+    Note over User,DB: Sign In Flow
+    
+    User->>Frontend: Click "Sign In"
+    Frontend->>Clerk: Redirect to Clerk sign-in
+    User->>Clerk: Enter credentials
+    Clerk->>Clerk: Verify credentials
+    Clerk->>Frontend: Return to app with session token
+    Frontend->>Frontend: Store Clerk session token
+    Frontend->>Frontend: Redirect to /dashboard<br/>(or previous page)
+    
+    Note over User,DB: Authenticated Request Flow
+    
+    User->>Frontend: Perform action (e.g., request session)
+    Frontend->>Frontend: Get Clerk session token
+    Frontend->>Backend: HTTP Request<br/>Authorization: Bearer <token>
+    Backend->>Clerk: Verify JWT token
+    Clerk-->>Backend: Token valid, user info
+    Backend->>Backend: Extract userId from token
+    Backend->>DB: Query/Update data
+    DB-->>Backend: Data response
+    Backend-->>Frontend: 200 OK with data
+    Frontend-->>User: Display result
+    
+    Note over User,DB: Token Expiration Flow
+    
+    User->>Frontend: Perform action
+    Frontend->>Backend: HTTP Request with expired token
+    Backend->>Clerk: Verify JWT token
+    Clerk-->>Backend: Token expired/invalid
+    Backend-->>Frontend: 401 Unauthorized
+    Frontend->>Clerk: Refresh token or redirect to sign-in
+    Clerk->>Frontend: New session token
+    Frontend->>Backend: Retry request with new token
+    Backend->>DB: Process request
+    DB-->>Backend: Data response
+    Backend-->>Frontend: 200 OK
+    Frontend-->>User: Display result
+

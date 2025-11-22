@@ -1,0 +1,464 @@
+# TODO: Create it programmatically using the code in the backend folder.
+openapi: 3.0.0
+info:
+  title: Webyalaya API
+  description: Peer-to-peer learning platform API
+  version: 1.0.0
+  contact:
+    name: Webyalaya Support
+    email: support@webyalaya.com
+
+servers:
+  - url: http://localhost:3001/api
+    description: Development server
+  - url: https://api.webyalaya.com/api
+    description: Production server
+
+tags:
+  - name: Authentication
+    description: Authentication and user management
+  - name: Skills
+    description: Skills management
+  - name: Study Rooms
+    description: Study room management
+  - name: Peer Sessions
+    description: Peer session management
+  - name: Reviews
+    description: Review and rating system
+  - name: Notifications
+    description: Notification management
+  - name: Browse
+    description: Browse and search
+  - name: Dashboard
+    description: Dashboard data
+
+security:
+  - bearerAuth: []
+
+paths:
+  /users/me:
+    get:
+      tags: [Authentication]
+      summary: Get current user
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current user data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    
+    patch:
+      tags: [Authentication]
+      summary: Update current user
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserDto'
+      responses:
+        '200':
+          description: Updated user data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /users/{userId}:
+    get:
+      tags: [Authentication]
+      summary: Get public user profile
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /peer-sessions:
+    get:
+      tags: [Peer Sessions]
+      summary: Get peer sessions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [PENDING, UPCOMING, ONGOING, DONE, CANCELLED]
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: List of peer sessions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PeerSession'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    
+    post:
+      tags: [Peer Sessions]
+      summary: Request peer session
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePeerSessionDto'
+      responses:
+        '201':
+          description: Session created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeerSession'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /peer-sessions/{sessionId}:
+    get:
+      tags: [Peer Sessions]
+      summary: Get peer session details
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Session details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeerSession'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /study-rooms:
+    get:
+      tags: [Study Rooms]
+      summary: List study rooms
+      parameters:
+        - name: skillIds
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [UPCOMING, ONGOING, DONE, CANCELLED]
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: List of study rooms
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StudyRoom'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+    
+    post:
+      tags: [Study Rooms]
+      summary: Create study room
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateStudyRoomDto'
+      responses:
+        '201':
+          description: Room created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudyRoom'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /dashboard:
+    get:
+      tags: [Dashboard]
+      summary: Get dashboard data
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: include
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Dashboard data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardData'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        avatar:
+          type: string
+          nullable: true
+        bio:
+          type: string
+          nullable: true
+        coins:
+          type: string
+        onboarded:
+          type: boolean
+
+    UpdateUserDto:
+      type: object
+      properties:
+        name:
+          type: string
+        bio:
+          type: string
+          nullable: true
+        avatar:
+          type: string
+          nullable: true
+        location:
+          type: string
+          nullable: true
+        school:
+          type: string
+          nullable: true
+
+    PeerSession:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        sessionStatus:
+          type: string
+          enum: [PENDING, UPCOMING, ONGOING, DONE, CANCELLED]
+        date:
+          type: string
+          format: date-time
+        duration:
+          type: integer
+
+    CreatePeerSessionDto:
+      type: object
+      required:
+        - title
+        - requestedToId
+        - date
+        - duration
+        - skillIds
+      properties:
+        title:
+          type: string
+          minLength: 3
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 500
+        requestedToId:
+          type: string
+        date:
+          type: string
+          format: date-time
+        duration:
+          type: integer
+          minimum: 15
+          maximum: 480
+        skillIds:
+          type: array
+          items:
+            type: string
+          minItems: 1
+
+    StudyRoom:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        sessionStatus:
+          type: string
+        date:
+          type: string
+          format: date-time
+        maxParticipants:
+          type: integer
+
+    CreateStudyRoomDto:
+      type: object
+      required:
+        - title
+        - date
+        - duration
+        - maxParticipants
+        - skillIds
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        date:
+          type: string
+          format: date-time
+        duration:
+          type: integer
+        maxParticipants:
+          type: integer
+        joiningFee:
+          type: string
+        skillIds:
+          type: array
+          items:
+            type: string
+
+    DashboardData:
+      type: object
+      properties:
+        metrics:
+          type: object
+        pendingRequests:
+          type: array
+        upcomingSessions:
+          type: array
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        totalPages:
+          type: integer
+
+    Error:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+        field:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+

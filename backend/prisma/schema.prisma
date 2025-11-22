@@ -1,0 +1,261 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                    String                 @id @default(cuid())
+  name                  String
+  username              String?                @unique
+  email                 String                 @unique
+  avatar                String?
+  bio                   String?
+  location              String?
+  school                String?
+  coins                 Decimal                @db.Decimal(36, 16) @default(0)
+  wallet                String?                // Hedera wallet address
+  hourlyRate            Decimal?               @db.Decimal(36, 16)
+  clerkId               String                 @unique
+  createdAt             DateTime               @default(now())
+  onboarded             Boolean                @default(false)
+  updatedAt             DateTime               @updatedAt
+  metrics               Metrics?
+  notifications         Notification[]
+  pushSubscriptions     PushSubscription[]
+  paymentsMade          Payment[]              @relation("PaymentsMade")
+  paymentsReceived      Payment[]              @relation("PaymentsReceived")
+  peerSessionsRequested PeerSession[]          @relation("RequestedBy")
+  peerSessionsReceived  PeerSession[]          @relation("RequestedTo")
+  reviewsReceived       Review[]               @relation("ReviewsReceived")
+  reviewsWritten        Review[]               @relation("ReviewsWritten")
+  studyRooms            StudyRoom[]            @relation("UserOwnsStudyRooms")
+  participating         StudyRoomParticipant[]
+  userSkills            UserSkill[]
+  channelMemberships ChannelMember[]
+  messagesSent       Message[]
+}
+
+model StudyRoom {
+  id              String                 @id @default(cuid())
+  title           String
+  description     String?
+  sessionStatus   SessionStatus
+  date            DateTime
+  duration        Int
+  maxParticipants Int
+  createdById     String
+  joiningFee      Decimal                @db.Decimal(36, 16) @default(0)
+  reviewReminded  Boolean                @default(false)
+  reminder24hSent Boolean                @default(false)
+  reminder1hSent  Boolean                @default(false)
+  reminder5mSent  Boolean                @default(false)
+  gmeetLink       String?
+  payments        Payment[]              @relation("StudyRoomPayments")
+  reviews         Review[]               @relation("StudyRoomReviews")
+  notifications   Notification[]
+  createdBy       User                   @relation("UserOwnsStudyRooms", fields: [createdById], references: [id])
+  learners        StudyRoomParticipant[]
+  skills          StudyRoomSkill[]
+}
+
+model PeerSession {
+  id            String             @id @default(cuid())
+  title         String
+  description   String?
+  sessionStatus SessionStatus
+  date          DateTime
+  duration      Int
+  requestedById String
+  requestedToId String
+  reviewReminded Boolean           @default(false)
+  reminder24hSent Boolean          @default(false)
+  reminder1hSent  Boolean          @default(false)
+  reminder5mSent  Boolean          @default(false)
+  gmeetLink     String?
+  payments      Payment[]          @relation("PeerSessionPayments")
+  notifications Notification[]
+  requestedBy   User               @relation("RequestedBy", fields: [requestedById], references: [id])
+  requestedTo   User               @relation("RequestedTo", fields: [requestedToId], references: [id])
+  skills        PeerSessionSkill[]
+  reviews       Review[]           @relation("PeerSessionReviews")
+}
+
+model Metrics {
+  id          String  @id @default(cuid())
+  name        String
+  value       Float
+  description String?
+  userId      String  @unique
+  user        User    @relation(fields: [userId], references: [id])
+}
+
+model Payment {
+  id             String        @id @default(cuid())
+  paymentStatus  PaymentStatus
+  madeById       String
+  receivedById   String
+  studyRoomId    String?
+  peerSessionId  String?
+  amountMade     Decimal                @db.Decimal(36, 16)
+  amountReceived Decimal?               @db.Decimal(36, 16)
+  amountRefunded Decimal?               @db.Decimal(36, 16)
+  createdAt      DateTime               @default(now())
+  transactionHash String?
+  network         String?
+  madeBy         User          @relation("PaymentsMade", fields: [madeById], references: [id])
+  peerSession    PeerSession?  @relation("PeerSessionPayments", fields: [peerSessionId], references: [id], map: "Payment_peerSessionId_fkey1")
+  receivedBy     User          @relation("PaymentsReceived", fields: [receivedById], references: [id])
+  studyRoom      StudyRoom?    @relation("StudyRoomPayments", fields: [studyRoomId], references: [id], map: "Payment_studyRoomId_fkey1")
+}
+
+model Review {
+  id            String       @id @default(cuid())
+  rating        Int
+  review        String
+  reviewerId    String
+  revieweeId    String
+  peerSessionId String?
+  studyRoomId   String?
+  peerSession   PeerSession? @relation("PeerSessionReviews", fields: [peerSessionId], references: [id])
+  reviewee      User         @relation("ReviewsReceived", fields: [revieweeId], references: [id])
+  reviewer      User         @relation("ReviewsWritten", fields: [reviewerId], references: [id])
+  studyRoom     StudyRoom?   @relation("StudyRoomReviews", fields: [studyRoomId], references: [id])
+}
+
+model Skill {
+  id           String             @id @default(cuid())
+  name         String             @unique
+  description  String?
+  peerSessions PeerSessionSkill[]
+  studyRooms   StudyRoomSkill[]
+  userSkills   UserSkill[]
+}
+
+model UserSkill {
+  id      String @id @default(cuid())
+  type    String
+  userId  String
+  skillId String
+  skill   Skill  @relation(fields: [skillId], references: [id])
+  user    User   @relation(fields: [userId], references: [id])
+
+  @@unique([userId, skillId, type])
+}
+
+model StudyRoomSkill {
+  id          String    @id @default(cuid())
+  studyRoomId String
+  skillId     String
+  skill       Skill     @relation(fields: [skillId], references: [id])
+  studyRoom   StudyRoom @relation(fields: [studyRoomId], references: [id])
+
+  @@unique([studyRoomId, skillId])
+}
+
+model PeerSessionSkill {
+  id            String      @id @default(cuid())
+  peerSessionId String
+  skillId       String
+  peerSession   PeerSession @relation(fields: [peerSessionId], references: [id])
+  skill         Skill       @relation(fields: [skillId], references: [id])
+
+  @@unique([peerSessionId, skillId])
+}
+
+model StudyRoomParticipant {
+  id          String    @id @default(cuid())
+  userId      String
+  studyRoomId String
+  studyRoom   StudyRoom @relation(fields: [studyRoomId], references: [id])
+  user        User      @relation(fields: [userId], references: [id])
+
+  @@unique([userId, studyRoomId])
+}
+
+model Notification {
+  id            String    @id @default(cuid())
+  notifType     NotifType
+  message       String
+  createdAt     DateTime
+  viewed        Boolean   @default(false)
+  userId        String
+  user          User      @relation(fields: [userId], references: [id])
+  // Metadata for notification actions
+  actionType    String?   // e.g., "SESSION_REQUEST", "SESSION_REMINDER", "REVIEW_REMINDER"
+  actionData    String?   // JSON string with sessionId, sessionType, etc.
+  peerSessionId String?
+  studyRoomId   String?
+  peerSession   PeerSession? @relation(fields: [peerSessionId], references: [id])
+  studyRoom     StudyRoom?   @relation(fields: [studyRoomId], references: [id])
+}
+
+model PushSubscription {
+  id           String   @id @default(cuid())
+  userId       String
+  endpoint     String
+  p256dh       String
+  auth         String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, endpoint])
+}
+
+enum SessionStatus {
+  UPCOMING
+  ONGOING
+  CANCELLED
+  DONE
+  PENDING
+}
+
+enum PaymentStatus {
+  ESCROW
+  REFUNDED
+  RECEIVED
+}
+
+enum NotifType {
+  URGENT
+  NORMAL
+}
+
+model Channel {
+  id        String          @id @default(cuid())
+  name      String
+  isDirect  Boolean         @default(false)
+  members   ChannelMember[]
+  messages  Message[]
+  createdAt DateTime        @default(now())
+  externalType String?
+  externalId   String?
+
+  @@unique([externalType, externalId])
+}
+
+model ChannelMember {
+  id        String @id @default(cuid())
+  channelId String
+  userId    String
+
+  channel   Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, userId])
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  channelId String
+  senderId  String
+  content   String
+  createdAt DateTime @default(now())
+
+  channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  sender    User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+}

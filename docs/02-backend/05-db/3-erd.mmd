@@ -1,0 +1,194 @@
+erDiagram
+    USER ||--o{ USER_SKILL : "has"
+    USER ||--o{ STUDY_ROOM : "creates"
+    USER ||--o{ PEER_SESSION : "requests"
+    USER ||--o{ PEER_SESSION : "receives"
+    USER ||--o{ STUDY_ROOM_PARTICIPANT : "participates"
+    USER ||--o{ PAYMENT : "makes"
+    USER ||--o{ PAYMENT : "receives"
+    USER ||--o{ REVIEW : "writes"
+    USER ||--o{ REVIEW : "receives"
+    USER ||--o{ NOTIFICATION : "receives"
+    USER ||--o{ PUSH_SUBSCRIPTION : "has"
+    USER ||--|| METRICS : "has"
+    USER ||--o{ CHANNEL_MEMBER : "is member"
+    USER ||--o{ MESSAGE : "sends"
+    
+    SKILL ||--o{ USER_SKILL : "linked to"
+    SKILL ||--o{ STUDY_ROOM_SKILL : "linked to"
+    SKILL ||--o{ PEER_SESSION_SKILL : "linked to"
+    
+    STUDY_ROOM ||--o{ STUDY_ROOM_PARTICIPANT : "has"
+    STUDY_ROOM ||--o{ STUDY_ROOM_SKILL : "has"
+    STUDY_ROOM ||--o{ PAYMENT : "has"
+    STUDY_ROOM ||--o{ REVIEW : "has"
+    STUDY_ROOM ||--o{ NOTIFICATION : "has"
+    
+    PEER_SESSION ||--o{ PEER_SESSION_SKILL : "has"
+    PEER_SESSION ||--o{ PAYMENT : "has"
+    PEER_SESSION ||--o{ REVIEW : "has"
+    PEER_SESSION ||--o{ NOTIFICATION : "has"
+    
+    CHANNEL ||--o{ CHANNEL_MEMBER : "has"
+    CHANNEL ||--o{ MESSAGE : "has"
+    
+    USER {
+        string id PK
+        string name
+        string username UK "nullable"
+        string email UK
+        string avatar "nullable"
+        string bio "nullable"
+        string location "nullable"
+        string school "nullable"
+        decimal coins
+        string wallet "nullable"
+        decimal hourlyRate "nullable"
+        string clerkId UK
+        boolean onboarded
+        datetime createdAt
+        datetime updatedAt
+    }
+    
+    SKILL {
+        string id PK
+        string name UK
+        string description "nullable"
+    }
+    
+    USER_SKILL {
+        string id PK
+        string type
+        string userId FK
+        string skillId FK
+    }
+    
+    STUDY_ROOM {
+        string id PK
+        string title
+        string description "nullable"
+        enum sessionStatus
+        datetime date
+        int duration
+        int maxParticipants
+        string createdById FK
+        decimal joiningFee
+        boolean reviewReminded
+        boolean reminder24hSent
+        boolean reminder1hSent
+        boolean reminder5mSent
+        string gmeetLink "nullable"
+    }
+    
+    STUDY_ROOM_PARTICIPANT {
+        string id PK
+        string userId FK
+        string studyRoomId FK
+    }
+    
+    STUDY_ROOM_SKILL {
+        string id PK
+        string studyRoomId FK
+        string skillId FK
+    }
+    
+    PEER_SESSION {
+        string id PK
+        string title
+        string description "nullable"
+        enum sessionStatus
+        datetime date
+        int duration
+        string requestedById FK
+        string requestedToId FK
+        boolean reviewReminded
+        boolean reminder24hSent
+        boolean reminder1hSent
+        boolean reminder5mSent
+        string gmeetLink "nullable"
+    }
+    
+    PEER_SESSION_SKILL {
+        string id PK
+        string peerSessionId FK
+        string skillId FK
+    }
+    
+    PAYMENT {
+        string id PK
+        enum paymentStatus
+        string madeById FK
+        string receivedById FK
+        string studyRoomId FK "nullable"
+        string peerSessionId FK "nullable"
+        decimal amountMade
+        decimal amountReceived "nullable"
+        decimal amountRefunded "nullable"
+        datetime createdAt
+        string transactionHash "nullable"
+        string network "nullable"
+    }
+    
+    REVIEW {
+        string id PK
+        int rating
+        string review
+        string reviewerId FK
+        string revieweeId FK
+        string peerSessionId FK "nullable"
+        string studyRoomId FK "nullable"
+    }
+    
+    NOTIFICATION {
+        string id PK
+        enum notifType
+        string message
+        datetime createdAt
+        boolean viewed
+        string userId FK
+        string actionType "nullable"
+        string actionData "nullable"
+        string peerSessionId FK "nullable"
+        string studyRoomId FK "nullable"
+    }
+    
+    PUSH_SUBSCRIPTION {
+        string id PK
+        string userId FK
+        string endpoint
+        string p256dh
+        string auth
+        datetime createdAt
+        datetime updatedAt
+    }
+    
+    METRICS {
+        string id PK
+        string name
+        float value
+        string description "nullable"
+        string userId FK
+    }
+    
+    CHANNEL {
+        string id PK
+        string name
+        boolean isDirect
+        datetime createdAt
+        string externalType "nullable"
+        string externalId "nullable"
+    }
+    
+    CHANNEL_MEMBER {
+        string id PK
+        string channelId FK
+        string userId FK
+    }
+    
+    MESSAGE {
+        string id PK
+        string channelId FK
+        string senderId FK
+        string content
+        datetime createdAt
+    }

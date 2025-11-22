@@ -1,0 +1,129 @@
+sequenceDiagram
+    participant Learner
+    participant Teacher
+    participant Frontend
+    participant Backend
+    participant DB
+    participant LiveKit
+    participant Notifications
+
+    Note over Learner,Notifications: Session Request Flow
+    
+    Learner->>Frontend: Browse peers
+    Frontend->>Backend: GET /api/browse?tab=peers
+    Backend->>DB: Query peers with filters
+    DB-->>Backend: Peers list
+    Backend-->>Frontend: Peers data
+    Frontend-->>Learner: Display peers
+    
+    Learner->>Frontend: Click "Request Session" on peer
+    Frontend->>Frontend: Navigate to /request-session/[userId]
+    Learner->>Frontend: Fill session request form<br/>(title, date, duration, skills)
+    Learner->>Frontend: Submit form
+    Frontend->>Backend: POST /api/peer-sessions<br/>(with JWT token)
+    Backend->>Backend: Verify JWT token
+    Backend->>DB: Check learner's coin balance
+    DB-->>Backend: Balance sufficient
+    Backend->>DB: Create PeerSession<br/>(status: PENDING)
+    Backend->>DB: Create Payment<br/>(status: ESCROW)
+    Backend->>DB: Deduct coins from learner
+    DB-->>Backend: Session and payment created
+    Backend->>DB: Create Notification<br/>(for teacher)
+    DB-->>Backend: Notification created
+    Backend->>Notifications: Send push notification<br/>(if subscribed)
+    Backend-->>Frontend: 201 Created (session data)
+    Frontend-->>Learner: Success notification<br/>Redirect to dashboard
+    
+    Note over Learner,Notifications: Session Acceptance Flow
+    
+    Teacher->>Frontend: View dashboard
+    Frontend->>Backend: GET /api/dashboard<br/>(with JWT token)
+    Backend->>DB: Get pending requests
+    DB-->>Backend: Pending sessions
+    Backend-->>Frontend: Dashboard data
+    Frontend-->>Teacher: Display pending request
+    
+    Teacher->>Frontend: Click "Accept" on session request
+    Frontend->>Backend: PATCH /api/peer-sessions/:id/status<br/>(status: UPCOMING)
+    Backend->>Backend: Verify JWT token
+    Backend->>DB: Update session status to UPCOMING
+    Backend->>DB: Confirm payment (ESCROW confirmed)
+    DB-->>Backend: Session updated
+    Backend->>DB: Create Notification<br/>(for learner: session accepted)
+    DB-->>Backend: Notification created
+    Backend->>Notifications: Send push notification
+    Backend-->>Frontend: 200 OK (updated session)
+    Frontend-->>Teacher: Success notification
+    
+    Note over Learner,Notifications: Session Reminder Flow
+    
+    Backend->>Backend: Scheduled job: Check upcoming sessions<br/>(24h, 1h, 5m before)
+    Backend->>DB: Query sessions starting soon
+    DB-->>Backend: Upcoming sessions list
+    Backend->>DB: Create Notifications<br/>(for both participants)
+    Backend->>Notifications: Send push notifications<br/>(24h, 1h, 5m reminders)
+    
+    Note over Learner,Notifications: Join Live Session Flow
+    
+    Learner->>Frontend: View session details page
+    Frontend->>Backend: GET /api/peer-sessions/:id<br/>(with JWT token)
+    Backend->>DB: Get session details
+    DB-->>Backend: Session data
+    Backend-->>Frontend: Session data
+    Frontend-->>Learner: Display session details
+    
+    Learner->>Frontend: Click "Join Session"<br/>(at session time)
+    Frontend->>Backend: POST /api/livekit/token<br/>(room name, user permissions)
+    Backend->>Backend: Verify JWT token
+    Backend->>LiveKit: Generate access token
+    LiveKit-->>Backend: LiveKit token
+    Backend-->>Frontend: LiveKit token
+    Frontend->>LiveKit: Initialize LiveKit client<br/>with token
+    Frontend->>Frontend: Request camera/mic permissions
+    Learner->>Frontend: Grant permissions
+    Frontend->>LiveKit: Join room
+    LiveKit-->>Frontend: Connected to room
+    
+    Teacher->>Frontend: Click "Join Session"
+    Frontend->>Backend: POST /api/livekit/token
+    Backend->>LiveKit: Generate access token
+    LiveKit-->>Backend: LiveKit token
+    Backend-->>Frontend: LiveKit token
+    Frontend->>LiveKit: Join room
+    LiveKit-->>Frontend: Connected to room
+    LiveKit-->>Learner: Teacher joined notification
+    LiveKit-->>Teacher: Learner joined notification
+    
+    Note over Learner,Notifications: Session Completion Flow
+    
+    Learner->>Frontend: Click "Mark as Complete"<br/>(after session)
+    Frontend->>Backend: PATCH /api/peer-sessions/:id/status<br/>(status: DONE)
+    Backend->>Backend: Verify JWT token
+    Backend->>DB: Update session status to DONE
+    Backend->>DB: Update Payment<br/>(status: RECEIVED)
+    Backend->>DB: Transfer coins to teacher
+    DB-->>Backend: Payment released
+    Backend->>DB: Create Notifications<br/>(review reminders for both)
+    Backend->>Notifications: Send push notifications
+    Backend-->>Frontend: 200 OK
+    Frontend-->>Learner: Success notification
+    
+    Note over Learner,Notifications: Review Submission Flow
+    
+    Learner->>Frontend: Click "Submit Review"
+    Frontend->>Frontend: Navigate to /submit-review/[sessionId]
+    Learner->>Frontend: Fill review form<br/>(rating: 5, review text)
+    Learner->>Frontend: Submit review
+    Frontend->>Backend: POST /api/reviews<br/>(rating, review, revieweeId, sessionId)
+    Backend->>Backend: Verify JWT token
+    Backend->>DB: Check if already reviewed
+    DB-->>Backend: Not reviewed yet
+    Backend->>DB: Create Review
+    Backend->>DB: Calculate average rating<br/>for reviewee
+    Backend->>DB: Update reviewee's metrics
+    DB-->>Backend: Review created, rating updated
+    Backend->>DB: Create Notification<br/>(for reviewee: new review)
+    Backend->>Notifications: Send push notification
+    Backend-->>Frontend: 201 Created
+    Frontend-->>Learner: Success notification<br/>Redirect to dashboard
+
