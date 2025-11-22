@@ -5,6 +5,7 @@ import { QueryProvider } from "@/providers/query-provider";
 import { ToastProvider } from "@/contexts/toast-context";
 import { NotificationProvider } from "@/contexts/notification-context";
 import { BottomNav } from "@/components/layout/bottom-nav";
+import { FloatingActionButtons } from "@/components/ui/floating-action-buttons";
 import { PushNotificationPrompt } from "@/components/notifications/push-notification-prompt";
 import { HiddenSignInButton } from "@/components/auth/hidden-sign-in-button";
 import "./globals.css";
@@ -38,6 +39,7 @@ export default function RootLayout({
               <ToastProvider>
                 {children}
                 <BottomNav />
+                <FloatingActionButtons />
                 <PushNotificationPrompt />
                 <HiddenSignInButton />
               </ToastProvider>
