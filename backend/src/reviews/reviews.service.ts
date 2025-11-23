@@ -177,7 +177,7 @@ export class ReviewsService {
 
     // Check if this review completes the session (both parties have reviewed)
     // and release escrow payment if applicable
-    await this.checkAndReleaseEscrowPayment(createDto.sessionId, createDto.sessionType);
+    await this.checkAndReleaseEscrowPayment(createDto.sessionId, createDto.sessionType, user.id);
 
     return {
       id: review.id,
@@ -235,7 +235,7 @@ export class ReviewsService {
     };
   }
 
-  private async checkAndReleaseEscrowPayment(sessionId: string, sessionType: 'studyRoom' | 'peerSession') {
+  private async checkAndReleaseEscrowPayment(sessionId: string, sessionType: 'studyRoom' | 'peerSession', reviewerId?: string) {
     if (sessionType === 'peerSession') {
       // For peer sessions, check if both parties have reviewed
       const peerSession = await this.prisma.peerSession.findUnique({
@@ -287,7 +287,7 @@ export class ReviewsService {
         }
       }
     } else if (sessionType === 'studyRoom') {
-      // For study rooms, check if all participants have reviewed
+      // For study rooms, release payment when a learner reviews the creator
       const studyRoom = await this.prisma.studyRoom.findUnique({
         where: { id: sessionId },
         include: {
@@ -299,45 +299,37 @@ export class ReviewsService {
 
       if (!studyRoom) return;
 
-      // Get all participant IDs (creator + learners)
-      const allParticipantIds = [
-        studyRoom.createdById,
-        ...studyRoom.learners.map((l) => l.userId),
-      ];
+      // If reviewerId is provided and it's a learner (not the creator), release their specific payment
+      if (reviewerId && reviewerId !== studyRoom.createdById) {
+        // Find the payment made by this learner
+        const learnerPayment = studyRoom.payments.find(
+          (p) => p.madeById === reviewerId && p.paymentStatus === PaymentStatus.ESCROW
+        );
 
-      // Check if all participants have reviewed
-      const reviewedParticipantIds = studyRoom.reviews.map((r) => r.reviewerId);
-      const allReviewed = allParticipantIds.every((id) =>
-        reviewedParticipantIds.includes(id)
-      );
+        if (learnerPayment) {
+          // Release this learner's payment
+          await this.prisma.payment.update({
+            where: { id: learnerPayment.id },
+            data: { paymentStatus: PaymentStatus.RECEIVED },
+          });
 
-      // If all have reviewed, release escrow payments
-      if (allReviewed) {
-        for (const payment of studyRoom.payments) {
-          if (payment.paymentStatus === PaymentStatus.ESCROW) {
-            await this.prisma.payment.update({
-              where: { id: payment.id },
-              data: { paymentStatus: PaymentStatus.RECEIVED },
-            });
+          await this.prisma.user.update({
+            where: { id: studyRoom.createdById },
+            data: { coins: { increment: learnerPayment.amountReceived || 0 } },
+          });
 
-            await this.prisma.user.update({
-              where: { id: studyRoom.createdById },
-              data: { coins: { increment: payment.amountReceived || 0 } },
-            });
-
-            // Notify the creator that payment has been released
-            await this.notificationsService.createAndPushNotification(
-              studyRoom.createdById,
-              `Payment of ${Number(payment.amountReceived).toFixed(2)} coins has been released from escrow for your study room "${studyRoom.title}"`,
-              'Payment Released',
-              NotifType.NORMAL,
-              {
-                actionType: 'PAYMENT_RELEASED',
-                studyRoomId: sessionId,
-                actionData: { sessionId, sessionType: 'studyRoom' },
-              },
-            );
-          }
+          // Notify the creator that payment has been released
+          await this.notificationsService.createAndPushNotification(
+            studyRoom.createdById,
+            `Payment of ${Number(learnerPayment.amountReceived).toFixed(2)} coins has been released from escrow for your study room "${studyRoom.title}"`,
+            'Payment Released',
+            NotifType.NORMAL,
+            {
+              actionType: 'PAYMENT_RELEASED',
+              studyRoomId: sessionId,
+              actionData: { sessionId, sessionType: 'studyRoom' },
+            },
+          );
         }
       }
     }
