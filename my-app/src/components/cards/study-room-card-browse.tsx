@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Users, Play, Clock, Calendar, Coins } from "lucide-react";
 import { motion } from "framer-motion";
 import { StudyRoomCard, SessionStatus } from "@/types/api.types";
+import { formatDate, getRelativeTimeString } from "@/lib/utils/date-time";
 
 interface StudyRoomCardBrowseProps {
   studyRoom: StudyRoomCard;
@@ -18,15 +19,8 @@ export function StudyRoomCardBrowse({ studyRoom }: StudyRoomCardBrowseProps) {
   const isUpcoming = studyRoom.sessionStatus === SessionStatus.UPCOMING;
   const isDone = studyRoom.sessionStatus === SessionStatus.DONE;
 
-  const sessionDate = new Date(studyRoom.date);
-  const formattedDate = sessionDate.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-  });
-  const formattedTime = sessionDate.toLocaleTimeString("en-US", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  // Get timezone-aware formatted time
+  const formattedDateTime = getRelativeTimeString(studyRoom.date);
 
   return (
     <Link href={`/studyroom/${studyRoom.id}`}>
@@ -77,15 +71,9 @@ export function StudyRoomCardBrowse({ studyRoom }: StudyRoomCardBrowseProps) {
           <CardContent className="flex-1 flex flex-col justify-end space-y-4">
             {/* Date and Time */}
             {!isDone && (
-              <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                <div className="flex items-center gap-1">
-                  <Calendar className="h-4 w-4" />
-                  <span>{formattedDate}</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Clock className="h-4 w-4" />
-                  <span>{formattedTime}</span>
-                </div>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Calendar className="h-4 w-4" />
+                <span className="font-medium">{formattedDateTime}</span>
               </div>
             )}
 

@@ -4,6 +4,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card, CardContent } from '@/components/ui/card';
 import { Calendar, Clock } from 'lucide-react';
 import type { UpcomingSession } from '@/types/api.types';
+import { getRelativeTimeString } from '@/lib/utils/date-time';
 
 interface UpcomingSessionCardProps {
   session: UpcomingSession;
@@ -11,22 +12,9 @@ interface UpcomingSessionCardProps {
 
 export function UpcomingSessionCardComponent({ session }: UpcomingSessionCardProps) {
   const { title, date, duration, peer, id } = session;
-  
-  // Calculate day label and time
-  const sessionDate = new Date(date);
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const sessionDay = new Date(sessionDate.getFullYear(), sessionDate.getMonth(), sessionDate.getDate());
-  
-  const dayLabel = sessionDay.getTime() === today.getTime() 
-    ? 'Today' 
-    : sessionDay.getTime() === tomorrow.getTime() 
-    ? 'Tomorrow' 
-    : sessionDate.toLocaleDateString();
-    
-  const timeOfDay = sessionDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  // Get timezone-aware formatted time
+  const sessionTime = getRelativeTimeString(date);
   
   const href = `/sessions/${id}`;
 
@@ -41,11 +29,7 @@ export function UpcomingSessionCardComponent({ session }: UpcomingSessionCardPro
               <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
                 <div className="flex items-center gap-1">
                   <Calendar className="h-4 w-4" />
-                  <span>{dayLabel}</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Clock className="h-4 w-4" />
-                  <span>{timeOfDay}</span>
+                  <span className="font-medium">{sessionTime}</span>
                 </div>
                 <div className="flex items-center gap-1">
                   <Clock className="h-4 w-4" />
