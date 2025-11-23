@@ -72,7 +72,7 @@ export default function RequestSessionPage({
           usersApi.getPublicUserProfile(userId),
           usersApi.getCurrentUser()
         ]);
-        
+
         setPeer(peerData);
         setCurrentUser(currentUserData.user);
       } catch (err) {
@@ -274,7 +274,7 @@ export default function RequestSessionPage({
 
                   {/* Skills */}
                   <div className="space-y-2">
-                    <Label>Topics / Skills *</Label>
+                    <Label>Topics / Skills (Optional)</Label>
                     <div className="flex flex-wrap gap-2">
                       {peer.hasSkills?.map((skillName) => (
                         <Badge
@@ -293,7 +293,7 @@ export default function RequestSessionPage({
                     </div>
                     {formData.skills.length === 0 && (
                       <p className="text-sm text-muted-foreground">
-                        Select at least one topic
+                        Select topics (optional - if none selected, session will be categorized as Communication)
                       </p>
                     )}
                   </div>
@@ -422,7 +422,6 @@ export default function RequestSessionPage({
                       disabled={
                         isSelfRequest ||
                         submitting ||
-                        formData.skills.length === 0 ||
                         !formData.date ||
                         !formData.time ||
                         !peer?.hourlyRate ||

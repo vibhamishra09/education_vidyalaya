@@ -193,8 +193,10 @@ export class PeerSessionsService {
       },
     });
 
-    // Add skills
-    for (const skillName of requestDto.skills) {
+    // Add skills - if no skills provided, default to "Communication"
+    const skillsToAdd = requestDto.skills && requestDto.skills.length > 0 ? requestDto.skills : ['Communication'];
+
+    for (const skillName of skillsToAdd) {
       const skill = await this.prisma.skill.findUnique({
         where: { name: skillName },
       });
