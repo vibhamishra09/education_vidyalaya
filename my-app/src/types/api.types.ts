@@ -143,6 +143,7 @@ export interface RequestSessionDto {
   message?: string;
   cost: number;
   gmeetLink?: string;
+  timezone: string;
 }
 
 export interface UpdateSessionStatusDto {

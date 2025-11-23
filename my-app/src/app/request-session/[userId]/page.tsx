@@ -176,6 +176,9 @@ export default function RequestSessionPage({
       setSubmitting(true);
       setError(null);
       
+      // Get user's timezone
+      const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
       const requestData = {
         peerId: peer.id,
         skills: formData.skills,
@@ -185,6 +188,7 @@ export default function RequestSessionPage({
         message: formData.message || undefined,
         cost: calculatedCost,
         gmeetLink: formData.gmeetLink || undefined,
+        timezone: userTimezone,
       };
       
       await peerSessionsApi.requestPeerSession(requestData);

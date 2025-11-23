@@ -53,6 +53,9 @@ export class RequestSessionDto {
   @IsOptional()
   @IsString()
   gmeetLink?: string;
+
+  @IsString()
+  timezone: string;
 }
 
 export class UpdateSessionStatusDto {

@@ -12,7 +12,6 @@ import { SessionsChart } from "@/components/stats/sessions-chart";
 import { EarningsChart } from "@/components/stats/earnings-chart";
 import { AchievementShowcase } from "@/components/achievements/achievement-showcase";
 import { StreakTracker } from "@/components/profile/streak-tracker";
-import { TimezoneSelector } from "@/components/dashboard/timezone-selector";
 import { SessionList } from "@/components/dashboard/session-list";
 import { MOCK_ACHIEVEMENTS } from "@/types/achievements.types";
 import { Button } from "@/components/ui/button";
@@ -274,9 +273,6 @@ export default function DashboardPage() {
               coins={typeof currentUser?.coins === 'number' ? currentUser.coins : undefined}
               isLoading={userLoading}
             />
-
-            {/* Timezone Selector */}
-            <TimezoneSelector variant="card" />
 
             {/* Streak Tracker */}
             <StreakTracker
