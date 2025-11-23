@@ -175,7 +175,60 @@ export class PeerSessionsService {
       });
     }
 
-    const dateTime = new Date(`${requestDto.date}T${requestDto.time}`);
+    // Convert user's local time to UTC
+    // The date and time strings represent the user's local time in their timezone
+    // We need to interpret them in that timezone and convert to UTC for storage
+    const [year, month, day] = requestDto.date.split('-').map(Number);
+    const [hour, minute] = requestDto.time.split(':').map(Number);
+
+    // Create an ISO string in the user's timezone (without Z suffix)
+    // Format: YYYY-MM-DDTHH:mm:ss
+    const isoStringInUserTZ = `${requestDto.date}T${requestDto.time}:00`;
+
+    // Parse this as if it's in the user's timezone
+    // We'll use a two-step process:
+    // 1. Create a date assuming UTC
+    const utcDate = new Date(`${isoStringInUserTZ}Z`); // Z makes it parse as UTC
+
+    // 2. Get the offset between UTC and user's timezone for this specific date
+    // This accounts for DST changes
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: requestDto.timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    });
+
+    // Get what time it would be in the user's timezone if we interpret our input as UTC
+    const utcParts = formatter.formatToParts(utcDate);
+    const getPart = (type: string) => utcParts.find(p => p.type === type)?.value || '0';
+
+    const utcYear = parseInt(getPart('year'));
+    const utcMonth = parseInt(getPart('month'));
+    const utcDay = parseInt(getPart('day'));
+    const utcHour = parseInt(getPart('hour'));
+    const utcMinute = parseInt(getPart('minute'));
+
+    // Calculate the difference
+    const yearDiff = year - utcYear;
+    const monthDiff = month - utcMonth;
+    const dayDiff = day - utcDay;
+    const hourDiff = hour - utcHour;
+    const minuteDiff = minute - utcMinute;
+
+    // Apply the difference to get the correct UTC time
+    const dateTime = new Date(Date.UTC(
+      year - yearDiff,
+      month - 1 - monthDiff, // JS months are 0-indexed
+      day - dayDiff,
+      hour - hourDiff,
+      minute - minuteDiff,
+      0
+    ));
 
     // Normalize Google Meet link if provided
     const gmeetLink = requestDto.gmeetLink ? normalizeGoogleMeetLink(requestDto.gmeetLink) : null;

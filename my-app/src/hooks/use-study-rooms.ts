@@ -111,11 +111,25 @@ export function useJoinStudyRoom() {
       // Invalidate queries (marks them as stale)
       queryClient.invalidateQueries({ queryKey: studyRoomKeys.detail(studyRoomId) });
       queryClient.invalidateQueries({ queryKey: studyRoomKeys.lists() });
-      // Explicitly refetch the detail query to ensure immediate update
-      await queryClient.refetchQueries({ 
-        queryKey: studyRoomKeys.detail(studyRoomId),
-        type: 'active' 
-      });
+      // Invalidate current user to refresh coins balance
+      queryClient.invalidateQueries({ queryKey: ['users', 'current'] });
+      // Invalidate transaction history to show the new payment
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      // Explicitly refetch queries to ensure immediate update
+      await Promise.all([
+        queryClient.refetchQueries({
+          queryKey: studyRoomKeys.detail(studyRoomId),
+          type: 'active'
+        }),
+        queryClient.refetchQueries({
+          queryKey: ['users', 'current'],
+          type: 'active'
+        }),
+        queryClient.refetchQueries({
+          queryKey: ['transactions'],
+          type: 'active'
+        }),
+      ]);
     },
   });
 }

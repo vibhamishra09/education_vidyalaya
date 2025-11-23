@@ -111,15 +111,12 @@ export default function OnboardingPage() {
 
       // Reload the user's data from the Clerk API to get updated metadata
       await user.reload();
-      
-      setStep("complete");
-      
+
       // Get the redirect URL from search params or default to dashboard
       const redirectUrl = searchParams.get('redirect_url') || '/dashboard';
-      
-      setTimeout(() => {
-        router.push(redirectUrl);
-      }, 2000);
+
+      // Redirect immediately after onboarding completion
+      router.push(redirectUrl);
     } catch (error) {
       console.error("Error completing onboarding:", error);
       alert("Failed to complete onboarding. Please try again.");
