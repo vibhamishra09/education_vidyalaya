@@ -104,6 +104,7 @@ export interface CreateStudyRoomDto {
   maxParticipants: number;
   joiningFee?: number;
   gmeetLink?: string;
+  timezone: string;
 }
 
 export interface UpdateStudyRoomDto {

@@ -2,8 +2,9 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
-import { Clock, Loader2 } from 'lucide-react';
+import { Clock, Loader2, Calendar } from 'lucide-react';
 import type { PendingRequest } from '@/types/api.types';
+import { getDaysUntil, getRelativeTimeString } from '@/lib/utils/date-time';
 
 interface SessionRequestCardProps {
   request: PendingRequest;
@@ -15,15 +16,15 @@ interface SessionRequestCardProps {
 export function SessionRequestCard({ request, onAccept, onDecline, isProcessing = false }: SessionRequestCardProps) {
   const { requestedBy, skills, date, duration, title } = request;
 
-  // Calculate time remaining
-  const sessionDate = new Date(date);
-  const now = new Date();
-  const timeDiff = sessionDate.getTime() - now.getTime();
-  const days = Math.ceil(timeDiff / (1000 * 3600 * 24));
-  
-  const timeRemaining = days > 0 
+  // Calculate time remaining using timezone-aware utilities
+  const days = getDaysUntil(date);
+
+  const timeRemaining = days > 0
     ? `${days} day${days > 1 ? 's' : ''} remaining`
     : 'Session time passed';
+
+  // Get formatted date/time in user's timezone
+  const sessionTime = getRelativeTimeString(date);
 
   return (
     <Card>
@@ -43,14 +44,20 @@ export function SessionRequestCard({ request, onAccept, onDecline, isProcessing 
               ))}
             </div>
 
-            <div className="flex items-center gap-4 mt-3 text-sm text-muted-foreground">
+            <div className="flex flex-col gap-2 mt-3 text-sm text-muted-foreground">
               <div className="flex items-center gap-1">
-                <Clock className="h-4 w-4" />
-                <span>{timeRemaining}</span>
+                <Calendar className="h-4 w-4" />
+                <span className="font-medium">{sessionTime}</span>
               </div>
-              <div className="flex items-center gap-1">
-                <Clock className="h-4 w-4" />
-                <span>{duration} min</span>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-1">
+                  <Clock className="h-4 w-4" />
+                  <span>{timeRemaining}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Clock className="h-4 w-4" />
+                  <span>{duration} min</span>
+                </div>
               </div>
             </div>
           </div>

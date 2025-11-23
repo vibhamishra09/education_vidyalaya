@@ -40,6 +40,9 @@ export default function CreateStudyRoomPage() {
       setSubmitting(true);
       setError(null);
       
+      // Get user's timezone
+      const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
       const createData: CreateStudyRoomDto = {
         title: formData.title,
         description: formData.description || undefined,
@@ -50,6 +53,7 @@ export default function CreateStudyRoomPage() {
         maxParticipants: parseInt(formData.maxParticipants),
         joiningFee: parseFloat(formData.joiningFee),
         gmeetLink: formData.gmeetLink || undefined,
+        timezone: userTimezone,
       };
       
       await studyRoomsApi.createStudyRoom(createData);

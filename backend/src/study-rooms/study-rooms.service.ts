@@ -5,6 +5,7 @@ import { ChatService } from '../chat/chat.service';
 import { CreateStudyRoomDto, UpdateStudyRoomDto } from './dto/study-room.dto';
 import { SessionStatus, NotifType } from '@prisma/client';
 import { normalizeGoogleMeetLink } from '../utils/gmeet-generator';
+import { convertLocalToUTC } from '../utils/timezone';
 
 @Injectable()
 export class StudyRoomsService {
@@ -233,8 +234,9 @@ export class StudyRoomsService {
       throw new NotFoundException('User not found');
     }
 
-    // Combine date and time
-    const dateTime = new Date(`${createDto.date}T${createDto.time}`);
+    // Convert user's local time to UTC
+    // Example: 11 AM IST -> 5:30 AM UTC
+    const dateTime = convertLocalToUTC(createDto.date, createDto.time, createDto.timezone);
 
     // Normalize Google Meet link if provided
     const gmeetLink = createDto.gmeetLink ? normalizeGoogleMeetLink(createDto.gmeetLink) : null;
