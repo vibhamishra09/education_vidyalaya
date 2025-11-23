@@ -3,7 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ChatService } from '../chat/chat.service';
 import { CreateStudyRoomDto, UpdateStudyRoomDto } from './dto/study-room.dto';
-import { SessionStatus, NotifType } from '@prisma/client';
+import { SessionStatus, NotifType, PaymentStatus } from '@prisma/client';
 import { normalizeGoogleMeetLink } from '../utils/gmeet-generator';
 import { convertLocalToUTC } from '../utils/timezone';
 
@@ -407,7 +407,7 @@ export class StudyRoomsService {
 
     // Process payment and join in a transaction
     await this.prisma.$transaction(async (tx) => {
-      // Deduct coins from user
+      // Deduct coins from user (held in escrow)
       await tx.user.update({
         where: { id: user.id },
         data: {
@@ -417,20 +417,10 @@ export class StudyRoomsService {
         },
       });
 
-      // Add coins to study room creator
-      await tx.user.update({
-        where: { id: studyRoom.createdById },
-        data: {
-          coins: {
-            increment: studyRoom.joiningFee,
-          },
-        },
-      });
-
-      // Create payment record
+      // Create payment record in escrow (coins will be released to creator after learner reviews)
       await tx.payment.create({
         data: {
-          paymentStatus: 'RECEIVED',
+          paymentStatus: PaymentStatus.ESCROW,
           madeById: user.id, // Use the database ID, not clerkId
           receivedById: studyRoom.createdById,
           studyRoomId: studyRoomId,
