@@ -136,7 +136,7 @@ export interface PeerSession {
 
 export interface RequestSessionDto {
   peerId: string;
-  skills: string[];
+  skills?: string[];
   date: string;
   time: string;
   duration: number;

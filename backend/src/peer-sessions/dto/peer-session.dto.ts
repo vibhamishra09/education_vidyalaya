@@ -26,9 +26,10 @@ export class RequestSessionDto {
   @IsString()
   peerId: string;
 
+  @IsOptional()
   @IsArray()
   @IsString({ each: true })
-  skills: string[];
+  skills?: string[];
 
   @IsDateString()
   date: string;
