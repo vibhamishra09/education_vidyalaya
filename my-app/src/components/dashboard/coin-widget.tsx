@@ -5,7 +5,7 @@ import { Coins, ArrowRight, ArrowUpRight, ArrowDownLeft, RefreshCw } from "lucid
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { formatCoins } from "@/lib/utils/coin-format";
+import { formatMaya } from "@/lib/utils/coin-format";
 import { useTransactionHistory } from "@/hooks/use-transactions";
 import { PaymentStatus } from "@/types/api.types";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -24,7 +24,7 @@ export function CoinWidget({ coins = 0, isLoading = false }: CoinWidgetProps) {
     <Card>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-lg">Coin Balance</CardTitle>
+          <CardTitle className="text-lg"><span className="text-sm">m</span>AYA Balance</CardTitle>
           <Link href="/profile?tab=earnings">
             <Button variant="ghost" size="sm">
               View All
@@ -42,7 +42,7 @@ export function CoinWidget({ coins = 0, isLoading = false }: CoinWidgetProps) {
             <>
               <div className="flex items-center justify-center gap-2">
                 <Coins className="h-6 w-6 text-yellow-600" />
-                <span className="text-3xl font-bold">{formatCoins(coins)}</span>
+                <span className="text-3xl font-bold">{formatMaya(coins)} <span className="text-xl">m</span>AYA</span>
               </div>
               <p className="text-xs text-muted-foreground mt-1">Available Balance</p>
             </>
@@ -109,7 +109,7 @@ export function CoinWidget({ coins = 0, isLoading = false }: CoinWidgetProps) {
                       }`}
                     >
                       {transaction.type === 'PAYMENT_MADE' ? '-' : '+'}
-                      {formatCoins(transaction.amount)}
+                      {formatMaya(transaction.amount)} <span className="text-[10px]">m</span>AYA
                     </p>
                     <Badge
                       variant="outline"

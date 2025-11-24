@@ -13,7 +13,7 @@ import {
 } from "recharts";
 import { ChartContainer } from "./chart-container";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatCoins } from "@/lib/utils/coin-format";
+import { formatMaya } from "@/lib/utils/coin-format";
 
 interface EarningsDataPoint {
   month: string;
@@ -72,7 +72,7 @@ export function EarningsChart({ data, isLoading = false }: EarningsChartProps) {
                 Earned:
               </span>
               <span className="font-medium text-green-600">
-                +{formatCoins(payload[0].payload.earned)}
+                +{formatMaya(payload[0].payload.earned)} <span className="text-[10px]">m</span>AYA
               </span>
             </div>
             <div className="flex items-center justify-between gap-4">
@@ -81,7 +81,7 @@ export function EarningsChart({ data, isLoading = false }: EarningsChartProps) {
                 Spent:
               </span>
               <span className="font-medium text-red-600">
-                -{formatCoins(payload[0].payload.spent)}
+                -{formatMaya(payload[0].payload.spent)} <span className="text-[10px]">m</span>AYA
               </span>
             </div>
             <div className="flex items-center justify-between gap-4 pt-1 border-t">
@@ -90,7 +90,7 @@ export function EarningsChart({ data, isLoading = false }: EarningsChartProps) {
                 Net:
               </span>
               <span className={`font-medium ${payload[0].payload.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {payload[0].payload.net >= 0 ? '+' : ''}{formatCoins(payload[0].payload.net)}
+                {payload[0].payload.net >= 0 ? '+' : ''}{formatMaya(payload[0].payload.net)} <span className="text-[10px]">m</span>AYA
               </span>
             </div>
           </div>
@@ -111,7 +111,7 @@ export function EarningsChart({ data, isLoading = false }: EarningsChartProps) {
   return (
     <ChartContainer
       title="Earnings Trend"
-      description="Your coins earned and spent over the last 6 months"
+      description="Your mAYA tokens earned and spent over the last 6 months"
     >
       <ResponsiveContainer width="100%" height={300}>
         <BarChart data={chartData}>
@@ -126,7 +126,7 @@ export function EarningsChart({ data, isLoading = false }: EarningsChartProps) {
             fontSize={12}
             tickLine={false}
             axisLine={false}
-            tickFormatter={(value) => formatCoins(value)}
+            tickFormatter={(value) => formatMaya(value)}
           />
           <Tooltip content={<CustomTooltip />} />
           <Legend

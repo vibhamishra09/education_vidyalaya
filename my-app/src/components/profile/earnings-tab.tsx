@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatCoins } from "@/lib/utils/coin-format";
+import { formatMaya } from "@/lib/utils/coin-format";
 import { useTransactionHistory } from "@/hooks/use-transactions";
 import { PaymentStatus } from "@/types/api.types";
 
@@ -37,7 +37,7 @@ export function EarningsTab({ coins = 0, hourlyRate, isLoading = false }: Earnin
                 {isLoading ? (
                   <Skeleton className="h-8 w-24" />
                 ) : (
-                  <p className="text-2xl font-bold">{formatCoins(coins)}</p>
+                  <p className="text-2xl font-bold">{formatMaya(coins)} <span className="text-sm">m</span>AYA</p>
                 )}
               </div>
               <div className="p-3 bg-yellow-100 rounded-full">
@@ -56,7 +56,7 @@ export function EarningsTab({ coins = 0, hourlyRate, isLoading = false }: Earnin
                   <Skeleton className="h-8 w-24" />
                 ) : (
                   <p className="text-2xl font-bold text-green-600">
-                    +{formatCoins(totalEarned)}
+                    +{formatMaya(totalEarned)} <span className="text-sm">m</span>AYA
                   </p>
                 )}
               </div>
@@ -76,7 +76,7 @@ export function EarningsTab({ coins = 0, hourlyRate, isLoading = false }: Earnin
                   <Skeleton className="h-8 w-24" />
                 ) : (
                   <p className="text-2xl font-bold">
-                    {hourlyRate ? formatCoins(hourlyRate) : 'Not set'}
+                    {hourlyRate ? <>{formatMaya(hourlyRate)} <span className="text-sm">m</span>AYA</> : 'Not set'}
                   </p>
                 )}
               </div>
@@ -167,7 +167,7 @@ export function EarningsTab({ coins = 0, hourlyRate, isLoading = false }: Earnin
                       }`}
                     >
                       {transaction.type === 'PAYMENT_MADE' ? '-' : '+'}
-                      {formatCoins(transaction.amount)}
+                      {formatMaya(transaction.amount)} <span className="text-xs">m</span>AYA
                     </p>
                     <Badge
                       variant="outline"

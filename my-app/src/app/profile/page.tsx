@@ -22,7 +22,7 @@ import { Edit, Star, Coins, Loader2 } from "lucide-react";
 import { usersApi, reviewsApi } from "@/lib/api";
 import { User, ReviewCard } from "@/types/api.types";
 import { setAuthToken } from "@/lib/api-client";
-import { formatCoins } from "@/lib/utils/coin-format";
+import { formatMaya } from "@/lib/utils/coin-format";
 
 function ProfileContent() {
   const searchParams = useSearchParams();
@@ -181,7 +181,7 @@ function ProfileContent() {
                       <div className="flex items-center justify-center sm:justify-start">
                         <Coins className="h-5 w-5 text-yellow-600" />
                         <span className="ml-1 font-medium">
-                          {formatCoins(currentUser.coins)} coins
+                          {formatMaya(currentUser.coins)} <span className="text-xs">m</span>AYA
                         </span>
                       </div>
 
@@ -189,7 +189,7 @@ function ProfileContent() {
                         <div className="flex items-center justify-center sm:justify-start">
                           <Coins className="h-5 w-5 text-green-600" />
                           <span className="ml-1 font-medium">
-                            {formatCoins(currentUser.hourlyRate)} coins/hr
+                            {formatMaya(currentUser.hourlyRate)} <span className="text-xs">m</span>AYA/hr
                           </span>
                         </div>
                       )}

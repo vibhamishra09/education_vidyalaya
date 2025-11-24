@@ -11,7 +11,7 @@ import { NotificationDropdown } from "./notification-dropdown";
 import { UserDropdown } from "./user-dropdown";
 import { CoinDropdown } from "./coin-dropdown";
 import { useCurrentUser } from "@/hooks/use-users";
-import { formatCoins } from "@/lib/utils/coin-format";
+import { formatMaya } from "@/lib/utils/coin-format";
 // import { isAuthError } from "@/lib/utils/error-handling";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent } from "@/components/ui/card";
@@ -180,7 +180,7 @@ export function Navigation() {
                             <div className="flex items-center gap-1 mt-2 px-1">
                               <Coins className="h-4 w-4 text-yellow-600" />
                               <span className="text-sm font-medium">
-                                {isUserLoading ? '...' : formatCoins(currentUserData?.user?.coins)} coins
+                                {isUserLoading ? '...' : formatMaya(currentUserData?.user?.coins)} <span className="text-xs">m</span>AYA
                               </span>
                             </div>
                           </div>
