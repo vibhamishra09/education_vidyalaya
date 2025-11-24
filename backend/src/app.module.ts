@@ -16,6 +16,8 @@ import { ChatModule } from './chat/chat.module';
 import { LivekitModule } from './livekit/livekit.module';
 import { UploadModule } from './upload/upload.module';
 import { AvailabilityModule } from './availability/availability.module';
+import { StreaksModule } from './streaks/streaks.module';
+import { AchievementsModule } from './achievements/achievements.module';
 
 @Module({
   imports: [
@@ -36,6 +38,8 @@ import { AvailabilityModule } from './availability/availability.module';
     LivekitModule,
     UploadModule,
     AvailabilityModule,
+    StreaksModule,
+    AchievementsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

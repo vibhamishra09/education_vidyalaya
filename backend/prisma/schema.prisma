@@ -27,6 +27,11 @@ model User {
   bufferTime            Int                    @default(15) // Minutes between sessions
   minAdvanceTime        Int                    @default(120) // Minimum minutes before booking
   maxFutureBooking      Int                    @default(30) // Maximum days in future for booking
+  // Streak tracking
+  currentStreak         Int                    @default(0)
+  longestStreak         Int                    @default(0)
+  lastActivityDate      DateTime?
+  timezone              String                 @default("UTC")
   metrics               Metrics?
   notifications         Notification[]
   pushSubscriptions     PushSubscription[]
@@ -43,6 +48,8 @@ model User {
   messagesSent       Message[]
   availability          UserAvailability[]
   blockedSlots          BlockedTimeSlot[]
+  achievements          UserAchievement[]
+  dailyActivities       DailyActivity[]
 }
 
 model StudyRoom {
@@ -293,4 +300,64 @@ model BlockedTimeSlot {
 
   @@index([userId])
   @@index([startTime, endTime])
+}
+
+model Achievement {
+  id               String            @id @default(cuid())
+  title            String
+  description      String
+  icon             String
+  category         AchievementCategory
+  rarity           AchievementRarity
+  maxProgress      Int               @default(1)
+  coinReward       Int               @default(0)
+  createdAt        DateTime          @default(now())
+  userAchievements UserAchievement[]
+}
+
+model UserAchievement {
+  id            String       @id @default(cuid())
+  userId        String
+  achievementId String
+  progress      Int          @default(0)
+  unlockedAt    DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement   Achievement  @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, achievementId])
+  @@index([userId])
+  @@index([achievementId])
+}
+
+model DailyActivity {
+  id             String   @id @default(cuid())
+  userId         String
+  date           DateTime // Date normalized to midnight in user's timezone
+  sessionCount   Int      @default(0)
+  minutesLearned Int      @default(0)
+  minutesTaught  Int      @default(0)
+  coinsEarned    Decimal  @db.Decimal(36, 16) @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId, date])
+}
+
+enum AchievementCategory {
+  LEARNING
+  TEACHING
+  SOCIAL
+  MILESTONE
+  STREAK
+}
+
+enum AchievementRarity {
+  COMMON
+  RARE
+  EPIC
+  LEGENDARY
 }
