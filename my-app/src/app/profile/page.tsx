@@ -13,7 +13,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ReviewCardComponent } from "@/components/cards/review-card";
 import { EditProfileModal } from "@/components/modals/edit-profile-modal";
 import { UserReviewStats } from "@/components/reviews/user-review-stats";
-import { EarningsTab } from "@/components/profile/earnings-tab";
+import { WalletTab } from "@/components/profile/wallet-tab";
 import { SessionsTab } from "@/components/profile/sessions-tab";
 import { AchievementShowcase } from "@/components/achievements/achievement-showcase";
 import { StreakTracker } from "@/components/profile/streak-tracker";
@@ -22,7 +22,7 @@ import { Edit, Star, Coins, Loader2 } from "lucide-react";
 import { usersApi, reviewsApi } from "@/lib/api";
 import { User, ReviewCard } from "@/types/api.types";
 import { setAuthToken } from "@/lib/api-client";
-import { formatCoins } from "@/lib/utils/coin-format";
+import { formatMaya } from "@/lib/utils/coin-format";
 
 function ProfileContent() {
   const searchParams = useSearchParams();
@@ -32,7 +32,7 @@ function ProfileContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"about" | "sessions" | "earnings" | "reviews">("about");
+  const [activeTab, setActiveTab] = useState<"about" | "sessions" | "wallet" | "reviews">("about");
 
   const avgRating =
     userReviews.length > 0
@@ -42,8 +42,8 @@ function ProfileContent() {
   // Handle URL parameters for tab navigation
   useEffect(() => {
     const tab = searchParams.get('tab');
-    if (tab && ['about', 'sessions', 'earnings', 'reviews'].includes(tab)) {
-      setActiveTab(tab as 'about' | 'sessions' | 'earnings' | 'reviews');
+    if (tab && ['about', 'sessions', 'wallet', 'reviews'].includes(tab)) {
+      setActiveTab(tab as 'about' | 'sessions' | 'wallet' | 'reviews');
     }
   }, [searchParams]);
 
@@ -181,7 +181,7 @@ function ProfileContent() {
                       <div className="flex items-center justify-center sm:justify-start">
                         <Coins className="h-5 w-5 text-yellow-600" />
                         <span className="ml-1 font-medium">
-                          {formatCoins(currentUser.coins)} coins
+                          {formatMaya(currentUser.coins)} <span className="text-xs">m</span>AYA
                         </span>
                       </div>
 
@@ -189,7 +189,7 @@ function ProfileContent() {
                         <div className="flex items-center justify-center sm:justify-start">
                           <Coins className="h-5 w-5 text-green-600" />
                           <span className="ml-1 font-medium">
-                            {formatCoins(currentUser.hourlyRate)} coins/hr
+                            {formatMaya(currentUser.hourlyRate)} <span className="text-xs">m</span>AYA/hr
                           </span>
                         </div>
                       )}
@@ -239,8 +239,8 @@ function ProfileContent() {
             <TabsTrigger active={activeTab === "sessions"} onClick={() => setActiveTab("sessions")}>
               Sessions
             </TabsTrigger>
-            <TabsTrigger active={activeTab === "earnings"} onClick={() => setActiveTab("earnings")}>
-              Earnings
+            <TabsTrigger active={activeTab === "wallet"} onClick={() => setActiveTab("wallet")}>
+              Wallet
             </TabsTrigger>
             <TabsTrigger active={activeTab === "reviews"} onClick={() => setActiveTab("reviews")}>
               Reviews
@@ -339,9 +339,9 @@ function ProfileContent() {
             <SessionsTab userId={currentUser.id} isLoading={loading} />
           </TabsContent>}
 
-          {/* Earnings Tab */}
-          {activeTab === "earnings" && <TabsContent>
-            <EarningsTab
+          {/* Wallet Tab */}
+          {activeTab === "wallet" && <TabsContent>
+            <WalletTab
               coins={typeof currentUser.coins === 'number' ? currentUser.coins : undefined}
               hourlyRate={typeof currentUser.hourlyRate === 'number' ? currentUser.hourlyRate : undefined}
               isLoading={loading}

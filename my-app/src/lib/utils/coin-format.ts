@@ -12,19 +12,47 @@ export function formatCoins(coins: number | string | null | undefined): string {
   if (coins === null || coins === undefined || coins === '') {
     return '0.00';
   }
-  
+
   // Convert to number if it's a string
   const numCoins = typeof coins === 'string' ? parseFloat(coins) : coins;
-  
+
   // Check if the conversion resulted in a valid number
   if (isNaN(numCoins)) {
     return '0.00';
   }
-  
+
   // Round to 2 decimal places to avoid floating point precision issues
   const roundedCoins = Math.round(numCoins * 100) / 100;
-  
+
   return roundedCoins.toFixed(2);
+}
+
+/**
+ * Formats mAYA tokens for display (mAYA = AYA * 100)
+ * @param ayaCoins - The AYA coin value to convert and format
+ * @returns Formatted string with 2 decimal places representing mAYA value
+ */
+export function formatMaya(ayaCoins: number | string | null | undefined): string {
+  // Handle null, undefined, or empty string
+  if (ayaCoins === null || ayaCoins === undefined || ayaCoins === '') {
+    return '0.00';
+  }
+
+  // Convert to number if it's a string
+  const numCoins = typeof ayaCoins === 'string' ? parseFloat(ayaCoins) : ayaCoins;
+
+  // Check if the conversion resulted in a valid number
+  if (isNaN(numCoins)) {
+    return '0.00';
+  }
+
+  // Convert AYA to mAYA (multiply by 100)
+  const mAyaValue = numCoins * 100;
+
+  // Round to 2 decimal places to avoid floating point precision issues
+  const roundedMaya = Math.round(mAyaValue * 100) / 100;
+
+  return roundedMaya.toFixed(2);
 }
 
 /**

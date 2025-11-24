@@ -17,6 +17,7 @@ import { User } from "@/types/api.types";
 import { setAuthToken } from "@/lib/api-client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { formatMaya } from "@/lib/utils/coin-format";
 
 export default function RequestSessionPage({
   params,
@@ -464,7 +465,7 @@ export default function RequestSessionPage({
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Rate</span>
                     <span className="font-medium">
-                      {peer?.hourlyRate ? `${costPerHour} coins/hour` : 'Not set'}
+                      {peer?.hourlyRate ? <>{formatMaya(costPerHour)} <span className="text-[10px]">m</span>AYA/hour</> : 'Not set'}
                     </span>
                   </div>
                   <div className="border-t pt-2 mt-2">
@@ -473,7 +474,7 @@ export default function RequestSessionPage({
                       <div className="flex items-center gap-1">
                         <Coins className="h-4 w-4 text-yellow-600" />
                         <span className="font-semibold">
-                          {peer?.hourlyRate ? `${Math.round(calculatedCost)} coins` : 'N/A'}
+                          {peer?.hourlyRate ? <>{formatMaya(calculatedCost)} <span className="text-xs">m</span>AYA</> : 'N/A'}
                         </span>
                       </div>
                     </div>
@@ -487,7 +488,7 @@ export default function RequestSessionPage({
                     </span>
                     <div className="flex items-center gap-1">
                       <Coins className="h-4 w-4 text-yellow-600" />
-                      <span className="font-medium">{typeof currentUser.coins === 'string' ? parseFloat(currentUser.coins) : currentUser.coins} coins</span>
+                      <span className="font-medium">{formatMaya(typeof currentUser.coins === 'string' ? parseFloat(currentUser.coins) : currentUser.coins)} <span className="text-xs">m</span>AYA</span>
                     </div>
                   </div>
 
