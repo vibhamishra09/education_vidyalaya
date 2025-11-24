@@ -23,6 +23,10 @@ model User {
   createdAt             DateTime               @default(now())
   onboarded             Boolean                @default(false)
   updatedAt             DateTime               @updatedAt
+  // Availability settings
+  bufferTime            Int                    @default(15) // Minutes between sessions
+  minAdvanceTime        Int                    @default(120) // Minimum minutes before booking
+  maxFutureBooking      Int                    @default(30) // Maximum days in future for booking
   metrics               Metrics?
   notifications         Notification[]
   pushSubscriptions     PushSubscription[]
@@ -37,6 +41,8 @@ model User {
   userSkills            UserSkill[]
   channelMemberships ChannelMember[]
   messagesSent       Message[]
+  availability          UserAvailability[]
+  blockedSlots          BlockedTimeSlot[]
 }
 
 model StudyRoom {
@@ -258,4 +264,33 @@ model Message {
 
   channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
   sender    User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+}
+
+model UserAvailability {
+  id        String   @id @default(cuid())
+  userId    String
+  dayOfWeek Int      // 0-6 (Sunday=0, Monday=1, ..., Saturday=6)
+  startTime String   // HH:MM format (e.g., "09:00")
+  endTime   String   // HH:MM format (e.g., "17:00")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dayOfWeek])
+  @@index([userId])
+}
+
+model BlockedTimeSlot {
+  id        String   @id @default(cuid())
+  userId    String
+  startTime DateTime // UTC timestamp for blocked period start
+  endTime   DateTime // UTC timestamp for blocked period end
+  reason    String?  // Optional reason for blocking
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([startTime, endTime])
 }

@@ -8,3 +8,4 @@ export { notificationsApi } from './notifications.api';
 export { browseApi } from './browse.api';
 export { dashboardApi } from './dashboard.api';
 export { paymentsApi } from './payments.api';
+export { availabilityApi } from './availability.api';

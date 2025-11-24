@@ -15,6 +15,7 @@ import { PaymentsModule } from './payments/payments.module';
 import { ChatModule } from './chat/chat.module';
 import { LivekitModule } from './livekit/livekit.module';
 import { UploadModule } from './upload/upload.module';
+import { AvailabilityModule } from './availability/availability.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { UploadModule } from './upload/upload.module';
     ChatModule,
     LivekitModule,
     UploadModule,
+    AvailabilityModule,
   ],
   controllers: [AppController],
   providers: [AppService],

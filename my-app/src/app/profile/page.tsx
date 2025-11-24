@@ -15,6 +15,7 @@ import { EditProfileModal } from "@/components/modals/edit-profile-modal";
 import { UserReviewStats } from "@/components/reviews/user-review-stats";
 import { WalletTab } from "@/components/profile/wallet-tab";
 import { SessionsTab } from "@/components/profile/sessions-tab";
+import { AvailabilitySettings } from "@/components/profile/availability-settings";
 import { AchievementShowcase } from "@/components/achievements/achievement-showcase";
 import { StreakTracker } from "@/components/profile/streak-tracker";
 import { MOCK_ACHIEVEMENTS } from "@/types/achievements.types";
@@ -32,7 +33,7 @@ function ProfileContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"about" | "sessions" | "wallet" | "reviews">("about");
+  const [activeTab, setActiveTab] = useState<"about" | "sessions" | "wallet" | "reviews" | "availability">("about");
 
   const avgRating =
     userReviews.length > 0
@@ -42,8 +43,8 @@ function ProfileContent() {
   // Handle URL parameters for tab navigation
   useEffect(() => {
     const tab = searchParams.get('tab');
-    if (tab && ['about', 'sessions', 'wallet', 'reviews'].includes(tab)) {
-      setActiveTab(tab as 'about' | 'sessions' | 'wallet' | 'reviews');
+    if (tab && ['about', 'sessions', 'wallet', 'reviews', 'availability'].includes(tab)) {
+      setActiveTab(tab as 'about' | 'sessions' | 'wallet' | 'reviews' | 'availability');
     }
   }, [searchParams]);
 
@@ -232,7 +233,7 @@ function ProfileContent() {
 
         {/* Tabs */}
         <Tabs className="w-full">
-          <TabsList className="grid w-full grid-cols-4 mb-6">
+          <TabsList className="grid w-full grid-cols-5 mb-6">
             <TabsTrigger active={activeTab === "about"} onClick={() => setActiveTab("about")}>
               About
             </TabsTrigger>
@@ -241,6 +242,9 @@ function ProfileContent() {
             </TabsTrigger>
             <TabsTrigger active={activeTab === "wallet"} onClick={() => setActiveTab("wallet")}>
               Wallet
+            </TabsTrigger>
+            <TabsTrigger active={activeTab === "availability"} onClick={() => setActiveTab("availability")}>
+              Availability
             </TabsTrigger>
             <TabsTrigger active={activeTab === "reviews"} onClick={() => setActiveTab("reviews")}>
               Reviews
@@ -346,6 +350,11 @@ function ProfileContent() {
               hourlyRate={typeof currentUser.hourlyRate === 'number' ? currentUser.hourlyRate : undefined}
               isLoading={loading}
             />
+          </TabsContent>}
+
+          {/* Availability Tab */}
+          {activeTab === "availability" && <TabsContent>
+            <AvailabilitySettings userId={currentUser.id} isOwnProfile={true} />
           </TabsContent>}
 
           {/* Reviews Tab */}
