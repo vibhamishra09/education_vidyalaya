@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { WalletChart } from "@/components/stats/wallet-chart";
 import { formatMaya } from "@/lib/utils/coin-format";
 import { useTransactionHistory } from "@/hooks/use-transactions";
 import { PaymentStatus } from "@/types/api.types";
@@ -87,6 +88,9 @@ export function WalletTab({ coins = 0, hourlyRate, isLoading = false }: WalletTa
           </CardContent>
         </Card>
       </div>
+
+      {/* Wallet Activity Chart */}
+      <WalletChart isLoading={transactionsLoading} />
 
       {/* Transaction History */}
       <Card>

@@ -60,11 +60,6 @@ export class DashboardService {
           value: Math.round(avgRating * 10) / 10,
           description: 'Out of 5 stars',
         },
-        {
-          name: 'Total Reviews',
-          value: receivedReviews.length,
-          description: 'Reviews received',
-        },
       ];
     }
 

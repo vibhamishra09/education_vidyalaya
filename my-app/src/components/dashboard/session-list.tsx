@@ -34,17 +34,17 @@ interface Session {
 
 interface SessionListProps {
   upcomingSessions?: Session[];
-  pendingSessions?: Session[];
+  ongoingSessions?: Session[];
   pastSessions?: Session[];
   isLoading?: boolean;
 }
 
 export function SessionList({
   upcomingSessions = [],
-  pendingSessions = [],
+  ongoingSessions = [],
   pastSessions = []
 }: SessionListProps) {
-  const [activeTab, setActiveTab] = useState<"upcoming" | "pending" | "past">("upcoming");
+  const [activeTab, setActiveTab] = useState<"upcoming" | "ongoing" | "past">("upcoming");
   const [expandedSession, setExpandedSession] = useState<string | null>(null);
 
   const toggleExpand = (sessionId: string) => {
@@ -86,9 +86,9 @@ export function SessionList({
                   <Badge variant="outline" className="text-xs flex-shrink-0">
                     {isPeerSession ? "1-on-1" : "Group"}
                   </Badge>
-                  {activeTab === "pending" && (
-                    <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200 text-xs flex-shrink-0">
-                      Pending
+                  {activeTab === "ongoing" && (
+                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-xs flex-shrink-0">
+                      Ongoing
                     </Badge>
                   )}
                 </div>
@@ -220,13 +220,13 @@ export function SessionList({
             )}
           </TabsTrigger>
           <TabsTrigger
-            active={activeTab === "pending"}
-            onClick={() => setActiveTab("pending")}
+            active={activeTab === "ongoing"}
+            onClick={() => setActiveTab("ongoing")}
           >
-            Pending
-            {pendingSessions.length > 0 && (
-              <Badge variant="secondary" className="ml-2 text-xs bg-yellow-100 text-yellow-700">
-                {pendingSessions.length}
+            Ongoing
+            {ongoingSessions.length > 0 && (
+              <Badge variant="secondary" className="ml-2 text-xs bg-green-100 text-green-700">
+                {ongoingSessions.length}
               </Badge>
             )}
           </TabsTrigger>
@@ -258,12 +258,12 @@ export function SessionList({
           </>
         )}
 
-        {activeTab === "pending" && (
+        {activeTab === "ongoing" && (
           <>
-            {pendingSessions.length === 0 ? (
-              <EmptyState message="No pending requests" icon={Clock} />
+            {ongoingSessions.length === 0 ? (
+              <EmptyState message="No ongoing sessions" icon={Clock} />
             ) : (
-              pendingSessions.map((session) => (
+              ongoingSessions.map((session) => (
                 <SessionCard key={session.id} session={session} />
               ))
             )}
@@ -285,7 +285,7 @@ export function SessionList({
 
       {/* View All Link */}
       {((activeTab === "upcoming" && upcomingSessions.length > 5) ||
-        (activeTab === "pending" && pendingSessions.length > 5) ||
+        (activeTab === "ongoing" && ongoingSessions.length > 5) ||
         (activeTab === "past" && pastSessions.length > 5)) && (
         <div className="text-center pt-2">
           <Button variant="ghost" size="sm">
