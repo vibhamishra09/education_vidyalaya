@@ -59,7 +59,7 @@ export function CoinDropdown({ coins = 0, isLoading = false }: CoinDropdownProps
                 <CardHeader className="pb-3">
                   <CardTitle className="text-lg flex items-center justify-between">
                     <span><span className="text-sm">m</span>AYA Balance</span>
-                    <Link href="/profile?tab=earnings" onClick={() => setIsOpen(false)}>
+                    <Link href="/profile?tab=wallet" onClick={() => setIsOpen(false)}>
                       <Button variant="ghost" size="sm" className="h-8">
                         View All
                       </Button>

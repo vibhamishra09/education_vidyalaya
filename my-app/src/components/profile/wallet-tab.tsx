@@ -9,13 +9,13 @@ import { formatMaya } from "@/lib/utils/coin-format";
 import { useTransactionHistory } from "@/hooks/use-transactions";
 import { PaymentStatus } from "@/types/api.types";
 
-interface EarningsTabProps {
+interface WalletTabProps {
   coins?: number;
   hourlyRate?: number;
   isLoading?: boolean;
 }
 
-export function EarningsTab({ coins = 0, hourlyRate, isLoading = false }: EarningsTabProps) {
+export function WalletTab({ coins = 0, hourlyRate, isLoading = false }: WalletTabProps) {
   const { data: transactionsData, isLoading: transactionsLoading, refetch } = useTransactionHistory();
 
   const transactions = transactionsData?.transactions || [];

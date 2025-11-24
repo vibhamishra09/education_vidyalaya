@@ -15,29 +15,29 @@ import { ChartContainer } from "./chart-container";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatMaya } from "@/lib/utils/coin-format";
 
-interface EarningsDataPoint {
+interface WalletDataPoint {
   month: string;
   earned: number;
   spent: number;
   net: number;
 }
 
-interface EarningsChartProps {
-  data?: EarningsDataPoint[];
+interface WalletChartProps {
+  data?: WalletDataPoint[];
   isLoading?: boolean;
 }
 
 interface TooltipPayload {
-  payload: EarningsDataPoint;
+  payload: WalletDataPoint;
 }
 
-export function EarningsChart({ data, isLoading = false }: EarningsChartProps) {
+export function WalletChart({ data, isLoading = false }: WalletChartProps) {
   // Generate mock data if none provided
   const chartData = useMemo(() => {
     if (data) return data;
 
     // Generate last 6 months of mock data
-    const mockData: EarningsDataPoint[] = [];
+    const mockData: WalletDataPoint[] = [];
     const today = new Date();
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -102,7 +102,7 @@ export function EarningsChart({ data, isLoading = false }: EarningsChartProps) {
 
   if (isLoading) {
     return (
-      <ChartContainer title="Earnings Trend">
+      <ChartContainer title="Wallet Activity">
         <Skeleton className="h-[300px] w-full" />
       </ChartContainer>
     );
@@ -110,7 +110,7 @@ export function EarningsChart({ data, isLoading = false }: EarningsChartProps) {
 
   return (
     <ChartContainer
-      title="Earnings Trend"
+      title="Wallet Activity"
       description="Your mAYA tokens earned and spent over the last 6 months"
     >
       <ResponsiveContainer width="100%" height={300}>

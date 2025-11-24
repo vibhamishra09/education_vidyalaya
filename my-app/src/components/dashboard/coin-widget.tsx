@@ -25,7 +25,7 @@ export function CoinWidget({ coins = 0, isLoading = false }: CoinWidgetProps) {
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg"><span className="text-sm">m</span>AYA Balance</CardTitle>
-          <Link href="/profile?tab=earnings">
+          <Link href="/profile?tab=wallet">
             <Button variant="ghost" size="sm">
               View All
               <ArrowRight className="ml-2 h-4 w-4" />

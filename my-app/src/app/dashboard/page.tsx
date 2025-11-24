@@ -9,7 +9,7 @@ import { QuickActions } from "@/components/dashboard/quick-actions";
 import { CoinWidget } from "@/components/dashboard/coin-widget";
 import { EnhancedCalendarWidget } from "@/components/dashboard/enhanced-calendar-widget";
 import { SessionsChart } from "@/components/stats/sessions-chart";
-import { EarningsChart } from "@/components/stats/earnings-chart";
+import { WalletChart } from "@/components/stats/wallet-chart";
 import { AchievementShowcase } from "@/components/achievements/achievement-showcase";
 import { StreakTracker } from "@/components/profile/streak-tracker";
 import { SessionList } from "@/components/dashboard/session-list";
@@ -262,8 +262,8 @@ export default function DashboardPage() {
             {/* Sessions Activity Chart */}
             <SessionsChart />
 
-            {/* Earnings Chart */}
-            <EarningsChart />
+            {/* Wallet Chart */}
+            <WalletChart />
           </div>
 
           {/* Right Column */}
