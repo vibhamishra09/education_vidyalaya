@@ -17,7 +17,6 @@ import { WalletTab } from "@/components/profile/wallet-tab";
 import { SessionsTab } from "@/components/profile/sessions-tab";
 import { AvailabilitySettings } from "@/components/profile/availability-settings";
 import { AchievementShowcase } from "@/components/achievements/achievement-showcase";
-import { StreakTracker } from "@/components/profile/streak-tracker";
 import { MOCK_ACHIEVEMENTS } from "@/types/achievements.types";
 import { Edit, Star, Coins, Loader2 } from "lucide-react";
 import { usersApi, reviewsApi } from "@/lib/api";
@@ -33,7 +32,7 @@ function ProfileContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"about" | "sessions" | "wallet" | "reviews" | "availability">("about");
+  const [activeTab, setActiveTab] = useState<"about" | "sessions" | "wallet" | "reviews">("about");
 
   const avgRating =
     userReviews.length > 0
@@ -43,8 +42,8 @@ function ProfileContent() {
   // Handle URL parameters for tab navigation
   useEffect(() => {
     const tab = searchParams.get('tab');
-    if (tab && ['about', 'sessions', 'wallet', 'reviews', 'availability'].includes(tab)) {
-      setActiveTab(tab as 'about' | 'sessions' | 'wallet' | 'reviews' | 'availability');
+    if (tab && ['about', 'sessions', 'wallet', 'reviews'].includes(tab)) {
+      setActiveTab(tab as 'about' | 'sessions' | 'wallet' | 'reviews');
     }
   }, [searchParams]);
 
@@ -233,7 +232,7 @@ function ProfileContent() {
 
         {/* Tabs */}
         <Tabs className="w-full">
-          <TabsList className="grid w-full grid-cols-5 mb-6">
+          <TabsList className="grid w-full grid-cols-4 mb-6">
             <TabsTrigger active={activeTab === "about"} onClick={() => setActiveTab("about")}>
               About
             </TabsTrigger>
@@ -242,9 +241,6 @@ function ProfileContent() {
             </TabsTrigger>
             <TabsTrigger active={activeTab === "wallet"} onClick={() => setActiveTab("wallet")}>
               Wallet
-            </TabsTrigger>
-            <TabsTrigger active={activeTab === "availability"} onClick={() => setActiveTab("availability")}>
-              Availability
             </TabsTrigger>
             <TabsTrigger active={activeTab === "reviews"} onClick={() => setActiveTab("reviews")}>
               Reviews
@@ -318,22 +314,15 @@ function ProfileContent() {
                       </div>
                     </CardContent>
                   </Card>
+
+                  {/* Achievement Showcase */}
+                  <AchievementShowcase achievements={MOCK_ACHIEVEMENTS} />
                 </div>
 
-                {/* Reviews Summary & Streak */}
-                <div className="space-y-6">
-                  <UserReviewStats userId={currentUser.id} showTitle={true} />
-
-                  <StreakTracker
-                    currentStreak={7}
-                    longestStreak={14}
-                  />
+                {/* Availability Settings */}
+                <div>
+                  <AvailabilitySettings userId={currentUser.id} isOwnProfile={true} />
                 </div>
-              </div>
-
-              {/* Achievement Showcase */}
-              <div className="mt-6">
-                <AchievementShowcase achievements={MOCK_ACHIEVEMENTS} />
               </div>
             </div>
           </TabsContent>}
@@ -350,11 +339,6 @@ function ProfileContent() {
               hourlyRate={typeof currentUser.hourlyRate === 'number' ? currentUser.hourlyRate : undefined}
               isLoading={loading}
             />
-          </TabsContent>}
-
-          {/* Availability Tab */}
-          {activeTab === "availability" && <TabsContent>
-            <AvailabilitySettings userId={currentUser.id} isOwnProfile={true} />
           </TabsContent>}
 
           {/* Reviews Tab */}

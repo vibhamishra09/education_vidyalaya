@@ -4,6 +4,7 @@ import { Calendar, Clock, Users, TrendingUp } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StreakTracker } from "@/components/profile/streak-tracker";
 import Link from "next/link";
 
 interface SessionsTabProps {
@@ -22,6 +23,12 @@ export function SessionsTab({ isLoading = false }: SessionsTabProps) {
 
   return (
     <div className="space-y-6">
+      {/* Learning Streak */}
+      <StreakTracker
+        currentStreak={7}
+        longestStreak={14}
+      />
+
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
