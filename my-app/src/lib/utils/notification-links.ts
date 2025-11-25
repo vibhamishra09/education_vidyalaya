@@ -120,8 +120,8 @@ export function getNotificationLink(notification: Notification): string {
 
       // Payment Notifications
       case 'PAYMENT_RELEASED':
-        // Navigate to profile earnings tab
-        return '/profile?tab=earnings';
+        // Navigate to profile wallet tab
+        return '/profile?tab=wallet';
 
       default:
         // Unknown actionType, fallback to dashboard
@@ -162,7 +162,7 @@ export function getNotificationLink(notification: Notification): string {
     return '/profile?tab=reviews';
   }
   if (message.includes("payment") || message.includes("released") || message.includes("coins")) {
-    return '/profile?tab=earnings';
+    return '/profile?tab=wallet';
   }
 
   // Final fallback

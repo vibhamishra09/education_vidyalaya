@@ -97,7 +97,7 @@ export default function StudyRoomPage({
       if (error && typeof error === 'object' && 'response' in error) {
         const apiError = error as { response: { data: { code: string; message: string } } };
         if (apiError.response?.data?.code === 'INSUFFICIENT_COINS') {
-          showError("Insufficient Coins", apiError.response.data.message);
+          showError("Insufficient mAYA", apiError.response.data.message);
         } else if (apiError.response?.data?.code === 'ROOM_FULL') {
           showError("Room Full", apiError.response.data.message);
         } else {

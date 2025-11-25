@@ -17,6 +17,7 @@ import { User } from "@/types/api.types";
 import { setAuthToken } from "@/lib/api-client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { formatMaya } from "@/lib/utils/coin-format";
 
 export default function RequestSessionPage({
   params,
@@ -32,6 +33,8 @@ export default function RequestSessionPage({
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [availabilityWarning, setAvailabilityWarning] = useState<string | null>(null);
+  const [checkingAvailability, setCheckingAvailability] = useState(false);
 
   const [formData, setFormData] = useState({
     skills: [] as string[],
@@ -85,6 +88,52 @@ export default function RequestSessionPage({
 
     fetchData();
   }, [userId, isLoaded, isSignedIn, getToken]);
+
+  // Check availability when date, time, or duration changes
+  useEffect(() => {
+    const checkAvailability = async () => {
+      // Only check if we have all required data
+      if (!peer || !formData.date || !formData.time || !formData.duration) {
+        setAvailabilityWarning(null);
+        return;
+      }
+
+      try {
+        setCheckingAvailability(true);
+        setAvailabilityWarning(null);
+
+        // Construct the ISO date string for the requested time
+        const dateTimeString = `${formData.date}T${formData.time}:00`;
+        const localDateTime = new Date(dateTimeString);
+
+        // Check if the time is in the past
+        if (localDateTime < new Date()) {
+          setAvailabilityWarning('Cannot book sessions in the past');
+          return;
+        }
+
+        // Call the availability check API
+        const result = await peerSessionsApi.checkAvailability(
+          peer.id,
+          localDateTime.toISOString(),
+          parseInt(formData.duration)
+        );
+
+        if (!result.isAvailable) {
+          setAvailabilityWarning(result.reason || 'This time slot is not available');
+        }
+      } catch (err) {
+        console.error('Error checking availability:', err);
+        // Don't show error for availability check failures
+      } finally {
+        setCheckingAvailability(false);
+      }
+    };
+
+    // Debounce the availability check
+    const timeoutId = setTimeout(checkAvailability, 500);
+    return () => clearTimeout(timeoutId);
+  }, [peer, formData.date, formData.time, formData.duration]);
 
   // Show loading while Clerk is initializing
   if (!isLoaded) {
@@ -157,18 +206,24 @@ export default function RequestSessionPage({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!peer || !currentUser) return;
-    
+
     // Prevent users from requesting sessions to themselves
     if (peer.id === currentUser.id) {
       setError('You cannot request a session to yourself.');
       return;
     }
-    
+
     // Check if peer has set their hourly rate
     if (!peer.hourlyRate) {
       setError('This user has not set their hourly rate yet. Please contact them directly or ask them to set their rate in their profile.');
+      return;
+    }
+
+    // Check if there's an availability warning
+    if (availabilityWarning) {
+      setError('Cannot book this time slot: ' + availabilityWarning);
       return;
     }
     
@@ -202,6 +257,10 @@ export default function RequestSessionPage({
         const apiError = err as { response: { data: { code: string; message: string } } };
         if (apiError.response?.data?.code === 'CANNOT_REQUEST_SELF') {
           setError(apiError.response.data.message || 'You cannot request a session to yourself.');
+        } else if (apiError.response?.data?.code === 'TIME_SLOT_UNAVAILABLE') {
+          setError(apiError.response.data.message || 'The selected time slot is not available.');
+        } else if (apiError.response?.data?.code === 'INSUFFICIENT_FUNDS') {
+          setError('You do not have enough mAYA tokens to book this session. Please add funds to your wallet.');
         } else {
           setError(apiError.response?.data?.message || 'Failed to send session request');
         }
@@ -363,6 +422,37 @@ export default function RequestSessionPage({
                     </p>
                   </div>
 
+                  {/* Availability Warning */}
+                  {checkingAvailability && formData.date && formData.time && formData.duration && (
+                    <div className="p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md">
+                      <div className="flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                        <p className="text-sm text-blue-600 dark:text-blue-400">Checking availability...</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {availabilityWarning && !checkingAvailability && (
+                    <div className="p-3 bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-md">
+                      <div className="flex items-center gap-2">
+                        <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+                        <p className="text-sm text-yellow-600 dark:text-yellow-400 font-medium">Availability Issue</p>
+                      </div>
+                      <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">{availabilityWarning}</p>
+                    </div>
+                  )}
+
+                  {!checkingAvailability && !availabilityWarning && formData.date && formData.time && formData.duration && (
+                    <div className="p-3 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-md">
+                      <div className="flex items-center gap-2">
+                        <svg className="h-4 w-4 text-green-600 dark:text-green-400" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                          <path d="M5 13l4 4L19 7"></path>
+                        </svg>
+                        <p className="text-sm text-green-600 dark:text-green-400">This time slot is available!</p>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Message */}
                   <div className="space-y-2">
                     <Label htmlFor="message">Message (Optional)</Label>
@@ -464,7 +554,7 @@ export default function RequestSessionPage({
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Rate</span>
                     <span className="font-medium">
-                      {peer?.hourlyRate ? `${costPerHour} coins/hour` : 'Not set'}
+                      {peer?.hourlyRate ? <>{formatMaya(costPerHour)} <span className="text-[10px]">m</span>AYA/hour</> : 'Not set'}
                     </span>
                   </div>
                   <div className="border-t pt-2 mt-2">
@@ -473,7 +563,7 @@ export default function RequestSessionPage({
                       <div className="flex items-center gap-1">
                         <Coins className="h-4 w-4 text-yellow-600" />
                         <span className="font-semibold">
-                          {peer?.hourlyRate ? `${Math.round(calculatedCost)} coins` : 'N/A'}
+                          {peer?.hourlyRate ? <>{formatMaya(calculatedCost)} <span className="text-xs">m</span>AYA</> : 'N/A'}
                         </span>
                       </div>
                     </div>
@@ -487,7 +577,7 @@ export default function RequestSessionPage({
                     </span>
                     <div className="flex items-center gap-1">
                       <Coins className="h-4 w-4 text-yellow-600" />
-                      <span className="font-medium">{typeof currentUser.coins === 'string' ? parseFloat(currentUser.coins) : currentUser.coins} coins</span>
+                      <span className="font-medium">{formatMaya(typeof currentUser.coins === 'string' ? parseFloat(currentUser.coins) : currentUser.coins)} <span className="text-xs">m</span>AYA</span>
                     </div>
                   </div>
 

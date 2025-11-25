@@ -2,6 +2,8 @@ import { Injectable, NotFoundException, BadRequestException, ForbiddenException 
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ChatService } from '../chat/chat.service';
+import { StreaksService } from '../streaks/streaks.service';
+import { AchievementsService } from '../achievements/achievements.service';
 import { CreateStudyRoomDto, UpdateStudyRoomDto } from './dto/study-room.dto';
 import { SessionStatus, NotifType, PaymentStatus } from '@prisma/client';
 import { normalizeGoogleMeetLink } from '../utils/gmeet-generator';
@@ -13,6 +15,8 @@ export class StudyRoomsService {
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
     private chatService: ChatService,
+    private streaksService: StreaksService,
+    private achievementsService: AchievementsService,
   ) {}
 
   async getStudyRooms(

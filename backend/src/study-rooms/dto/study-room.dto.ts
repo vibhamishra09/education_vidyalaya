@@ -123,4 +123,7 @@ export class UpdateStudyRoomDto {
   @IsOptional()
   @IsString()
   gmeetLink?: string;
+
+  @IsOptional()
+  status?: SessionStatus;
 }

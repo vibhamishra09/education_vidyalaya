@@ -5,10 +5,11 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Users, Play, Clock, Calendar, Coins } from "lucide-react";
+import { Users, Play, Calendar, Coins } from "lucide-react";
 import { motion } from "framer-motion";
 import { StudyRoomCard, SessionStatus } from "@/types/api.types";
-import { formatDate, getRelativeTimeString } from "@/lib/utils/date-time";
+import { getRelativeTimeString } from "@/lib/utils/date-time";
+import { formatMaya } from "@/lib/utils/coin-format";
 
 interface StudyRoomCardBrowseProps {
   studyRoom: StudyRoomCard;
@@ -103,7 +104,7 @@ export function StudyRoomCardBrowse({ studyRoom }: StudyRoomCardBrowseProps) {
               <div className="flex items-center gap-2 text-sm">
                 <Coins className="h-4 w-4 text-yellow-600" />
                 <span className="text-yellow-600 font-medium">
-                  {parseFloat(studyRoom.joiningFee.toString()).toFixed(2)} coins to join
+                  {formatMaya(studyRoom.joiningFee)} <span className="text-xs">m</span>AYA to join
                 </span>
               </div>
             )}

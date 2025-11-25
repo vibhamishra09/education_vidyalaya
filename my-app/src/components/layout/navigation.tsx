@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Coins } from "lucide-react";
@@ -11,7 +12,7 @@ import { NotificationDropdown } from "./notification-dropdown";
 import { UserDropdown } from "./user-dropdown";
 import { CoinDropdown } from "./coin-dropdown";
 import { useCurrentUser } from "@/hooks/use-users";
-import { formatCoins } from "@/lib/utils/coin-format";
+import { formatMaya } from "@/lib/utils/coin-format";
 // import { isAuthError } from "@/lib/utils/error-handling";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent } from "@/components/ui/card";
@@ -33,10 +34,12 @@ export function Navigation() {
         <div className="flex h-16 items-center justify-between">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 relative group">
-            <img
+            <Image
               src="/logo_green.png"
               alt="Webyalaya"
-              className="h-8 object-contain rounded-md bg-white dark:bg-gray-900 px-1 transition-transform group-hover:scale-105"
+              width={32}
+              height={32}
+              className="object-contain rounded-md bg-white dark:bg-gray-900 px-1 transition-transform group-hover:scale-105"
             />
           </Link>
 
@@ -180,7 +183,7 @@ export function Navigation() {
                             <div className="flex items-center gap-1 mt-2 px-1">
                               <Coins className="h-4 w-4 text-yellow-600" />
                               <span className="text-sm font-medium">
-                                {isUserLoading ? '...' : formatCoins(currentUserData?.user?.coins)} coins
+                                {isUserLoading ? '...' : formatMaya(currentUserData?.user?.coins)} <span className="text-xs">m</span>AYA
                               </span>
                             </div>
                           </div>
