@@ -12,7 +12,6 @@ import {
   Users,
   ChevronDown,
   ChevronUp,
-  Video,
   BookOpen,
   ArrowRight
 } from "lucide-react";

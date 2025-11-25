@@ -5,10 +5,10 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Users, Play, Clock, Calendar, Coins } from "lucide-react";
+import { Users, Play, Calendar, Coins } from "lucide-react";
 import { motion } from "framer-motion";
 import { StudyRoomCard, SessionStatus } from "@/types/api.types";
-import { formatDate, getRelativeTimeString } from "@/lib/utils/date-time";
+import { getRelativeTimeString } from "@/lib/utils/date-time";
 import { formatMaya } from "@/lib/utils/coin-format";
 
 interface StudyRoomCardBrowseProps {

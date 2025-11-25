@@ -47,9 +47,9 @@ export default function DashboardPage() {
   const currentUser = currentUserData?.user;
   const metrics = dashboardData?.metrics || [];
   const pendingRequests = dashboardData?.pendingRequests || [];
-  const upcomingSessions = dashboardData?.upcomingSessions || [];
+  const upcomingSessions = useMemo(() => dashboardData?.upcomingSessions || [], [dashboardData?.upcomingSessions]);
   const pastSessions = dashboardData?.pastSessions || [];
-  const upcomingStudyRooms = dashboardData?.upcomingStudyRooms || [];
+  const upcomingStudyRooms = useMemo(() => dashboardData?.upcomingStudyRooms || [], [dashboardData?.upcomingStudyRooms]);
   const pastStudyRooms = dashboardData?.pastStudyRooms || [];
   const pendingReviews = dashboardData?.pendingReviews || 0;
 

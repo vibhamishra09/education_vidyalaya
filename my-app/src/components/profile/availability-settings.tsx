@@ -1,15 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, Clock, Calendar, Plus, Trash2, Save } from "lucide-react";
+import { Loader2, Clock, Calendar, Save } from "lucide-react";
 import { availabilityApi } from "@/lib/api";
-import type { UserAvailability, UserPreferences } from "@/lib/api/availability.api";
+import type { UserAvailability } from "@/lib/api/availability.api";
 import { toast } from "sonner";
 
 interface AvailabilitySettingsProps {
@@ -31,7 +31,6 @@ export function AvailabilitySettings({ userId, isOwnProfile = false }: Availabil
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [availability, setAvailability] = useState<UserAvailability[]>([]);
-  const [preferences, setPreferences] = useState<UserPreferences | null>(null);
 
   // Local state for editing
   const [editedAvailability, setEditedAvailability] = useState<
@@ -44,11 +43,7 @@ export function AvailabilitySettings({ userId, isOwnProfile = false }: Availabil
     maxFutureBooking: 30,
   });
 
-  useEffect(() => {
-    fetchData();
-  }, [userId]);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       const [availData, prefData] = await Promise.all([
@@ -70,7 +65,6 @@ export function AvailabilitySettings({ userId, isOwnProfile = false }: Availabil
       setEditedAvailability(editState);
 
       if (prefData) {
-        setPreferences(prefData);
         setEditedPreferences({
           bufferTime: prefData.bufferTime,
           minAdvanceTime: prefData.minAdvanceTime,
@@ -83,7 +77,11 @@ export function AvailabilitySettings({ userId, isOwnProfile = false }: Availabil
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId, isOwnProfile]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const handleDayToggle = (dayOfWeek: number, isActive: boolean) => {
     setEditedAvailability((prev) => ({
@@ -117,7 +115,7 @@ export function AvailabilitySettings({ userId, isOwnProfile = false }: Availabil
 
       // Convert edited state to API format
       const availabilityData = Object.entries(editedAvailability)
-        .filter(([_, data]) => data.isActive)
+        .filter(([, data]) => data.isActive)
         .map(([dayOfWeek, data]) => ({
           dayOfWeek: parseInt(dayOfWeek),
           startTime: data.startTime,

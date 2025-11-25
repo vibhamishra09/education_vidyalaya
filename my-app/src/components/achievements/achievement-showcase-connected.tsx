@@ -37,7 +37,7 @@ export function AchievementShowcaseConnected({ showProgress = true }: { showProg
     icon: apiAchievement.icon,
     category: apiAchievement.category.toLowerCase() as LocalAchievement['category'],
     rarity: apiAchievement.rarity.toLowerCase() as LocalAchievement['rarity'],
-    unlockedAt: apiAchievement.unlocked ? apiAchievement.unlockedAt : undefined,
+    unlockedAt: apiAchievement.unlocked && apiAchievement.unlockedAt !== null ? apiAchievement.unlockedAt : undefined,
     progress: apiAchievement.progress,
     maxProgress: apiAchievement.maxProgress,
     coins: apiAchievement.coinReward,

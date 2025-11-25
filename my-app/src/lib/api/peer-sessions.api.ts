@@ -85,7 +85,13 @@ export const peerSessionsApi = {
   ): Promise<{
     isAvailable: boolean;
     reason?: string;
-    conflicts?: any[];
+    conflicts?: Array<{
+      id: string;
+      type: 'session' | 'blocked_slot' | 'availability';
+      startTime: string;
+      endTime: string;
+      reason?: string;
+    }>;
   }> => {
     const response = await apiClient.get(`/api/availability/check/${userId}`, {
       params: { startTime, duration },
