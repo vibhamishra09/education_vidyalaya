@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, Suspense, useMemo } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useSearchParams } from "next/navigation";
 import { Navigation } from "@/components/layout/navigation";
@@ -18,25 +18,27 @@ import { SessionsTab } from "@/components/profile/sessions-tab";
 import { AvailabilitySettings } from "@/components/profile/availability-settings";
 import { AchievementShowcaseConnected } from "@/components/achievements/achievement-showcase-connected";
 import { Edit, Star, Coins, Loader2 } from "lucide-react";
-import { usersApi, reviewsApi } from "@/lib/api";
-import { User, ReviewCard } from "@/types/api.types";
-import { setAuthToken } from "@/lib/api-client";
+import { useProfileData } from "@/hooks/use-profile-data";
 import { formatMaya } from "@/lib/utils/coin-format";
 
 function ProfileContent() {
   const searchParams = useSearchParams();
-  const { isSignedIn, isLoaded, getToken } = useAuth();
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [userReviews, setUserReviews] = useState<ReviewCard[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { isSignedIn, isLoaded } = useAuth();
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"about" | "sessions" | "wallet" | "reviews">("about");
 
-  const avgRating =
-    userReviews.length > 0
-      ? userReviews.reduce((acc, r) => acc + r.rating, 0) / userReviews.length
-      : 0;
+  // Use React Query hook for optimized data fetching
+  const {
+    data: profileData,
+    isLoading: loading,
+    error: queryError,
+    refetch,
+  } = useProfileData();
+
+  const currentUser = profileData?.user || null;
+  const userReviews = profileData?.reviews || [];
+  const avgRating = profileData?.avgRating || 0;
+  const error = queryError ? 'Failed to load profile data' : null;
 
   // Handle URL parameters for tab navigation
   useEffect(() => {
@@ -46,50 +48,10 @@ function ProfileContent() {
     }
   }, [searchParams]);
 
-
-  useEffect(() => {
-    const fetchUserData = async () => {
-      // Wait for Clerk to load
-      if (!isLoaded) {
-        return;
-      }
-
-      // Check if user is signed in
-      if (!isSignedIn) {
-        setError('Please sign in to view your profile');
-        setLoading(false);
-        return;
-      }
-
-      try {
-        setLoading(true);
-        setError(null);
-        
-        // Get token and set it for API calls
-        const token = await getToken();
-        if (token) {
-          setAuthToken(token);
-          console.log('Token set for API calls:', token);
-        }
-        
-        // Fetch current user data and reviews in parallel
-        const [userData, reviewsResponse] = await Promise.all([
-          usersApi.getCurrentUser(),
-          reviewsApi.getReviews({ userId: 'me' }) // Get reviews for current user
-        ]);
-        
-        setCurrentUser(userData.user);
-        setUserReviews(reviewsResponse.reviews || []);
-      } catch (err) {
-        console.error('Error fetching user data:', err);
-        setError('Failed to load profile data');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchUserData();
-  }, [isLoaded, isSignedIn, getToken]);
+  // Update current user after editing profile
+  const handleUserUpdate = () => {
+    refetch();
+  };
 
   // Show loading while Clerk is initializing
   if (!isLoaded) {
@@ -334,8 +296,8 @@ function ProfileContent() {
           {/* Wallet Tab */}
           {activeTab === "wallet" && <TabsContent>
             <WalletTab
-              coins={typeof currentUser.coins === 'number' ? currentUser.coins : undefined}
-              hourlyRate={typeof currentUser.hourlyRate === 'number' ? currentUser.hourlyRate : undefined}
+              coins={currentUser.coins}
+              hourlyRate={currentUser.hourlyRate}
               isLoading={loading}
             />
           </TabsContent>}
@@ -343,7 +305,62 @@ function ProfileContent() {
           {/* Reviews Tab */}
           {activeTab === "reviews" && <TabsContent>
             <div className="space-y-6">
-              <UserReviewStats userId={currentUser.id} showTitle={true} />
+              {/* Review Statistics - Pass reviews directly to avoid duplicate fetching */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Review Statistics</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {/* Overall Stats */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="text-center">
+                      <div className="flex items-center justify-center gap-1 mb-1">
+                        <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
+                        <span className="text-2xl font-bold">{avgRating.toFixed(1)}</span>
+                      </div>
+                      <p className="text-sm text-muted-foreground">Average Rating</p>
+                    </div>
+                    <div className="text-center">
+                      <div className="flex items-center justify-center gap-1 mb-1">
+                        <Star className="h-5 w-5 text-primary" />
+                        <span className="text-2xl font-bold">{userReviews.length}</span>
+                      </div>
+                      <p className="text-sm text-muted-foreground">Total Reviews</p>
+                    </div>
+                  </div>
+
+                  {/* Rating Distribution */}
+                  {userReviews.length > 0 && (
+                    <div className="space-y-3">
+                      <h4 className="font-semibold text-sm">Rating Distribution</h4>
+                      {[5, 4, 3, 2, 1].map((rating) => {
+                        const count = userReviews.filter(r => r.rating === rating).length;
+                        const percentage = (count / userReviews.length) * 100;
+                        return (
+                          <div key={rating} className="flex items-center gap-3">
+                            <div className="flex items-center gap-1 w-8">
+                              <span className="text-sm font-medium">{rating}</span>
+                              <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                            </div>
+                            <div className="flex-1 bg-muted rounded-full h-2">
+                              <div
+                                className="bg-yellow-400 h-2 rounded-full transition-all duration-300"
+                                style={{ width: `${percentage}%` }}
+                              />
+                            </div>
+                            <div className="flex items-center gap-2 w-16">
+                              <span className="text-sm text-muted-foreground">{count}</span>
+                              <Badge variant="secondary" className="text-xs">
+                                {percentage.toFixed(0)}%
+                              </Badge>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
 
               {/* All Reviews */}
               <div>
@@ -389,7 +406,7 @@ function ProfileContent() {
           isOpen={isEditModalOpen}
           onClose={() => setIsEditModalOpen(false)}
           user={currentUser}
-          onUserUpdate={setCurrentUser}
+          onUserUpdate={handleUserUpdate}
         />
       )}
     </div>

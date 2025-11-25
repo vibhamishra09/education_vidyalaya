@@ -1,10 +1,12 @@
 "use client";
 
+import { memo } from "react";
 import { Calendar, Clock, Users, TrendingUp } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StreakTrackerConnected } from "@/components/profile/streak-tracker-connected";
+import { useUserStats } from "@/hooks/use-user-stats";
 import Link from "next/link";
 
 interface SessionsTabProps {
@@ -12,14 +14,10 @@ interface SessionsTabProps {
   isLoading?: boolean;
 }
 
-export function SessionsTab({ isLoading = false }: SessionsTabProps) {
-  // Placeholder stats - you can replace with actual data from API
-  const stats = {
-    totalSessions: 0,
-    hoursCompleted: 0,
-    averageRating: 0,
-    completionRate: 0,
-  };
+export const SessionsTab = memo(function SessionsTab({ userId, isLoading = false }: SessionsTabProps) {
+  const { data: stats, isLoading: statsLoading } = useUserStats(userId);
+
+  const isDataLoading = isLoading || statsLoading;
 
   return (
     <div className="space-y-6">
@@ -33,10 +31,10 @@ export function SessionsTab({ isLoading = false }: SessionsTabProps) {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Total Sessions</p>
-                {isLoading ? (
+                {isDataLoading ? (
                   <Skeleton className="h-8 w-16" />
                 ) : (
-                  <p className="text-2xl font-bold">{stats.totalSessions}</p>
+                  <p className="text-2xl font-bold">{stats?.totalSessions || 0}</p>
                 )}
               </div>
               <div className="p-3 bg-blue-100 rounded-full">
@@ -51,10 +49,10 @@ export function SessionsTab({ isLoading = false }: SessionsTabProps) {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Hours Completed</p>
-                {isLoading ? (
+                {isDataLoading ? (
                   <Skeleton className="h-8 w-16" />
                 ) : (
-                  <p className="text-2xl font-bold">{stats.hoursCompleted}</p>
+                  <p className="text-2xl font-bold">{stats?.hoursCompleted || 0}</p>
                 )}
               </div>
               <div className="p-3 bg-green-100 rounded-full">
@@ -69,11 +67,11 @@ export function SessionsTab({ isLoading = false }: SessionsTabProps) {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Avg. Rating</p>
-                {isLoading ? (
+                {isDataLoading ? (
                   <Skeleton className="h-8 w-16" />
                 ) : (
                   <p className="text-2xl font-bold">
-                    {stats.averageRating > 0 ? stats.averageRating.toFixed(1) : 'N/A'}
+                    {stats?.averageRating && stats.averageRating > 0 ? stats.averageRating.toFixed(1) : 'N/A'}
                   </p>
                 )}
               </div>
@@ -89,11 +87,11 @@ export function SessionsTab({ isLoading = false }: SessionsTabProps) {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Completion Rate</p>
-                {isLoading ? (
+                {isDataLoading ? (
                   <Skeleton className="h-8 w-16" />
                 ) : (
                   <p className="text-2xl font-bold">
-                    {stats.completionRate > 0 ? `${stats.completionRate}%` : 'N/A'}
+                    {stats?.completionRate && stats.completionRate > 0 ? `${stats.completionRate}%` : 'N/A'}
                   </p>
                 )}
               </div>
@@ -125,4 +123,4 @@ export function SessionsTab({ isLoading = false }: SessionsTabProps) {
       </Card>
     </div>
   );
-}
+});

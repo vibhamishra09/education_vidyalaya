@@ -15,6 +15,7 @@ import { ArrowLeft, Coins, Loader2, AlertCircle } from "lucide-react";
 import { usersApi, peerSessionsApi } from "@/lib/api";
 import { User } from "@/types/api.types";
 import { setAuthToken } from "@/lib/api-client";
+import { AvailabilityCalendar } from "@/components/availability/availability-calendar";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatMaya } from "@/lib/utils/coin-format";
@@ -361,52 +362,15 @@ export default function RequestSessionPage({
                     )}
                   </div>
 
-                  {/* Date & Time */}
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="date">Date *</Label>
-                      <Input
-                        id="date"
-                        type="date"
-                        value={formData.date}
-                        onChange={(e) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            date: e.target.value,
-                          }))
-                        }
-                        required
-                        min={new Date().toISOString().split("T")[0]}
-                        disabled={isSelfRequest}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="time">Time *</Label>
-                      <Input
-                        id="time"
-                        type="time"
-                        value={formData.time}
-                        onChange={(e) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            time: e.target.value,
-                          }))
-                        }
-                        required
-                        disabled={isSelfRequest}
-                      />
-                    </div>
-                  </div>
-
                   {/* Duration */}
                   <div className="space-y-2">
                     <Label htmlFor="duration">Duration (minutes) *</Label>
                     <Input
                       id="duration"
                       type="number"
-                      min="1"
+                      min="30"
                       max="180"
-                      step="1"
+                      step="30"
                       value={formData.duration}
                       onChange={(e) =>
                         setFormData((prev) => ({
@@ -418,9 +382,68 @@ export default function RequestSessionPage({
                       disabled={isSelfRequest}
                     />
                     <p className="text-sm text-muted-foreground">
-                      Between 1 and 180 minutes
+                      Between 30 and 180 minutes (in 30-minute increments)
                     </p>
                   </div>
+
+                  {/* Availability Calendar */}
+                  {!isSelfRequest && formData.duration && (
+                    <AvailabilityCalendar
+                      peerId={peer.id}
+                      duration={parseInt(formData.duration)}
+                      onSlotSelect={(date, time) => {
+                        setFormData((prev) => ({
+                          ...prev,
+                          date,
+                          time,
+                        }));
+                      }}
+                      selectedDate={formData.date}
+                      selectedTime={formData.time}
+                    />
+                  )}
+
+                  {/* Manual Date & Time (fallback/override) */}
+                  <details className="space-y-4">
+                    <summary className="text-sm font-medium cursor-pointer text-muted-foreground hover:text-foreground">
+                      Or manually enter date and time
+                    </summary>
+                    <div className="grid sm:grid-cols-2 gap-4 pt-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="date">Date *</Label>
+                        <Input
+                          id="date"
+                          type="date"
+                          value={formData.date}
+                          onChange={(e) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              date: e.target.value,
+                            }))
+                          }
+                          required
+                          min={new Date().toISOString().split("T")[0]}
+                          disabled={isSelfRequest}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="time">Time *</Label>
+                        <Input
+                          id="time"
+                          type="time"
+                          value={formData.time}
+                          onChange={(e) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              time: e.target.value,
+                            }))
+                          }
+                          required
+                          disabled={isSelfRequest}
+                        />
+                      </div>
+                    </div>
+                  </details>
 
                   {/* Availability Warning */}
                   {checkingAvailability && formData.date && formData.time && formData.duration && (
