@@ -2,6 +2,8 @@ import { Injectable, NotFoundException, BadRequestException, ForbiddenException 
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ChatService } from '../chat/chat.service';
+import { StreaksService } from '../streaks/streaks.service';
+import { AchievementsService } from '../achievements/achievements.service';
 import { CreateStudyRoomDto, UpdateStudyRoomDto } from './dto/study-room.dto';
 import { SessionStatus, NotifType, PaymentStatus } from '@prisma/client';
 import { normalizeGoogleMeetLink } from '../utils/gmeet-generator';
@@ -13,6 +15,8 @@ export class StudyRoomsService {
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
     private chatService: ChatService,
+    private streaksService: StreaksService,
+    private achievementsService: AchievementsService,
   ) {}
 
   async getStudyRooms(
@@ -474,5 +478,143 @@ export class StudyRoomsService {
       success: true,
       message: 'Successfully joined study room',
     };
+  }
+
+  async updateStudyRoomStatus(studyRoomId: string, userId: string, status: SessionStatus) {
+    // userId is actually clerkId, so we need to find the user by clerkId first
+    const user = await this.prisma.user.findUnique({
+      where: { clerkId: userId },
+      select: { id: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const studyRoom = await this.prisma.studyRoom.findUnique({
+      where: { id: studyRoomId },
+      include: {
+        learners: {
+          include: {
+            user: true,
+          },
+        },
+        payments: true,
+      },
+    });
+
+    if (!studyRoom) {
+      throw new NotFoundException('Study room not found');
+    }
+
+    // Only creator can update status
+    if (studyRoom.createdById !== user.id) {
+      throw new ForbiddenException('Only the creator can update study room status');
+    }
+
+    // Update study room status
+    await this.prisma.studyRoom.update({
+      where: { id: studyRoomId },
+      data: { sessionStatus: status },
+    });
+
+    // If status is DONE, handle payments and track activity
+    if (status === SessionStatus.DONE && studyRoom.payments.length > 0) {
+      // Release payments from escrow
+      for (const payment of studyRoom.payments) {
+        if (payment.paymentStatus === PaymentStatus.ESCROW) {
+          await this.prisma.$transaction(async (tx) => {
+            // Transfer coins to creator
+            await tx.user.update({
+              where: { id: payment.receivedById },
+              data: {
+                coins: {
+                  increment: payment.amountReceived || 0,
+                },
+              },
+            });
+
+            // Update payment status
+            await tx.payment.update({
+              where: { id: payment.id },
+              data: { paymentStatus: PaymentStatus.RECEIVED },
+            });
+          });
+        }
+      }
+
+      // Track activity for creator (teacher)
+      const coinsEarned = studyRoom.payments.reduce(
+        (sum, p) => sum + Number(p.amountReceived || 0),
+        0,
+      );
+
+      await this.streaksService.updateUserActivity(
+        studyRoom.createdById,
+        studyRoom.date,
+        studyRoom.duration,
+        'teacher',
+        coinsEarned,
+      );
+
+      // Track activity for all learners
+      for (const learner of studyRoom.learners) {
+        await this.streaksService.updateUserActivity(
+          learner.userId,
+          studyRoom.date,
+          studyRoom.duration,
+          'learner',
+          0, // Learners don't earn coins from study rooms
+        );
+      }
+
+      // Check session achievements for creator (teacher)
+      await this.achievementsService.checkSessionAchievements(
+        studyRoom.createdById,
+        'teacher',
+      );
+
+      // Check session achievements for all learners
+      for (const learner of studyRoom.learners) {
+        await this.achievementsService.checkSessionAchievements(
+          learner.userId,
+          'learner',
+        );
+      }
+
+      // Check streak achievements for creator
+      const creatorStreak = await this.streaksService.getUserStreak(studyRoom.createdById);
+      await this.achievementsService.checkStreakAchievements(
+        studyRoom.createdById,
+        creatorStreak.currentStreak,
+      );
+
+      // Check streak achievements for all learners
+      for (const learner of studyRoom.learners) {
+        const learnerStreak = await this.streaksService.getUserStreak(learner.userId);
+        await this.achievementsService.checkStreakAchievements(
+          learner.userId,
+          learnerStreak.currentStreak,
+        );
+      }
+
+      // Notify all participants about completion
+      const participants = [studyRoom.createdById, ...studyRoom.learners.map((l) => l.userId)];
+      for (const participantId of participants) {
+        await this.notificationsService.createAndPushNotification(
+          participantId,
+          `Study room "${studyRoom.title}" has been completed`,
+          'Session Completed',
+          NotifType.NORMAL,
+          {
+            actionType: 'STUDYROOM_COMPLETED',
+            studyRoomId: studyRoomId,
+            actionData: { sessionId: studyRoomId, sessionType: 'studyRoom' },
+          },
+        );
+      }
+    }
+
+    return this.getStudyRoomDetails(studyRoomId, userId);
   }
 }

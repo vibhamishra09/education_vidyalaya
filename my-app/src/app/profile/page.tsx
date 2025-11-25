@@ -15,9 +15,8 @@ import { EditProfileModal } from "@/components/modals/edit-profile-modal";
 import { UserReviewStats } from "@/components/reviews/user-review-stats";
 import { WalletTab } from "@/components/profile/wallet-tab";
 import { SessionsTab } from "@/components/profile/sessions-tab";
-import { AchievementShowcase } from "@/components/achievements/achievement-showcase";
-import { StreakTracker } from "@/components/profile/streak-tracker";
-import { MOCK_ACHIEVEMENTS } from "@/types/achievements.types";
+import { AvailabilitySettings } from "@/components/profile/availability-settings";
+import { AchievementShowcaseConnected } from "@/components/achievements/achievement-showcase-connected";
 import { Edit, Star, Coins, Loader2 } from "lucide-react";
 import { usersApi, reviewsApi } from "@/lib/api";
 import { User, ReviewCard } from "@/types/api.types";
@@ -314,22 +313,15 @@ function ProfileContent() {
                       </div>
                     </CardContent>
                   </Card>
+
+                  {/* Achievement Showcase */}
+                  <AchievementShowcaseConnected />
                 </div>
 
-                {/* Reviews Summary & Streak */}
-                <div className="space-y-6">
-                  <UserReviewStats userId={currentUser.id} showTitle={true} />
-
-                  <StreakTracker
-                    currentStreak={7}
-                    longestStreak={14}
-                  />
+                {/* Availability Settings */}
+                <div>
+                  <AvailabilitySettings userId={currentUser.id} isOwnProfile={true} />
                 </div>
-              </div>
-
-              {/* Achievement Showcase */}
-              <div className="mt-6">
-                <AchievementShowcase achievements={MOCK_ACHIEVEMENTS} />
               </div>
             </div>
           </TabsContent>}

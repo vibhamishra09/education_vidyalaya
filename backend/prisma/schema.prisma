@@ -23,6 +23,15 @@ model User {
   createdAt             DateTime               @default(now())
   onboarded             Boolean                @default(false)
   updatedAt             DateTime               @updatedAt
+  // Availability settings
+  bufferTime            Int                    @default(15) // Minutes between sessions
+  minAdvanceTime        Int                    @default(120) // Minimum minutes before booking
+  maxFutureBooking      Int                    @default(30) // Maximum days in future for booking
+  // Streak tracking
+  currentStreak         Int                    @default(0)
+  longestStreak         Int                    @default(0)
+  lastActivityDate      DateTime?
+  timezone              String                 @default("UTC")
   metrics               Metrics?
   notifications         Notification[]
   pushSubscriptions     PushSubscription[]
@@ -37,6 +46,10 @@ model User {
   userSkills            UserSkill[]
   channelMemberships ChannelMember[]
   messagesSent       Message[]
+  availability          UserAvailability[]
+  blockedSlots          BlockedTimeSlot[]
+  achievements          UserAchievement[]
+  dailyActivities       DailyActivity[]
 }
 
 model StudyRoom {
@@ -258,4 +271,93 @@ model Message {
 
   channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
   sender    User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+}
+
+model UserAvailability {
+  id        String   @id @default(cuid())
+  userId    String
+  dayOfWeek Int      // 0-6 (Sunday=0, Monday=1, ..., Saturday=6)
+  startTime String   // HH:MM format (e.g., "09:00")
+  endTime   String   // HH:MM format (e.g., "17:00")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dayOfWeek])
+  @@index([userId])
+}
+
+model BlockedTimeSlot {
+  id        String   @id @default(cuid())
+  userId    String
+  startTime DateTime // UTC timestamp for blocked period start
+  endTime   DateTime // UTC timestamp for blocked period end
+  reason    String?  // Optional reason for blocking
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([startTime, endTime])
+}
+
+model Achievement {
+  id               String            @id @default(cuid())
+  title            String
+  description      String
+  icon             String
+  category         AchievementCategory
+  rarity           AchievementRarity
+  maxProgress      Int               @default(1)
+  coinReward       Int               @default(0)
+  createdAt        DateTime          @default(now())
+  userAchievements UserAchievement[]
+}
+
+model UserAchievement {
+  id            String       @id @default(cuid())
+  userId        String
+  achievementId String
+  progress      Int          @default(0)
+  unlockedAt    DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement   Achievement  @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, achievementId])
+  @@index([userId])
+  @@index([achievementId])
+}
+
+model DailyActivity {
+  id             String   @id @default(cuid())
+  userId         String
+  date           DateTime // Date normalized to midnight in user's timezone
+  sessionCount   Int      @default(0)
+  minutesLearned Int      @default(0)
+  minutesTaught  Int      @default(0)
+  coinsEarned    Decimal  @db.Decimal(36, 16) @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId, date])
+}
+
+enum AchievementCategory {
+  LEARNING
+  TEACHING
+  SOCIAL
+  MILESTONE
+  STREAK
+}
+
+enum AchievementRarity {
+  COMMON
+  RARE
+  EPIC
+  LEGENDARY
 }
