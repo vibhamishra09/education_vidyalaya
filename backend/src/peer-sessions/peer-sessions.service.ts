@@ -432,4 +432,33 @@ export class PeerSessionsService {
       }
     }
   }
+
+  async checkIsHost(peerSessionId: string, userId: string) {
+    // userId is actually clerkId, so we need to find the user by clerkId first
+    const user = await this.prisma.user.findUnique({
+      where: { clerkId: userId },
+      select: { id: true },
+    });
+
+    if (!user) {
+      throw new BadRequestException({
+        code: 'USER_NOT_FOUND',
+        message: 'User not found',
+      });
+    }
+
+    const peerSession = await this.prisma.peerSession.findUnique({
+      where: { id: peerSessionId },
+      select: { requestedToId: true },
+    });
+
+    if (!peerSession) {
+      throw new NotFoundException('Peer session not found');
+    }
+
+    // For peer sessions, the host is the tutor (requestedToId)
+    const isHost = peerSession.requestedToId === user.id;
+
+    return { isHost };
+  }
 }
