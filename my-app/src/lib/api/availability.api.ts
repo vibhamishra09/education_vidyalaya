@@ -28,10 +28,18 @@ export interface UserPreferences {
   maxFutureBooking: number; // Maximum days in future
 }
 
+export interface AvailabilityConflict {
+  id: string;
+  type: 'session' | 'blocked_slot' | 'availability';
+  startTime: string;
+  endTime: string;
+  reason?: string;
+}
+
 export interface AvailabilityCheck {
   isAvailable: boolean;
   reason?: string;
-  conflicts?: any[];
+  conflicts?: AvailabilityConflict[];
 }
 
 export interface AvailableSlot {
