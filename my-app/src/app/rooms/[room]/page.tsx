@@ -13,7 +13,13 @@ export default function RoomPage() {
 	const { getToken } = useAuth()
 	const [token, setToken] = useState<string | null>(null)
 	const [channelId, setChannelId] = useState<string | null>(null)
-	const [sessionData, setSessionData] = useState<any>(null)
+	const [sessionData, setSessionData] = useState<{
+		id: string;
+		date: string;
+		duration: number;
+		sessionType: 'studyRoom' | 'peerSession';
+		[key: string]: unknown;
+	} | null>(null)
 	const [isHost, setIsHost] = useState<boolean>(false)
 	const [error, setError] = useState<string | null>(null)
 	const [loading, setLoading] = useState(true)
@@ -34,7 +40,7 @@ export default function RoomPage() {
 				const roomId = roomName.split('-')[1]
 
 				// Fetch LiveKit token, channel ID, and session data
-				const promises: Promise<any>[] = [
+				const promises: Promise<{ data: { token?: string; channelId?: string; [key: string]: unknown } } | null>[] = [
 					axios.post(
 						`${process.env.NEXT_PUBLIC_API_URL}/api/livekit/token`,
 						{ roomName },
@@ -73,14 +79,17 @@ export default function RoomPage() {
 				const results = await Promise.all(promises)
 
 				if (!mounted) return
-				setToken(results[0].data.token)
+				if (results[0]?.data?.token) {
+					setToken(results[0].data.token as string)
+				}
 				if (results[1]?.data?.channelId) {
-					setChannelId(results[1].data.channelId)
+					setChannelId(results[1].data.channelId as string)
 				}
 				if (results[2]?.data) {
 					// Add session type to sessionData
+					const data = results[2].data as { id: string; date: string; duration: number; [key: string]: unknown };
 					setSessionData({
-						...results[2].data,
+						...data,
 						sessionType: isStudyRoom ? 'studyRoom' : 'peerSession',
 					})
 
@@ -97,7 +106,7 @@ export default function RoomPage() {
 						if (mounted) {
 							setIsHost(hostResponse.data.isHost || false)
 						}
-					} catch (hostError) {
+					} catch {
 						// If host check fails, default to false (safer)
 						if (mounted) {
 							setIsHost(false)

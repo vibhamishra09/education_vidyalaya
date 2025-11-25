@@ -14,11 +14,19 @@ import { SessionEndedDialog } from '@/components/study-room/session-ended-dialog
 import { useToast } from '@/contexts/toast-context'
 import { useAuth } from '@clerk/nextjs'
 
+interface SessionData {
+	id: string;
+	date: string;
+	duration: number;
+	sessionType: 'studyRoom' | 'peerSession';
+	[key: string]: unknown;
+}
+
 interface EnhancedVideoRoomProps {
 	token: string
 	serverUrl: string
 	channelId?: string | null
-	sessionData?: any
+	sessionData?: SessionData | null
 	isHost?: boolean
 }
 

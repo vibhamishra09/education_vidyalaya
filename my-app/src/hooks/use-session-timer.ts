@@ -47,7 +47,6 @@ export function useSessionTimer({ startTime, duration, onTimeUp, onWarning, enab
 
 			const durationMs = duration * 60000;
 			const remainingMs = Math.max(0, durationMs - spent);
-			const minutesLeft = Math.floor(remainingMs / 60000);
 
 			// Trigger warning at exactly 5:00 (300 seconds = 300000ms)
 			if (remainingMs <= 300000 && remainingMs > 240000 && !warningShownRef.current) {
