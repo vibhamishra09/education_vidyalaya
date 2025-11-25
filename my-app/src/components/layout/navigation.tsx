@@ -37,8 +37,8 @@ export function Navigation() {
             <Image
               src="/logo_green.png"
               alt="Webyalaya"
-              width={32}
-              height={32}
+              width={128}
+              height={128}
               className="object-contain rounded-md bg-white dark:bg-gray-900 px-1 transition-transform group-hover:scale-105"
             />
           </Link>
