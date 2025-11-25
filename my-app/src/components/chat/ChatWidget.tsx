@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { io, Socket } from 'socket.io-client'
 import { useUser, useAuth } from '@clerk/nextjs'
 import apiClient from '@/lib/api-client'
@@ -27,7 +27,7 @@ export function ChatWidget({ channelId, className = '' }: ChatWidgetProps) {
 	const { user, isLoaded } = useUser()
 	const { getToken } = useAuth()
 	const [messages, setMessages] = useState<Message[]>([])
-	const socketRef = useRef<Socket | null>(null)
+	const [socket, setSocket] = useState<Socket | null>(null)
 	const [error, setError] = useState<string | null>(null)
 	const [isConnecting, setIsConnecting] = useState(false)
 
@@ -62,9 +62,9 @@ export function ChatWidget({ channelId, className = '' }: ChatWidgetProps) {
 
 	useEffect(() => {
 		if (!channelId || !isLoaded || !user || !getToken) {
-			if (socketRef.current) {
-				socketRef.current.disconnect()
-				socketRef.current = null
+			if (socket) {
+				socket.disconnect()
+				setSocket(null)
 			}
 			return
 		}
@@ -92,7 +92,6 @@ export function ChatWidget({ channelId, className = '' }: ChatWidgetProps) {
 				})
 				
 				socketInstance = s
-				socketRef.current = s
 				
 				s.on('connect', () => {
 					console.log('Socket connected, joining channel:', channelId)
@@ -105,19 +104,12 @@ export function ChatWidget({ channelId, className = '' }: ChatWidgetProps) {
 					setError(null) // Clear any previous errors
 				})
 				
-			s.on('message:new', (msg: Message) => {
-				console.log('Received new message:', msg)
-				setMessages((prev) => {
-					// Prevent duplicate messages
-					if (prev.some(m => m.id === msg.id)) {
-						console.warn('Duplicate message detected, ignoring:', msg.id)
-						return prev
-					}
-					return [...prev, msg]
+				s.on('message:new', (msg: Message) => {
+					console.log('Received new message:', msg)
+					setMessages((prev) => [...prev, msg])
 				})
-			})
-		
-		s.on('connect_error', (err: Error) => {
+				
+				s.on('connect_error', (err: Error) => {
 					console.error('Socket connection error:', err)
 					setError(err.message || 'Connection error')
 					setIsConnecting(false)
@@ -131,6 +123,8 @@ export function ChatWidget({ channelId, className = '' }: ChatWidgetProps) {
 				s.on('disconnect', (reason) => {
 					console.log('Socket disconnected:', reason)
 				})
+				
+				setSocket(s)
 			} catch (err: unknown) {
 				console.error('Failed to connect socket:', err)
 				const errorMessage = err instanceof Error ? err.message : 'Failed to connect'
@@ -148,7 +142,7 @@ export function ChatWidget({ channelId, className = '' }: ChatWidgetProps) {
 			}
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [channelId, isLoaded, getToken])
+	}, [channelId, isLoaded, user, getToken])
 
 	if (!channelId) {
 		return (
@@ -175,11 +169,11 @@ export function ChatWidget({ channelId, className = '' }: ChatWidgetProps) {
 	}
 
 	const onSend = async (text: string) => {
-		if (!socketRef.current || !socketRef.current.connected) {
+		if (!socket || !socket.connected) {
 			setError('Not connected to chat server')
 			return
 		}
-		socketRef.current.emit('message:send', { channelId, content: text })
+		socket.emit('message:send', { channelId, content: text })
 	}
 
 	const isFullHeight = className.includes('h-full')

@@ -1,6 +1,5 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Flame, TrendingUp } from "lucide-react";
@@ -23,12 +22,6 @@ export function StreakTracker({
   longestStreak,
   streakDays,
 }: StreakTrackerProps) {
-  const [isMounted, setIsMounted] = useState(false);
-
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
-
   // Generate last 14 days if no data provided
   const days = streakDays || generateMockStreakDays();
 
@@ -74,7 +67,7 @@ export function StreakTracker({
           <h4 className="text-sm font-medium mb-3">Last 14 Days</h4>
           <div className="grid grid-cols-7 gap-2">
             {days.map((day, index) => {
-              const isToday = isMounted && isDateToday(day.date);
+              const isToday = isDateToday(day.date);
               return (
                 <div
                   key={index}

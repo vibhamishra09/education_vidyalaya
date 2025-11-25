@@ -85,13 +85,4 @@ export class PeerSessionsController {
   ) {
     return this.peerSessionsService.completePeerSession(peerSessionId, userId);
   }
-
-  @Get(':peerSessionId/is-host')
-  @UseGuards(ClerkAuthGuard)
-  async checkIsHost(
-    @Param('peerSessionId') peerSessionId: string,
-    @CurrentUser() userId: string,
-  ) {
-    return this.peerSessionsService.checkIsHost(peerSessionId, userId);
-  }
 }

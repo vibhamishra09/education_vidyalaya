@@ -1,89 +1,25 @@
 'use client'
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { LiveKitRoom, useParticipants, useRoomContext, useTrackToggle, useTracks, GridLayout, ParticipantTile, RoomAudioRenderer } from '@livekit/components-react'
 import { Track } from 'livekit-client'
 import '@livekit/components-styles'
 import { ChatWidget } from '@/components/chat/ChatWidget'
 import { Button } from '@/components/ui/button'
-import { MessageSquare, X, Users, Maximize2, Minimize2, Video, VideoOff, Mic, MicOff, Volume2, VolumeX, Clock } from 'lucide-react'
+import { MessageSquare, X, Users, Maximize2, Minimize2, Video, VideoOff, Mic, MicOff, Volume2, VolumeX } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
-import { useSessionTimer } from '@/hooks/use-session-timer'
-import { SessionEndWarningDialog } from '@/components/study-room/session-end-warning-dialog'
-import { SessionEndedDialog } from '@/components/study-room/session-ended-dialog'
-import { useToast } from '@/contexts/toast-context'
-import { useAuth } from '@clerk/nextjs'
 
 interface EnhancedVideoRoomProps {
 	token: string
 	serverUrl: string
 	channelId?: string | null
-	sessionData?: any
-	isHost?: boolean
 }
 
-export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, isHost = false }: EnhancedVideoRoomProps) {
+export function EnhancedVideoRoom({ token, serverUrl, channelId }: EnhancedVideoRoomProps) {
 	const [showChat, setShowChat] = useState(false) // Start hidden on mobile
 	const [showParticipants, setShowParticipants] = useState(false)
 	const [isFullscreen, setIsFullscreen] = useState(false)
-	const [showWarning, setShowWarning] = useState(false)
-	const [showEnded, setShowEnded] = useState(false)
 	const router = useRouter()
-	const { showSuccess } = useToast()
-	const { getToken } = useAuth()
-
-	// Store showSuccess in ref to avoid recreating handleWarning callback
-	const showSuccessRef = useRef(showSuccess)
-	useEffect(() => {
-		showSuccessRef.current = showSuccess
-	}, [showSuccess])
-
-	// Calculate session start time and duration (only if sessionData exists)
-	const sessionStartTime = sessionData?.date ? new Date(sessionData.date) : null
-	const sessionDuration = sessionData?.duration || 0 // in minutes
-	
-	// Convert to stable timestamp (use 0 as fallback to avoid hydration issues)
-	const sessionStartTimestamp = sessionStartTime ? sessionStartTime.getTime() : 0
-
-	// Session timer with warnings (only if we have start time and duration)
-	const timerEnabled = !!sessionStartTime && sessionDuration > 0 && !!sessionData
-	
-	const handleTimeUp = useCallback(async () => {
-		// Only host should call the backend to complete the session
-		if (sessionData?.id && sessionData?.sessionType && isHost) {
-			try {
-				const authToken = await getToken()
-				const endpoint = sessionData.sessionType === 'studyRoom'
-					? `/api/study-rooms/${sessionData.id}/complete`
-					: `/api/peer-sessions/${sessionData.id}/complete`
-				
-				await fetch(`${process.env.NEXT_PUBLIC_API_URL}${endpoint}`, {
-					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json',
-						'Authorization': `Bearer ${authToken}`,
-					},
-				})
-			} catch (error) {
-				console.error('Error completing session:', error)
-			}
-		}
-		// Show ended dialog for all users (host and participants)
-		setShowEnded(true)
-	}, [sessionData?.id, sessionData?.sessionType, isHost, getToken])
-
-	const handleWarning = useCallback((minutes: number) => {
-		setShowWarning(true)
-		showSuccessRef.current('⏰ Session Ending Soon', `Your session will end in ${minutes} minutes.`)
-	}, [])
-	
-	const { formattedTime, minutesLeft } = useSessionTimer({
-		startTime: sessionStartTimestamp,
-		duration: sessionDuration || 60,
-		enabled: timerEnabled,
-		onTimeUp: handleTimeUp,
-		onWarning: handleWarning,
-	})
 
 	// Auto-show chat on desktop, hide on mobile
 	useEffect(() => {
@@ -122,28 +58,8 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 					setIsFullscreen={setIsFullscreen}
 					channelId={channelId}
 					onLeave={handleLeave}
-					timerEnabled={timerEnabled}
-					formattedTime={formattedTime}
-					minutesLeft={minutesLeft}
 				/>
-		</LiveKitRoom>
-
-		{/* Warning Dialog - Shows at 5 minutes (Only for host) */}
-		{timerEnabled && isHost && (
-			<SessionEndWarningDialog
-					open={showWarning && !showEnded}
-					minutesRemaining={5}
-					onClose={() => setShowWarning(false)}
-				/>
-			)}
-
-			{/* Session Ended Dialog */}
-			{timerEnabled && sessionData?.id && (
-				<SessionEndedDialog
-					open={showEnded}
-					sessionId={sessionData.id}
-				/>
-			)}
+			</LiveKitRoom>
 		</div>
 	)
 }
@@ -157,9 +73,6 @@ function VideoRoomContent({
 	setIsFullscreen,
 	channelId,
 	onLeave,
-	timerEnabled,
-	formattedTime,
-	minutesLeft,
 }: {
 	showChat: boolean
 	setShowChat: (show: boolean) => void
@@ -169,9 +82,6 @@ function VideoRoomContent({
 	setIsFullscreen: (show: boolean) => void
 	channelId?: string | null
 	onLeave: () => void
-	timerEnabled: boolean
-	formattedTime: string
-	minutesLeft: number
 }) {
 	const room = useRoomContext()
 	const params = useParams<{ room: string }>()
@@ -239,20 +149,6 @@ function VideoRoomContent({
 								</span>
 							</div>
 						</div>
-
-						{/* Session Timer */}
-						{timerEnabled && (
-							<div className="hidden md:flex items-center gap-2 ml-4 px-3 py-1.5 bg-black/60 backdrop-blur-sm rounded-lg border border-white/10">
-								<Clock className="h-4 w-4 text-white/80" />
-								<span
-									className={`font-mono font-semibold text-sm ${
-										minutesLeft <= 2 ? "text-red-400 animate-pulse" : "text-white"
-									}`}
-								>
-									{formattedTime}
-								</span>
-							</div>
-						)}
 					</div>
 
 					{/* Action Buttons */}

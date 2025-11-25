@@ -60,36 +60,4 @@ export class StudyRoomsController {
   ) {
     return this.studyRoomsService.joinStudyRoom(studyRoomId, userId);
   }
-
-  @Post(':studyRoomId/complete')
-  @UseGuards(ClerkAuthGuard)
-  async completeStudyRoom(
-    @Param('studyRoomId') studyRoomId: string,
-    @CurrentUser() userId: string,
-  ) {
-    return this.studyRoomsService.completeStudyRoom(studyRoomId, userId);
-  }
-
-  @Get(':studyRoomId/is-host')
-  @UseGuards(ClerkAuthGuard)
-  async checkIsHost(
-    @Param('studyRoomId') studyRoomId: string,
-    @CurrentUser() userId: string,
-  ) {
-    return this.studyRoomsService.checkIsHost(studyRoomId, userId);
-  }
-  
-  @Patch(':studyRoomId/status')
-  @UseGuards(ClerkAuthGuard)
-  async updateStudyRoomStatus(
-    @Param('studyRoomId') studyRoomId: string,
-    @CurrentUser() userId: string,
-    @Body() body: { status: string },
-  ) {
-    return this.studyRoomsService.updateStudyRoomStatus(
-      studyRoomId,
-      userId,
-      body.status as any,
-    );
-  }
 }
