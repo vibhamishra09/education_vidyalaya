@@ -479,4 +479,74 @@ export class StudyRoomsService {
       message: 'Successfully joined study room',
     };
   }
+
+  async completeStudyRoom(studyRoomId: string, userId: string) {
+    // userId is actually clerkId, so we need to find the user by clerkId first
+    const user = await this.prisma.user.findUnique({
+      where: { clerkId: userId },
+      select: { id: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const studyRoom = await this.prisma.studyRoom.findUnique({
+      where: { id: studyRoomId },
+    });
+
+    if (!studyRoom) {
+      throw new NotFoundException('Study room not found');
+    }
+
+    // Check if user is part of the study room (creator or participant)
+    const isCreator = studyRoom.createdById === user.id;
+    const isParticipant = await this.prisma.studyRoomParticipant.findFirst({
+      where: {
+        studyRoomId,
+        userId: user.id,
+      },
+    });
+
+    if (!isCreator && !isParticipant) {
+      throw new ForbiddenException('Not authorized to complete this study room');
+    }
+
+    // Update study room status to COMPLETED
+    const updatedRoom = await this.prisma.studyRoom.update({
+      where: { id: studyRoomId },
+      data: { sessionStatus: SessionStatus.DONE },
+    });
+
+    return {
+      success: true,
+      message: 'Study room marked as completed',
+      studyRoom: updatedRoom,
+    };
+  }
+
+  async checkIsHost(studyRoomId: string, userId: string) {
+    // userId is actually clerkId, so we need to find the user by clerkId first
+    const user = await this.prisma.user.findUnique({
+      where: { clerkId: userId },
+      select: { id: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const studyRoom = await this.prisma.studyRoom.findUnique({
+      where: { id: studyRoomId },
+      select: { createdById: true },
+    });
+
+    if (!studyRoom) {
+      throw new NotFoundException('Study room not found');
+    }
+
+    const isHost = studyRoom.createdById === user.id;
+
+    return { isHost };
+  }
 }
