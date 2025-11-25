@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { User, Settings, LogOut, Coins } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useCurrentUser } from "@/hooks/use-users";
-import { formatCoins, formatCoinsFull } from "@/lib/utils/coin-format";
+import { formatMaya } from "@/lib/utils/coin-format";
 // import { isAuthError } from "@/lib/utils/error-handling";
 interface UserDropdownProps {
   user: {
@@ -113,13 +113,13 @@ export function UserDropdown({ user, signOut }: UserDropdownProps) {
                         </p>
                       </div>
                     </div>
-                    <div 
+                    <div
                       className="flex items-center gap-1 mt-2 px-1 cursor-help"
-                      title={isUserLoading ? 'Loading...' : formatCoinsFull(currentUserData?.user?.coins)}
+                      title={isUserLoading ? 'Loading...' : `${formatMaya(currentUserData?.user?.coins)} mAYA`}
                     >
                       <Coins className="h-4 w-4 text-yellow-600" />
                       <span className="text-sm font-medium">
-                        {isUserLoading ? '...' : formatCoins(currentUserData?.user?.coins)} coins
+                        {isUserLoading ? '...' : formatMaya(currentUserData?.user?.coins)} <span className="text-xs">m</span>AYA
                       </span>
                     </div>
                   </div>
