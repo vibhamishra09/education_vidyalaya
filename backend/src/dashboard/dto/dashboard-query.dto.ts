@@ -16,4 +16,12 @@ export class DashboardQueryDto {
   @IsOptional()
   @IsBooleanString()
   includeNotifications?: string;
+
+  @IsOptional()
+  @IsBooleanString()
+  includeStreaks?: string;
+
+  @IsOptional()
+  @IsBooleanString()
+  includeAchievements?: string;
 }

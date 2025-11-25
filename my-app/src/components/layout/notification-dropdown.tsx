@@ -6,7 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Bell, Loader2 } from "lucide-react";
-import { Notification } from "@/types/api.types";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNotificationContext } from "@/contexts/notification-context";
 import { getNotificationLink } from "@/lib/utils/notification-links";

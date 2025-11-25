@@ -76,4 +76,45 @@ export const peerSessionsApi = {
     );
     return response.data;
   },
+
+  // Check availability for a specific time slot
+  checkAvailability: async (
+    userId: string,
+    startTime: string, // ISO date string
+    duration: number // Minutes
+  ): Promise<{
+    isAvailable: boolean;
+    reason?: string;
+    conflicts?: Array<{
+      id: string;
+      type: 'session' | 'blocked_slot' | 'availability';
+      startTime: string;
+      endTime: string;
+      reason?: string;
+    }>;
+  }> => {
+    const response = await apiClient.get(`/api/availability/check/${userId}`, {
+      params: { startTime, duration },
+    });
+    return response.data;
+  },
+
+  // Get available slots for a specific date
+  getAvailableSlots: async (
+    userId: string,
+    date: string, // YYYY-MM-DD
+    duration: number = 60, // Minutes
+    interval: number = 30 // Minutes
+  ): Promise<{
+    availableSlots: Array<{
+      startTime: string;
+      endTime: string;
+      isAvailable: boolean;
+    }>;
+  }> => {
+    const response = await apiClient.get(`/api/availability/slots/${userId}`, {
+      params: { date, duration, interval },
+    });
+    return response.data;
+  },
 };

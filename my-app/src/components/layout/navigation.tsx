@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Coins } from "lucide-react";
@@ -33,10 +34,12 @@ export function Navigation() {
         <div className="flex h-16 items-center justify-between">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 relative group">
-            <img
+            <Image
               src="/logo_green.png"
               alt="Webyalaya"
-              className="h-8 object-contain rounded-md bg-white dark:bg-gray-900 px-1 transition-transform group-hover:scale-105"
+              width={32}
+              height={32}
+              className="object-contain rounded-md bg-white dark:bg-gray-900 px-1 transition-transform group-hover:scale-105"
             />
           </Link>
 

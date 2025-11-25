@@ -6,6 +6,9 @@ import { SessionStatus, PaymentStatus, NotifType } from '@prisma/client';
 import { normalizeGoogleMeetLink, isValidGoogleMeetLink } from '../utils/gmeet-generator';
 import { ChatService } from '../chat/chat.service';
 import { convertLocalToUTC } from '../utils/timezone';
+import { AvailabilityService } from '../availability/availability.service';
+import { StreaksService } from '../streaks/streaks.service';
+import { AchievementsService } from '../achievements/achievements.service';
 
 @Injectable()
 export class PeerSessionsService {
@@ -13,6 +16,9 @@ export class PeerSessionsService {
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
     private chatService: ChatService,
+    private availabilityService: AvailabilityService,
+    private streaksService: StreaksService,
+    private achievementsService: AchievementsService,
   ) {}
 
   async getPeerSessions(
@@ -180,6 +186,21 @@ export class PeerSessionsService {
     // Example: 11 AM IST -> 5:30 AM UTC
     const dateTime = convertLocalToUTC(requestDto.date, requestDto.time, requestDto.timezone);
 
+    // Check if the peer is available at the requested time
+    const availabilityCheck = await this.availabilityService.checkTimeSlotAvailability(
+      peer.id,
+      dateTime,
+      requestDto.duration,
+    );
+
+    if (!availabilityCheck.isAvailable) {
+      throw new BadRequestException({
+        code: 'TIME_SLOT_UNAVAILABLE',
+        message: availabilityCheck.reason || 'The requested time slot is not available',
+        conflicts: availabilityCheck.conflicts,
+      });
+    }
+
     // Normalize Google Meet link if provided
     const gmeetLink = requestDto.gmeetLink ? normalizeGoogleMeetLink(requestDto.gmeetLink) : null;
 
@@ -302,6 +323,52 @@ export class PeerSessionsService {
         where: { id: peerSession.requestedToId },
         data: { coins: { increment: payment.amountReceived || 0 } },
       });
+
+      // Track activity and update streaks for both learner and teacher
+      const coinsEarned = Number(payment.amountReceived || 0);
+
+      // Update learner's activity (requestedBy is the learner)
+      await this.streaksService.updateUserActivity(
+        peerSession.requestedById,
+        peerSession.date,
+        peerSession.duration,
+        'learner',
+        Number(payment.amountMade),
+      );
+
+      // Update teacher's activity (requestedTo is the teacher)
+      await this.streaksService.updateUserActivity(
+        peerSession.requestedToId,
+        peerSession.date,
+        peerSession.duration,
+        'teacher',
+        coinsEarned,
+      );
+
+      // Check and update achievements for both users
+      await this.achievementsService.checkSessionAchievements(
+        peerSession.requestedById,
+        'learner',
+      );
+
+      await this.achievementsService.checkSessionAchievements(
+        peerSession.requestedToId,
+        'teacher',
+      );
+
+      // Check streak achievements
+      const learnerStreak = await this.streaksService.getUserStreak(peerSession.requestedById);
+      const teacherStreak = await this.streaksService.getUserStreak(peerSession.requestedToId);
+
+      await this.achievementsService.checkStreakAchievements(
+        peerSession.requestedById,
+        learnerStreak.currentStreak,
+      );
+
+      await this.achievementsService.checkStreakAchievements(
+        peerSession.requestedToId,
+        teacherStreak.currentStreak,
+      );
 
       // Notify both parties to leave reviews
       await this.notificationsService.createAndPushNotification(
