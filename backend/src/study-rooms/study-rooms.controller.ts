@@ -60,4 +60,18 @@ export class StudyRoomsController {
   ) {
     return this.studyRoomsService.joinStudyRoom(studyRoomId, userId);
   }
+
+  @Patch(':studyRoomId/status')
+  @UseGuards(ClerkAuthGuard)
+  async updateStudyRoomStatus(
+    @Param('studyRoomId') studyRoomId: string,
+    @CurrentUser() userId: string,
+    @Body() body: { status: string },
+  ) {
+    return this.studyRoomsService.updateStudyRoomStatus(
+      studyRoomId,
+      userId,
+      body.status as any,
+    );
+  }
 }

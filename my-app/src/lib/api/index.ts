@@ -9,3 +9,5 @@ export { browseApi } from './browse.api';
 export { dashboardApi } from './dashboard.api';
 export { paymentsApi } from './payments.api';
 export { availabilityApi } from './availability.api';
+export { streaksApi } from './streaks.api';
+export { achievementsApi } from './achievements.api';

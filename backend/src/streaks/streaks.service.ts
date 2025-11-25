@@ -223,7 +223,15 @@ export class StreaksService {
     );
 
     // Generate array for all days in range
-    const streakDays = [];
+    type StreakDay = {
+      date: Date;
+      hasActivity: boolean;
+      sessionCount: number;
+      minutesLearned: number;
+      minutesTaught: number;
+    };
+
+    const streakDays: StreakDay[] = [];
     let currentDate = startDate;
 
     for (let i = 0; i < days; i++) {

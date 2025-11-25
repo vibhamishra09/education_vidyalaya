@@ -35,14 +35,27 @@ export class AchievementsService {
     );
 
     // Categorize achievements
-    const unlocked = [];
-    const inProgress = [];
-    const locked = [];
+    type AchievementData = {
+      id: string;
+      title: string;
+      description: string;
+      icon: string;
+      category: AchievementCategory;
+      rarity: AchievementRarity;
+      maxProgress: number;
+      coinReward: number;
+      progress: number;
+      unlockedAt: Date | null | undefined;
+    };
+
+    const unlocked: AchievementData[] = [];
+    const inProgress: AchievementData[] = [];
+    const locked: AchievementData[] = [];
 
     for (const achievement of allAchievements) {
       const userProgress = userAchievementMap.get(achievement.id);
 
-      const achievementData = {
+      const achievementData: AchievementData = {
         id: achievement.id,
         title: achievement.title,
         description: achievement.description,

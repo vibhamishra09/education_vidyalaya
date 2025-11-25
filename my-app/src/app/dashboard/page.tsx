@@ -7,11 +7,10 @@ import { SessionRequestCard } from "@/components/cards/session-request-card";
 import { QuickActions } from "@/components/dashboard/quick-actions";
 import { EnhancedCalendarWidget } from "@/components/dashboard/enhanced-calendar-widget";
 import { SessionsChart } from "@/components/stats/sessions-chart";
-import { AchievementShowcase } from "@/components/achievements/achievement-showcase";
-import { StreakTracker } from "@/components/profile/streak-tracker";
+import { AchievementShowcaseConnected } from "@/components/achievements/achievement-showcase-connected";
+import { StreakTrackerConnected } from "@/components/profile/streak-tracker-connected";
 import { SessionList } from "@/components/dashboard/session-list";
 import { SkillsAndSuggestions } from "@/components/dashboard/skills-and-suggestions";
-import { MOCK_ACHIEVEMENTS } from "@/types/achievements.types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -38,6 +37,8 @@ export default function DashboardPage() {
     includeRequests: true,
     includeSessions: true,
     includeNotifications: true,
+    includeStreaks: true,
+    includeAchievements: true,
   });
 
   // Fetch current user data
@@ -332,10 +333,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Streak Tracker */}
-          <StreakTracker
-            currentStreak={7}
-            longestStreak={14}
-          />
+          <StreakTrackerConnected />
         </div>
 
         {/* Skills and Study Room Suggestions */}
@@ -443,7 +441,7 @@ export default function DashboardPage() {
 
         {/* Achievement Showcase - Full Width */}
         <div className="mt-6 sm:mt-8">
-          <AchievementShowcase achievements={MOCK_ACHIEVEMENTS} />
+          <AchievementShowcaseConnected showProgress={false} />
         </div>
       </main>
 

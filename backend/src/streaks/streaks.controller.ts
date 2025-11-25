@@ -3,7 +3,7 @@ import { StreaksService } from './streaks.service';
 import { ClerkAuthGuard } from '../common/guards/clerk-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 
-@Controller('streaks')
+@Controller('api/streaks')
 @UseGuards(ClerkAuthGuard)
 export class StreaksController {
   constructor(private readonly streaksService: StreaksService) {}

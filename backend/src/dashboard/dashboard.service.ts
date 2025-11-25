@@ -1,10 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SessionStatus } from '@prisma/client';
+import { StreaksService } from '../streaks/streaks.service';
+import { AchievementsService } from '../achievements/achievements.service';
 
 @Injectable()
 export class DashboardService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private streaksService: StreaksService,
+    private achievementsService: AchievementsService,
+  ) {}
 
   async getDashboardData(
     userId: string,
@@ -12,6 +18,8 @@ export class DashboardService {
     includeRequests: boolean = true,
     includeSessions: boolean = true,
     includeNotifications: boolean = true,
+    includeStreaks: boolean = true,
+    includeAchievements: boolean = true,
   ) {
     console.log('includeMetrics', includeMetrics);
     // userId is actually clerkId, so we need to find the user by clerkId first
@@ -215,6 +223,20 @@ export class DashboardService {
         orderBy: { createdAt: 'desc' },
         take: 5,
       });
+    }
+
+    if (includeStreaks) {
+      data.streak = await this.streaksService.getUserStreak(user.id);
+    }
+
+    if (includeAchievements) {
+      const achievements = await this.achievementsService.getUserAchievements(user.id);
+      data.achievements = {
+        unlocked: achievements.unlocked.slice(0, 5), // Latest 5 unlocked
+        inProgress: achievements.inProgress.slice(0, 3), // Top 3 in progress
+        totalUnlocked: achievements.totalUnlocked,
+        totalAvailable: achievements.totalAvailable,
+      };
     }
 
     return data;

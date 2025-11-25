@@ -16,8 +16,7 @@ import { UserReviewStats } from "@/components/reviews/user-review-stats";
 import { WalletTab } from "@/components/profile/wallet-tab";
 import { SessionsTab } from "@/components/profile/sessions-tab";
 import { AvailabilitySettings } from "@/components/profile/availability-settings";
-import { AchievementShowcase } from "@/components/achievements/achievement-showcase";
-import { MOCK_ACHIEVEMENTS } from "@/types/achievements.types";
+import { AchievementShowcaseConnected } from "@/components/achievements/achievement-showcase-connected";
 import { Edit, Star, Coins, Loader2 } from "lucide-react";
 import { usersApi, reviewsApi } from "@/lib/api";
 import { User, ReviewCard } from "@/types/api.types";
@@ -316,7 +315,7 @@ function ProfileContent() {
                   </Card>
 
                   {/* Achievement Showcase */}
-                  <AchievementShowcase achievements={MOCK_ACHIEVEMENTS} />
+                  <AchievementShowcaseConnected />
                 </div>
 
                 {/* Availability Settings */}

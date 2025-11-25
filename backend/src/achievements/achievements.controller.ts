@@ -3,7 +3,7 @@ import { AchievementsService } from './achievements.service';
 import { ClerkAuthGuard } from '../common/guards/clerk-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 
-@Controller('achievements')
+@Controller('api/achievements')
 @UseGuards(ClerkAuthGuard)
 export class AchievementsController {
   constructor(private readonly achievementsService: AchievementsService) {}
