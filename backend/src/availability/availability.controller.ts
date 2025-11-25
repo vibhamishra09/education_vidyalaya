@@ -25,80 +25,32 @@ export class AvailabilityController {
   constructor(private readonly availabilityService: AvailabilityService) {}
 
   /**
-   * GET /api/availability - Get current user's availability settings
+   * GET /api/availability/preferences - Get user's booking preferences
+   * IMPORTANT: This must come BEFORE the :userId route to avoid conflicts
    */
-  @Get()
+  @Get('preferences')
   @UseGuards(ClerkAuthGuard)
-  async getMyAvailability(@CurrentUser() userId: string) {
-    return this.availabilityService.getUserAvailability(userId);
+  async getMyPreferences(@CurrentUser() userId: string) {
+    return this.availabilityService.getUserPreferences(userId);
   }
 
   /**
-   * GET /api/availability/:userId - Get specific user's availability settings (public)
+   * PATCH /api/availability/preferences - Update user's booking preferences
+   * IMPORTANT: This must come BEFORE the :availabilityId route to avoid conflicts
    */
-  @Get(':userId')
-  async getUserAvailability(@Param('userId') userId: string) {
-    return this.availabilityService.getUserAvailability(userId);
-  }
-
-  /**
-   * POST /api/availability/day - Set availability for a specific day
-   */
-  @Post('day')
+  @Patch('preferences')
   @UseGuards(ClerkAuthGuard)
-  async setDayAvailability(
+  async updatePreferences(
     @CurrentUser() userId: string,
-    @Body() data: UserAvailabilityDto,
+    @Body() data: UpdateUserPreferencesDto,
   ) {
-    return this.availabilityService.setDayAvailability(userId, data);
-  }
-
-  /**
-   * POST /api/availability/bulk - Set availability for multiple days at once
-   */
-  @Post('bulk')
-  @UseGuards(ClerkAuthGuard)
-  async setMultipleDaysAvailability(
-    @CurrentUser() userId: string,
-    @Body() data: SetAvailabilityDto,
-  ) {
-    return this.availabilityService.setMultipleDaysAvailability(userId, data);
-  }
-
-  /**
-   * PATCH /api/availability/:availabilityId - Update availability for a specific day
-   */
-  @Patch(':availabilityId')
-  @UseGuards(ClerkAuthGuard)
-  async updateDayAvailability(
-    @CurrentUser() userId: string,
-    @Param('availabilityId') availabilityId: string,
-    @Body() data: UpdateAvailabilityDto,
-  ) {
-    return this.availabilityService.updateDayAvailability(
-      userId,
-      availabilityId,
-      data,
-    );
-  }
-
-  /**
-   * DELETE /api/availability/:availabilityId - Delete availability for a specific day
-   */
-  @Delete(':availabilityId')
-  @UseGuards(ClerkAuthGuard)
-  async deleteDayAvailability(
-    @CurrentUser() userId: string,
-    @Param('availabilityId') availabilityId: string,
-  ) {
-    return this.availabilityService.deleteDayAvailability(
-      userId,
-      availabilityId,
-    );
+    console.log(data);
+    return this.availabilityService.updateUserPreferences(userId, data);
   }
 
   /**
    * GET /api/availability/blocked/slots - Get all blocked time slots
+   * IMPORTANT: This must come BEFORE the :userId route to avoid conflicts
    */
   @Get('blocked/slots')
   @UseGuards(ClerkAuthGuard)
@@ -139,24 +91,27 @@ export class AvailabilityController {
   }
 
   /**
-   * GET /api/availability/preferences - Get user's booking preferences
+   * POST /api/availability/day - Set availability for a specific day
    */
-  @Get('preferences')
+  @Post('day')
   @UseGuards(ClerkAuthGuard)
-  async getMyPreferences(@CurrentUser() userId: string) {
-    return this.availabilityService.getUserPreferences(userId);
+  async setDayAvailability(
+    @CurrentUser() userId: string,
+    @Body() data: UserAvailabilityDto,
+  ) {
+    return this.availabilityService.setDayAvailability(userId, data);
   }
 
   /**
-   * PATCH /api/availability/preferences - Update user's booking preferences
+   * POST /api/availability/bulk - Set availability for multiple days at once
    */
-  @Patch('preferences')
+  @Post('bulk')
   @UseGuards(ClerkAuthGuard)
-  async updatePreferences(
+  async setMultipleDaysAvailability(
     @CurrentUser() userId: string,
-    @Body() data: UpdateUserPreferencesDto,
+    @Body() data: SetAvailabilityDto,
   ) {
-    return this.availabilityService.updateUserPreferences(userId, data);
+    return this.availabilityService.setMultipleDaysAvailability(userId, data);
   }
 
   /**
@@ -205,6 +160,55 @@ export class AvailabilityController {
       date,
       durationNum,
       intervalNum,
+    );
+  }
+
+  /**
+   * GET /api/availability - Get current user's availability settings
+   */
+  @Get()
+  @UseGuards(ClerkAuthGuard)
+  async getMyAvailability(@CurrentUser() userId: string) {
+    return this.availabilityService.getUserAvailability(userId);
+  }
+
+  /**
+   * GET /api/availability/:userId - Get specific user's availability settings (public)
+   */
+  @Get(':userId')
+  async getUserAvailability(@Param('userId') userId: string) {
+    return this.availabilityService.getUserAvailability(userId);
+  }
+
+  /**
+   * PATCH /api/availability/:availabilityId - Update availability for a specific day
+   */
+  @Patch(':availabilityId')
+  @UseGuards(ClerkAuthGuard)
+  async updateDayAvailability(
+    @CurrentUser() userId: string,
+    @Param('availabilityId') availabilityId: string,
+    @Body() data: UpdateAvailabilityDto,
+  ) {
+    return this.availabilityService.updateDayAvailability(
+      userId,
+      availabilityId,
+      data,
+    );
+  }
+
+  /**
+   * DELETE /api/availability/:availabilityId - Delete availability for a specific day
+   */
+  @Delete(':availabilityId')
+  @UseGuards(ClerkAuthGuard)
+  async deleteDayAvailability(
+    @CurrentUser() userId: string,
+    @Param('availabilityId') availabilityId: string,
+  ) {
+    return this.availabilityService.deleteDayAvailability(
+      userId,
+      availabilityId,
     );
   }
 }

@@ -19,11 +19,37 @@ export class AvailabilityService {
   constructor(private prisma: PrismaService) {}
 
   /**
+   * Helper method to convert clerkId to database userId
+   */
+  private async getDbUserId(clerkId: string): Promise<string> {
+    const user = await this.prisma.user.findUnique({
+      where: { clerkId },
+      select: { id: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    return user.id;
+  }
+
+  /**
    * Get all availability settings for a user
+   * Note: userId can be either clerkId or database userId
    */
   async getUserAvailability(userId: string) {
+    // Try to find user by clerkId first, if not found, assume it's already a database userId
+    let dbUserId = userId;
+    const userByClerkId = await this.prisma.user.findUnique({
+      where: { clerkId: userId },
+      select: { id: true },
+    });
+    if (userByClerkId) {
+      dbUserId = userByClerkId.id;
+    }
     const availability = await this.prisma.userAvailability.findMany({
-      where: { userId },
+      where: { userId: dbUserId },
       orderBy: { dayOfWeek: 'asc' },
     });
 
@@ -34,9 +60,11 @@ export class AvailabilityService {
    * Set or update availability for a specific day
    */
   async setDayAvailability(
-    userId: string,
+    userId: string, // This is clerkId
     data: UserAvailabilityDto,
   ) {
+    const dbUserId = await this.getDbUserId(userId);
+
     // Validate that endTime is after startTime
     if (data.startTime >= data.endTime) {
       throw new BadRequestException('End time must be after start time');
@@ -46,12 +74,12 @@ export class AvailabilityService {
     const availability = await this.prisma.userAvailability.upsert({
       where: {
         userId_dayOfWeek: {
-          userId,
+          userId: dbUserId,
           dayOfWeek: data.dayOfWeek,
         },
       },
       create: {
-        userId,
+        userId: dbUserId,
         dayOfWeek: data.dayOfWeek,
         startTime: data.startTime,
         endTime: data.endTime,
@@ -71,9 +99,11 @@ export class AvailabilityService {
    * Set availability for multiple days at once
    */
   async setMultipleDaysAvailability(
-    userId: string,
+    userId: string, // This is clerkId
     data: SetAvailabilityDto,
   ) {
+    const dbUserId = await this.getDbUserId(userId);
+
     // Validate all entries
     for (const avail of data.availability) {
       if (avail.startTime >= avail.endTime) {
@@ -89,12 +119,12 @@ export class AvailabilityService {
         this.prisma.userAvailability.upsert({
           where: {
             userId_dayOfWeek: {
-              userId,
+              userId: dbUserId, // Use database ID instead of clerkId
               dayOfWeek: avail.dayOfWeek,
             },
           },
           create: {
-            userId,
+            userId: dbUserId, // Use database ID instead of clerkId
             dayOfWeek: avail.dayOfWeek,
             startTime: avail.startTime,
             endTime: avail.endTime,
@@ -116,10 +146,12 @@ export class AvailabilityService {
    * Update availability for a specific day
    */
   async updateDayAvailability(
-    userId: string,
+    userId: string, // This is clerkId
     availabilityId: string,
     data: UpdateAvailabilityDto,
   ) {
+    const dbUserId = await this.getDbUserId(userId);
+
     // Check if availability exists and belongs to user
     const existing = await this.prisma.userAvailability.findUnique({
       where: { id: availabilityId },
@@ -129,7 +161,7 @@ export class AvailabilityService {
       throw new NotFoundException('Availability setting not found');
     }
 
-    if (existing.userId !== userId) {
+    if (existing.userId !== dbUserId) {
       throw new ForbiddenException(
         'You cannot update another user\'s availability',
       );
@@ -155,6 +187,8 @@ export class AvailabilityService {
    * Delete availability for a specific day
    */
   async deleteDayAvailability(userId: string, availabilityId: string) {
+    const dbUserId = await this.getDbUserId(userId);
+
     // Check if availability exists and belongs to user
     const existing = await this.prisma.userAvailability.findUnique({
       where: { id: availabilityId },
@@ -164,7 +198,7 @@ export class AvailabilityService {
       throw new NotFoundException('Availability setting not found');
     }
 
-    if (existing.userId !== userId) {
+    if (existing.userId !== dbUserId) {
       throw new ForbiddenException(
         'You cannot delete another user\'s availability',
       );
@@ -179,10 +213,21 @@ export class AvailabilityService {
 
   /**
    * Get all blocked time slots for a user
+   * Note: userId can be either clerkId or database userId
    */
   async getBlockedSlots(userId: string) {
+    // Try to find user by clerkId first, if not found, assume it's already a database userId
+    let dbUserId = userId;
+    const userByClerkId = await this.prisma.user.findUnique({
+      where: { clerkId: userId },
+      select: { id: true },
+    });
+    if (userByClerkId) {
+      dbUserId = userByClerkId.id;
+    }
+
     const blockedSlots = await this.prisma.blockedTimeSlot.findMany({
-      where: { userId },
+      where: { userId: dbUserId },
       orderBy: { startTime: 'asc' },
     });
 
@@ -193,6 +238,8 @@ export class AvailabilityService {
    * Create a blocked time slot
    */
   async createBlockedSlot(userId: string, data: CreateBlockedSlotDto) {
+    const dbUserId = await this.getDbUserId(userId);
+
     const startTime = new Date(data.startTime);
     const endTime = new Date(data.endTime);
 
@@ -208,7 +255,7 @@ export class AvailabilityService {
 
     const blockedSlot = await this.prisma.blockedTimeSlot.create({
       data: {
-        userId,
+        userId: dbUserId,
         startTime,
         endTime,
         reason: data.reason,
@@ -222,6 +269,8 @@ export class AvailabilityService {
    * Delete a blocked time slot
    */
   async deleteBlockedSlot(userId: string, blockedSlotId: string) {
+    const dbUserId = await this.getDbUserId(userId);
+
     // Check if blocked slot exists and belongs to user
     const existing = await this.prisma.blockedTimeSlot.findUnique({
       where: { id: blockedSlotId },
@@ -231,7 +280,7 @@ export class AvailabilityService {
       throw new NotFoundException('Blocked time slot not found');
     }
 
-    if (existing.userId !== userId) {
+    if (existing.userId !== dbUserId) {
       throw new ForbiddenException(
         'You cannot delete another user\'s blocked time slot',
       );
@@ -248,8 +297,10 @@ export class AvailabilityService {
    * Update user booking preferences (buffer time, advance time, etc.)
    */
   async updateUserPreferences(userId: string, data: UpdateUserPreferencesDto) {
+    const dbUserId = await this.getDbUserId(userId);
+
     const user = await this.prisma.user.update({
-      where: { id: userId },
+      where: { id: dbUserId },
       data: {
         bufferTime: data.bufferTime,
         minAdvanceTime: data.minAdvanceTime,
@@ -270,8 +321,10 @@ export class AvailabilityService {
    * Get user booking preferences
    */
   async getUserPreferences(userId: string) {
+    const dbUserId = await this.getDbUserId(userId);
+
     const user = await this.prisma.user.findUnique({
-      where: { id: userId },
+      where: { id: dbUserId },
       select: {
         id: true,
         bufferTime: true,
@@ -293,6 +346,7 @@ export class AvailabilityService {
    * 1. User's weekly availability
    * 2. Blocked time slots
    * 3. Existing session conflicts (PENDING or UPCOMING)
+   * Note: userId can be either clerkId or database userId
    */
   async checkTimeSlotAvailability(
     userId: string,
@@ -303,11 +357,21 @@ export class AvailabilityService {
     reason?: string;
     conflicts?: any[];
   }> {
+    // Try to find user by clerkId first, if not found, assume it's already a database userId
+    let dbUserId = userId;
+    const userByClerkId = await this.prisma.user.findUnique({
+      where: { clerkId: userId },
+      select: { id: true },
+    });
+    if (userByClerkId) {
+      dbUserId = userByClerkId.id;
+    }
+
     const endTime = new Date(startTime.getTime() + duration * 60000);
 
     // Get user's preferences
     const user = await this.prisma.user.findUnique({
-      where: { id: userId },
+      where: { id: dbUserId },
       select: {
         bufferTime: true,
         minAdvanceTime: true,
@@ -350,7 +414,7 @@ export class AvailabilityService {
     const availability = await this.prisma.userAvailability.findUnique({
       where: {
         userId_dayOfWeek: {
-          userId,
+          userId: dbUserId,
           dayOfWeek,
         },
       },
@@ -374,7 +438,7 @@ export class AvailabilityService {
     // Check 4: Blocked time slots
     const blockedSlots = await this.prisma.blockedTimeSlot.findMany({
       where: {
-        userId,
+        userId: dbUserId,
         AND: [
           { startTime: { lt: endTime } },
           { endTime: { gt: startTime } },
@@ -398,8 +462,8 @@ export class AvailabilityService {
     const conflictingSessions = await this.prisma.peerSession.findMany({
       where: {
         OR: [
-          { requestedById: userId },
-          { requestedToId: userId },
+          { requestedById: dbUserId },
+          { requestedToId: dbUserId },
         ],
         sessionStatus: {
           in: ['PENDING', 'UPCOMING'],
@@ -438,6 +502,7 @@ export class AvailabilityService {
 
   /**
    * Get available time slots for a user on a specific date
+   * Note: userId can be either clerkId or database userId
    */
   async getAvailableSlotsForDate(
     userId: string,
@@ -445,6 +510,16 @@ export class AvailabilityService {
     duration: number = 60,
     slotInterval: number = 30, // Generate slots every 30 minutes
   ) {
+    // Try to find user by clerkId first, if not found, assume it's already a database userId
+    let dbUserId = userId;
+    const userByClerkId = await this.prisma.user.findUnique({
+      where: { clerkId: userId },
+      select: { id: true },
+    });
+    if (userByClerkId) {
+      dbUserId = userByClerkId.id;
+    }
+
     const targetDate = new Date(date);
     const dayOfWeek = targetDate.getDay();
 
@@ -452,7 +527,7 @@ export class AvailabilityService {
     const availability = await this.prisma.userAvailability.findUnique({
       where: {
         userId_dayOfWeek: {
-          userId,
+          userId: dbUserId,
           dayOfWeek,
         },
       },
@@ -481,7 +556,7 @@ export class AvailabilityService {
 
       // Check if this slot is available
       const availabilityCheck = await this.checkTimeSlotAvailability(
-        userId,
+        dbUserId,
         slotStart,
         duration,
       );

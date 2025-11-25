@@ -13,6 +13,14 @@ export default function RoomPage() {
 	const { getToken } = useAuth()
 	const [token, setToken] = useState<string | null>(null)
 	const [channelId, setChannelId] = useState<string | null>(null)
+	const [sessionData, setSessionData] = useState<{
+		id: string;
+		date: string;
+		duration: number;
+		sessionType: 'studyRoom' | 'peerSession';
+		[key: string]: unknown;
+	} | null>(null)
+	const [isHost, setIsHost] = useState<boolean>(false)
 	const [error, setError] = useState<string | null>(null)
 	const [loading, setLoading] = useState(true)
 
@@ -25,8 +33,14 @@ export default function RoomPage() {
 					throw new Error('Not authenticated')
 				}
 
-				// Fetch LiveKit token and channel ID in parallel
-				const [tokenRes, channelRes] = await Promise.all([
+				// Extract room type and ID from room name
+				// Format: studyroom-{id} or peersession-{id}
+				const isStudyRoom = roomName.startsWith('studyroom-')
+				const isPeerSession = roomName.startsWith('peersession-')
+				const roomId = roomName.split('-')[1]
+
+				// Fetch LiveKit token, channel ID, and session data
+				const promises: Promise<{ data: { token?: string; channelId?: string; [key: string]: unknown } } | null>[] = [
 					axios.post(
 						`${process.env.NEXT_PUBLIC_API_URL}/api/livekit/token`,
 						{ roomName },
@@ -40,13 +54,64 @@ export default function RoomPage() {
 						headers: {
 							Authorization: `Bearer ${clerkToken}`,
 						},
-					}).catch(() => null) // Channel might not exist, that's OK
-				])
+					}).catch(() => null), // Channel might not exist, that's OK
+				]
+
+				// Add session data fetch if it's a study room or peer session
+				if (isStudyRoom && roomId) {
+					promises.push(
+						apiClient.get(`/api/study-rooms/${roomId}`, {
+							headers: {
+								Authorization: `Bearer ${clerkToken}`,
+							},
+						})
+					)
+				} else if (isPeerSession && roomId) {
+					promises.push(
+						apiClient.get(`/api/peer-sessions/${roomId}`, {
+							headers: {
+								Authorization: `Bearer ${clerkToken}`,
+							},
+						})
+					)
+				}
+
+				const results = await Promise.all(promises)
 
 				if (!mounted) return
-				setToken(tokenRes.data.token)
-				if (channelRes?.data?.channelId) {
-					setChannelId(channelRes.data.channelId)
+				if (results[0]?.data?.token) {
+					setToken(results[0].data.token as string)
+				}
+				if (results[1]?.data?.channelId) {
+					setChannelId(results[1].data.channelId as string)
+				}
+				if (results[2]?.data) {
+					// Add session type to sessionData
+					const data = results[2].data as { id: string; date: string; duration: number; [key: string]: unknown };
+					setSessionData({
+						...data,
+						sessionType: isStudyRoom ? 'studyRoom' : 'peerSession',
+					})
+
+					// Check if current user is the host
+					try {
+						const endpoint = isStudyRoom 
+							? `/api/study-rooms/${roomId}/is-host`
+							: `/api/peer-sessions/${roomId}/is-host`
+						const hostResponse = await apiClient.get(endpoint, {
+							headers: {
+								Authorization: `Bearer ${clerkToken}`,
+							},
+						})
+						if (mounted) {
+							setIsHost(hostResponse.data.isHost || false)
+						}
+					} catch {
+						// If host check fails, default to false (safer)
+						if (mounted) {
+							setIsHost(false)
+						}
+					}
 				}
 			} catch (e: unknown) {
 				if (!mounted) return
@@ -98,7 +163,7 @@ export default function RoomPage() {
 	}
 
 	const serverUrl = process.env.NEXT_PUBLIC_LIVEKIT_WS_URL as string
-	return <EnhancedVideoRoom token={token} serverUrl={serverUrl} channelId={channelId} />
+	return <EnhancedVideoRoom token={token} serverUrl={serverUrl} channelId={channelId} sessionData={sessionData} isHost={isHost} />
 }
 
 
