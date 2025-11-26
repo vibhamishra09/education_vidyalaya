@@ -16,7 +16,7 @@ import { formatMaya } from "@/lib/utils/coin-format";
 // import { isAuthError } from "@/lib/utils/error-handling";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent } from "@/components/ui/card";
-import { User, Settings, LogOut } from "lucide-react";
+import { User, LogOut } from "lucide-react";
 
 export function Navigation() {
   const [mobileAvatarOpen, setMobileAvatarOpen] = useState(false);
@@ -58,6 +58,16 @@ export function Navigation() {
                   Browse
                 </Link>
                 <Link
+                  href="/how-it-works"
+                  className={`text-sm font-medium transition-all relative pb-1 ${
+                    pathname === '/how-it-works'
+                      ? 'text-foreground after:absolute after:bottom-0 after:left-0 after:right-0 after:h-1 after:bg-primary after:rounded-full'
+                      : 'text-muted-foreground hover:text-foreground hover:after:absolute hover:after:bottom-0 hover:after:left-0 hover:after:right-0 hover:after:h-0.5 hover:after:bg-primary/50 hover:after:rounded-full'
+                  }`}
+                >
+                  How it works
+                </Link>
+                <Link
                   href="/dashboard"
                   className={`text-sm font-medium transition-all relative pb-1 ${
                     pathname === '/dashboard'
@@ -97,6 +107,16 @@ export function Navigation() {
                   }`}
                 >
                   Browse
+                </Link>
+                <Link
+                  href="/how-it-works"
+                  className={`text-sm font-medium transition-all relative pb-1 ${
+                    pathname === '/how-it-works'
+                      ? 'text-foreground after:absolute after:bottom-0 after:left-0 after:right-0 after:h-1 after:bg-primary after:rounded-full'
+                      : 'text-muted-foreground hover:text-foreground hover:after:absolute hover:after:bottom-0 hover:after:left-0 hover:after:right-0 hover:after:h-0.5 hover:after:bg-primary/50 hover:after:rounded-full'
+                  }`}
+                >
+                  How it works
                 </Link>
                 <div className="flex items-center gap-2">
                   <SignInButton mode="modal">
@@ -199,18 +219,6 @@ export function Navigation() {
                               }`}>
                                 <User className="h-4 w-4 text-muted-foreground" />
                                 <span className="text-sm">Profile</span>
-                              </div>
-                            </Link>
-                            
-                            <Link
-                              href="/settings"
-                              onClick={() => setMobileAvatarOpen(false)}
-                            >
-                              <div className={`flex items-center gap-3 px-4 py-2 hover:bg-muted/50 transition-colors cursor-pointer ${
-                                pathname === '/settings' ? 'bg-muted/30' : ''
-                              }`}>
-                                <Settings className="h-4 w-4 text-muted-foreground" />
-                                <span className="text-sm">Settings</span>
                               </div>
                             </Link>
                           </div>
