@@ -100,6 +100,15 @@ export class NotificationSchedulerService {
 
     // Send 24-hour reminders
     for (const session of upcomingSessions24h) {
+      const locked = await this.prisma.peerSession.updateMany({
+        where: { id: session.id, reminder24hSent: false },
+        data: { reminder24hSent: true },
+      });
+
+      if (!locked.count) {
+        continue;
+      }
+
       const message24h = `Reminder: Your peer session "${session.title}" starts in 24 hours`;
 
       await this.notificationsService.createAndPushNotification(
@@ -126,15 +135,19 @@ export class NotificationSchedulerService {
         },
       );
 
-      // Mark 24-hour reminder as sent
-      await this.prisma.peerSession.update({
-        where: { id: session.id },
-        data: { reminder24hSent: true },
-      });
     }
 
     // Send 1-hour reminders (URGENT)
     for (const session of upcomingSessions1h) {
+      const locked = await this.prisma.peerSession.updateMany({
+        where: { id: session.id, reminder1hSent: false },
+        data: { reminder1hSent: true },
+      });
+
+      if (!locked.count) {
+        continue;
+      }
+
       const message1h = `Your peer session "${session.title}" starts in 1 hour!`;
 
       await this.notificationsService.createAndPushNotification(
@@ -161,15 +174,19 @@ export class NotificationSchedulerService {
         },
       );
 
-      // Mark 1-hour reminder as sent
-      await this.prisma.peerSession.update({
-        where: { id: session.id },
-        data: { reminder1hSent: true },
-      });
     }
 
     // Send 5-minute reminders (URGENT)
     for (const session of upcomingSessions5m) {
+      const locked = await this.prisma.peerSession.updateMany({
+        where: { id: session.id, reminder5mSent: false },
+        data: { reminder5mSent: true },
+      });
+
+      if (!locked.count) {
+        continue;
+      }
+
       const message5m = `Your peer session "${session.title}" starts in 5 minutes!`;
 
       await this.notificationsService.createAndPushNotification(
@@ -196,11 +213,6 @@ export class NotificationSchedulerService {
         },
       );
 
-      // Mark 5-minute reminder as sent
-      await this.prisma.peerSession.update({
-        where: { id: session.id },
-        data: { reminder5mSent: true },
-      });
     }
 
     this.logger.log(
@@ -276,6 +288,15 @@ export class NotificationSchedulerService {
 
     // Send 24-hour reminders
     for (const room of upcomingRooms24h) {
+      const locked = await this.prisma.studyRoom.updateMany({
+        where: { id: room.id, reminder24hSent: false },
+        data: { reminder24hSent: true },
+      });
+
+      if (!locked.count) {
+        continue;
+      }
+
       const message24h = `Reminder: Study room "${room.title}" starts in 24 hours`;
 
       // Notify creator
@@ -306,15 +327,19 @@ export class NotificationSchedulerService {
         );
       }
 
-      // Mark 24-hour reminder as sent
-      await this.prisma.studyRoom.update({
-        where: { id: room.id },
-        data: { reminder24hSent: true },
-      });
     }
 
     // Send 1-hour reminders (URGENT)
     for (const room of upcomingRooms1h) {
+      const locked = await this.prisma.studyRoom.updateMany({
+        where: { id: room.id, reminder1hSent: false },
+        data: { reminder1hSent: true },
+      });
+
+      if (!locked.count) {
+        continue;
+      }
+
       const message1h = `Study room "${room.title}" starts in 1 hour!`;
 
       // Notify creator
@@ -345,15 +370,19 @@ export class NotificationSchedulerService {
         );
       }
 
-      // Mark 1-hour reminder as sent
-      await this.prisma.studyRoom.update({
-        where: { id: room.id },
-        data: { reminder1hSent: true },
-      });
     }
 
     // Send 5-minute reminders (URGENT)
     for (const room of upcomingRooms5m) {
+      const locked = await this.prisma.studyRoom.updateMany({
+        where: { id: room.id, reminder5mSent: false },
+        data: { reminder5mSent: true },
+      });
+
+      if (!locked.count) {
+        continue;
+      }
+
       const message5m = `Study room "${room.title}" starts in 5 minutes!`;
 
       // Notify creator
@@ -384,11 +413,6 @@ export class NotificationSchedulerService {
         );
       }
 
-      // Mark 5-minute reminder as sent
-      await this.prisma.studyRoom.update({
-        where: { id: room.id },
-        data: { reminder5mSent: true },
-      });
     }
 
     this.logger.log(
@@ -420,6 +444,15 @@ export class NotificationSchedulerService {
     });
 
     for (const session of completedPeerSessions) {
+      const locked = await this.prisma.peerSession.updateMany({
+        where: { id: session.id, reviewReminded: false },
+        data: { reviewReminded: true },
+      });
+
+      if (!locked.count) {
+        continue;
+      }
+
       // Check if requester has reviewed
       const requesterReviewed = session.reviews.some(
         (r) => r.reviewerId === session.requestedById,
@@ -456,11 +489,6 @@ export class NotificationSchedulerService {
         );
       }
 
-      // Mark as reminded
-      await this.prisma.peerSession.update({
-        where: { id: session.id },
-        data: { reviewReminded: true },
-      });
     }
 
     // Find completed study rooms without reviews
@@ -484,6 +512,15 @@ export class NotificationSchedulerService {
     });
 
     for (const room of completedStudyRooms) {
+      const locked = await this.prisma.studyRoom.updateMany({
+        where: { id: room.id, reviewReminded: false },
+        data: { reviewReminded: true },
+      });
+
+      if (!locked.count) {
+        continue;
+      }
+
       // Remind all participants who haven't reviewed
       for (const learner of room.learners) {
         const hasReviewed = room.reviews.some(
@@ -504,11 +541,6 @@ export class NotificationSchedulerService {
         }
       }
 
-      // Mark as reminded
-      await this.prisma.studyRoom.update({
-        where: { id: room.id },
-        data: { reviewReminded: true },
-      });
     }
 
     this.logger.log(
@@ -539,11 +571,14 @@ export class NotificationSchedulerService {
     });
 
     for (const session of actuallyEndedSessions) {
-      // Update session status to DONE
-      await this.prisma.peerSession.update({
-        where: { id: session.id },
+      const locked = await this.prisma.peerSession.updateMany({
+        where: { id: session.id, sessionStatus: SessionStatus.UPCOMING },
         data: { sessionStatus: SessionStatus.DONE },
       });
+
+      if (!locked.count) {
+        continue;
+      }
 
       // Note: Escrow payment will be released after both parties submit reviews
       // This is handled in the reviews service
@@ -601,19 +636,22 @@ export class NotificationSchedulerService {
     });
 
     for (const room of actuallyEndedRooms) {
-      // Update room status to DONE
-      await this.prisma.studyRoom.update({
-        where: { id: room.id },
+      const locked = await this.prisma.studyRoom.updateMany({
+        where: { id: room.id, sessionStatus: SessionStatus.UPCOMING },
         data: { sessionStatus: SessionStatus.DONE },
       });
+
+      if (!locked.count) {
+        continue;
+      }
 
       // Note: Escrow payments will be released after all participants submit reviews
       // This is handled in the reviews service
 
-      // Send session end notifications to all participants
-      const allParticipants = [room.createdBy, ...room.learners.map(l => l.user)];
-      
-      for (const participant of allParticipants) {
+      // Send session end notifications to all learners (creator should not review)
+      const learnerUsers = room.learners.map((learner) => learner.user);
+
+      for (const participant of learnerUsers) {
         await this.notificationsService.createAndPushNotification(
           participant.id,
           `Study room "${room.title}" has ended. Please leave a review!`,
