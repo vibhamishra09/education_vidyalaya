@@ -36,6 +36,14 @@ export const notificationsApi = {
     return response.data;
   },
 
+  // Mark multiple notifications as read
+  markNotificationsAsRead: async (notificationIds: string[]): Promise<{ success: boolean; count: number }> => {
+    const response = await apiClient.patch('/api/notifications/read', {
+      notificationIds,
+    });
+    return response.data;
+  },
+
   // Get VAPID public key for push notifications
   getVapidPublicKey: async (): Promise<{ publicKey: string }> => {
     const response = await apiClient.get<{ publicKey: string }>(

@@ -1,4 +1,5 @@
 import { NotifType } from '@prisma/client';
+import { ArrayNotEmpty, ArrayUnique, IsArray, IsString } from 'class-validator';
 
 export class NotificationDto {
   id: string;
@@ -6,4 +7,12 @@ export class NotificationDto {
   message: string;
   createdAt: Date;
   viewed: boolean;
+}
+
+export class MarkNotificationsReadDto {
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayUnique()
+  @IsString({ each: true })
+  notificationIds: string[];
 }

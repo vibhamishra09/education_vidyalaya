@@ -5,7 +5,7 @@ import { ChatService } from '../chat/chat.service';
 import { StreaksService } from '../streaks/streaks.service';
 import { AchievementsService } from '../achievements/achievements.service';
 import { CreateStudyRoomDto, UpdateStudyRoomDto } from './dto/study-room.dto';
-import { SessionStatus, NotifType, PaymentStatus } from '@prisma/client';
+import { Prisma, SessionStatus, NotifType, PaymentStatus } from '@prisma/client';
 import { normalizeGoogleMeetLink } from '../utils/gmeet-generator';
 import { convertLocalToUTC } from '../utils/timezone';
 
@@ -17,7 +17,7 @@ type StudyRoomWithRelations = {
   date: Date;
   duration: number;
   maxParticipants: number;
-  joiningFee: number | string;
+  joiningFee: number | string | Prisma.Decimal;
   gmeetLink?: string | null;
   createdBy: {
     id: string;

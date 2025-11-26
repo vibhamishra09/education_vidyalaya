@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Bell, Loader2 } from "lucide-react";
+import { Bell, Check, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNotificationContext } from "@/contexts/notification-context";
 import { getNotificationLink } from "@/lib/utils/notification-links";
@@ -98,30 +98,31 @@ export function NotificationDropdown() {
                       </div>
                     ) : (
                       notifications.map((notification) => (
-                        <Link
+                        <div
                           key={notification.id}
-                          href={getNotificationLink(notification)}
-                          onClick={() => {
-                            setIsOpen(false);
-                            if (!notification.viewed) {
-                              markAsRead(notification.id);
-                            }
-                          }}
+                          className={`px-4 py-3 border-b last:border-b-0 transition-colors ${
+                            !notification.viewed ? "bg-muted/30" : "hover:bg-muted/50"
+                          }`}
                         >
-                          <div
-                            className={`px-4 py-3 border-b last:border-b-0 hover:bg-muted/50 transition-colors cursor-pointer ${
-                              !notification.viewed ? "bg-muted/30" : ""
-                            }`}
-                          >
-                            <div className="flex items-start gap-3">
-                              <Bell
-                                className={`h-4 w-4 mt-0.5 flex-shrink-0 ${
-                                  notification.notifType === "URGENT"
-                                    ? "text-destructive"
-                                    : "text-muted-foreground"
-                                }`}
-                              />
-                              <div className="flex-1 min-w-0">
+                          <div className="flex items-start gap-3">
+                            <Bell
+                              className={`h-4 w-4 mt-0.5 flex-shrink-0 ${
+                                notification.notifType === "URGENT"
+                                  ? "text-destructive"
+                                  : "text-muted-foreground"
+                              }`}
+                            />
+                            <div className="flex-1 min-w-0">
+                              <Link
+                                href={getNotificationLink(notification)}
+                                className="block cursor-pointer"
+                                onClick={() => {
+                                  setIsOpen(false);
+                                  if (!notification.viewed) {
+                                    void markAsRead(notification.id);
+                                  }
+                                }}
+                              >
                                 <p
                                   className={`text-sm ${
                                     !notification.viewed ? "font-medium" : ""
@@ -139,13 +140,29 @@ export function NotificationDropdown() {
                                     minute: "2-digit",
                                   })}
                                 </p>
-                              </div>
-                              {!notification.viewed && (
-                                <div className="h-2 w-2 rounded-full bg-primary flex-shrink-0 mt-2" />
-                              )}
+                              </Link>
                             </div>
+                            {!notification.viewed ? (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                aria-label="Mark notification as read"
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  void markAsRead(notification.id);
+                                }}
+                              >
+                                <Check className="h-4 w-4" />
+                              </Button>
+                            ) : (
+                              <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+                                Read
+                              </Badge>
+                            )}
                           </div>
-                        </Link>
+                        </div>
                       ))
                     )}
                   </div>
@@ -169,7 +186,7 @@ export function NotificationDropdown() {
                           )}
                         </Button>
                       )}
-                      <Link href="/dashboard" onClick={() => setIsOpen(false)}>
+                      <Link href="/notifications" onClick={() => setIsOpen(false)}>
                         <Button variant="ghost" size="sm" className="w-full">
                           View All Notifications
                         </Button>
