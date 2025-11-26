@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Coins, ArrowUpRight, ArrowDownLeft, RefreshCw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -18,6 +18,7 @@ interface CoinDropdownProps {
 
 export function CoinDropdown({ coins = 0, isLoading = false }: CoinDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement | null>(null);
   const { data: transactionsData, isLoading: transactionsLoading } = useTransactionHistory();
 
   const recentTransactions = transactionsData?.transactions?.slice(0, 3) || [];
@@ -26,28 +27,36 @@ export function CoinDropdown({ coins = 0, isLoading = false }: CoinDropdownProps
   const coinBalance = typeof coins === 'string' ? parseFloat(coins) : (coins ?? 0);
   const displayCoins = isNaN(coinBalance) ? 0 : coinBalance;
 
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isOpen]);
+
   return (
-    <div className="relative">
-      <div
-        className="flex items-center gap-1 px-3 py-1 bg-muted rounded-full cursor-pointer hover:bg-muted/80 transition-colors"
-        onClick={() => setIsOpen(!isOpen)}
-      >
-        <Coins className="h-4 w-4 text-yellow-600" />
-        <span className="text-sm font-medium">
-          {isLoading ? '...' : formatMaya(displayCoins)} <span className="text-xs">m</span>AYA
-        </span>
-      </div>
+    <>
+      <div className="relative" ref={dropdownRef}>
+        <div
+          className="flex items-center gap-1 px-3 py-1 bg-muted rounded-full cursor-pointer hover:bg-muted/80 transition-colors"
+          onClick={() => setIsOpen(!isOpen)}
+        >
+          <Coins className="h-4 w-4 text-yellow-600" />
+          <span className="text-sm font-medium">
+            {isLoading ? '...' : formatMaya(displayCoins)} <span className="text-xs">m</span>AYA
+          </span>
+        </div>
 
-      <AnimatePresence>
-        {isOpen && (
-          <>
-            {/* Backdrop */}
-            <div
-              className="fixed inset-0 z-40"
-              onClick={() => setIsOpen(false)}
-            />
-
-            {/* Dropdown */}
+        <AnimatePresence>
+          {isOpen && (
             <motion.div
               initial={{ opacity: 0, y: -10, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -156,9 +165,22 @@ export function CoinDropdown({ coins = 0, isLoading = false }: CoinDropdownProps
                 </CardContent>
               </Card>
             </motion.div>
-          </>
+          )}
+        </AnimatePresence>
+      </div>
+
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            className="fixed inset-0 z-40"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.2 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            onClick={() => setIsOpen(false)}
+          />
         )}
       </AnimatePresence>
-    </div>
+    </>
   );
 }
