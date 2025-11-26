@@ -256,9 +256,6 @@ export const SessionsTab = memo(function SessionsTab({ userId, isLoading = false
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>Session Requests</CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Respond to new requests without leaving your profile.
-              </p>
             </div>
             {pendingRequests.length > 0 && (
               <Badge variant="secondary">{pendingRequests.length}</Badge>
