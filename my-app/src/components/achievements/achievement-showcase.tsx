@@ -14,7 +14,6 @@ import {
   Lock,
   GraduationCap,
   Users,
-  Sparkles,
   Medal,
   Flame,
   type LucideIcon,

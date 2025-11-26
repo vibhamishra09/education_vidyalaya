@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense, useMemo } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useSearchParams } from "next/navigation";
 import { Navigation } from "@/components/layout/navigation";
@@ -12,7 +12,6 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ReviewCardComponent } from "@/components/cards/review-card";
 import { EditProfileModal } from "@/components/modals/edit-profile-modal";
-import { UserReviewStats } from "@/components/reviews/user-review-stats";
 import { WalletTab } from "@/components/profile/wallet-tab";
 import { SessionsTab } from "@/components/profile/sessions-tab";
 import { AvailabilitySettings } from "@/components/profile/availability-settings";
@@ -42,7 +41,7 @@ const isTabKey = (value: string): value is TabKey =>
 
 function ProfileContent() {
   const searchParams = useSearchParams();
-  const { isSignedIn, isLoaded } = useAuth();
+  const { isLoaded } = useAuth();
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>("about");
 

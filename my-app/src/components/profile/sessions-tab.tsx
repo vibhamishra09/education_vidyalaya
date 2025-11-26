@@ -46,10 +46,6 @@ export const SessionsTab = memo(function SessionsTab({ userId, isLoading = false
 
   const isDataLoading = isLoading || statsLoading;
   const pendingRequests = dashboardData?.pendingRequests || [];
-  const upcomingSessions = dashboardData?.upcomingSessions || [];
-  const upcomingStudyRooms = dashboardData?.upcomingStudyRooms || [];
-  const pastSessions = dashboardData?.pastSessions || [];
-  const pastStudyRooms = dashboardData?.pastStudyRooms || [];
 
   const splitByToday = <T extends { date: string | Date }>(items: T[]) => {
     const today = new Date();
@@ -71,13 +67,13 @@ export const SessionsTab = memo(function SessionsTab({ userId, isLoading = false
   };
 
   const { today: todayPeerSessions, future: futurePeerSessions } = useMemo(
-    () => splitByToday(upcomingSessions),
-    [upcomingSessions]
+    () => splitByToday(dashboardData?.upcomingSessions ?? []),
+    [dashboardData?.upcomingSessions]
   );
 
   const { today: todayStudyRooms, future: futureStudyRooms } = useMemo(
-    () => splitByToday(upcomingStudyRooms),
-    [upcomingStudyRooms]
+    () => splitByToday(dashboardData?.upcomingStudyRooms ?? []),
+    [dashboardData?.upcomingStudyRooms]
   );
 
   const formatPeerSession = (session: UpcomingSession | PastSession) => ({
@@ -120,6 +116,8 @@ export const SessionsTab = memo(function SessionsTab({ userId, isLoading = false
   );
 
   const pastList = useMemo(() => {
+    const pastSessions = dashboardData?.pastSessions ?? [];
+    const pastStudyRooms = dashboardData?.pastStudyRooms ?? [];
     const combined = [
       ...pastSessions.map(formatPeerSession),
       ...pastStudyRooms.map(formatStudyRoom),
@@ -127,7 +125,7 @@ export const SessionsTab = memo(function SessionsTab({ userId, isLoading = false
     return combined.sort(
       (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
     );
-  }, [pastSessions, pastStudyRooms]);
+  }, [dashboardData?.pastSessions, dashboardData?.pastStudyRooms]);
 
   const handleRequestAction = async (
     requestId: string,

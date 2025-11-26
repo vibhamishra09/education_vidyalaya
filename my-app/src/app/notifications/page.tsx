@@ -196,7 +196,7 @@ function NotificationsContent() {
             <Inbox className="mb-4 h-10 w-10 text-muted-foreground" />
             <h2 className="text-lg font-semibold">No notifications yet</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              We'll keep this space updated whenever something needs your attention.
+              We&apos;ll keep this space updated whenever something needs your attention.
             </p>
           </div>
         )}
