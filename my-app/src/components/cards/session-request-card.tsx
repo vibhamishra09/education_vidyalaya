@@ -11,10 +11,18 @@ interface SessionRequestCardProps {
   onAccept?: () => void;
   onDecline?: () => void;
   isProcessing?: boolean;
+  variant?: 'received' | 'sent';
 }
 
-export function SessionRequestCard({ request, onAccept, onDecline, isProcessing = false }: SessionRequestCardProps) {
-  const { requestedBy, skills, date, duration, title } = request;
+export function SessionRequestCard({
+  request,
+  onAccept,
+  onDecline,
+  isProcessing = false,
+  variant = 'received',
+}: SessionRequestCardProps) {
+  const { requestedBy, requestedTo, skills = [], date, duration, title } = request;
+  const counterpart = variant === 'received' ? requestedBy : requestedTo ?? requestedBy;
 
   // Calculate time remaining using timezone-aware utilities
   const days = getDaysUntil(date);
@@ -31,13 +39,17 @@ export function SessionRequestCard({ request, onAccept, onDecline, isProcessing 
       <CardContent className="pt-6">
         <div className="flex items-start gap-4">
           <Avatar className="h-12 w-12">
-            <AvatarImage src={requestedBy?.avatar} alt={requestedBy?.name} />
-            <AvatarFallback>{requestedBy?.name?.charAt(0)}</AvatarFallback>
+            <AvatarImage src={counterpart?.avatar} alt={counterpart?.name} />
+            <AvatarFallback>{counterpart?.name?.charAt(0)}</AvatarFallback>
           </Avatar>
 
           <div className="flex-1 min-w-0">
             <h4 className="font-semibold">{title}</h4>
-            <p className="text-sm text-muted-foreground">Requested by {requestedBy.name}</p>
+            <p className="text-sm text-muted-foreground">
+              {variant === 'received'
+                ? `Requested by ${counterpart?.name}`
+                : `Awaiting ${counterpart?.name}'s response`}
+            </p>
             <div className="flex items-center gap-2 mt-2">
               {skills.map((skill, index) => (
                 <Badge key={index} variant="secondary">{skill}</Badge>
@@ -64,37 +76,46 @@ export function SessionRequestCard({ request, onAccept, onDecline, isProcessing 
         </div>
       </CardContent>
 
-      <CardFooter className="flex gap-2">
-        <Button
-          variant="outline"
-          className="flex-1"
-          onClick={onDecline}
-          disabled={isProcessing}
-        >
-          {isProcessing ? (
-            <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Processing...
-            </>
-          ) : (
-            'Decline'
-          )}
-        </Button>
-        <Button
-          className="flex-1"
-          onClick={onAccept}
-          disabled={isProcessing}
-        >
-          {isProcessing ? (
-            <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Processing...
-            </>
-          ) : (
-            'Accept'
-          )}
-        </Button>
-      </CardFooter>
+      {variant === 'received' ? (
+        <CardFooter className="flex gap-2">
+          <Button
+            variant="outline"
+            className="flex-1"
+            onClick={onDecline}
+            disabled={isProcessing}
+          >
+            {isProcessing ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Processing...
+              </>
+            ) : (
+              'Decline'
+            )}
+          </Button>
+          <Button
+            className="flex-1"
+            onClick={onAccept}
+            disabled={isProcessing}
+          >
+            {isProcessing ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Processing...
+              </>
+            ) : (
+              'Accept'
+            )}
+          </Button>
+        </CardFooter>
+      ) : (
+        <CardFooter className="flex items-center justify-between">
+          <span className="text-sm text-muted-foreground">Status</span>
+          <Badge variant="secondary" className="uppercase tracking-wide">
+            Pending
+          </Badge>
+        </CardFooter>
+      )}
     </Card>
   );
 }

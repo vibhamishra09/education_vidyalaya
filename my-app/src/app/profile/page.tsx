@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, Suspense, useMemo } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useSearchParams } from "next/navigation";
 import { Navigation } from "@/components/layout/navigation";
@@ -18,78 +18,63 @@ import { SessionsTab } from "@/components/profile/sessions-tab";
 import { AvailabilitySettings } from "@/components/profile/availability-settings";
 import { AchievementShowcaseConnected } from "@/components/achievements/achievement-showcase-connected";
 import { Edit, Star, Coins, Loader2 } from "lucide-react";
-import { usersApi, reviewsApi } from "@/lib/api";
-import { User, ReviewCard } from "@/types/api.types";
-import { setAuthToken } from "@/lib/api-client";
+import { useProfileData } from "@/hooks/use-profile-data";
 import { formatMaya } from "@/lib/utils/coin-format";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+type TabKey = "about" | "sessions" | "wallet" | "reviews";
+
+const TAB_OPTIONS: { label: string; value: TabKey }[] = [
+  { label: "About", value: "about" },
+  { label: "Sessions", value: "sessions" },
+  { label: "Wallet", value: "wallet" },
+  { label: "Reviews", value: "reviews" },
+];
+
+const isTabKey = (value: string): value is TabKey =>
+  TAB_OPTIONS.some((tab) => tab.value === value);
 
 function ProfileContent() {
   const searchParams = useSearchParams();
-  const { isSignedIn, isLoaded, getToken } = useAuth();
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [userReviews, setUserReviews] = useState<ReviewCard[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { isSignedIn, isLoaded } = useAuth();
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"about" | "sessions" | "wallet" | "reviews">("about");
+  const [activeTab, setActiveTab] = useState<TabKey>("about");
 
-  const avgRating =
-    userReviews.length > 0
-      ? userReviews.reduce((acc, r) => acc + r.rating, 0) / userReviews.length
-      : 0;
+  // Use React Query hook for optimized data fetching
+  const {
+    data: profileData,
+    isLoading: loading,
+    error: queryError,
+    refetch,
+  } = useProfileData();
+
+  const currentUser = profileData?.user || null;
+  const userReviews = profileData?.reviews || [];
+  const avgRating = profileData?.avgRating || 0;
+  const error = queryError ? 'Failed to load profile data' : null;
 
   // Handle URL parameters for tab navigation
   useEffect(() => {
-    const tab = searchParams.get('tab');
-    if (tab && ['about', 'sessions', 'wallet', 'reviews'].includes(tab)) {
-      setActiveTab(tab as 'about' | 'sessions' | 'wallet' | 'reviews');
+    const tab = searchParams.get("tab");
+    if (tab && isTabKey(tab)) {
+      setActiveTab(tab);
     }
   }, [searchParams]);
 
+  const handleTabChange = (tab: TabKey) => {
+    setActiveTab(tab);
+  };
 
-  useEffect(() => {
-    const fetchUserData = async () => {
-      // Wait for Clerk to load
-      if (!isLoaded) {
-        return;
-      }
-
-      // Check if user is signed in
-      if (!isSignedIn) {
-        setError('Please sign in to view your profile');
-        setLoading(false);
-        return;
-      }
-
-      try {
-        setLoading(true);
-        setError(null);
-        
-        // Get token and set it for API calls
-        const token = await getToken();
-        if (token) {
-          setAuthToken(token);
-          console.log('Token set for API calls:', token);
-        }
-        
-        // Fetch current user data and reviews in parallel
-        const [userData, reviewsResponse] = await Promise.all([
-          usersApi.getCurrentUser(),
-          reviewsApi.getReviews({ userId: 'me' }) // Get reviews for current user
-        ]);
-        
-        setCurrentUser(userData.user);
-        setUserReviews(reviewsResponse.reviews || []);
-      } catch (err) {
-        console.error('Error fetching user data:', err);
-        setError('Failed to load profile data');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchUserData();
-  }, [isLoaded, isSignedIn, getToken]);
+  // Update current user after editing profile
+  const handleUserUpdate = () => {
+    refetch();
+  };
 
   // Show loading while Clerk is initializing
   if (!isLoaded) {
@@ -146,11 +131,11 @@ function ProfileContent() {
     <div className="min-h-screen flex flex-col">
       <Navigation />
 
-      <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-20 md:pb-8">
+      <main className="flex-1 container mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-8 pb-20 md:pb-8">
         {/* Profile Header */}
         <Card className="mb-8">
           <CardContent className="pt-6">
-            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
+            <div className="flex flex-col lg:flex-row items-center lg:items-start gap-6 lg:gap-8">
               <Avatar className="h-24 w-24 sm:h-32 sm:w-32">
                 <AvatarImage src={currentUser.avatar} alt={currentUser.name} />
                 <AvatarFallback className="text-2xl sm:text-4xl">
@@ -159,15 +144,15 @@ function ProfileContent() {
               </Avatar>
 
               <div className="flex-1 min-w-0 w-full">
-                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-                  <div className="flex-1 text-center sm:text-left">
+                <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 lg:gap-6">
+                  <div className="flex-1 text-center lg:text-left">
                     <h1 className="text-2xl sm:text-3xl font-bold">{currentUser.name}</h1>
-                    <p className="text-muted-foreground mt-1 text-sm sm:text-base">
+                    <p className="text-muted-foreground mt-1 text-sm md:text-base">
                       @{currentUser.username || currentUser.email.split('@')[0]}
                     </p>
 
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 mt-3">
-                      <div className="flex items-center justify-center sm:justify-start">
+                    <div className="flex flex-col md:flex-row md:flex-wrap md:items-center gap-3 md:gap-4 mt-3">
+                      <div className="flex items-center justify-center md:justify-start">
                         <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
                         <span className="ml-1 font-medium">
                           {avgRating.toFixed(1)}
@@ -177,7 +162,7 @@ function ProfileContent() {
                         </span>
                       </div>
 
-                      <div className="flex items-center justify-center sm:justify-start">
+                      <div className="flex items-center justify-center md:justify-start">
                         <Coins className="h-5 w-5 text-yellow-600" />
                         <span className="ml-1 font-medium">
                           {formatMaya(currentUser.coins)} <span className="text-xs">m</span>AYA
@@ -185,7 +170,7 @@ function ProfileContent() {
                       </div>
 
                       {currentUser.hourlyRate && (
-                        <div className="flex items-center justify-center sm:justify-start">
+                        <div className="flex items-center justify-center md:justify-start">
                           <Coins className="h-5 w-5 text-green-600" />
                           <span className="ml-1 font-medium">
                             {formatMaya(currentUser.hourlyRate)} <span className="text-xs">m</span>AYA/hr
@@ -196,22 +181,22 @@ function ProfileContent() {
                     </div>
                   </div>
 
-                  <Button 
-                    className="w-full sm:w-auto"
+                  <Button
+                    className="w-full md:w-auto"
                     onClick={() => setIsEditModalOpen(true)}
                   >
                     <Edit className="h-4 w-4 mr-2" />
-                    <span className="hidden sm:inline">Edit Profile</span>
-                    <span className="sm:hidden">Edit</span>
+                    <span className="hidden md:inline">Edit Profile</span>
+                    <span className="md:hidden">Edit</span>
                   </Button>
                 </div>
 
                 {currentUser.bio && (
-                  <p className="mt-4 text-muted-foreground text-center sm:text-left">{currentUser.bio}</p>
+                  <p className="mt-4 text-muted-foreground text-center lg:text-left">{currentUser.bio}</p>
                 )}
                 
                 {(currentUser.location || currentUser.school) && (
-                  <div className="mt-3 flex flex-wrap gap-4 text-sm text-muted-foreground text-center sm:text-left">
+                  <div className="mt-3 flex flex-wrap gap-4 text-sm text-muted-foreground justify-center lg:justify-start text-center lg:text-left">
                     {currentUser.location && (
                       <span className="flex items-center gap-1">
                         📍 {currentUser.location}
@@ -231,30 +216,46 @@ function ProfileContent() {
 
         {/* Tabs */}
         <Tabs className="w-full">
-          <TabsList className="grid w-full grid-cols-4 mb-6">
-            <TabsTrigger active={activeTab === "about"} onClick={() => setActiveTab("about")}>
-              About
-            </TabsTrigger>
-            <TabsTrigger active={activeTab === "sessions"} onClick={() => setActiveTab("sessions")}>
-              Sessions
-            </TabsTrigger>
-            <TabsTrigger active={activeTab === "wallet"} onClick={() => setActiveTab("wallet")}>
-              Wallet
-            </TabsTrigger>
-            <TabsTrigger active={activeTab === "reviews"} onClick={() => setActiveTab("reviews")}>
-              Reviews
-            </TabsTrigger>
+          <div className="mb-4 md:hidden">
+            <Select
+              value={activeTab}
+              onValueChange={(value) => handleTabChange(value as TabKey)}
+            >
+              <SelectTrigger className="w-full justify-between">
+                <SelectValue placeholder="Select section" />
+              </SelectTrigger>
+              <SelectContent>
+                {TAB_OPTIONS.map((tab) => (
+                  <SelectItem key={tab.value} value={tab.value}>
+                    {tab.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <TabsList className="hidden w-full grid-cols-4 gap-2 rounded-xl bg-muted/60 p-1 md:grid mb-6">
+            {TAB_OPTIONS.map((tab) => (
+              <TabsTrigger
+                key={tab.value}
+                active={activeTab === tab.value}
+                onClick={() => handleTabChange(tab.value)}
+                className="w-full rounded-lg px-3 py-2 text-sm font-semibold transition hover:bg-background/70"
+              >
+                {tab.label}
+              </TabsTrigger>
+            ))}
           </TabsList>
 
           {/* About Tab */}
           {activeTab === "about" && <TabsContent>
             <div className="space-y-6">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8 items-start">
                 {/* Skills & Interests */}
                 <div className="space-y-6">
                   <Card>
                     <CardHeader>
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <CardTitle>I can teach</CardTitle>
                         <Button
                           variant="outline"
@@ -285,7 +286,7 @@ function ProfileContent() {
 
                   <Card>
                     <CardHeader>
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <CardTitle>I want to learn</CardTitle>
                         <Button
                           variant="outline"
@@ -315,12 +316,24 @@ function ProfileContent() {
                   </Card>
 
                   {/* Achievement Showcase */}
-                  <AchievementShowcaseConnected />
+                  <div className="rounded-2xl border bg-background/60 p-1 shadow-sm">
+                    <AchievementShowcaseConnected />
+                  </div>
                 </div>
 
                 {/* Availability Settings */}
-                <div>
-                  <AvailabilitySettings userId={currentUser.id} isOwnProfile={true} />
+                <div className="space-y-6">
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle>Availability</CardTitle>
+                      <p className="text-sm text-muted-foreground">
+                        Keep your weekly slots current so learners know when to book you.
+                      </p>
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                      <AvailabilitySettings userId={currentUser.id} isOwnProfile={true} />
+                    </CardContent>
+                  </Card>
                 </div>
               </div>
             </div>
@@ -334,8 +347,8 @@ function ProfileContent() {
           {/* Wallet Tab */}
           {activeTab === "wallet" && <TabsContent>
             <WalletTab
-              coins={typeof currentUser.coins === 'number' ? currentUser.coins : undefined}
-              hourlyRate={typeof currentUser.hourlyRate === 'number' ? currentUser.hourlyRate : undefined}
+              coins={currentUser.coins}
+              hourlyRate={currentUser.hourlyRate}
               isLoading={loading}
             />
           </TabsContent>}
@@ -343,7 +356,62 @@ function ProfileContent() {
           {/* Reviews Tab */}
           {activeTab === "reviews" && <TabsContent>
             <div className="space-y-6">
-              <UserReviewStats userId={currentUser.id} showTitle={true} />
+              {/* Review Statistics - Pass reviews directly to avoid duplicate fetching */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Review Statistics</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {/* Overall Stats */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="text-center">
+                      <div className="flex items-center justify-center gap-1 mb-1">
+                        <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
+                        <span className="text-2xl font-bold">{avgRating.toFixed(1)}</span>
+                      </div>
+                      <p className="text-sm text-muted-foreground">Average Rating</p>
+                    </div>
+                    <div className="text-center">
+                      <div className="flex items-center justify-center gap-1 mb-1">
+                        <Star className="h-5 w-5 text-primary" />
+                        <span className="text-2xl font-bold">{userReviews.length}</span>
+                      </div>
+                      <p className="text-sm text-muted-foreground">Total Reviews</p>
+                    </div>
+                  </div>
+
+                  {/* Rating Distribution */}
+                  {userReviews.length > 0 && (
+                    <div className="space-y-3">
+                      <h4 className="font-semibold text-sm">Rating Distribution</h4>
+                      {[5, 4, 3, 2, 1].map((rating) => {
+                        const count = userReviews.filter(r => r.rating === rating).length;
+                        const percentage = (count / userReviews.length) * 100;
+                        return (
+                          <div key={rating} className="flex items-center gap-3">
+                            <div className="flex items-center gap-1 w-8">
+                              <span className="text-sm font-medium">{rating}</span>
+                              <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                            </div>
+                            <div className="flex-1 bg-muted rounded-full h-2">
+                              <div
+                                className="bg-yellow-400 h-2 rounded-full transition-all duration-300"
+                                style={{ width: `${percentage}%` }}
+                              />
+                            </div>
+                            <div className="flex items-center gap-2 w-16">
+                              <span className="text-sm text-muted-foreground">{count}</span>
+                              <Badge variant="secondary" className="text-xs">
+                                {percentage.toFixed(0)}%
+                              </Badge>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
 
               {/* All Reviews */}
               <div>
@@ -389,7 +457,7 @@ function ProfileContent() {
           isOpen={isEditModalOpen}
           onClose={() => setIsEditModalOpen(false)}
           user={currentUser}
-          onUserUpdate={setCurrentUser}
+          onUserUpdate={handleUserUpdate}
         />
       )}
     </div>

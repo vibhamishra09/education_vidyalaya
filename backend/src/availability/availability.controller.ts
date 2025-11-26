@@ -142,6 +142,44 @@ export class AvailabilityController {
   }
 
   /**
+   * GET /api/availability/summary/:userId - Get availability summary for a date range
+   * Query params: startDate (YYYY-MM-DD), endDate (YYYY-MM-DD)
+   * Returns dates with at least one available slot for each preset duration (15, 30, 60, 120 min)
+   */
+  @Get('summary/:userId')
+  async getAvailabilitySummary(
+    @Param('userId') userId: string,
+    @Query('startDate') startDate: string,
+    @Query('endDate') endDate: string,
+  ) {
+    return this.availabilityService.getAvailabilitySummary(
+      userId,
+      startDate,
+      endDate,
+    );
+  }
+
+  /**
+   * GET /api/availability/detailed/:userId - Get detailed available slots for a specific date and duration
+   * Query params: date (YYYY-MM-DD), duration (minutes)
+   * Returns all available time slots in 15-minute intervals
+   */
+  @Get('detailed/:userId')
+  async getDetailedSlots(
+    @Param('userId') userId: string,
+    @Query('date') date: string,
+    @Query('duration') duration: string,
+  ) {
+    const durationNum = parseInt(duration, 10) || 60;
+
+    return this.availabilityService.getDetailedSlotsForDate(
+      userId,
+      date,
+      durationNum,
+    );
+  }
+
+  /**
    * GET /api/availability/slots/:userId - Get available slots for a specific date
    * Query params: date (YYYY-MM-DD), duration (minutes), interval (minutes)
    */
@@ -151,15 +189,23 @@ export class AvailabilityController {
     @Query('date') date: string,
     @Query('duration') duration: string,
     @Query('interval') interval: string,
+    @Query('durations') durations?: string,
   ) {
     const durationNum = parseInt(duration, 10) || 60;
     const intervalNum = parseInt(interval, 10) || 30;
+    const parsedDurations = durations
+      ? durations
+          .split(',')
+          .map((value) => parseInt(value.trim(), 10))
+          .filter((value) => !isNaN(value) && value > 0)
+      : undefined;
 
     return this.availabilityService.getAvailableSlotsForDate(
       userId,
       date,
       durationNum,
       intervalNum,
+      parsedDurations,
     );
   }
 

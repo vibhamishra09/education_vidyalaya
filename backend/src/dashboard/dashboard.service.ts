@@ -72,25 +72,53 @@ export class DashboardService {
     }
 
     if (includeRequests) {
-      const pendingRequests = await this.prisma.peerSession.findMany({
-        where: {
-          requestedToId: user.id,
-          sessionStatus: SessionStatus.PENDING,
-        },
-        include: {
-          requestedBy: { select: { id: true, name: true, avatar: true } },
-          skills: { include: { skill: { select: { name: true } } } },
-        },
-        take: 5,
-      });
+      const [pendingRequests, sentRequests] = await Promise.all([
+        this.prisma.peerSession.findMany({
+          where: {
+            requestedToId: user.id,
+            sessionStatus: SessionStatus.PENDING,
+          },
+          include: {
+            requestedBy: { select: { id: true, name: true, avatar: true } },
+            requestedTo: { select: { id: true, name: true, avatar: true } },
+            skills: { include: { skill: { select: { name: true } } } },
+          },
+          take: 5,
+        }),
+        this.prisma.peerSession.findMany({
+          where: {
+            requestedById: user.id,
+            sessionStatus: SessionStatus.PENDING,
+          },
+          include: {
+            requestedBy: { select: { id: true, name: true, avatar: true } },
+            requestedTo: { select: { id: true, name: true, avatar: true } },
+            skills: { include: { skill: { select: { name: true } } } },
+          },
+          take: 5,
+        }),
+      ]);
 
       data.pendingRequests = pendingRequests.map((ps) => ({
         id: ps.id,
         title: ps.title,
         requestedBy: ps.requestedBy,
+        requestedTo: ps.requestedTo,
         date: ps.date,
         duration: ps.duration,
         skills: ps.skills.map((s) => s.skill.name),
+        direction: 'received',
+      }));
+
+      data.sentRequests = sentRequests.map((ps) => ({
+        id: ps.id,
+        title: ps.title,
+        requestedBy: ps.requestedBy,
+        requestedTo: ps.requestedTo,
+        date: ps.date,
+        duration: ps.duration,
+        skills: ps.skills.map((s) => s.skill.name),
+        direction: 'sent',
       }));
     }
 

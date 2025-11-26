@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { Coins, ArrowUpRight, ArrowDownLeft, RefreshCw, TrendingUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,12 +12,12 @@ import { useTransactionHistory } from "@/hooks/use-transactions";
 import { PaymentStatus } from "@/types/api.types";
 
 interface WalletTabProps {
-  coins?: number;
-  hourlyRate?: number;
+  coins?: number | string;
+  hourlyRate?: number | string;
   isLoading?: boolean;
 }
 
-export function WalletTab({ coins = 0, hourlyRate, isLoading = false }: WalletTabProps) {
+export const WalletTab = memo(function WalletTab({ coins, hourlyRate, isLoading = false }: WalletTabProps) {
   const { data: transactionsData, isLoading: transactionsLoading, refetch } = useTransactionHistory();
 
   const transactions = transactionsData?.transactions || [];
@@ -194,4 +195,4 @@ export function WalletTab({ coins = 0, hourlyRate, isLoading = false }: WalletTa
       </Card>
     </div>
   );
-}
+});

@@ -55,6 +55,10 @@ export default function PublicProfilePage({
         ]);
         
         setUser(userData);
+        if (userData.publicStats) {
+          setRating(userData.publicStats.avgRating ?? 0);
+          setReviewCount(userData.publicStats.reviewCount ?? 0);
+        }
         if (currentUserData) {
           setCurrentUser(currentUserData.user);
         }
@@ -126,21 +130,44 @@ export default function PublicProfilePage({
     );
   }
 
+  const sessionsTaught = user.publicStats?.sessionsTaught ?? 0;
+  const acceptedSessions = user.publicStats?.acceptedSessions ?? 0;
+  const totalSessionRequests = user.publicStats?.totalSessionRequests ?? 0;
+  const acceptanceRateValue =
+    totalSessionRequests > 0
+      ? Math.round(
+          100 *
+            (user.publicStats?.acceptanceRate ??
+              (acceptedSessions / totalSessionRequests || 0)),
+        )
+      : null;
+
+  const ratingValue =
+    reviewCount > 0
+      ? rating.toFixed(1)
+      : user.publicStats && user.publicStats.reviewCount > 0
+        ? user.publicStats.avgRating.toFixed(1)
+        : "—";
+
   const publicMetrics: MetricCard[] = [
     {
       name: "Sessions Taught",
-      value: 15,
+      value: sessionsTaught,
       icon: "check-circle",
     },
     {
       name: "Rating",
-      value: rating.toFixed(1),
+      value: ratingValue,
       description: `${reviewCount} reviews`,
       icon: "star",
     },
     {
-      name: "Response Rate",
-      value: "95%",
+      name: "Acceptance Rate",
+      value: acceptanceRateValue !== null ? `${acceptanceRateValue}%` : "—",
+      description:
+        totalSessionRequests > 0
+          ? `${acceptedSessions}/${totalSessionRequests} accepted`
+          : "No requests yet",
       icon: "trending-up",
     },
   ];

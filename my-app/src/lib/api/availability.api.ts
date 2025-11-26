@@ -48,6 +48,28 @@ export interface AvailableSlot {
   isAvailable: boolean;
 }
 
+export interface AvailableSlotsResponse {
+  availableSlots: AvailableSlot[];
+  slotsByDuration?: Record<string, AvailableSlot[]>;
+}
+
+export interface AvailabilityDateSummary {
+  date: string;
+  hasSlots: {
+    '15': boolean;
+    '30': boolean;
+    '60': boolean;
+    '120': boolean;
+  };
+}
+
+export interface DetailedSlot {
+  startTime: string;
+  endTime: string;
+  isAvailable: boolean;
+  reason?: string;
+}
+
 export interface SetAvailabilityData {
   dayOfWeek: number;
   startTime: string;
@@ -195,10 +217,47 @@ export const availabilityApi = {
     userId: string,
     date: string, // YYYY-MM-DD
     duration: number = 60, // Minutes
-    interval: number = 30 // Minutes
-  ): Promise<{ availableSlots: AvailableSlot[] }> {
+    interval: number = 30, // Minutes
+    durations?: number[]
+  ): Promise<AvailableSlotsResponse> {
+    const params: Record<string, string | number> = { date, duration, interval };
+    if (durations && durations.length > 0) {
+      params.durations = durations.join(',');
+    }
+
     const response = await apiClient.get(`/api/availability/slots/${userId}`, {
-      params: { date, duration, interval },
+      params,
+    });
+    return response.data;
+  },
+
+  /**
+   * Get availability summary for a date range
+   * Returns dates with at least one available slot for each preset duration (15, 30, 60, 120 min)
+   * More efficient than fetching slots for each date individually
+   */
+  async getAvailabilitySummary(
+    userId: string,
+    startDate: string, // YYYY-MM-DD
+    endDate: string // YYYY-MM-DD
+  ): Promise<{ summary: AvailabilityDateSummary[] }> {
+    const response = await apiClient.get(`/api/availability/summary/${userId}`, {
+      params: { startDate, endDate },
+    });
+    return response.data;
+  },
+
+  /**
+   * Get detailed available slots for a specific date and duration
+   * Returns all available time slots in 15-minute intervals
+   */
+  async getDetailedSlots(
+    userId: string,
+    date: string, // YYYY-MM-DD
+    duration: number // Minutes (15, 30, 60, or 120)
+  ): Promise<{ slots: DetailedSlot[] }> {
+    const response = await apiClient.get(`/api/availability/detailed/${userId}`, {
+      params: { date, duration },
     });
     return response.data;
   },

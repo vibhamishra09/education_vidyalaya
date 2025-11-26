@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { User, Settings, LogOut, Coins } from "lucide-react";
+import { User, LogOut, Coins } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useCurrentUser } from "@/hooks/use-users";
 import { formatMaya } from "@/lib/utils/coin-format";
@@ -133,16 +133,6 @@ export function UserDropdown({ user, signOut }: UserDropdownProps) {
                       <div className="flex items-center gap-3 px-4 py-2 hover:bg-muted/50 transition-colors cursor-pointer">
                         <User className="h-4 w-4 text-muted-foreground" />
                         <span className="text-sm">Profile</span>
-                      </div>
-                    </Link>
-                    
-                    <Link
-                      href="/settings"
-                      onClick={() => setIsOpen(false)}
-                    >
-                      <div className="flex items-center gap-3 px-4 py-2 hover:bg-muted/50 transition-colors cursor-pointer">
-                        <Settings className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm">Settings</span>
                       </div>
                     </Link>
                   </div>

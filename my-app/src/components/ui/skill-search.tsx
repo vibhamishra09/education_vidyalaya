@@ -4,8 +4,6 @@ import { useState, useEffect, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { Search, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useUser } from "@clerk/nextjs";
-import { getGlobalSignInTrigger } from "@/hooks/use-require-auth";
 import { skillsApi } from "@/lib/api/skills.api";
 
 interface SkillSearchProps {
@@ -27,7 +25,6 @@ export function SkillSearch({
   const inputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
-  const { isSignedIn } = useUser();
 
   // Debounced search function
   useEffect(() => {
@@ -103,22 +100,9 @@ export function SkillSearch({
     const trimmedSearch = searchTerm.trim();
     if (!trimmedSearch) return;
 
-    if (isSignedIn) {
-      // User is authenticated, redirect to browse page with search term
-      router.push(`/browse?search=${encodeURIComponent(trimmedSearch)}`);
-    } else {
-      // User is not authenticated, trigger sign-in modal
-      if (onSearch) {
-        onSearch(trimmedSearch);
-      } else {
-        // If no onSearch callback provided, trigger the global sign-in modal
-        // This ensures search works even without explicit callback
-        const globalTrigger = getGlobalSignInTrigger();
-        if (globalTrigger) {
-          globalTrigger();
-        }
-      }
-    }
+    setShowSuggestions(false);
+    router.push(`/browse?search=${encodeURIComponent(trimmedSearch)}`);
+    onSearch?.(trimmedSearch);
   };
 
   const handleSearchClick = () => {
