@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "User" ALTER COLUMN "bufferTime" SET DEFAULT 0,
+ALTER COLUMN "maxFutureBooking" SET DEFAULT 365,
+ALTER COLUMN "minAdvanceTime" SET DEFAULT 0;

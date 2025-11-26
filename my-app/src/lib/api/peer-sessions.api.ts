@@ -6,6 +6,7 @@ import {
   UpdateSessionStatusDto,
 } from '@/types/api.types';
 import { cleanQueryParams } from '../utils/api-utils';
+import type { AvailableSlotsResponse } from './availability.api';
 
 export const peerSessionsApi = {
   // Get peer sessions
@@ -104,16 +105,16 @@ export const peerSessionsApi = {
     userId: string,
     date: string, // YYYY-MM-DD
     duration: number = 60, // Minutes
-    interval: number = 30 // Minutes
-  ): Promise<{
-    availableSlots: Array<{
-      startTime: string;
-      endTime: string;
-      isAvailable: boolean;
-    }>;
-  }> => {
+    interval: number = 30, // Minutes
+    durations?: number[]
+  ): Promise<AvailableSlotsResponse> => {
+    const params: Record<string, string | number> = { date, duration, interval };
+    if (durations && durations.length > 0) {
+      params.durations = durations.join(',');
+    }
+
     const response = await apiClient.get(`/api/availability/slots/${userId}`, {
-      params: { date, duration, interval },
+      params,
     });
     return response.data;
   },

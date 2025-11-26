@@ -193,13 +193,13 @@ export class PeerSessionsService {
       requestDto.duration,
     );
 
-    if (!availabilityCheck.isAvailable) {
-      throw new BadRequestException({
-        code: 'TIME_SLOT_UNAVAILABLE',
-        message: availabilityCheck.reason || 'The requested time slot is not available',
-        conflicts: availabilityCheck.conflicts,
-      });
-    }
+    // if (!availabilityCheck.isAvailable) {
+    //   throw new BadRequestException({
+    //     code: 'TIME_SLOT_UNAVAILABLE',
+    //     message: availabilityCheck.reason || 'The requested time slot is not available',
+    //     conflicts: availabilityCheck.conflicts,
+    //   });
+    // }
 
     // Normalize Google Meet link if provided
     const gmeetLink = requestDto.gmeetLink ? normalizeGoogleMeetLink(requestDto.gmeetLink) : null;

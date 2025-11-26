@@ -38,9 +38,9 @@ export function AvailabilitySettings({ userId, isOwnProfile = false }: Availabil
   >({});
 
   const [editedPreferences, setEditedPreferences] = useState({
-    bufferTime: 15,
-    minAdvanceTime: 120,
-    maxFutureBooking: 30,
+    bufferTime: 0,
+    minAdvanceTime: 0,
+    maxFutureBooking: 365,
   });
 
   const fetchData = useCallback(async () => {
@@ -87,8 +87,8 @@ export function AvailabilitySettings({ userId, isOwnProfile = false }: Availabil
     setEditedAvailability((prev) => ({
       ...prev,
       [dayOfWeek]: {
-        startTime: prev[dayOfWeek]?.startTime || "09:00",
-        endTime: prev[dayOfWeek]?.endTime || "17:00",
+        startTime: prev[dayOfWeek]?.startTime || "00:00",
+        endTime: prev[dayOfWeek]?.endTime || "00:00",
         isActive,
       },
     }));
@@ -169,12 +169,15 @@ export function AvailabilitySettings({ userId, isOwnProfile = false }: Availabil
       <div className="space-y-6">
         <Card>
           <CardHeader>
-            <CardTitle>Weekly Availability</CardTitle>
-            <CardDescription>When this user is available for sessions</CardDescription>
+            <CardTitle>Unavailable Hours</CardTitle>
+            <CardDescription>Times when this user is NOT available for sessions (Available 24/7 by default)</CardDescription>
           </CardHeader>
           <CardContent>
-            {availability.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No availability set</p>
+            {availability.filter(a => a.isActive).length === 0 ? (
+              <div className="p-4 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg">
+                <p className="text-sm text-green-700 dark:text-green-300 font-medium">✓ Available 24/7</p>
+                <p className="text-xs text-green-600 dark:text-green-400 mt-1">No blocked hours set</p>
+              </div>
             ) : (
               <div className="space-y-3">
                 {DAYS_OF_WEEK.map((day) => {
@@ -182,10 +185,10 @@ export function AvailabilitySettings({ userId, isOwnProfile = false }: Availabil
                   if (!dayAvail || !dayAvail.isActive) return null;
 
                   return (
-                    <div key={day.value} className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                    <div key={day.value} className="flex items-center justify-between p-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg">
                       <span className="font-medium">{day.label}</span>
-                      <Badge variant="secondary">
-                        {dayAvail.startTime} - {dayAvail.endTime}
+                      <Badge variant="destructive">
+                        Unavailable: {dayAvail.startTime} - {dayAvail.endTime}
                       </Badge>
                     </div>
                   );
@@ -201,44 +204,48 @@ export function AvailabilitySettings({ userId, isOwnProfile = false }: Availabil
   // Edit mode for own profile
   return (
     <div className="space-y-6">
-      {/* Weekly Availability */}
+      {/* Weekly Unavailability */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Calendar className="h-5 w-5" />
-            Weekly Availability
+            Block Out Unavailable Hours
           </CardTitle>
           <CardDescription>
-            Set your available hours for each day of the week
+            You are available 24/7 by default. Add specific times when you are NOT available.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {DAYS_OF_WEEK.map((day) => {
             const dayData = editedAvailability[day.value];
-            const isActive = dayData?.isActive ?? false;
+            const isBlocked = dayData?.isActive ?? false;
 
             return (
               <div key={day.value} className="space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <Switch
-                      checked={isActive}
+                      checked={isBlocked}
                       onCheckedChange={(checked) => handleDayToggle(day.value, checked)}
                     />
-                    <Label className="font-medium">{day.label}</Label>
+                    <Label className="font-medium">
+                      {day.label}
+                      {!isBlocked && <span className="ml-2 text-xs text-green-600 dark:text-green-400">(Available all day)</span>}
+                      {isBlocked && <span className="ml-2 text-xs text-red-600 dark:text-red-400">(Blocked)</span>}
+                    </Label>
                   </div>
-                  {isActive && (
+                  {isBlocked && (
                     <div className="flex items-center gap-2">
                       <Input
                         type="time"
-                        value={dayData?.startTime || "09:00"}
+                        value={dayData?.startTime || "00:00"}
                         onChange={(e) => handleTimeChange(day.value, "startTime", e.target.value)}
                         className="w-32"
                       />
                       <span className="text-muted-foreground">to</span>
                       <Input
                         type="time"
-                        value={dayData?.endTime || "17:00"}
+                        value={dayData?.endTime || "00:00"}
                         onChange={(e) => handleTimeChange(day.value, "endTime", e.target.value)}
                         className="w-32"
                       />
@@ -249,6 +256,12 @@ export function AvailabilitySettings({ userId, isOwnProfile = false }: Availabil
             );
           })}
 
+          <div className="p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md mt-4">
+            <p className="text-sm text-blue-700 dark:text-blue-300">
+              <strong>Tip:</strong> Leave all days off to stay available 24/7. Toggle a day ON to block specific hours.
+            </p>
+          </div>
+
           <Button onClick={handleSaveAvailability} disabled={saving} className="w-full mt-4">
             {saving ? (
               <>
@@ -258,7 +271,7 @@ export function AvailabilitySettings({ userId, isOwnProfile = false }: Availabil
             ) : (
               <>
                 <Save className="h-4 w-4 mr-2" />
-                Save Availability
+                Save Unavailable Hours
               </>
             )}
           </Button>
@@ -293,7 +306,7 @@ export function AvailabilitySettings({ userId, isOwnProfile = false }: Availabil
               }
             />
             <p className="text-xs text-muted-foreground">
-              Minimum gap between sessions (0-120 minutes)
+              Minimum gap between sessions (0 = back-to-back sessions allowed)
             </p>
           </div>
 
@@ -313,7 +326,7 @@ export function AvailabilitySettings({ userId, isOwnProfile = false }: Availabil
               }
             />
             <p className="text-xs text-muted-foreground">
-              How far in advance must sessions be booked (e.g., 120 = 2 hours)
+              How far in advance must sessions be booked (0 = instant booking allowed)
             </p>
           </div>
 
@@ -328,12 +341,12 @@ export function AvailabilitySettings({ userId, isOwnProfile = false }: Availabil
               onChange={(e) =>
                 setEditedPreferences((prev) => ({
                   ...prev,
-                  maxFutureBooking: parseInt(e.target.value) || 1,
+                  maxFutureBooking: parseInt(e.target.value) || 365,
                 }))
               }
             />
             <p className="text-xs text-muted-foreground">
-              How far in advance can sessions be booked (1-365 days)
+              How far in advance can sessions be booked (365 = 1 year ahead)
             </p>
           </div>
 
@@ -359,10 +372,11 @@ export function AvailabilitySettings({ userId, isOwnProfile = false }: Availabil
           <CardTitle className="text-sm">Quick Setup Guide</CardTitle>
         </CardHeader>
         <CardContent className="text-sm text-muted-foreground space-y-2">
-          <p>• <strong>Weekly Availability:</strong> Toggle days on/off and set your working hours</p>
-          <p>• <strong>Buffer Time:</strong> Adds a gap between sessions (recommended: 15 minutes)</p>
-          <p>• <strong>Advance Notice:</strong> Prevents last-minute bookings (recommended: 2 hours)</p>
-          <p>• <strong>Booking Window:</strong> Limits how far ahead people can book (recommended: 30 days)</p>
+          <p>• <strong>Default:</strong> You&apos;re available 24/7 with instant booking (no restrictions)</p>
+          <p>• <strong>Block Hours:</strong> Toggle days ON to block specific unavailable times</p>
+          <p>• <strong>Buffer Time (0):</strong> Back-to-back sessions allowed. Increase if you need breaks</p>
+          <p>• <strong>Advance Notice (0):</strong> Instant booking allowed. Increase to prevent last-minute bookings</p>
+          <p>• <strong>Booking Window (365):</strong> Sessions can be booked up to 1 year ahead</p>
         </CardContent>
       </Card>
     </div>
