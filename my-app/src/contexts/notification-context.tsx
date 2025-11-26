@@ -17,6 +17,7 @@ interface NotificationContextType {
   markAsRead: (notificationId: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
   markNotificationsAsRead: (notificationIds: string[]) => Promise<void>;
+  addNotification: (notification: Notification) => void;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
@@ -128,6 +129,24 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     }
   };
 
+  // Add a new notification to the list (for real-time updates)
+  const addNotification = useCallback((notification: Notification) => {
+    setNotifications(prev => {
+      // Check if notification already exists
+      const exists = prev.some(n => n.id === notification.id);
+      if (exists) {
+        return prev;
+      }
+      // Add to the beginning of the list
+      const updated = [notification, ...prev];
+      // Update unread count if notification is unread
+      if (!notification.viewed) {
+        setUnreadCount(prevCount => prevCount + 1);
+      }
+      return updated;
+    });
+  }, []);
+
   // Fetch notifications when user signs in
   useEffect(() => {
     if (isSignedIn) {
@@ -162,6 +181,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     markAsRead,
     markAllAsRead,
     markNotificationsAsRead,
+    addNotification,
   };
 
   return (

@@ -84,11 +84,13 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
     const registration = await navigator.serviceWorker.register('/sw.js', {
       scope: '/',
     });
-    console.log('Service Worker registered:', registration);
+    console.log('✅ Service Worker registered:', registration);
+    // Wait for service worker to be ready
+    await navigator.serviceWorker.ready;
     return registration;
   } catch (error) {
-    console.error('Service Worker registration failed:', error);
-    return null;
+    console.error('❌ Service Worker registration failed:', error);
+    throw error;
   }
 }
 
@@ -97,14 +99,26 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
  */
 export async function getServiceWorkerRegistration(): Promise<ServiceWorkerRegistration | null> {
   if (!('serviceWorker' in navigator)) {
+    console.log('🔧 Service workers not supported in navigator');
     return null;
   }
 
   try {
-    const registration = await navigator.serviceWorker.ready;
-    return registration;
+    console.log('🔧 Checking for existing service worker...');
+    // First check if there's already a registration
+    const existingReg = await navigator.serviceWorker.getRegistration();
+    if (existingReg) {
+      console.log('✅ Found existing service worker registration:', existingReg);
+      // Wait for it to be ready
+      await navigator.serviceWorker.ready;
+      return existingReg;
+    }
+    
+    console.log('🔧 No existing service worker registration found');
+    return null;
   } catch (error) {
-    console.error('Failed to get service worker registration:', error);
+    console.error('❌ Failed to get service worker registration:', error);
+    console.error('❌ Error details:', error instanceof Error ? error.message : String(error));
     return null;
   }
 }
@@ -115,35 +129,66 @@ export async function getServiceWorkerRegistration(): Promise<ServiceWorkerRegis
 export async function subscribeToPushNotifications(
   vapidPublicKey: string
 ): Promise<PushSubscription | null> {
+  console.log('🔧 Starting subscribeToPushNotifications with key:', vapidPublicKey.substring(0, 20) + '...');
+  
   try {
     // Get or register service worker
+    console.log('🔧 Getting service worker registration...');
     let registration = await getServiceWorkerRegistration();
     if (!registration) {
+      console.log('🔧 No existing registration, registering new service worker...');
       registration = await registerServiceWorker();
     }
 
     if (!registration) {
-      throw new Error('Service worker registration failed');
+      throw new Error('Service worker registration failed - registration is null');
+    }
+    console.log('🔧 Service worker registration obtained:', registration);
+    console.log('🔧 Service worker state:', registration.active?.state);
+
+    // Wait for service worker to be active
+    if (registration.installing) {
+      console.log('🔧 Service worker is installing, waiting...');
+      await new Promise((resolve) => {
+        registration!.installing!.addEventListener('statechange', function() {
+          if (this.state === 'activated') {
+            resolve(undefined);
+          }
+        });
+      });
     }
 
     // Check if already subscribed
+    console.log('🔧 Checking for existing subscription...');
     const existingSubscription = await registration.pushManager.getSubscription();
     if (existingSubscription) {
-      console.log('Already subscribed to push notifications');
+      console.log('✅ Already subscribed to push notifications');
       return existingSubscription;
     }
+    console.log('🔧 No existing subscription, creating new one...');
+
+    // Convert VAPID key
+    console.log('🔧 Converting VAPID key to Uint8Array...');
+    const applicationServerKey = urlBase64ToUint8Array(vapidPublicKey);
+    console.log('🔧 VAPID key converted, length:', applicationServerKey.length);
 
     // Subscribe to push notifications
+    console.log('🔧 Calling pushManager.subscribe...');
     const subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(vapidPublicKey) as BufferSource,
+      applicationServerKey: applicationServerKey,
     });
 
-    console.log('Push subscription created:', subscription);
+    console.log('✅ Push subscription created:', subscription);
     return subscription;
   } catch (error) {
-    console.error('Failed to subscribe to push notifications:', error);
-    return null;
+    console.error('❌ Failed to subscribe to push notifications:', error);
+    console.error('❌ Error name:', error instanceof Error ? error.name : 'Unknown');
+    console.error('❌ Error message:', error instanceof Error ? error.message : String(error));
+    console.error('❌ Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+    
+    // Re-throw the error so the caller gets the actual error message
+    throw error;
   }
 }
 
