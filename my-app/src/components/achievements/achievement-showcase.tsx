@@ -135,12 +135,12 @@ export function AchievementShowcase({
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle className="text-lg flex items-center gap-2">
             <Trophy className="h-5 w-5 text-yellow-500" />
             Achievements
           </CardTitle>
-          <div className="text-sm text-muted-foreground space-x-2">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground sm:text-sm">
             <span>
               <span className="font-semibold text-primary">{unlocked.length}</span> unlocked
             </span>
@@ -176,7 +176,7 @@ export function AchievementShowcase({
           </div>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 xxl:grid-cols-3">
           {categoryStats.map((stat) => {
             const config = categoryConfig[stat.category];
             const Icon = config.icon;
@@ -189,7 +189,7 @@ export function AchievementShowcase({
                   setActiveCategory((prev) => (prev === stat.category ? "all" : stat.category))
                 }
                 className={cn(
-                  "rounded-xl border bg-card p-4 text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                  "rounded-xl border bg-card p-4 text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary h-full",
                   activeCategory === stat.category && "border-primary shadow-lg"
                 )}
               >
@@ -209,12 +209,13 @@ export function AchievementShowcase({
                 </div>
                 <div className="mt-3 space-y-1.5">
                   <Progress value={stat.completion} />
-                  <p className="text-xs text-muted-foreground flex items-center justify-between">
+                  <div className="flex flex-col gap-1 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
                     <span>{stat.completion}% complete</span>
-                    <span>
-                      {stat.inProgress} active · {stat.total - stat.unlocked - stat.inProgress} locked
+                    <span className="text-muted-foreground">
+                      {stat.inProgress} active ·{" "}
+                      {stat.total - stat.unlocked - stat.inProgress} locked
                     </span>
-                  </p>
+                  </div>
                 </div>
               </button>
             );
