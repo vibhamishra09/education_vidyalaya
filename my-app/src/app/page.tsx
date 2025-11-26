@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
 import { Navigation } from "@/components/layout/navigation";
@@ -10,27 +10,29 @@ import { DebateRoomCard } from "@/components/cards/debate-room-card";
 import { Footer } from "@/components/layout/footer";
 import { FadeIn } from "@/components/ui/fade-in";
 import { Button } from "@/components/ui/button";
-import { useStudyRooms } from "@/hooks/use-study-rooms";
+import { useStudyRooms, useJoinStudyRoom } from "@/hooks/use-study-rooms";
+import { useRequireAuth } from "@/hooks/use-require-auth";
+import { useToast } from "@/contexts/toast-context";
 import { SessionStatus } from "@/types/api.types";
+import type { StudyRoomCard as StudyRoomCardType } from "@/types/api.types";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function Home() {
-  const { isSignedIn, isLoaded } = useUser();
+  const { isLoaded } = useUser();
   const router = useRouter();
+  const requireAuth = useRequireAuth();
+  const { showSuccess, showError } = useToast();
+  const joinStudyRoom = useJoinStudyRoom();
+  const [joiningRoomId, setJoiningRoomId] = useState<string | null>(null);
 
-  // Redirect logged-in users to browse page
-  useEffect(() => {
-    if (isLoaded && isSignedIn) {
-      router.push('/browse');
-    }
-  }, [isLoaded, isSignedIn, router]);
-
-  // Fetch study rooms from API
   const { data: studyRoomsData, isLoading: studyRoomsLoading, error: studyRoomsError } = useStudyRooms({
-    limit: 6, // Show only 6 study rooms on home page
+    limit: 6,
+    status: SessionStatus.UPCOMING,
+    trending: true,
   });
 
-  // Mock data for debate rooms (since backend doesn't have debate rooms API yet)
+  const studyRooms = studyRoomsData?.studyRooms ?? [];
+
   const debateRooms = [
     {
       status: "open" as const,
@@ -46,21 +48,38 @@ export default function Home() {
     },
   ];
 
-  // Transform API data to match component props
-  const studyRooms = studyRoomsData?.studyRooms?.map((room) => ({
-    status: room.sessionStatus === SessionStatus.ONGOING ? "live" as const : "scheduled" as const,
-    category: typeof room.skills?.[0] === 'string' ? room.skills[0] : room.skills?.[0]?.name || "General",
-    title: room.title,
-    description: room.description || "",
-    participants: { 
-      current: room.participantCount || 0, 
-      max: room.maxParticipants 
-    },
-    host: { 
-      name: room.createdBy.name, 
-      avatar: room.createdBy.avatar || "" 
-    },
-  })) || [];
+  const handleViewAll = () => {
+    router.push("/browse");
+  };
+
+  const handleJoinRoom = (room: StudyRoomCardType) => {
+    requireAuth(async () => {
+      try {
+        setJoiningRoomId(room.id);
+        await joinStudyRoom.mutateAsync(room.id);
+        showSuccess("You're in!", `You joined "${room.title}".`);
+      } catch (error: unknown) {
+        console.error("Error joining study room from landing:", error);
+        if (error && typeof error === "object" && "response" in error) {
+          const apiError = error as { response: { data?: { code?: string; message?: string } } };
+          const errorCode = apiError.response?.data?.code;
+          const errorMessage = apiError.response?.data?.message;
+
+          if (errorCode === "INSUFFICIENT_COINS") {
+            showError("Not enough mAYA", errorMessage ?? "You do not have enough mAYA to join this study room.");
+          } else if (errorCode === "ROOM_FULL") {
+            showError("Room is full", errorMessage ?? "This study room has reached maximum capacity.");
+          } else {
+            showError("Failed to join", "Failed to join study room. Please try again.");
+          }
+        } else {
+          showError("Failed to join", "Failed to join study room. Please try again.");
+        }
+      } finally {
+        setJoiningRoomId(null);
+      }
+    });
+  };
 
   // Show loading state while checking authentication
   if (!isLoaded) {
@@ -78,11 +97,6 @@ export default function Home() {
     );
   }
 
-  // Don't render the landing page for signed-in users (they'll be redirected)
-  if (isSignedIn) {
-    return null;
-  }
-
   return (
     <div className="min-h-screen flex flex-col">
       <Navigation />
@@ -90,13 +104,15 @@ export default function Home() {
       <main className="flex-1">
         <HeroSection />
 
-        {/* Live Study Rooms Section */}
+        {/* Trending Study Rooms Section */}
         <section className="py-16 bg-muted/30" id="features">
           <div className="container mx-auto px-4 sm:px-6 lg:px-8">
             <FadeIn>
               <div className="flex items-center justify-between mb-8">
-                <h2 className="text-3xl font-bold">Live Study Rooms</h2>
-                <Button variant="ghost">View All</Button>
+                <h2 className="text-3xl font-bold">Trending Study Rooms</h2>
+                <Button variant="ghost" onClick={handleViewAll}>
+                  View All
+                </Button>
               </div>
             </FadeIn>
 
@@ -140,24 +156,60 @@ export default function Home() {
             ) : studyRooms.length === 0 ? (
               <div className="text-center py-12">
                 <p className="text-muted-foreground">
-                  No study rooms available at the moment.
+                  No trending study rooms are available right now. Check back soon!
                 </p>
               </div>
             ) : (
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {studyRooms.map((room, index) => (
-                  <FadeIn key={index} delay={index * 0.1}>
+                {studyRooms.map((room, index) => {
+                  const isLive = room.sessionStatus === SessionStatus.ONGOING;
+                  const isFull = (room.participantCount || 0) >= room.maxParticipants;
+                  const joinLoading = joinStudyRoom.isPending && joiningRoomId === room.id;
+
+                  return (
+                    <FadeIn key={room.id} delay={index * 0.1}>
                     <div data-testid="study-room-card">
-                      <StudyRoomCard {...room} />
+                      <StudyRoomCard
+                        status={isLive ? "live" : "scheduled"}
+                        category={
+                          typeof room.skills?.[0] === "string"
+                            ? room.skills[0]
+                            : room.skills?.[0]?.name || "General"
+                        }
+                        title={room.title}
+                        description={room.description || ""}
+                        participants={{
+                          current: room.participantCount || 0,
+                          max: room.maxParticipants,
+                        }}
+                        host={{
+                          name: room.createdBy.name,
+                          avatar: room.createdBy.avatar || "",
+                          rating: room.hostAvgRating,
+                          reviewCount: room.hostReviewCount,
+                        }}
+                        actionLabel={
+                          isFull ? "Room Full" : isLive ? "Join Live" : "Join Room"
+                        }
+                        actionVariant={
+                          isFull ? "secondary" : isLive ? "default" : "outline"
+                        }
+                        actionDisabled={isFull}
+                        actionLoading={joinLoading}
+                        onAction={
+                          isFull ? undefined : () => handleJoinRoom(room)
+                        }
+                      />
                     </div>
                   </FadeIn>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
         </section>
 
-        {/* Debate Rooms Section */}
+        {/* Debate Rooms Section (Mock Data) */}
         <section className="py-16" id="community">
           <div className="container mx-auto px-4 sm:px-6 lg:px-8">
             <FadeIn>
@@ -171,7 +223,7 @@ export default function Home() {
 
             <div className="grid sm:grid-cols-2 gap-6 max-w-4xl">
               {debateRooms.map((room, index) => (
-                <FadeIn key={index} delay={index * 0.1}>
+                <FadeIn key={room.title} delay={index * 0.1}>
                   <DebateRoomCard {...room} />
                 </FadeIn>
               ))}

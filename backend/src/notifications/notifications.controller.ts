@@ -5,6 +5,7 @@ import type { PushSubscriptionDto } from './push-notification.service';
 import { ClerkAuthGuard } from '../common/guards/clerk-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { NotifType } from '@prisma/client';
+import { MarkNotificationsReadDto } from './dto/notification.dto';
 
 @Controller('api/notifications')
 @UseGuards(ClerkAuthGuard)
@@ -44,6 +45,14 @@ export class NotificationsController {
   @Patch('read-all')
   async markAllNotificationsAsRead(@CurrentUser() userId: string) {
     return this.notificationsService.markAllNotificationsAsRead(userId);
+  }
+
+  @Patch('read')
+  async markNotificationsAsRead(
+    @Body() body: MarkNotificationsReadDto,
+    @CurrentUser() userId: string,
+  ) {
+    return this.notificationsService.markNotificationsAsRead(body.notificationIds, userId);
   }
 
   @Get('vapid-public-key')

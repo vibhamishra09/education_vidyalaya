@@ -21,6 +21,15 @@ export enum NotifType {
 }
 
 // User Types
+export interface PublicUserStats {
+  sessionsTaught: number;
+  totalSessionRequests: number;
+  acceptedSessions: number;
+  acceptanceRate: number; // Stored as a decimal (0-1)
+  avgRating: number;
+  reviewCount: number;
+}
+
 export interface User {
   id: string;
   name: string;
@@ -34,6 +43,7 @@ export interface User {
   hourlyRate?: number | string; // Hourly rate in coins for teaching sessions
   hasSkills?: string[];
   wantSkills?: string[];
+  publicStats?: PublicUserStats;
 }
 
 export interface PublicUser {
@@ -85,6 +95,8 @@ export interface StudyRoomCard {
   createdBy: PublicUser;
   skills: (string | Skill)[];
   gmeetLink?: string;
+  hostAvgRating?: number;
+  hostReviewCount?: number;
 }
 
 export interface StudyRoom extends StudyRoomCard {
@@ -363,6 +375,7 @@ export interface StudyRoomFilters extends PaginationQuery {
   status?: SessionStatus;
   dateFrom?: string;
   dateTo?: string;
+  trending?: boolean;
   [key: string]: unknown;
 }
 

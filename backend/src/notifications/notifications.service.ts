@@ -107,6 +107,40 @@ export class NotificationsService {
     };
   }
 
+  async markNotificationsAsRead(notificationIds: string[], userId: string) {
+    if (!notificationIds || notificationIds.length === 0) {
+      return {
+        success: true,
+        count: 0,
+      };
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { clerkId: userId },
+      select: { id: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const uniqueNotificationIds = Array.from(new Set(notificationIds));
+
+    const result = await this.prisma.notification.updateMany({
+      where: {
+        userId: user.id,
+        id: { in: uniqueNotificationIds },
+        viewed: false,
+      },
+      data: { viewed: true },
+    });
+
+    return {
+      success: true,
+      count: result.count,
+    };
+  }
+
   async createNotification(
     userId: string,
     message: string,

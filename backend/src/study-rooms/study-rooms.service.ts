@@ -5,9 +5,39 @@ import { ChatService } from '../chat/chat.service';
 import { StreaksService } from '../streaks/streaks.service';
 import { AchievementsService } from '../achievements/achievements.service';
 import { CreateStudyRoomDto, UpdateStudyRoomDto } from './dto/study-room.dto';
-import { SessionStatus, NotifType, PaymentStatus } from '@prisma/client';
+import { Prisma, SessionStatus, NotifType, PaymentStatus } from '@prisma/client';
 import { normalizeGoogleMeetLink } from '../utils/gmeet-generator';
 import { convertLocalToUTC } from '../utils/timezone';
+
+type StudyRoomWithRelations = {
+  id: string;
+  title: string;
+  description?: string | null;
+  sessionStatus: SessionStatus;
+  date: Date;
+  duration: number;
+  maxParticipants: number;
+  joiningFee: number | string | Prisma.Decimal;
+  gmeetLink?: string | null;
+  createdBy: {
+    id: string;
+    name: string;
+    avatar?: string | null;
+  };
+  skills: Array<{
+    skill: {
+      id: string;
+      name: string;
+    };
+  }>;
+  learners: Array<{
+    user: {
+      id: string;
+      name: string;
+      avatar?: string | null;
+    };
+  }>;
+};
 
 @Injectable()
 export class StudyRoomsService {
@@ -27,7 +57,12 @@ export class StudyRoomsService {
     dateTo?: string,
     page: number = 1,
     limit: number = 10,
+    trending?: boolean,
   ) {
+    if (trending) {
+      return this.getTrendingStudyRooms(limit);
+    }
+
     const where: any = {};
 
     if (search) {
@@ -99,7 +134,219 @@ export class StudyRoomsService {
       this.prisma.studyRoom.count({ where }),
     ]);
 
-    const studyRoomCards = studyRooms.map((room) => ({
+    const studyRoomCards = studyRooms.map((room) => this.buildStudyRoomCard(room));
+
+    return {
+      studyRooms: studyRoomCards,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+        hasMore: skip + limit < total,
+      },
+    };
+  }
+
+  private async getTrendingStudyRooms(limit?: number) {
+    const normalizedLimit = Math.max(1, limit ?? 6);
+    const now = new Date();
+
+    const teacherRatings = await this.prisma.review.groupBy({
+      by: ['revieweeId'],
+      where: {
+        reviewee: {
+          studyRooms: {
+            some: {
+              sessionStatus: SessionStatus.UPCOMING,
+              date: { gte: now },
+            },
+          },
+        },
+      },
+      _avg: { rating: true },
+      _count: { rating: true },
+      orderBy: [
+        { _avg: { rating: 'desc' } },
+        { _count: { rating: 'desc' } },
+      ],
+      take: normalizedLimit * 4,
+    });
+
+    if (teacherRatings.length === 0) {
+      return this.getFallbackTrendingRooms(normalizedLimit, now);
+    }
+
+    const MIN_AVG_RATING = 4;
+    const prioritizedTeachers = teacherRatings.filter(
+      (teacher) => (teacher._avg.rating ?? 0) >= MIN_AVG_RATING && (teacher._count.rating ?? 0) > 0,
+    );
+
+    const orderedTeachers =
+      prioritizedTeachers.length >= normalizedLimit ? prioritizedTeachers : teacherRatings;
+
+    const roomEntries = await Promise.all(
+      orderedTeachers.map(async (teacher) => {
+        const room = await this.prisma.studyRoom.findFirst({
+          where: {
+            createdById: teacher.revieweeId,
+            sessionStatus: SessionStatus.UPCOMING,
+            date: { gte: now },
+          },
+          include: {
+            createdBy: {
+              select: {
+                id: true,
+                name: true,
+                avatar: true,
+              },
+            },
+            skills: {
+              include: {
+                skill: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
+              },
+            },
+            learners: {
+              select: {
+                user: {
+                  select: {
+                    id: true,
+                    name: true,
+                    avatar: true,
+                  },
+                },
+              },
+            },
+          },
+          orderBy: { date: 'asc' },
+        });
+
+        if (!room) {
+          return null;
+        }
+
+        return {
+          room,
+          rating: teacher._avg.rating ?? 0,
+          reviewCount: teacher._count.rating ?? 0,
+        };
+      }),
+    );
+
+    const uniqueRooms: Array<{ room: StudyRoomWithRelations; rating: number; reviewCount: number }> = [];
+    const seenRoomIds = new Set<string>();
+
+    for (const entry of roomEntries) {
+      if (!entry || seenRoomIds.has(entry.room.id)) {
+        continue;
+      }
+
+      seenRoomIds.add(entry.room.id);
+      uniqueRooms.push(entry);
+
+      if (uniqueRooms.length >= normalizedLimit * 2) {
+        break;
+      }
+    }
+
+    if (uniqueRooms.length === 0) {
+      return this.getFallbackTrendingRooms(normalizedLimit, now);
+    }
+
+    const sortedRooms = uniqueRooms
+      .sort((a, b) => {
+        if (b.rating !== a.rating) {
+          return b.rating - a.rating;
+        }
+
+        if (b.reviewCount !== a.reviewCount) {
+          return b.reviewCount - a.reviewCount;
+        }
+
+        return a.room.date.getTime() - b.room.date.getTime();
+      })
+      .slice(0, normalizedLimit);
+
+    const studyRoomCards = sortedRooms.map(({ room, rating, reviewCount }) =>
+      this.buildStudyRoomCard(room, { avgRating: rating, reviewCount }),
+    );
+
+    return {
+      studyRooms: studyRoomCards,
+      pagination: {
+        total: studyRoomCards.length,
+        page: 1,
+        limit: normalizedLimit,
+        totalPages: 1,
+        hasMore: false,
+      },
+    };
+  }
+
+  private async getFallbackTrendingRooms(limit: number, fromDate: Date) {
+    const studyRooms = await this.prisma.studyRoom.findMany({
+      where: {
+        sessionStatus: SessionStatus.UPCOMING,
+        date: { gte: fromDate },
+      },
+      take: limit,
+      orderBy: { date: 'asc' },
+      include: {
+        createdBy: {
+          select: {
+            id: true,
+            name: true,
+            avatar: true,
+          },
+        },
+        skills: {
+          include: {
+            skill: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+        learners: {
+          select: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                avatar: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const studyRoomCards = studyRooms.map((room) => this.buildStudyRoomCard(room));
+
+    return {
+      studyRooms: studyRoomCards,
+      pagination: {
+        total: studyRoomCards.length,
+        page: 1,
+        limit,
+        totalPages: 1,
+        hasMore: false,
+      },
+    };
+  }
+
+  private buildStudyRoomCard(
+    room: StudyRoomWithRelations,
+    rating?: { avgRating?: number; reviewCount?: number },
+  ) {
+    return {
       id: room.id,
       title: room.title,
       description: room.description,
@@ -112,17 +359,8 @@ export class StudyRoomsService {
       participantCount: room.learners.length,
       createdBy: room.createdBy,
       skills: room.skills.map((s) => s.skill.name),
-    }));
-
-    return {
-      studyRooms: studyRoomCards,
-      pagination: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
-        hasMore: skip + limit < total,
-      },
+      hostAvgRating: rating?.avgRating,
+      hostReviewCount: rating?.reviewCount,
     };
   }
 

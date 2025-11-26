@@ -1,12 +1,18 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { Calendar, ChevronLeft, ChevronRight, Clock, List, Grid3x3 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { useRouter } from "next/navigation";
 
 interface CalendarSession {
   id: string;
@@ -22,8 +28,32 @@ interface EnhancedCalendarWidgetProps {
 }
 
 export function EnhancedCalendarWidget({ sessions = [] }: EnhancedCalendarWidgetProps) {
+  const router = useRouter();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<"month" | "week" | "agenda">("month");
+  const [activeDay, setActiveDay] = useState<string | null>(null);
+  const [pinnedDay, setPinnedDay] = useState<string | null>(null);
+  const [isInteractingWithPopover, setIsInteractingWithPopover] = useState(false);
+
+  const hoverCloseTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pinnedDayRef = useRef<string | null>(null);
+  const interactingRef = useRef(false);
+
+  useEffect(() => {
+    pinnedDayRef.current = pinnedDay;
+  }, [pinnedDay]);
+
+  useEffect(() => {
+    interactingRef.current = isInteractingWithPopover;
+  }, [isInteractingWithPopover]);
+
+  useEffect(() => {
+    return () => {
+      if (hoverCloseTimeout.current) {
+        clearTimeout(hoverCloseTimeout.current);
+      }
+    };
+  }, []);
 
   const monthYear = currentDate.toLocaleDateString('en-US', {
     month: 'long',
@@ -151,6 +181,62 @@ export function EnhancedCalendarWidget({ sessions = [] }: EnhancedCalendarWidget
     return `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
   };
 
+  const getDateKey = (date: Date) => date.toISOString().split('T')[0];
+
+  const stopHoverCloseTimer = () => {
+    if (hoverCloseTimeout.current) {
+      clearTimeout(hoverCloseTimeout.current);
+      hoverCloseTimeout.current = null;
+    }
+  };
+
+  const schedulePopoverClose = () => {
+    stopHoverCloseTimer();
+    hoverCloseTimeout.current = setTimeout(() => {
+      if (!pinnedDayRef.current && !interactingRef.current) {
+        setActiveDay(null);
+      }
+    }, 160);
+  };
+
+  const handleDayHover = (date: Date, shouldPin = false) => {
+    const key = getDateKey(date);
+
+    if (!shouldPin && pinnedDayRef.current && pinnedDayRef.current !== key) {
+      return;
+    }
+
+    setActiveDay(key);
+    stopHoverCloseTimer();
+
+    if (shouldPin) {
+      setPinnedDay(key);
+    } else if (pinnedDayRef.current && pinnedDayRef.current !== key) {
+      setPinnedDay(null);
+    }
+  };
+
+  const toggleDayPin = (date: Date) => {
+    const key = getDateKey(date);
+    if (pinnedDay === key) {
+      closeDayPopover();
+    } else {
+      handleDayHover(date, true);
+    }
+  };
+
+  const closeDayPopover = () => {
+    stopHoverCloseTimer();
+    setActiveDay(null);
+    setPinnedDay(null);
+    setIsInteractingWithPopover(false);
+  };
+
+  const openSessionDetails = (sessionId: string) => {
+    closeDayPopover();
+    router.push(`/sessions/${sessionId}`);
+  };
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -244,66 +330,104 @@ export function EnhancedCalendarWidget({ sessions = [] }: EnhancedCalendarWidget
                 const dateObj = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
                 const sessionsOnDay = getSessionsForDate(dateObj);
 
+                const dateKey = getDateKey(dateObj);
+                const isOpen = activeDay === dateKey;
+
                 return (
-                  <div
+                  <Popover
                     key={day}
-                    className={cn(
-                      "aspect-square flex items-center justify-center text-xs sm:text-sm rounded-lg cursor-pointer transition-colors relative group",
-                      today
-                        ? "bg-primary text-primary-foreground font-semibold"
-                        : hasSession
-                        ? "bg-blue-50 text-blue-700 font-medium hover:bg-blue-100"
-                        : "hover:bg-muted"
-                    )}
+                    open={isOpen}
+                    onOpenChange={(open) => {
+                      if (!open) {
+                        closeDayPopover();
+                      }
+                    }}
                   >
-                    <span className="relative z-10">{day}</span>
-                    {sessionsOnDay.length > 0 && !today && (
-                      <div className="absolute bottom-0.5 flex gap-0.5">
-                        {sessionsOnDay.slice(0, 3).map((_, idx) => (
-                          <div key={idx} className="w-1 h-1 rounded-full bg-blue-600" />
-                        ))}
-                      </div>
-                    )}
-                    {/* Hover Tooltip */}
-                    {sessionsOnDay.length > 0 && (
-                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 hidden sm:block">
-                        <div className="bg-gray-900 text-white text-xs rounded-lg py-2 px-3 max-w-[200px] shadow-xl">
-                          <div className="font-semibold mb-1 whitespace-nowrap">
-                            {dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        className={cn(
+                          "aspect-square w-full h-full flex items-center justify-center text-xs sm:text-sm rounded-lg cursor-pointer transition-colors relative",
+                          today
+                            ? "bg-primary text-primary-foreground font-semibold"
+                            : hasSession
+                            ? "bg-blue-50 text-blue-700 font-medium hover:bg-blue-100"
+                            : "hover:bg-muted"
+                        )}
+                        onMouseEnter={() => sessionsOnDay.length > 0 && handleDayHover(dateObj)}
+                        onMouseLeave={() => {
+                          if (!pinnedDay || pinnedDay !== dateKey) {
+                            schedulePopoverClose();
+                          }
+                        }}
+                        onClick={() => sessionsOnDay.length > 0 && toggleDayPin(dateObj)}
+                        disabled={sessionsOnDay.length === 0}
+                      >
+                        <span className="relative z-10">{day}</span>
+                        {sessionsOnDay.length > 0 && !today && (
+                          <div className="absolute bottom-0.5 flex gap-0.5">
+                            {sessionsOnDay.slice(0, 3).map((_, idx) => (
+                              <div key={idx} className="w-1 h-1 rounded-full bg-blue-600" />
+                            ))}
                           </div>
-                          <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
-                            {sessionsOnDay.slice(0, 5).map((session) => (
-                              <div key={session.id} className="flex items-start gap-2">
-                                <div className={cn(
+                        )}
+                      </button>
+                    </PopoverTrigger>
+                    {sessionsOnDay.length > 0 && (
+                      <PopoverContent
+                        align="center"
+                        side="top"
+                        className="w-56 sm:w-64"
+                        sideOffset={12}
+                        onMouseEnter={() => {
+                          setIsInteractingWithPopover(true);
+                          stopHoverCloseTimer();
+                        }}
+                        onMouseLeave={() => {
+                          setIsInteractingWithPopover(false);
+                          schedulePopoverClose();
+                        }}
+                      >
+                        <div className="font-semibold mb-1 whitespace-nowrap text-sm">
+                          {dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        </div>
+                        <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
+                          {sessionsOnDay.slice(0, 5).map((session) => (
+                            <button
+                              key={session.id}
+                              type="button"
+                              onClick={() => openSessionDetails(session.id)}
+                              className="flex w-full items-start gap-2 rounded-md p-1.5 text-left transition-colors hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                            >
+                              <div
+                                className={cn(
                                   "w-2 h-2 rounded-full mt-1.5 flex-shrink-0",
                                   session.type === "teaching" ? "bg-green-400" : "bg-blue-400"
-                                )} />
-                                <div className="flex-1 min-w-0">
-                                  <div className="font-medium truncate">{session.title}</div>
-                                  <div className="text-gray-300 text-[10px] flex items-center gap-1 mt-0.5">
-                                    <Clock className="h-2.5 w-2.5" />
-                                    {formatTime(session.date)} • {session.duration}m
-                                  </div>
-                                  {session.participantName && (
-                                    <div className="text-gray-400 text-[10px] truncate mt-0.5">
-                                      {session.participantName}
-                                    </div>
-                                  )}
+                                )}
+                              />
+                              <div className="flex-1 min-w-0">
+                                <div className="font-medium truncate">{session.title}</div>
+                                <div className="text-muted-foreground text-[11px] flex items-center gap-1 mt-0.5">
+                                  <Clock className="h-2.5 w-2.5" />
+                                  {formatTime(session.date)} • {session.duration}m
                                 </div>
+                                {session.participantName && (
+                                  <div className="text-muted-foreground/80 text-[10px] truncate mt-0.5">
+                                    {session.participantName}
+                                  </div>
+                                )}
                               </div>
-                            ))}
-                            {sessionsOnDay.length > 5 && (
-                              <div className="text-gray-400 text-[10px] pt-1 border-t border-gray-700">
-                                +{sessionsOnDay.length - 5} more
-                              </div>
-                            )}
-                          </div>
+                            </button>
+                          ))}
+                          {sessionsOnDay.length > 5 && (
+                            <div className="text-muted-foreground text-[10px] pt-1 border-t">
+                              +{sessionsOnDay.length - 5} more
+                            </div>
+                          )}
                         </div>
-                        {/* Arrow */}
-                        <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900" />
-                      </div>
+                      </PopoverContent>
                     )}
-                  </div>
+                  </Popover>
                 );
               })}
             </div>
@@ -339,10 +463,12 @@ export function EnhancedCalendarWidget({ sessions = [] }: EnhancedCalendarWidget
                     {/* Sessions for this day */}
                     <div className="space-y-1">
                       {sessionsOnDay.map((session) => (
-                        <div
+                        <button
                           key={session.id}
+                          type="button"
+                          onClick={() => openSessionDetails(session.id)}
                           className={cn(
-                            "text-xs p-1 sm:p-1.5 rounded border text-center cursor-pointer hover:bg-muted/50 transition-colors group relative",
+                            "w-full text-xs p-1 sm:p-1.5 rounded border text-center cursor-pointer hover:bg-muted/50 transition-colors group relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
                             session.type === "teaching"
                               ? "bg-green-50 border-green-200 text-green-700"
                               : "bg-blue-50 border-blue-200 text-blue-700"
@@ -366,7 +492,7 @@ export function EnhancedCalendarWidget({ sessions = [] }: EnhancedCalendarWidget
                             </div>
                             <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900" />
                           </div>
-                        </div>
+                        </button>
                       ))}
                       {!hasSession && (
                         <div className="h-12 border border-dashed border-muted rounded" />
@@ -390,9 +516,11 @@ export function EnhancedCalendarWidget({ sessions = [] }: EnhancedCalendarWidget
               </div>
             ) : (
               upcomingSessions.map((session) => (
-                <div
+                <button
                   key={session.id}
-                  className="flex items-start gap-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors cursor-pointer"
+                  type="button"
+                  onClick={() => openSessionDetails(session.id)}
+                  className="flex w-full items-start gap-3 p-3 rounded-lg border text-left hover:bg-muted/50 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
                   <div className="flex-shrink-0 text-center min-w-[60px]">
                     <div className="text-xs font-medium text-muted-foreground">
@@ -422,7 +550,7 @@ export function EnhancedCalendarWidget({ sessions = [] }: EnhancedCalendarWidget
                       {session.duration} minutes
                     </p>
                   </div>
-                </div>
+                </button>
               ))
             )}
           </div>

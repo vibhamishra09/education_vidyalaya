@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import { SessionStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateUserDto } from './dto/user.dto';
 
@@ -172,6 +173,36 @@ export class UsersService {
       .filter((us) => us.type === 'WANTS')
       .map((us) => us.skill.name);
 
+    const acceptedStatuses = [SessionStatus.UPCOMING, SessionStatus.ONGOING, SessionStatus.DONE];
+
+    const [sessionsTaught, totalSessionRequests, acceptedSessions, reviewStats] = await Promise.all([
+      this.prisma.peerSession.count({
+        where: {
+          requestedToId: user.id,
+          sessionStatus: SessionStatus.DONE,
+        },
+      }),
+      this.prisma.peerSession.count({
+        where: { requestedToId: user.id },
+      }),
+      this.prisma.peerSession.count({
+        where: {
+          requestedToId: user.id,
+          sessionStatus: {
+            in: acceptedStatuses,
+          },
+        },
+      }),
+      this.prisma.review.aggregate({
+        where: { revieweeId: user.id },
+        _avg: { rating: true },
+        _count: { rating: true },
+      }),
+    ]);
+
+    const acceptanceRate =
+      totalSessionRequests > 0 ? acceptedSessions / totalSessionRequests : 0;
+
     return {
       id: user.id,
       name: user.name,
@@ -185,6 +216,14 @@ export class UsersService {
       hourlyRate: user.hourlyRate,
       hasSkills,
       wantSkills,
+      publicStats: {
+        sessionsTaught,
+        totalSessionRequests,
+        acceptedSessions,
+        acceptanceRate,
+        avgRating: reviewStats._avg.rating ?? 0,
+        reviewCount: reviewStats._count.rating ?? 0,
+      },
     };
   }
 
@@ -280,6 +319,7 @@ export class UsersService {
   ) {
     // Create user with onboarding data (on-demand user creation)
     console.log('🔍 Completing onboarding for user:', clerkId);
+    const normalizedHourlyRate = data.hourlyRate ?? 0;
     const user = await this.prisma.user.upsert({
       where: { clerkId },
       update: {
@@ -289,7 +329,7 @@ export class UsersService {
         bio: data.bio,
         location: data.location,
         school: data.school,
-        hourlyRate: data.hourlyRate,
+        hourlyRate: normalizedHourlyRate,
         coins: 10, // Award 10 coins for completing onboarding
         onboarded: true,
       },
@@ -301,7 +341,7 @@ export class UsersService {
         bio: data.bio,
         location: data.location,
         school: data.school,
-        hourlyRate: data.hourlyRate,
+        hourlyRate: normalizedHourlyRate,
         coins: 10,
         onboarded: true,
       },
