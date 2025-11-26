@@ -185,9 +185,12 @@ export function AvailabilitySettings({ userId, isOwnProfile = false }: Availabil
                   if (!dayAvail || !dayAvail.isActive) return null;
 
                   return (
-                    <div key={day.value} className="flex items-center justify-between p-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg">
+                    <div
+                      key={day.value}
+                      className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg"
+                    >
                       <span className="font-medium">{day.label}</span>
-                      <Badge variant="destructive">
+                      <Badge variant="destructive" className="w-full justify-center sm:w-auto">
                         Unavailable: {dayAvail.startTime} - {dayAvail.endTime}
                       </Badge>
                     </div>
@@ -222,8 +225,8 @@ export function AvailabilitySettings({ userId, isOwnProfile = false }: Availabil
 
             return (
               <div key={day.value} className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-start sm:items-center gap-3">
                     <Switch
                       checked={isBlocked}
                       onCheckedChange={(checked) => handleDayToggle(day.value, checked)}
@@ -235,19 +238,19 @@ export function AvailabilitySettings({ userId, isOwnProfile = false }: Availabil
                     </Label>
                   </div>
                   {isBlocked && (
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3 w-full sm:w-auto">
                       <Input
                         type="time"
                         value={dayData?.startTime || "00:00"}
                         onChange={(e) => handleTimeChange(day.value, "startTime", e.target.value)}
-                        className="w-32"
+                        className="w-full sm:w-28"
                       />
-                      <span className="text-muted-foreground">to</span>
+                      <span className="text-center text-muted-foreground sm:text-left">to</span>
                       <Input
                         type="time"
                         value={dayData?.endTime || "00:00"}
                         onChange={(e) => handleTimeChange(day.value, "endTime", e.target.value)}
-                        className="w-32"
+                        className="w-full sm:w-28"
                       />
                     </div>
                   )}
