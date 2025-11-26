@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CreateReviewDto } from './dto/review.dto';
@@ -115,10 +120,20 @@ export class ReviewsService {
     if (createDto.sessionType === 'studyRoom') {
       const studyRoom = await this.prisma.studyRoom.findUnique({
         where: { id: createDto.sessionId },
+        include: { learners: { select: { userId: true } } },
       });
 
       if (!studyRoom) {
         throw new NotFoundException('Study room not found');
+      }
+
+      if (studyRoom.createdById === user.id) {
+        throw new ForbiddenException('Creators cannot review their own study rooms');
+      }
+
+      const isLearner = studyRoom.learners.some((learner) => learner.userId === user.id);
+      if (!isLearner) {
+        throw new ForbiddenException('Only learners can review this study room');
       }
 
       revieweeId = studyRoom.createdById;

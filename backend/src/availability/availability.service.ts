@@ -343,9 +343,10 @@ export class AvailabilityService {
   /**
    * Check if a specific time slot is available for a user
    * This checks:
-   * 1. User's weekly availability
+   * 1. User's weekly unavailability blocks
    * 2. Blocked time slots
    * 3. Existing session conflicts (PENDING or UPCOMING)
+   * Note: Users are available 24/7 by default. UserAvailability records represent UNAVAILABLE times.
    * Note: userId can be either clerkId or database userId
    */
   async checkTimeSlotAvailability(
@@ -383,35 +384,37 @@ export class AvailabilityService {
       return { isAvailable: false, reason: 'User not found' };
     }
 
-    // Check 1: Minimum advance time
+    // Check 1: Minimum advance time (0 = instant booking allowed)
     const now = new Date();
     const minBookingTime = new Date(
-      now.getTime() + (user.minAdvanceTime || 120) * 60000,
+      now.getTime() + (user.minAdvanceTime || 0) * 60000,
     );
     if (startTime < minBookingTime) {
       return {
         isAvailable: false,
-        reason: `Booking must be at least ${user.minAdvanceTime || 120} minutes in advance`,
+        reason: `Booking must be at least ${user.minAdvanceTime || 0} minutes in advance`,
       };
     }
 
-    // Check 2: Maximum future booking
+    // Check 2: Maximum future booking (365 days default)
     const maxBookingTime = new Date(
-      now.getTime() + (user.maxFutureBooking || 30) * 24 * 60 * 60000,
+      now.getTime() + (user.maxFutureBooking || 365) * 24 * 60 * 60000,
     );
     if (startTime > maxBookingTime) {
       return {
         isAvailable: false,
-        reason: `Cannot book more than ${user.maxFutureBooking || 30} days in advance`,
+        reason: `Cannot book more than ${user.maxFutureBooking || 365} days in advance`,
       };
     }
 
-    // Check 3: Weekly availability
+    // Check 3: Weekly unavailability blocks
+    // IMPORTANT: UserAvailability records now represent UNAVAILABLE times, not available times
+    // Users are available 24/7 by default unless they have blocked hours
     const dayOfWeek = startTime.getDay(); // 0=Sunday, 6=Saturday
     const timeStr = `${startTime.getUTCHours().toString().padStart(2, '0')}:${startTime.getUTCMinutes().toString().padStart(2, '0')}`;
     const endTimeStr = `${endTime.getUTCHours().toString().padStart(2, '0')}:${endTime.getUTCMinutes().toString().padStart(2, '0')}`;
 
-    const availability = await this.prisma.userAvailability.findUnique({
+    const unavailability = await this.prisma.userAvailability.findUnique({
       where: {
         userId_dayOfWeek: {
           userId: dbUserId,
@@ -420,19 +423,16 @@ export class AvailabilityService {
       },
     });
 
-    if (!availability || !availability.isActive) {
-      return {
-        isAvailable: false,
-        reason: 'User is not available on this day of the week',
-      };
-    }
-
-    // Check if requested time falls within available hours
-    if (timeStr < availability.startTime || endTimeStr > availability.endTime) {
-      return {
-        isAvailable: false,
-        reason: `User is only available from ${availability.startTime} to ${availability.endTime} on this day`,
-      };
+    // If there's an active unavailability block for this day, check if requested time falls within it
+    if (unavailability && unavailability.isActive) {
+      // Check if requested time overlaps with the unavailable hours
+      // Unavailable if: request starts before block ends AND request ends after block starts
+      if (timeStr < unavailability.endTime && endTimeStr > unavailability.startTime) {
+        return {
+          isAvailable: false,
+          reason: `User is not available from ${unavailability.startTime} to ${unavailability.endTime} on this day`,
+        };
+      }
     }
 
     // Check 4: Blocked time slots
@@ -454,8 +454,8 @@ export class AvailabilityService {
       };
     }
 
-    // Check 5: Existing session conflicts (with buffer time)
-    const bufferMs = (user.bufferTime || 15) * 60000;
+    // Check 5: Existing session conflicts (with buffer time, 0 = no buffer by default)
+    const bufferMs = (user.bufferTime || 0) * 60000;
     const startWithBuffer = new Date(startTime.getTime() - bufferMs);
     const endWithBuffer = new Date(endTime.getTime() + bufferMs);
 
@@ -502,6 +502,8 @@ export class AvailabilityService {
 
   /**
    * Get available time slots for a user on a specific date
+   * IMPORTANT: Users are available 24/7 by default. UserAvailability records represent UNAVAILABLE times.
+   * This method generates slots for the entire day (00:00-23:59) and marks unavailable ones.
    * Note: userId can be either clerkId or database userId
    */
   async getAvailableSlotsForDate(
@@ -509,6 +511,7 @@ export class AvailabilityService {
     date: string,
     duration: number = 60,
     slotInterval: number = 30, // Generate slots every 30 minutes
+    durations?: number[],
   ) {
     // Try to find user by clerkId first, if not found, assume it's already a database userId
     let dbUserId = userId;
@@ -521,56 +524,440 @@ export class AvailabilityService {
     }
 
     const targetDate = new Date(date);
-    const dayOfWeek = targetDate.getDay();
+    const dayStart = new Date(targetDate);
+    dayStart.setHours(0, 0, 0, 0);
 
-    // Get user's availability for this day
-    const availability = await this.prisma.userAvailability.findUnique({
-      where: {
-        userId_dayOfWeek: {
-          userId: dbUserId,
-          dayOfWeek,
-        },
+    const dayEnd = new Date(dayStart);
+    dayEnd.setHours(23, 59, 59, 999);
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: dbUserId },
+      select: {
+        bufferTime: true,
+        minAdvanceTime: true,
+        maxFutureBooking: true,
       },
     });
 
-    if (!availability || !availability.isActive) {
-      return { availableSlots: [] };
+    if (!user) {
+      throw new NotFoundException('User not found');
     }
 
-    // Parse start and end times
-    const [startHour, startMinute] = availability.startTime.split(':').map(Number);
-    const [endHour, endMinute] = availability.endTime.split(':').map(Number);
+    const bufferMs = (user.bufferTime || 0) * 60000;
 
-    const slots: { startTime: Date; endTime: Date; isAvailable: boolean }[] = [];
+    const [unavailability, blockedSlots, sessions] = await Promise.all([
+      this.prisma.userAvailability.findUnique({
+        where: {
+          userId_dayOfWeek: {
+            userId: dbUserId,
+            dayOfWeek: dayStart.getDay(),
+          },
+        },
+        select: { startTime: true, endTime: true, isActive: true },
+      }),
+      this.prisma.blockedTimeSlot.findMany({
+        where: {
+          userId: dbUserId,
+          startTime: { lt: dayEnd },
+          endTime: { gt: dayStart },
+        },
+        select: { startTime: true, endTime: true },
+      }),
+      this.prisma.peerSession.findMany({
+        where: {
+          OR: [{ requestedById: dbUserId }, { requestedToId: dbUserId }],
+          sessionStatus: { in: ['PENDING', 'UPCOMING'] },
+          date: {
+            gte: new Date(dayStart.getTime() - bufferMs),
+            lte: new Date(dayEnd.getTime() + bufferMs),
+          },
+        },
+        select: { date: true, duration: true },
+      }),
+    ]);
 
-    // Generate all possible slots for the day
-    let currentTime = new Date(targetDate);
-    currentTime.setHours(startHour, startMinute, 0, 0);
+    const dayUnavailability =
+      unavailability && unavailability.isActive
+        ? {
+            startTime: unavailability.startTime,
+            endTime: unavailability.endTime,
+          }
+        : undefined;
 
-    const dayEnd = new Date(targetDate);
-    dayEnd.setHours(endHour, endMinute, 0, 0);
+    const requestedDurations = (
+      durations && durations.length > 0 ? durations : [duration]
+    )
+      .map((value) => Number(value))
+      .filter((value) => !Number.isNaN(value) && value > 0);
 
-    while (currentTime.getTime() + duration * 60000 <= dayEnd.getTime()) {
-      const slotStart = new Date(currentTime);
-      const slotEnd = new Date(currentTime.getTime() + duration * 60000);
+    if (requestedDurations.length === 0) {
+      requestedDurations.push(duration);
+    }
 
-      // Check if this slot is available
-      const availabilityCheck = await this.checkTimeSlotAvailability(
-        dbUserId,
-        slotStart,
-        duration,
+    const uniqueDurations = [...new Set(requestedDurations)].sort(
+      (a, b) => a - b,
+    );
+
+    const slotsByDuration: Record<
+      number,
+      { startTime: Date; endTime: Date; isAvailable: boolean }[]
+    > = {};
+
+    for (const currentDuration of uniqueDurations) {
+      const durationSlots: {
+        startTime: Date;
+        endTime: Date;
+        isAvailable: boolean;
+      }[] = [];
+
+      for (
+        let slotStart = new Date(dayStart);
+        slotStart.getTime() + currentDuration * 60000 <= dayEnd.getTime();
+        slotStart = new Date(slotStart.getTime() + slotInterval * 60000)
+      ) {
+        const quickResult = this.evaluateQuickAvailability(
+          slotStart,
+          currentDuration,
+          dayUnavailability,
+          blockedSlots,
+          sessions,
+          user,
+        );
+
+        durationSlots.push({
+          startTime: new Date(slotStart),
+          endTime: new Date(slotStart.getTime() + currentDuration * 60000),
+          isAvailable: quickResult.isAvailable,
+        });
+      }
+
+      slotsByDuration[currentDuration] = durationSlots;
+    }
+
+    const defaultDuration = uniqueDurations[0];
+
+    return {
+      availableSlots: slotsByDuration[defaultDuration] || [],
+      slotsByDuration,
+    };
+  }
+
+  /**
+   * Get availability summary for a date range with preset durations
+   * More efficient approach - returns dates with at least one available slot for each duration
+   * Preset durations: 15min, 30min, 60min, 120min
+   */
+  async getAvailabilitySummary(
+    userId: string,
+    startDate: string,
+    endDate: string,
+  ) {
+    // Try to find user by clerkId first
+    let dbUserId = userId;
+    const userByClerkId = await this.prisma.user.findUnique({
+      where: { clerkId: userId },
+      select: { id: true },
+    });
+    if (userByClerkId) {
+      dbUserId = userByClerkId.id;
+    }
+
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+
+    // Get all unavailability blocks, blocked slots, and sessions for the date range
+    const [unavailabilityBlocks, blockedSlots, sessions, user] = await Promise.all([
+      this.prisma.userAvailability.findMany({
+        where: { userId: dbUserId, isActive: true },
+      }),
+      this.prisma.blockedTimeSlot.findMany({
+        where: {
+          userId: dbUserId,
+          startTime: { lte: end },
+          endTime: { gte: start },
+        },
+      }),
+      this.prisma.peerSession.findMany({
+        where: {
+          OR: [{ requestedById: dbUserId }, { requestedToId: dbUserId }],
+          sessionStatus: { in: ['PENDING', 'UPCOMING'] },
+          date: { gte: start, lte: end },
+        },
+        select: { date: true, duration: true },
+      }),
+      this.prisma.user.findUnique({
+        where: { id: dbUserId },
+        select: { bufferTime: true, minAdvanceTime: true, maxFutureBooking: true },
+      }),
+    ]);
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const availabilitySummary: Record<string, {
+      date: string;
+      hasSlots: { '15': boolean; '30': boolean; '60': boolean; '120': boolean };
+    }> = {};
+
+    // Iterate through each day in the range
+    const currentDate = new Date(start);
+    while (currentDate <= end) {
+      const dateStr = currentDate.toISOString().split('T')[0];
+      const dayOfWeek = currentDate.getDay();
+
+      // Get unavailability block for this day of week
+      const unavailBlock = unavailabilityBlocks.find(
+        (block) => block.dayOfWeek === dayOfWeek,
       );
 
-      slots.push({
-        startTime: slotStart,
-        endTime: slotEnd,
-        isAvailable: availabilityCheck.isAvailable,
-      });
+      availabilitySummary[dateStr] = {
+        date: dateStr,
+        hasSlots: { '15': false, '30': false, '60': false, '120': false },
+      };
 
-      // Move to next slot
-      currentTime = new Date(currentTime.getTime() + slotInterval * 60000);
+      // Quick check for each duration
+      const durations = [15, 30, 60, 120];
+      for (const duration of durations) {
+        // Sample a few time slots throughout the day to see if any are available
+        const sampleTimes = [
+          { hour: 9, minute: 0 },
+          { hour: 12, minute: 0 },
+          { hour: 15, minute: 0 },
+          { hour: 18, minute: 0 },
+        ];
+
+        for (const { hour, minute } of sampleTimes) {
+          const testTime = new Date(currentDate);
+          testTime.setHours(hour, minute, 0, 0);
+
+          const quickResult = this.evaluateQuickAvailability(
+            testTime,
+            duration,
+            unavailBlock,
+            blockedSlots,
+            sessions,
+            user,
+          );
+
+          if (quickResult.isAvailable) {
+            availabilitySummary[dateStr].hasSlots[duration.toString()] = true;
+            break; // Found at least one slot for this duration
+          }
+        }
+      }
+
+      currentDate.setDate(currentDate.getDate() + 1);
     }
 
-    return { availableSlots: slots };
+    return { summary: Object.values(availabilitySummary) };
+  }
+
+  /**
+   * Quick availability check without database queries (uses pre-fetched data)
+   */
+  private quickAvailabilityCheck(
+    startTime: Date,
+    duration: number,
+    unavailBlock: { startTime: string; endTime: string } | undefined,
+    blockedSlots: { startTime: Date; endTime: Date }[],
+    sessions: { date: Date; duration: number }[],
+    user: { bufferTime: number; minAdvanceTime: number; maxFutureBooking: number },
+  ): boolean {
+    return this.evaluateQuickAvailability(
+      startTime,
+      duration,
+      unavailBlock,
+      blockedSlots,
+      sessions,
+      user,
+    ).isAvailable;
+  }
+
+  private evaluateQuickAvailability(
+    startTime: Date,
+    duration: number,
+    unavailBlock: { startTime: string; endTime: string } | undefined,
+    blockedSlots: { startTime: Date; endTime: Date }[],
+    sessions: { date: Date; duration: number }[],
+    user: { bufferTime: number; minAdvanceTime: number; maxFutureBooking: number },
+  ): { isAvailable: boolean; reason?: string } {
+    const endTime = new Date(startTime.getTime() + duration * 60000);
+    const now = new Date();
+
+    // Check minimum advance time
+    const minBookingTime = new Date(
+      now.getTime() + (user.minAdvanceTime || 0) * 60000,
+    );
+    if (startTime < minBookingTime) {
+      return {
+        isAvailable: false,
+        reason: `Booking must be at least ${user.minAdvanceTime || 0} minutes in advance`,
+      };
+    }
+
+    // Check maximum future booking
+    const maxBookingTime = new Date(
+      now.getTime() + (user.maxFutureBooking || 365) * 24 * 60 * 60000,
+    );
+    if (startTime > maxBookingTime) {
+      return {
+        isAvailable: false,
+        reason: `Cannot book more than ${user.maxFutureBooking || 365} days in advance`,
+      };
+    }
+
+    // Check unavailability block
+    if (unavailBlock) {
+      const timeStr = `${startTime.getUTCHours().toString().padStart(2, '0')}:${startTime.getUTCMinutes().toString().padStart(2, '0')}`;
+      const endTimeStr = `${endTime.getUTCHours().toString().padStart(2, '0')}:${endTime.getUTCMinutes().toString().padStart(2, '0')}`;
+
+      if (timeStr < unavailBlock.endTime && endTimeStr > unavailBlock.startTime) {
+        return {
+          isAvailable: false,
+          reason: `User is not available from ${unavailBlock.startTime} to ${unavailBlock.endTime}`,
+        };
+      }
+    }
+
+    // Check blocked time slots
+    for (const slot of blockedSlots) {
+      if (startTime < slot.endTime && endTime > slot.startTime) {
+        return { isAvailable: false, reason: 'Time slot is blocked' };
+      }
+    }
+
+    // Check existing sessions with buffer
+    const bufferMs = (user.bufferTime || 0) * 60000;
+    const startWithBuffer = new Date(startTime.getTime() - bufferMs);
+    const endWithBuffer = new Date(endTime.getTime() + bufferMs);
+
+    for (const session of sessions) {
+      const sessionEnd = new Date(
+        session.date.getTime() + session.duration * 60000,
+      );
+      if (
+        session.date < endWithBuffer &&
+        sessionEnd.getTime() > startWithBuffer.getTime()
+      ) {
+        return {
+          isAvailable: false,
+          reason: 'Time slot conflicts with existing session(s)',
+        };
+      }
+    }
+
+    return { isAvailable: true };
+  }
+
+  /**
+   * Get detailed available slots for a specific date and duration
+   * This is called when user hovers/clicks on a date
+   */
+  async getDetailedSlotsForDate(
+    userId: string,
+    date: string,
+    duration: number,
+  ) {
+    // Try to find user by clerkId first
+    let dbUserId = userId;
+    const userByClerkId = await this.prisma.user.findUnique({
+      where: { clerkId: userId },
+      select: { id: true },
+    });
+    if (userByClerkId) {
+      dbUserId = userByClerkId.id;
+    }
+
+    const targetDate = new Date(date);
+    const dayStart = new Date(targetDate);
+    dayStart.setHours(0, 0, 0, 0);
+
+    const dayEnd = new Date(dayStart);
+    dayEnd.setHours(23, 59, 59, 999);
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: dbUserId },
+      select: {
+        bufferTime: true,
+        minAdvanceTime: true,
+        maxFutureBooking: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const bufferMs = (user.bufferTime || 0) * 60000;
+    const [unavailability, blockedSlots, sessions] = await Promise.all([
+      this.prisma.userAvailability.findUnique({
+        where: {
+          userId_dayOfWeek: {
+            userId: dbUserId,
+            dayOfWeek: dayStart.getDay(),
+          },
+        },
+        select: { startTime: true, endTime: true, isActive: true },
+      }),
+      this.prisma.blockedTimeSlot.findMany({
+        where: {
+          userId: dbUserId,
+          startTime: { lt: dayEnd },
+          endTime: { gt: dayStart },
+        },
+        select: { startTime: true, endTime: true },
+      }),
+      this.prisma.peerSession.findMany({
+        where: {
+          OR: [{ requestedById: dbUserId }, { requestedToId: dbUserId }],
+          sessionStatus: { in: ['PENDING', 'UPCOMING'] },
+          date: {
+            gte: new Date(dayStart.getTime() - bufferMs),
+            lte: new Date(dayEnd.getTime() + bufferMs),
+          },
+        },
+        select: { date: true, duration: true },
+      }),
+    ]);
+
+    const dayUnavailability =
+      unavailability && unavailability.isActive
+        ? {
+            startTime: unavailability.startTime,
+            endTime: unavailability.endTime,
+          }
+        : undefined;
+
+    const allSlots: {
+      startTime: Date;
+      endTime: Date;
+      isAvailable: boolean;
+      reason?: string;
+    }[] = [];
+
+    for (
+      let slotStart = new Date(dayStart);
+      slotStart.getTime() + duration * 60000 <= dayEnd.getTime();
+      slotStart = new Date(slotStart.getTime() + 15 * 60000)
+    ) {
+      const quickResult = this.evaluateQuickAvailability(
+        slotStart,
+        duration,
+        dayUnavailability,
+        blockedSlots,
+        sessions,
+        user,
+      );
+
+      allSlots.push({
+        startTime: new Date(slotStart),
+        endTime: new Date(slotStart.getTime() + duration * 60000),
+        isAvailable: quickResult.isAvailable,
+        reason: quickResult.reason,
+      });
+    }
+
+    return { slots: allSlots };
   }
 }

@@ -16,6 +16,7 @@ interface NotificationContextType {
   loadMoreNotifications: () => Promise<void>;
   markAsRead: (notificationId: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
+  markNotificationsAsRead: (notificationIds: string[]) => Promise<void>;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
@@ -105,6 +106,28 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     }
   };
 
+  const markNotificationsAsRead = async (notificationIds: string[]) => {
+    if (!notificationIds || notificationIds.length === 0) {
+      return;
+    }
+
+    try {
+      const idsSet = new Set(notificationIds);
+      await notificationsApi.markNotificationsAsRead(notificationIds);
+      setNotifications(prev => {
+        const updated = prev.map(notification =>
+          idsSet.has(notification.id)
+            ? { ...notification, viewed: true }
+            : notification
+        );
+        setUnreadCount(updated.filter((n) => !n.viewed).length);
+        return updated;
+      });
+    } catch (err) {
+      console.error('Error marking notifications as read:', err);
+    }
+  };
+
   // Fetch notifications when user signs in
   useEffect(() => {
     if (isSignedIn) {
@@ -138,6 +161,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     loadMoreNotifications,
     markAsRead,
     markAllAsRead,
+    markNotificationsAsRead,
   };
 
   return (

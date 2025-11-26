@@ -23,10 +23,10 @@ model User {
   createdAt             DateTime               @default(now())
   onboarded             Boolean                @default(false)
   updatedAt             DateTime               @updatedAt
-  // Availability settings
-  bufferTime            Int                    @default(15) // Minutes between sessions
-  minAdvanceTime        Int                    @default(120) // Minimum minutes before booking
-  maxFutureBooking      Int                    @default(30) // Maximum days in future for booking
+  // Availability settings (Users available 24/7 by default)
+  bufferTime            Int                    @default(0) // Minutes between sessions (0 = back-to-back allowed)
+  minAdvanceTime        Int                    @default(0) // Minimum minutes before booking (0 = instant booking)
+  maxFutureBooking      Int                    @default(365) // Maximum days in future for booking
   // Streak tracking
   currentStreak         Int                    @default(0)
   longestStreak         Int                    @default(0)

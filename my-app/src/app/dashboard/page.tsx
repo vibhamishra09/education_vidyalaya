@@ -14,6 +14,7 @@ import { SkillsAndSuggestions } from "@/components/dashboard/skills-and-suggesti
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowRight } from "lucide-react";
 import { useDashboard } from "@/hooks/use-dashboard";
 import { useCurrentUser } from "@/hooks/use-users";
@@ -30,6 +31,7 @@ export default function DashboardPage() {
   const queryClient = useQueryClient();
   const { showSuccess, showError } = useToast();
   const [processingRequests, setProcessingRequests] = useState<Set<string>>(new Set());
+  const [activeRequestTab, setActiveRequestTab] = useState<'received' | 'sent'>('received');
 
   // Fetch dashboard data from API
   const { data: dashboardData, isLoading: dashboardLoading, error: dashboardError } = useDashboard({
@@ -47,6 +49,7 @@ export default function DashboardPage() {
   const currentUser = currentUserData?.user;
   const metrics = dashboardData?.metrics || [];
   const pendingRequests = dashboardData?.pendingRequests || [];
+  const sentRequests = dashboardData?.sentRequests || [];
   const upcomingSessions = useMemo(() => dashboardData?.upcomingSessions || [], [dashboardData?.upcomingSessions]);
   const pastSessions = dashboardData?.pastSessions || [];
   const upcomingStudyRooms = useMemo(() => dashboardData?.upcomingStudyRooms || [], [dashboardData?.upcomingStudyRooms]);
@@ -251,30 +254,72 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-6">
           {/* Pending Session Requests */}
           <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
+            <CardHeader className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <CardTitle>Session Requests</CardTitle>
-                {pendingRequests.length > 2 && (
+                {(
+                  activeRequestTab === 'received'
+                    ? pendingRequests.length
+                    : sentRequests.length
+                ) > 2 && (
                   <Button variant="ghost" size="sm">
                     View All
                   </Button>
                 )}
               </div>
+              <Tabs>
+                <TabsList className="w-full sm:w-auto">
+                  <TabsTrigger
+                    active={activeRequestTab === 'received'}
+                    onClick={() => setActiveRequestTab('received')}
+                  >
+                    Received ({pendingRequests.length})
+                  </TabsTrigger>
+                  <TabsTrigger
+                    active={activeRequestTab === 'sent'}
+                    onClick={() => setActiveRequestTab('sent')}
+                  >
+                    Sent ({sentRequests.length})
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
             </CardHeader>
             <CardContent>
-              {pendingRequests.length === 0 ? (
-                <div className="text-muted-foreground">
-                  No pending requests
+              {(
+                activeRequestTab === 'received'
+                  ? pendingRequests
+                  : sentRequests
+              ).length === 0 ? (
+                <div className="text-muted-foreground text-sm">
+                  {activeRequestTab === 'received'
+                    ? 'No received requests'
+                    : 'No sent requests yet'}
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {pendingRequests.map((request) => (
+                  {(activeRequestTab === 'received'
+                    ? pendingRequests
+                    : sentRequests
+                  ).map((request) => (
                     <SessionRequestCard
                       key={request.id}
                       request={request}
-                      onAccept={() => handleAcceptRequest(request.id)}
-                      onDecline={() => handleDeclineRequest(request.id)}
-                      isProcessing={processingRequests.has(request.id)}
+                      variant={activeRequestTab}
+                      onAccept={
+                        activeRequestTab === 'received'
+                          ? () => handleAcceptRequest(request.id)
+                          : undefined
+                      }
+                      onDecline={
+                        activeRequestTab === 'received'
+                          ? () => handleDeclineRequest(request.id)
+                          : undefined
+                      }
+                      isProcessing={
+                        activeRequestTab === 'received'
+                          ? processingRequests.has(request.id)
+                          : false
+                      }
                     />
                   ))}
                 </div>

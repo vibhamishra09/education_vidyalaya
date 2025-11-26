@@ -24,28 +24,28 @@ export function AchievementProgress({
   return (
     <Card className={isUnlocked ? "border-primary/50" : ""}>
       <CardContent className="pt-6">
-        <div className="flex items-start gap-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
           {/* Badge */}
           <AchievementBadge achievement={achievement} size="md" showProgress={false} />
 
           {/* Details */}
           <div className="flex-1 min-w-0">
-            <div className="flex items-start justify-between gap-2 mb-2">
-              <div>
-                <h4 className="font-semibold text-sm">{achievement.title}</h4>
-                {showDetails && (
-                  <p className="text-xs text-muted-foreground mt-0.5">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between mb-2">
+              <div className="min-w-0 flex-1">
+                <h4 className="font-semibold text-sm break-words">{achievement.title}</h4>
+                {showDetails && achievement.description && (
+                  <p className="text-xs text-muted-foreground mt-0.5 break-words">
                     {achievement.description}
                   </p>
                 )}
               </div>
               {achievement.coins && (
-                <div className="flex items-center gap-1 bg-yellow-100 dark:bg-yellow-900/30 px-2 py-1 rounded-full flex-shrink-0">
-                  <span className="text-yellow-600 dark:text-yellow-400 text-xs font-medium">
+                <div className="inline-flex items-center gap-1 bg-yellow-100 dark:bg-yellow-900/30 px-2 py-1 rounded-full flex-shrink-0 text-nowrap">
+                  <span className="text-yellow-600 dark:text-yellow-400 text-[11px] font-semibold leading-none">
                     +{formatMaya(achievement.coins)}
                   </span>
-                  <span className="text-[10px] text-yellow-600/70 dark:text-yellow-400/70">
-                    <span className="text-[8px]">m</span>AYA
+                  <span className="text-[9px] text-yellow-600/70 dark:text-yellow-400/70 leading-none">
+                    <span className="text-[7px] align-top">m</span>AYA
                   </span>
                 </div>
               )}

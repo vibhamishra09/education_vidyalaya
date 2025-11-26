@@ -15,6 +15,7 @@ import { ArrowLeft, Coins, Loader2, AlertCircle } from "lucide-react";
 import { usersApi, peerSessionsApi } from "@/lib/api";
 import { User } from "@/types/api.types";
 import { setAuthToken } from "@/lib/api-client";
+import { ImprovedAvailabilityCalendar } from "@/components/availability/improved-availability-calendar";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatMaya } from "@/lib/utils/coin-format";
@@ -221,11 +222,8 @@ export default function RequestSessionPage({
       return;
     }
 
-    // Check if there's an availability warning
-    if (availabilityWarning) {
-      setError('Cannot book this time slot: ' + availabilityWarning);
-      return;
-    }
+    // Note: We allow booking even when there's an availability warning
+    // The warning is just informational to let the user know there's a higher chance of cancellation
     
     try {
       setSubmitting(true);
@@ -361,52 +359,15 @@ export default function RequestSessionPage({
                     )}
                   </div>
 
-                  {/* Date & Time */}
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="date">Date *</Label>
-                      <Input
-                        id="date"
-                        type="date"
-                        value={formData.date}
-                        onChange={(e) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            date: e.target.value,
-                          }))
-                        }
-                        required
-                        min={new Date().toISOString().split("T")[0]}
-                        disabled={isSelfRequest}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="time">Time *</Label>
-                      <Input
-                        id="time"
-                        type="time"
-                        value={formData.time}
-                        onChange={(e) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            time: e.target.value,
-                          }))
-                        }
-                        required
-                        disabled={isSelfRequest}
-                      />
-                    </div>
-                  </div>
-
                   {/* Duration */}
                   <div className="space-y-2">
                     <Label htmlFor="duration">Duration (minutes) *</Label>
                     <Input
                       id="duration"
                       type="number"
-                      min="1"
+                      min="30"
                       max="180"
-                      step="1"
+                      step="30"
                       value={formData.duration}
                       onChange={(e) =>
                         setFormData((prev) => ({
@@ -418,9 +379,78 @@ export default function RequestSessionPage({
                       disabled={isSelfRequest}
                     />
                     <p className="text-sm text-muted-foreground">
-                      Between 1 and 180 minutes
+                      Between 30 and 180 minutes (in 30-minute increments)
                     </p>
                   </div>
+
+                  {/* Availability Calendar */}
+                  {!isSelfRequest && (
+                    <ImprovedAvailabilityCalendar
+                      peerId={peer.id}
+                      onSlotSelect={(date, time, duration, isAvailable, reason) => {
+                        setFormData((prev) => ({
+                          ...prev,
+                          date,
+                          time,
+                          duration: duration.toString(),
+                        }));
+
+                        // Set warning if slot is not available
+                        if (!isAvailable) {
+                          setAvailabilityWarning(
+                            `This time slot may not be ideal: ${reason || 'User may not be available'}. There is a high chance this booking might be cancelled.`
+                          );
+                        } else {
+                          setAvailabilityWarning(null);
+                        }
+                      }}
+                      selectedDate={formData.date}
+                      selectedTime={formData.time}
+                      selectedDuration={parseInt(formData.duration)}
+                    />
+                  )}
+
+                  {/* Manual Date & Time (fallback/override) */}
+                  <details className="space-y-4">
+                    <summary className="text-sm font-medium cursor-pointer text-muted-foreground hover:text-foreground">
+                      Or manually enter date and time
+                    </summary>
+                    <div className="grid sm:grid-cols-2 gap-4 pt-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="date">Date *</Label>
+                        <Input
+                          id="date"
+                          type="date"
+                          value={formData.date}
+                          onChange={(e) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              date: e.target.value,
+                            }))
+                          }
+                          required
+                          min={new Date().toISOString().split("T")[0]}
+                          disabled={isSelfRequest}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="time">Time *</Label>
+                        <Input
+                          id="time"
+                          type="time"
+                          value={formData.time}
+                          onChange={(e) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              time: e.target.value,
+                            }))
+                          }
+                          required
+                          disabled={isSelfRequest}
+                        />
+                      </div>
+                    </div>
+                  </details>
 
                   {/* Availability Warning */}
                   {checkingAvailability && formData.date && formData.time && formData.duration && (
@@ -433,12 +463,21 @@ export default function RequestSessionPage({
                   )}
 
                   {availabilityWarning && !checkingAvailability && (
-                    <div className="p-3 bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-md">
-                      <div className="flex items-center gap-2">
-                        <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
-                        <p className="text-sm text-yellow-600 dark:text-yellow-400 font-medium">Availability Issue</p>
+                    <div className="p-4 bg-orange-50 dark:bg-orange-950 border-2 border-orange-300 dark:border-orange-700 rounded-lg">
+                      <div className="flex items-start gap-3">
+                        <AlertCircle className="h-5 w-5 text-orange-600 dark:text-orange-400 flex-shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                          <p className="text-sm font-semibold text-orange-800 dark:text-orange-200 mb-1">
+                            ⚠️ High Cancellation Risk
+                          </p>
+                          <p className="text-sm text-orange-700 dark:text-orange-300 mb-2">
+                            {availabilityWarning}
+                          </p>
+                          <p className="text-xs text-orange-600 dark:text-orange-400 italic">
+                            You can still proceed with booking, but be prepared for potential cancellation.
+                          </p>
+                        </div>
                       </div>
-                      <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">{availabilityWarning}</p>
                     </div>
                   )}
 
