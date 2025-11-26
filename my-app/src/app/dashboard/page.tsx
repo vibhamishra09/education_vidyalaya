@@ -4,38 +4,34 @@ import { Navigation } from "@/components/layout/navigation";
 import { Footer } from "@/components/layout/footer";
 import { MetricCardComponent } from "@/components/cards/metric-card";
 import { SessionRequestCard } from "@/components/cards/session-request-card";
-import { UpcomingSessionCardComponent } from "@/components/cards/upcoming-session-card";
 import { QuickActions } from "@/components/dashboard/quick-actions";
-import { CoinWidget } from "@/components/dashboard/coin-widget";
 import { EnhancedCalendarWidget } from "@/components/dashboard/enhanced-calendar-widget";
 import { SessionsChart } from "@/components/stats/sessions-chart";
-import { EarningsChart } from "@/components/stats/earnings-chart";
-import { AchievementShowcase } from "@/components/achievements/achievement-showcase";
-import { StreakTracker } from "@/components/profile/streak-tracker";
-import { TimezoneSelector } from "@/components/dashboard/timezone-selector";
+import { AchievementShowcaseConnected } from "@/components/achievements/achievement-showcase-connected";
+import { StreakTrackerConnected } from "@/components/profile/streak-tracker-connected";
 import { SessionList } from "@/components/dashboard/session-list";
-import { MOCK_ACHIEVEMENTS } from "@/types/achievements.types";
+import { SkillsAndSuggestions } from "@/components/dashboard/skills-and-suggestions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Bell, ArrowRight } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ArrowRight } from "lucide-react";
 import { useDashboard } from "@/hooks/use-dashboard";
 import { useCurrentUser } from "@/hooks/use-users";
-import { peerSessionsApi } from "@/lib/api";
+import { peerSessionsApi, studyRoomsApi } from "@/lib/api";
 import { useAuth } from "@clerk/nextjs";
 import { setAuthToken } from "@/lib/api-client";
-import { useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
+import { useState, useMemo } from "react";
 import { useToast } from "@/contexts/toast-context";
 import Link from "next/link";
-import { getNotificationLink } from "@/lib/utils/notification-links";
 
 export default function DashboardPage() {
   const { getToken } = useAuth();
   const queryClient = useQueryClient();
   const { showSuccess, showError } = useToast();
   const [processingRequests, setProcessingRequests] = useState<Set<string>>(new Set());
+  const [activeRequestTab, setActiveRequestTab] = useState<'received' | 'sent'>('received');
 
   // Fetch dashboard data from API
   const { data: dashboardData, isLoading: dashboardLoading, error: dashboardError } = useDashboard({
@@ -43,6 +39,8 @@ export default function DashboardPage() {
     includeRequests: true,
     includeSessions: true,
     includeNotifications: true,
+    includeStreaks: true,
+    includeAchievements: true,
   });
 
   // Fetch current user data
@@ -51,14 +49,88 @@ export default function DashboardPage() {
   const currentUser = currentUserData?.user;
   const metrics = dashboardData?.metrics || [];
   const pendingRequests = dashboardData?.pendingRequests || [];
-  const upcomingSessions = dashboardData?.upcomingSessions || [];
+  const sentRequests = dashboardData?.sentRequests || [];
+  const upcomingSessions = useMemo(() => dashboardData?.upcomingSessions || [], [dashboardData?.upcomingSessions]);
   const pastSessions = dashboardData?.pastSessions || [];
-  const upcomingStudyRooms = dashboardData?.upcomingStudyRooms || [];
+  const upcomingStudyRooms = useMemo(() => dashboardData?.upcomingStudyRooms || [], [dashboardData?.upcomingStudyRooms]);
   const pastStudyRooms = dashboardData?.pastStudyRooms || [];
-  const notifications = dashboardData?.notifications || [];
   const pendingReviews = dashboardData?.pendingReviews || 0;
 
-  const unreadNotifications = notifications.filter((n) => !n.viewed);
+  // Filter ongoing sessions (sessions happening today)
+  const ongoingSessions = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const ongoingPeerSessions = upcomingSessions.filter(s => {
+      const sessionDate = new Date(s.date);
+      sessionDate.setHours(0, 0, 0, 0);
+      return sessionDate.getTime() === today.getTime();
+    });
+
+    const ongoingRooms = upcomingStudyRooms.filter(sr => {
+      const roomDate = new Date(sr.date);
+      roomDate.setHours(0, 0, 0, 0);
+      return roomDate.getTime() === today.getTime();
+    });
+
+    return [...ongoingPeerSessions, ...ongoingRooms];
+  }, [upcomingSessions, upcomingStudyRooms]);
+
+  // Extract user skill IDs from currentUser (hasSkills is array of skill IDs)
+  const userSkillIds = useMemo(() => {
+    if (!currentUser?.hasSkills) return [];
+    return currentUser.hasSkills;
+  }, [currentUser?.hasSkills]);
+
+  // Convert skill IDs to Skill objects for display
+  const userSkills = useMemo(() => {
+    if (!currentUser?.hasSkills) return [];
+    // For now, create basic skill objects from IDs
+    // In a real scenario, you'd fetch the full skill details
+    return currentUser.hasSkills.map(skillId => ({
+      id: skillId,
+      name: skillId, // You may want to fetch actual skill names
+    }));
+  }, [currentUser?.hasSkills]);
+
+  // Fetch suggested study rooms based on user skills
+  const { data: studyRoomsData, isLoading: studyRoomsLoading } = useQuery({
+    queryKey: ['study-rooms', 'suggestions', userSkillIds],
+    queryFn: async () => {
+      const token = await getToken();
+      if (token) {
+        setAuthToken(token);
+      }
+      return studyRoomsApi.getStudyRooms({
+        limit: 10,
+      });
+    },
+    enabled: userSkillIds.length > 0,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+
+  // Filter study rooms that match user skills and are upcoming
+  const suggestedRooms = useMemo(() => {
+    if (!studyRoomsData?.studyRooms) return [];
+    const now = new Date();
+
+    return studyRoomsData.studyRooms
+      .filter(room => {
+        // Filter for upcoming rooms
+        const roomDate = new Date(room.date);
+        if (roomDate < now) return false;
+
+        // Filter for rooms that match user skills
+        if (!room.skills || room.skills.length === 0) return false;
+        return room.skills.some(skill => {
+          const skillId = typeof skill === 'string' ? skill : skill.id;
+          return userSkillIds.includes(skillId);
+        });
+      })
+      .slice(0, 5); // Limit to 5 suggestions
+  }, [studyRoomsData?.studyRooms, userSkillIds]);
 
   // Handle accepting a session request
   const handleAcceptRequest = async (requestId: string) => {
@@ -150,9 +222,9 @@ export default function DashboardPage() {
         </div>
 
         {/* Metrics */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
           {dashboardLoading ? (
-            Array.from({ length: 4 }).map((_, index) => (
+            Array.from({ length: 3 }).map((_, index) => (
               <div key={index} className="border rounded-lg p-6 space-y-4">
                 <Skeleton className="h-4 w-24" />
                 <Skeleton className="h-8 w-16" />
@@ -164,8 +236,8 @@ export default function DashboardPage() {
               <p className="text-muted-foreground mb-4">
                 Failed to load dashboard data. Please try again later.
               </p>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={() => window.location.reload()}
               >
                 Retry
@@ -178,267 +250,243 @@ export default function DashboardPage() {
           )}
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-4 sm:gap-6">
-          {/* Left Column */}
-          <div className="lg:col-span-2 space-y-4 sm:space-y-6">
-            {/* Pending Session Requests */}
-            <div>
-              <div className="flex items-center justify-between mb-3 sm:mb-4">
-                <h2 className="text-xl sm:text-2xl font-semibold">Session Requests</h2>
-                {pendingRequests.length > 2 && (
+        {/* Session Requests and Pending Reviews - Side by Side */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-6">
+          {/* Pending Session Requests */}
+          <Card>
+            <CardHeader className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <CardTitle>Session Requests</CardTitle>
+                {(
+                  activeRequestTab === 'received'
+                    ? pendingRequests.length
+                    : sentRequests.length
+                ) > 2 && (
                   <Button variant="ghost" size="sm">
                     View All
                   </Button>
                 )}
               </div>
-
-              <div className="space-y-4">
-                {pendingRequests.length === 0 ? (
-                  <Card>
-                    <CardContent className="pt-6 text-center text-muted-foreground">
-                      No pending requests
-                    </CardContent>
-                  </Card>
-                ) : (
-                  pendingRequests.map((request) => (
+              <Tabs>
+                <TabsList className="w-full sm:w-auto">
+                  <TabsTrigger
+                    active={activeRequestTab === 'received'}
+                    onClick={() => setActiveRequestTab('received')}
+                  >
+                    Received ({pendingRequests.length})
+                  </TabsTrigger>
+                  <TabsTrigger
+                    active={activeRequestTab === 'sent'}
+                    onClick={() => setActiveRequestTab('sent')}
+                  >
+                    Sent ({sentRequests.length})
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </CardHeader>
+            <CardContent>
+              {(
+                activeRequestTab === 'received'
+                  ? pendingRequests
+                  : sentRequests
+              ).length === 0 ? (
+                <div className="text-muted-foreground text-sm">
+                  {activeRequestTab === 'received'
+                    ? 'No received requests'
+                    : 'No sent requests yet'}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {(activeRequestTab === 'received'
+                    ? pendingRequests
+                    : sentRequests
+                  ).map((request) => (
                     <SessionRequestCard
                       key={request.id}
                       request={request}
-                      onAccept={() => handleAcceptRequest(request.id)}
-                      onDecline={() => handleDeclineRequest(request.id)}
-                      isProcessing={processingRequests.has(request.id)}
+                      variant={activeRequestTab}
+                      onAccept={
+                        activeRequestTab === 'received'
+                          ? () => handleAcceptRequest(request.id)
+                          : undefined
+                      }
+                      onDecline={
+                        activeRequestTab === 'received'
+                          ? () => handleDeclineRequest(request.id)
+                          : undefined
+                      }
+                      isProcessing={
+                        activeRequestTab === 'received'
+                          ? processingRequests.has(request.id)
+                          : false
+                      }
                     />
-                  ))
-                )}
-              </div>
-            </div>
-
-            {/* Enhanced Calendar Widget */}
-            <div id="calendar-section">
-              <EnhancedCalendarWidget sessions={[
-                ...upcomingSessions.map(s => ({
-                  id: s.id,
-                  title: s.title,
-                  date: typeof s.date === 'string' ? s.date : s.date.toISOString(),
-                  duration: s.duration,
-                  type: (s.requestedBy?.id && currentUser?.id && s.requestedBy.id === currentUser.id) ? "teaching" as const : "learning" as const,
-                  participantName: s.peer?.name,
-                })),
-                ...upcomingStudyRooms.map(sr => ({
-                  id: sr.id,
-                  title: sr.title,
-                  date: typeof sr.date === 'string' ? sr.date : sr.date.toISOString(),
-                  duration: sr.duration,
-                  type: (sr.createdBy?.id && currentUser?.id && sr.createdBy.id === currentUser.id) ? "teaching" as const : "learning" as const,
-                  participantName: `Group (${sr.participantCount}/${sr.maxParticipants})`,
-                })),
-              ]} />
-            </div>
-
-            {/* Pending Reviews */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Pending Reviews</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-between">
-                  <p className="text-muted-foreground">
-                    {pendingReviews > 0
-                      ? `You have ${pendingReviews} session${pendingReviews > 1 ? 's' : ''} waiting for your review`
-                      : "No pending reviews"
-                    }
-                  </p>
-                  {pendingReviews > 0 && (
-                    <Link href="/profile?tab=sessions">
-                      <Button variant="outline" size="sm">
-                        Review
-                        <ArrowRight className="ml-2 h-4 w-4" />
-                      </Button>
-                    </Link>
-                  )}
+                  ))}
                 </div>
-              </CardContent>
-            </Card>
+              )}
+            </CardContent>
+          </Card>
 
-            {/* Sessions Activity Chart */}
-            <SessionsChart />
-
-            {/* Earnings Chart */}
-            <EarningsChart />
-          </div>
-
-          {/* Right Column */}
-          <div className="space-y-4 sm:space-y-6">
-            {/* Coin Balance Widget */}
-            <CoinWidget
-              coins={typeof currentUser?.coins === 'number' ? currentUser.coins : undefined}
-              isLoading={userLoading}
-            />
-
-            {/* Timezone Selector */}
-            <TimezoneSelector variant="card" />
-
-            {/* Streak Tracker */}
-            <StreakTracker
-              currentStreak={7}
-              longestStreak={14}
-            />
-
-            {/* Upcoming Sessions */}
-            <div>
-              <div className="flex items-center justify-between mb-3 sm:mb-4">
-                <h2 className="text-base sm:text-lg font-semibold">Upcoming Sessions</h2>
-              </div>
-
-              <div className="space-y-3">
-                {upcomingSessions.length === 0 ? (
-                  <Card>
-                    <CardContent className="pt-6 text-center text-muted-foreground">
-                      No upcoming sessions
-                    </CardContent>
-                  </Card>
-                ) : (
-                  upcomingSessions.slice(0, 5).map((session) => (
-                    <UpcomingSessionCardComponent
-                      key={session.id}
-                      session={session}
-                    />
-                  ))
-                )}
-              </div>
-            </div>
-
-            {/* Notifications */}
-            <div>
-              <div className="flex items-center justify-between mb-3 sm:mb-4">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-xl sm:text-2xl font-semibold">Notifications</h2>
-                  {unreadNotifications.length > 0 && (
-                    <Badge variant="destructive">
-                      {unreadNotifications.length}
-                    </Badge>
-                  )}
-                </div>
-              </div>
-
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="space-y-4">
-                    {notifications.slice(0, 3).map((notification) => {
-                      return (
-                        <Link key={notification.id} href={getNotificationLink(notification)}>
-                          <div
-                            className={`flex items-start gap-3 pb-4 border-b last:border-b-0 last:pb-0 hover:bg-muted/50 -mx-6 px-6 py-3 rounded-lg transition-colors cursor-pointer ${
-                              !notification.viewed ? "font-medium" : ""
-                            }`}
-                          >
-                            <Bell
-                              className={`h-5 w-5 mt-0.5 flex-shrink-0 ${
-                                notification.notifType === "URGENT"
-                                  ? "text-destructive"
-                                  : "text-muted-foreground"
-                              }`}
-                            />
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm">{notification.message}</p>
-                              <p className="text-xs text-muted-foreground mt-1">
-                                {new Date(notification.createdAt).toLocaleString()}
-                              </p>
-                            </div>
-                            {!notification.viewed && (
-                              <div className="h-2 w-2 rounded-full bg-primary flex-shrink-0 mt-2" />
-                            )}
-                          </div>
-                        </Link>
-                      );
-                    })}
-                    {notifications.length === 0 && (
-                      <div className="text-center py-8 text-muted-foreground">
-                        No notifications
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-        </div>
-
-        {/* All Sessions - Full Width */}
-        <div className="mt-6 sm:mt-8">
+          {/* Pending Reviews */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-xl sm:text-2xl">My Sessions</CardTitle>
-              <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-                Manage all your learning and teaching sessions
-              </p>
+              <CardTitle>Pending Reviews</CardTitle>
             </CardHeader>
             <CardContent>
-              <SessionList
-                upcomingSessions={[
-                  ...upcomingSessions.map(s => ({
-                    id: s.id,
-                    title: s.title,
-                    date: s.date,
-                    duration: s.duration,
-                    skills: s.skills,
-                    description: s.description,
-                    requestedBy: s.requestedBy,
-                    hostName: s.peer?.name,
-                  })),
-                  ...upcomingStudyRooms.map(sr => ({
-                    id: sr.id,
-                    title: sr.title,
-                    date: sr.date,
-                    duration: sr.duration,
-                    skills: sr.skills,
-                    description: sr.description,
-                    hostName: sr.createdBy?.name,
-                    participantCount: sr.participantCount,
-                    maxParticipants: sr.maxParticipants,
-                  })),
-                ]}
-                pendingSessions={pendingRequests.map(r => ({
-                  id: r.id,
-                  title: r.title,
-                  date: r.date,
-                  duration: r.duration,
-                  skills: r.skills,
-                  requestedBy: r.requestedBy,
-                  hostName: r.requestedBy?.name,
-                }))}
-                pastSessions={[
-                  ...pastSessions.map(s => ({
-                    id: s.id,
-                    title: s.title,
-                    date: s.date,
-                    duration: s.duration,
-                    skills: s.skills,
-                    description: s.description,
-                    requestedBy: s.requestedBy,
-                    hostName: s.peer?.name,
-                  })),
-                  ...pastStudyRooms.map(sr => ({
-                    id: sr.id,
-                    title: sr.title,
-                    date: sr.date,
-                    duration: sr.duration,
-                    skills: sr.skills,
-                    description: sr.description,
-                    hostName: sr.createdBy?.name,
-                    participantCount: sr.participantCount,
-                    maxParticipants: sr.maxParticipants,
-                  })),
-                ]}
-                isLoading={dashboardLoading}
-              />
+              <div className="flex items-center justify-between">
+                <p className="text-muted-foreground">
+                  {pendingReviews > 0
+                    ? `You have ${pendingReviews} session${pendingReviews > 1 ? 's' : ''} waiting for your review`
+                    : "No pending reviews"
+                  }
+                </p>
+                {pendingReviews > 0 && (
+                  <Link href="/profile?tab=sessions">
+                    <Button variant="outline" size="sm">
+                      Review
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </Link>
+                )}
+              </div>
             </CardContent>
           </Card>
         </div>
 
+        {/* Calendar and Streak Tracker - Side by Side */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-6">
+          {/* Enhanced Calendar Widget */}
+          <div id="calendar-section">
+            <EnhancedCalendarWidget sessions={[
+              ...upcomingSessions.map(s => ({
+                id: s.id,
+                title: s.title,
+                date: typeof s.date === 'string' ? s.date : s.date.toISOString(),
+                duration: s.duration,
+                type: (s.requestedBy?.id && currentUser?.id && s.requestedBy.id === currentUser.id) ? "teaching" as const : "learning" as const,
+                participantName: s.peer?.name,
+              })),
+              ...upcomingStudyRooms.map(sr => ({
+                id: sr.id,
+                title: sr.title,
+                date: typeof sr.date === 'string' ? sr.date : sr.date.toISOString(),
+                duration: sr.duration,
+                type: (sr.createdBy?.id && currentUser?.id && sr.createdBy.id === currentUser.id) ? "teaching" as const : "learning" as const,
+                participantName: `Group (${sr.participantCount}/${sr.maxParticipants})`,
+              })),
+            ]} />
+          </div>
+
+          {/* Streak Tracker */}
+          <StreakTrackerConnected />
+        </div>
+
+        {/* Skills and Study Room Suggestions */}
+        <div className="mb-6">
+          <SkillsAndSuggestions
+            userSkills={userSkills}
+            suggestedRooms={suggestedRooms}
+            isLoading={studyRoomsLoading || userLoading}
+          />
+        </div>
+
+        {/* My Sessions - Full Width */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="text-xl sm:text-2xl">My Sessions</CardTitle>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+              Manage all your learning and teaching sessions
+            </p>
+          </CardHeader>
+          <CardContent>
+            <SessionList
+              upcomingSessions={[
+                ...upcomingSessions
+                  .filter(s => {
+                    // Filter out today's sessions from upcoming
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const sessionDate = new Date(s.date);
+                    sessionDate.setHours(0, 0, 0, 0);
+                    return sessionDate.getTime() > today.getTime();
+                  })
+                  .map(s => ({
+                    id: s.id,
+                    title: s.title,
+                    date: s.date,
+                    duration: s.duration,
+                    skills: s.skills,
+                    description: s.description,
+                    requestedBy: s.requestedBy,
+                    hostName: s.peer?.name,
+                  })),
+                ...upcomingStudyRooms
+                  .filter(sr => {
+                    // Filter out today's rooms from upcoming
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const roomDate = new Date(sr.date);
+                    roomDate.setHours(0, 0, 0, 0);
+                    return roomDate.getTime() > today.getTime();
+                  })
+                  .map(sr => ({
+                    id: sr.id,
+                    title: sr.title,
+                    date: sr.date,
+                    duration: sr.duration,
+                    skills: sr.skills,
+                    description: sr.description,
+                    hostName: sr.createdBy?.name,
+                    participantCount: sr.participantCount,
+                    maxParticipants: sr.maxParticipants,
+                  })),
+              ]}
+              ongoingSessions={ongoingSessions.map(session => ({
+                id: session.id,
+                title: session.title,
+                date: session.date,
+                duration: session.duration,
+                skills: session.skills,
+                description: session.description,
+                hostName: 'peer' in session ? session.peer?.name : session.createdBy?.name,
+                participantCount: 'participantCount' in session ? session.participantCount : undefined,
+                maxParticipants: 'maxParticipants' in session ? session.maxParticipants : undefined,
+                requestedBy: 'requestedBy' in session ? session.requestedBy : undefined,
+              }))}
+              pastSessions={[
+                ...pastSessions.map(s => ({
+                  id: s.id,
+                  title: s.title,
+                  date: s.date,
+                  duration: s.duration,
+                  skills: s.skills,
+                  description: s.description,
+                  requestedBy: s.requestedBy,
+                  hostName: s.peer?.name,
+                })),
+                ...pastStudyRooms.map(sr => ({
+                  id: sr.id,
+                  title: sr.title,
+                  date: sr.date,
+                  duration: sr.duration,
+                  skills: sr.skills,
+                  description: sr.description,
+                  hostName: sr.createdBy?.name,
+                  participantCount: sr.participantCount,
+                  maxParticipants: sr.maxParticipants,
+                })),
+              ]}
+              isLoading={dashboardLoading}
+            />
+          </CardContent>
+        </Card>
+
+        {/* Sessions Activity Chart - Full Width */}
+        <SessionsChart />
+
         {/* Achievement Showcase - Full Width */}
         <div className="mt-6 sm:mt-8">
-          <AchievementShowcase achievements={MOCK_ACHIEVEMENTS} />
+          <AchievementShowcaseConnected showProgress={false} />
         </div>
       </main>
 

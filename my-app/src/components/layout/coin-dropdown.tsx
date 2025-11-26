@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { formatCoins } from "@/lib/utils/coin-format";
+import { formatMaya } from "@/lib/utils/coin-format";
 import { useTransactionHistory } from "@/hooks/use-transactions";
 import { PaymentStatus } from "@/types/api.types";
 
@@ -34,7 +34,7 @@ export function CoinDropdown({ coins = 0, isLoading = false }: CoinDropdownProps
       >
         <Coins className="h-4 w-4 text-yellow-600" />
         <span className="text-sm font-medium">
-          {isLoading ? '...' : formatCoins(displayCoins)}
+          {isLoading ? '...' : formatMaya(displayCoins)} <span className="text-xs">m</span>AYA
         </span>
       </div>
 
@@ -58,8 +58,8 @@ export function CoinDropdown({ coins = 0, isLoading = false }: CoinDropdownProps
               <Card className="shadow-lg">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-lg flex items-center justify-between">
-                    <span>Coin Balance</span>
-                    <Link href="/profile?tab=earnings" onClick={() => setIsOpen(false)}>
+                    <span><span className="text-sm">m</span>AYA Balance</span>
+                    <Link href="/profile?tab=wallet" onClick={() => setIsOpen(false)}>
                       <Button variant="ghost" size="sm" className="h-8">
                         View All
                       </Button>
@@ -72,7 +72,7 @@ export function CoinDropdown({ coins = 0, isLoading = false }: CoinDropdownProps
                     <div className="flex items-center justify-center gap-2">
                       <Coins className="h-6 w-6 text-yellow-600" />
                       <span className="text-3xl font-bold">
-                        {formatCoins(displayCoins)}
+                        {formatMaya(displayCoins)} <span className="text-xl">m</span>AYA
                       </span>
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">
@@ -133,7 +133,7 @@ export function CoinDropdown({ coins = 0, isLoading = false }: CoinDropdownProps
                                   : 'text-green-600'
                               }`}>
                                 {transaction.type === 'PAYMENT_MADE' ? '-' : '+'}
-                                {formatCoins(transaction.amount)}
+                                {formatMaya(transaction.amount)} <span className="text-[10px]">m</span>AYA
                               </p>
                               <Badge
                                 variant="outline"

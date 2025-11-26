@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, Suspense, useMemo } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useSearchParams } from "next/navigation";
 import { Navigation } from "@/components/layout/navigation";
@@ -13,84 +13,45 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ReviewCardComponent } from "@/components/cards/review-card";
 import { EditProfileModal } from "@/components/modals/edit-profile-modal";
 import { UserReviewStats } from "@/components/reviews/user-review-stats";
-import { EarningsTab } from "@/components/profile/earnings-tab";
+import { WalletTab } from "@/components/profile/wallet-tab";
 import { SessionsTab } from "@/components/profile/sessions-tab";
-import { AchievementShowcase } from "@/components/achievements/achievement-showcase";
-import { StreakTracker } from "@/components/profile/streak-tracker";
-import { MOCK_ACHIEVEMENTS } from "@/types/achievements.types";
+import { AvailabilitySettings } from "@/components/profile/availability-settings";
+import { AchievementShowcaseConnected } from "@/components/achievements/achievement-showcase-connected";
 import { Edit, Star, Coins, Loader2 } from "lucide-react";
-import { usersApi, reviewsApi } from "@/lib/api";
-import { User, ReviewCard } from "@/types/api.types";
-import { setAuthToken } from "@/lib/api-client";
-import { formatCoins } from "@/lib/utils/coin-format";
+import { useProfileData } from "@/hooks/use-profile-data";
+import { formatMaya } from "@/lib/utils/coin-format";
 
 function ProfileContent() {
   const searchParams = useSearchParams();
-  const { isSignedIn, isLoaded, getToken } = useAuth();
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [userReviews, setUserReviews] = useState<ReviewCard[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { isSignedIn, isLoaded } = useAuth();
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"about" | "sessions" | "earnings" | "reviews">("about");
+  const [activeTab, setActiveTab] = useState<"about" | "sessions" | "wallet" | "reviews">("about");
 
-  const avgRating =
-    userReviews.length > 0
-      ? userReviews.reduce((acc, r) => acc + r.rating, 0) / userReviews.length
-      : 0;
+  // Use React Query hook for optimized data fetching
+  const {
+    data: profileData,
+    isLoading: loading,
+    error: queryError,
+    refetch,
+  } = useProfileData();
+
+  const currentUser = profileData?.user || null;
+  const userReviews = profileData?.reviews || [];
+  const avgRating = profileData?.avgRating || 0;
+  const error = queryError ? 'Failed to load profile data' : null;
 
   // Handle URL parameters for tab navigation
   useEffect(() => {
     const tab = searchParams.get('tab');
-    if (tab && ['about', 'sessions', 'earnings', 'reviews'].includes(tab)) {
-      setActiveTab(tab as 'about' | 'sessions' | 'earnings' | 'reviews');
+    if (tab && ['about', 'sessions', 'wallet', 'reviews'].includes(tab)) {
+      setActiveTab(tab as 'about' | 'sessions' | 'wallet' | 'reviews');
     }
   }, [searchParams]);
 
-
-  useEffect(() => {
-    const fetchUserData = async () => {
-      // Wait for Clerk to load
-      if (!isLoaded) {
-        return;
-      }
-
-      // Check if user is signed in
-      if (!isSignedIn) {
-        setError('Please sign in to view your profile');
-        setLoading(false);
-        return;
-      }
-
-      try {
-        setLoading(true);
-        setError(null);
-        
-        // Get token and set it for API calls
-        const token = await getToken();
-        if (token) {
-          setAuthToken(token);
-          console.log('Token set for API calls:', token);
-        }
-        
-        // Fetch current user data and reviews in parallel
-        const [userData, reviewsResponse] = await Promise.all([
-          usersApi.getCurrentUser(),
-          reviewsApi.getReviews({ userId: 'me' }) // Get reviews for current user
-        ]);
-        
-        setCurrentUser(userData.user);
-        setUserReviews(reviewsResponse.reviews || []);
-      } catch (err) {
-        console.error('Error fetching user data:', err);
-        setError('Failed to load profile data');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchUserData();
-  }, [isLoaded, isSignedIn, getToken]);
+  // Update current user after editing profile
+  const handleUserUpdate = () => {
+    refetch();
+  };
 
   // Show loading while Clerk is initializing
   if (!isLoaded) {
@@ -181,7 +142,7 @@ function ProfileContent() {
                       <div className="flex items-center justify-center sm:justify-start">
                         <Coins className="h-5 w-5 text-yellow-600" />
                         <span className="ml-1 font-medium">
-                          {formatCoins(currentUser.coins)} coins
+                          {formatMaya(currentUser.coins)} <span className="text-xs">m</span>AYA
                         </span>
                       </div>
 
@@ -189,7 +150,7 @@ function ProfileContent() {
                         <div className="flex items-center justify-center sm:justify-start">
                           <Coins className="h-5 w-5 text-green-600" />
                           <span className="ml-1 font-medium">
-                            {formatCoins(currentUser.hourlyRate)} coins/hr
+                            {formatMaya(currentUser.hourlyRate)} <span className="text-xs">m</span>AYA/hr
                           </span>
                         </div>
                       )}
@@ -239,8 +200,8 @@ function ProfileContent() {
             <TabsTrigger active={activeTab === "sessions"} onClick={() => setActiveTab("sessions")}>
               Sessions
             </TabsTrigger>
-            <TabsTrigger active={activeTab === "earnings"} onClick={() => setActiveTab("earnings")}>
-              Earnings
+            <TabsTrigger active={activeTab === "wallet"} onClick={() => setActiveTab("wallet")}>
+              Wallet
             </TabsTrigger>
             <TabsTrigger active={activeTab === "reviews"} onClick={() => setActiveTab("reviews")}>
               Reviews
@@ -314,22 +275,15 @@ function ProfileContent() {
                       </div>
                     </CardContent>
                   </Card>
+
+                  {/* Achievement Showcase */}
+                  <AchievementShowcaseConnected />
                 </div>
 
-                {/* Reviews Summary & Streak */}
-                <div className="space-y-6">
-                  <UserReviewStats userId={currentUser.id} showTitle={true} />
-
-                  <StreakTracker
-                    currentStreak={7}
-                    longestStreak={14}
-                  />
+                {/* Availability Settings */}
+                <div>
+                  <AvailabilitySettings userId={currentUser.id} isOwnProfile={true} />
                 </div>
-              </div>
-
-              {/* Achievement Showcase */}
-              <div className="mt-6">
-                <AchievementShowcase achievements={MOCK_ACHIEVEMENTS} />
               </div>
             </div>
           </TabsContent>}
@@ -339,11 +293,11 @@ function ProfileContent() {
             <SessionsTab userId={currentUser.id} isLoading={loading} />
           </TabsContent>}
 
-          {/* Earnings Tab */}
-          {activeTab === "earnings" && <TabsContent>
-            <EarningsTab
-              coins={typeof currentUser.coins === 'number' ? currentUser.coins : undefined}
-              hourlyRate={typeof currentUser.hourlyRate === 'number' ? currentUser.hourlyRate : undefined}
+          {/* Wallet Tab */}
+          {activeTab === "wallet" && <TabsContent>
+            <WalletTab
+              coins={currentUser.coins}
+              hourlyRate={currentUser.hourlyRate}
               isLoading={loading}
             />
           </TabsContent>}
@@ -351,7 +305,62 @@ function ProfileContent() {
           {/* Reviews Tab */}
           {activeTab === "reviews" && <TabsContent>
             <div className="space-y-6">
-              <UserReviewStats userId={currentUser.id} showTitle={true} />
+              {/* Review Statistics - Pass reviews directly to avoid duplicate fetching */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Review Statistics</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {/* Overall Stats */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="text-center">
+                      <div className="flex items-center justify-center gap-1 mb-1">
+                        <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
+                        <span className="text-2xl font-bold">{avgRating.toFixed(1)}</span>
+                      </div>
+                      <p className="text-sm text-muted-foreground">Average Rating</p>
+                    </div>
+                    <div className="text-center">
+                      <div className="flex items-center justify-center gap-1 mb-1">
+                        <Star className="h-5 w-5 text-primary" />
+                        <span className="text-2xl font-bold">{userReviews.length}</span>
+                      </div>
+                      <p className="text-sm text-muted-foreground">Total Reviews</p>
+                    </div>
+                  </div>
+
+                  {/* Rating Distribution */}
+                  {userReviews.length > 0 && (
+                    <div className="space-y-3">
+                      <h4 className="font-semibold text-sm">Rating Distribution</h4>
+                      {[5, 4, 3, 2, 1].map((rating) => {
+                        const count = userReviews.filter(r => r.rating === rating).length;
+                        const percentage = (count / userReviews.length) * 100;
+                        return (
+                          <div key={rating} className="flex items-center gap-3">
+                            <div className="flex items-center gap-1 w-8">
+                              <span className="text-sm font-medium">{rating}</span>
+                              <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                            </div>
+                            <div className="flex-1 bg-muted rounded-full h-2">
+                              <div
+                                className="bg-yellow-400 h-2 rounded-full transition-all duration-300"
+                                style={{ width: `${percentage}%` }}
+                              />
+                            </div>
+                            <div className="flex items-center gap-2 w-16">
+                              <span className="text-sm text-muted-foreground">{count}</span>
+                              <Badge variant="secondary" className="text-xs">
+                                {percentage.toFixed(0)}%
+                              </Badge>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
 
               {/* All Reviews */}
               <div>
@@ -397,7 +406,7 @@ function ProfileContent() {
           isOpen={isEditModalOpen}
           onClose={() => setIsEditModalOpen(false)}
           user={currentUser}
-          onUserUpdate={setCurrentUser}
+          onUserUpdate={handleUserUpdate}
         />
       )}
     </div>

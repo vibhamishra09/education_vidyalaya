@@ -2,9 +2,12 @@ import { Injectable, NotFoundException, BadRequestException, ForbiddenException 
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ChatService } from '../chat/chat.service';
+import { StreaksService } from '../streaks/streaks.service';
+import { AchievementsService } from '../achievements/achievements.service';
 import { CreateStudyRoomDto, UpdateStudyRoomDto } from './dto/study-room.dto';
-import { SessionStatus, NotifType } from '@prisma/client';
+import { SessionStatus, NotifType, PaymentStatus } from '@prisma/client';
 import { normalizeGoogleMeetLink } from '../utils/gmeet-generator';
+import { convertLocalToUTC } from '../utils/timezone';
 
 @Injectable()
 export class StudyRoomsService {
@@ -12,6 +15,8 @@ export class StudyRoomsService {
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
     private chatService: ChatService,
+    private streaksService: StreaksService,
+    private achievementsService: AchievementsService,
   ) {}
 
   async getStudyRooms(
@@ -233,8 +238,9 @@ export class StudyRoomsService {
       throw new NotFoundException('User not found');
     }
 
-    // Combine date and time
-    const dateTime = new Date(`${createDto.date}T${createDto.time}`);
+    // Convert user's local time to UTC
+    // Example: 11 AM IST -> 5:30 AM UTC
+    const dateTime = convertLocalToUTC(createDto.date, createDto.time, createDto.timezone);
 
     // Normalize Google Meet link if provided
     const gmeetLink = createDto.gmeetLink ? normalizeGoogleMeetLink(createDto.gmeetLink) : null;
@@ -405,7 +411,7 @@ export class StudyRoomsService {
 
     // Process payment and join in a transaction
     await this.prisma.$transaction(async (tx) => {
-      // Deduct coins from user
+      // Deduct coins from user (held in escrow)
       await tx.user.update({
         where: { id: user.id },
         data: {
@@ -415,20 +421,10 @@ export class StudyRoomsService {
         },
       });
 
-      // Add coins to study room creator
-      await tx.user.update({
-        where: { id: studyRoom.createdById },
-        data: {
-          coins: {
-            increment: studyRoom.joiningFee,
-          },
-        },
-      });
-
-      // Create payment record
+      // Create payment record in escrow (coins will be released to creator after learner reviews)
       await tx.payment.create({
         data: {
-          paymentStatus: 'RECEIVED',
+          paymentStatus: PaymentStatus.ESCROW,
           madeById: user.id, // Use the database ID, not clerkId
           receivedById: studyRoom.createdById,
           studyRoomId: studyRoomId,
@@ -482,5 +478,75 @@ export class StudyRoomsService {
       success: true,
       message: 'Successfully joined study room',
     };
+  }
+
+  async completeStudyRoom(studyRoomId: string, userId: string) {
+    // userId is actually clerkId, so we need to find the user by clerkId first
+    const user = await this.prisma.user.findUnique({
+      where: { clerkId: userId },
+      select: { id: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const studyRoom = await this.prisma.studyRoom.findUnique({
+      where: { id: studyRoomId },
+    });
+
+    if (!studyRoom) {
+      throw new NotFoundException('Study room not found');
+    }
+
+    // Check if user is part of the study room (creator or participant)
+    const isCreator = studyRoom.createdById === user.id;
+    const isParticipant = await this.prisma.studyRoomParticipant.findFirst({
+      where: {
+        studyRoomId,
+        userId: user.id,
+      },
+    });
+
+    if (!isCreator && !isParticipant) {
+      throw new ForbiddenException('Not authorized to complete this study room');
+    }
+
+    // Update study room status to COMPLETED
+    const updatedRoom = await this.prisma.studyRoom.update({
+      where: { id: studyRoomId },
+      data: { sessionStatus: SessionStatus.DONE },
+    });
+
+    return {
+      success: true,
+      message: 'Study room marked as completed',
+      studyRoom: updatedRoom,
+    };
+  }
+
+  async checkIsHost(studyRoomId: string, userId: string) {
+    // userId is actually clerkId, so we need to find the user by clerkId first
+    const user = await this.prisma.user.findUnique({
+      where: { clerkId: userId },
+      select: { id: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const studyRoom = await this.prisma.studyRoom.findUnique({
+      where: { id: studyRoomId },
+      select: { createdById: true },
+    });
+
+    if (!studyRoom) {
+      throw new NotFoundException('Study room not found');
+    }
+
+    const isHost = studyRoom.createdById === user.id;
+
+    return { isHost };
   }
 }

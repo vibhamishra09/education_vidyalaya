@@ -75,6 +75,9 @@ export class CreateStudyRoomDto {
   @IsOptional()
   @IsString()
   gmeetLink?: string;
+
+  @IsString()
+  timezone: string;
 }
 
 export class UpdateStudyRoomDto {
@@ -120,4 +123,7 @@ export class UpdateStudyRoomDto {
   @IsOptional()
   @IsString()
   gmeetLink?: string;
+
+  @IsOptional()
+  status?: SessionStatus;
 }

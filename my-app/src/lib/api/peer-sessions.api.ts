@@ -6,6 +6,7 @@ import {
   UpdateSessionStatusDto,
 } from '@/types/api.types';
 import { cleanQueryParams } from '../utils/api-utils';
+import type { AvailableSlotsResponse } from './availability.api';
 
 export const peerSessionsApi = {
   // Get peer sessions
@@ -74,6 +75,47 @@ export const peerSessionsApi = {
     const response = await apiClient.patch<PeerSession>(
       `/api/peer-sessions/${peerSessionId}/complete`
     );
+    return response.data;
+  },
+
+  // Check availability for a specific time slot
+  checkAvailability: async (
+    userId: string,
+    startTime: string, // ISO date string
+    duration: number // Minutes
+  ): Promise<{
+    isAvailable: boolean;
+    reason?: string;
+    conflicts?: Array<{
+      id: string;
+      type: 'session' | 'blocked_slot' | 'availability';
+      startTime: string;
+      endTime: string;
+      reason?: string;
+    }>;
+  }> => {
+    const response = await apiClient.get(`/api/availability/check/${userId}`, {
+      params: { startTime, duration },
+    });
+    return response.data;
+  },
+
+  // Get available slots for a specific date
+  getAvailableSlots: async (
+    userId: string,
+    date: string, // YYYY-MM-DD
+    duration: number = 60, // Minutes
+    interval: number = 30, // Minutes
+    durations?: number[]
+  ): Promise<AvailableSlotsResponse> => {
+    const params: Record<string, string | number> = { date, duration, interval };
+    if (durations && durations.length > 0) {
+      params.durations = durations.join(',');
+    }
+
+    const response = await apiClient.get(`/api/availability/slots/${userId}`, {
+      params,
+    });
     return response.data;
   },
 };

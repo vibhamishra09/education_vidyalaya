@@ -46,7 +46,9 @@ export function EditProfileModal({
   const [bio, setBio] = useState(user.bio || "");
   const [location, setLocation] = useState(user.location || "");
   const [school, setSchool] = useState(user.school || "");
-  const [hourlyRate, setHourlyRate] = useState<number | string>(user.hourlyRate ?? "");
+  const [hourlyRate, setHourlyRate] = useState<number | string>(
+    user.hourlyRate ? (typeof user.hourlyRate === 'number' ? user.hourlyRate * 100 : parseFloat(user.hourlyRate) * 100) : ""
+  ); // Convert AYA to mAYA for display
   const [hasSkills, setHasSkills] = useState<string[]>(user.hasSkills || []);
   const [wantSkills, setWantSkills] = useState<string[]>(user.wantSkills || []);
   
@@ -62,7 +64,9 @@ export function EditProfileModal({
     setBio(user.bio || "");
     setLocation(user.location || "");
     setSchool(user.school || "");
-    setHourlyRate(user.hourlyRate ?? "");
+    setHourlyRate(
+      user.hourlyRate ? (typeof user.hourlyRate === 'number' ? user.hourlyRate * 100 : parseFloat(user.hourlyRate) * 100) : ""
+    ); // Convert AYA to mAYA for display
     setHasSkills(user.hasSkills || []);
     setWantSkills(user.wantSkills || []);
     setError(null);
@@ -187,7 +191,7 @@ export function EditProfileModal({
       if (hourlyRate !== "" && hourlyRate !== null && hourlyRate !== undefined) {
         const numValue = typeof hourlyRate === 'number' ? hourlyRate : parseFloat(String(hourlyRate));
         if (!isNaN(numValue)) {
-          hourlyRateValue = numValue;
+          hourlyRateValue = numValue / 100; // Convert mAYA input to AYA for storage
         }
       }
       
@@ -345,7 +349,7 @@ export function EditProfileModal({
 
           {/* Hourly Rate */}
           <div className="space-y-2">
-            <Label htmlFor="hourlyRate">Hourly Rate (Coins)</Label>
+            <Label htmlFor="hourlyRate">Hourly Rate (<span className="text-xs">m</span>AYA)</Label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">🪙</span>
               <Input
@@ -368,7 +372,7 @@ export function EditProfileModal({
               />
             </div>
             <p className="text-xs text-muted-foreground">
-              Set your hourly rate in coins for teaching sessions. Leave empty or 0 to not display a rate.
+              Set your hourly rate in mAYA tokens for teaching sessions. Leave empty or 0 to not display a rate.
             </p>
           </div>
 

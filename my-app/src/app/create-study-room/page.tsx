@@ -40,6 +40,9 @@ export default function CreateStudyRoomPage() {
       setSubmitting(true);
       setError(null);
       
+      // Get user's timezone
+      const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
       const createData: CreateStudyRoomDto = {
         title: formData.title,
         description: formData.description || undefined,
@@ -48,8 +51,9 @@ export default function CreateStudyRoomPage() {
         time: formData.time,
         duration: parseInt(formData.duration),
         maxParticipants: parseInt(formData.maxParticipants),
-        joiningFee: parseFloat(formData.joiningFee),
+        joiningFee: parseFloat(formData.joiningFee) / 100, // Convert mAYA input to AYA for storage
         gmeetLink: formData.gmeetLink || undefined,
+        timezone: userTimezone,
       };
       
       await studyRoomsApi.createStudyRoom(createData);
@@ -228,14 +232,14 @@ export default function CreateStudyRoomPage() {
 
                 {/* Joining Fee */}
                 <div className="space-y-2">
-                  <Label htmlFor="joiningFee">Joining Fee (coins) *</Label>
+                  <Label htmlFor="joiningFee">Joining Fee (<span className="text-xs">m</span>AYA) *</Label>
                   <div className="relative">
                     <Coins className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                       id="joiningFee"
                       type="number"
                       min="0"
-                      max="1000"
+                      max="100000"
                       step="0.01"
                       value={formData.joiningFee}
                       onChange={(e) =>
@@ -277,10 +281,10 @@ export default function CreateStudyRoomPage() {
                 <div className="bg-muted p-4 rounded-lg">
                   <h4 className="font-semibold mb-2">Earning Potential</h4>
                   <p className="text-sm text-muted-foreground">
-                    Each participant will pay {formData.joiningFee} coins to join. With{" "}
+                    Each participant will pay {parseFloat(formData.joiningFee).toFixed(2)} <span className="text-xs">m</span>AYA to join. With{" "}
                     {formData.maxParticipants} participants, you could earn up to{" "}
                     <span className="font-semibold text-foreground">
-                      {(parseInt(formData.maxParticipants) * parseFloat(formData.joiningFee)).toFixed(2)} coins
+                      {(parseInt(formData.maxParticipants) * parseFloat(formData.joiningFee)).toFixed(2)} <span className="text-xs">m</span>AYA
                     </span>
                     .
                   </p>

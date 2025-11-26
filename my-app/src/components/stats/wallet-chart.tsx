@@ -13,31 +13,31 @@ import {
 } from "recharts";
 import { ChartContainer } from "./chart-container";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatCoins } from "@/lib/utils/coin-format";
+import { formatMaya } from "@/lib/utils/coin-format";
 
-interface EarningsDataPoint {
+interface WalletDataPoint {
   month: string;
   earned: number;
   spent: number;
   net: number;
 }
 
-interface EarningsChartProps {
-  data?: EarningsDataPoint[];
+interface WalletChartProps {
+  data?: WalletDataPoint[];
   isLoading?: boolean;
 }
 
 interface TooltipPayload {
-  payload: EarningsDataPoint;
+  payload: WalletDataPoint;
 }
 
-export function EarningsChart({ data, isLoading = false }: EarningsChartProps) {
+export function WalletChart({ data, isLoading = false }: WalletChartProps) {
   // Generate mock data if none provided
   const chartData = useMemo(() => {
     if (data) return data;
 
     // Generate last 6 months of mock data
-    const mockData: EarningsDataPoint[] = [];
+    const mockData: WalletDataPoint[] = [];
     const today = new Date();
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -72,7 +72,7 @@ export function EarningsChart({ data, isLoading = false }: EarningsChartProps) {
                 Earned:
               </span>
               <span className="font-medium text-green-600">
-                +{formatCoins(payload[0].payload.earned)}
+                +{formatMaya(payload[0].payload.earned)} <span className="text-[10px]">m</span>AYA
               </span>
             </div>
             <div className="flex items-center justify-between gap-4">
@@ -81,7 +81,7 @@ export function EarningsChart({ data, isLoading = false }: EarningsChartProps) {
                 Spent:
               </span>
               <span className="font-medium text-red-600">
-                -{formatCoins(payload[0].payload.spent)}
+                -{formatMaya(payload[0].payload.spent)} <span className="text-[10px]">m</span>AYA
               </span>
             </div>
             <div className="flex items-center justify-between gap-4 pt-1 border-t">
@@ -90,7 +90,7 @@ export function EarningsChart({ data, isLoading = false }: EarningsChartProps) {
                 Net:
               </span>
               <span className={`font-medium ${payload[0].payload.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {payload[0].payload.net >= 0 ? '+' : ''}{formatCoins(payload[0].payload.net)}
+                {payload[0].payload.net >= 0 ? '+' : ''}{formatMaya(payload[0].payload.net)} <span className="text-[10px]">m</span>AYA
               </span>
             </div>
           </div>
@@ -102,7 +102,7 @@ export function EarningsChart({ data, isLoading = false }: EarningsChartProps) {
 
   if (isLoading) {
     return (
-      <ChartContainer title="Earnings Trend">
+      <ChartContainer title="Wallet Activity">
         <Skeleton className="h-[300px] w-full" />
       </ChartContainer>
     );
@@ -110,8 +110,8 @@ export function EarningsChart({ data, isLoading = false }: EarningsChartProps) {
 
   return (
     <ChartContainer
-      title="Earnings Trend"
-      description="Your coins earned and spent over the last 6 months"
+      title="Wallet Activity"
+      description="Your mAYA tokens earned and spent over the last 6 months"
     >
       <ResponsiveContainer width="100%" height={300}>
         <BarChart data={chartData}>
@@ -126,7 +126,7 @@ export function EarningsChart({ data, isLoading = false }: EarningsChartProps) {
             fontSize={12}
             tickLine={false}
             axisLine={false}
-            tickFormatter={(value) => formatCoins(value)}
+            tickFormatter={(value) => formatMaya(value)}
           />
           <Tooltip content={<CustomTooltip />} />
           <Legend

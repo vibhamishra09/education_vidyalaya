@@ -1,21 +1,23 @@
 "use client";
 
+import { memo } from "react";
 import { Coins, ArrowUpRight, ArrowDownLeft, RefreshCw, TrendingUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatCoins } from "@/lib/utils/coin-format";
+import { WalletChart } from "@/components/stats/wallet-chart";
+import { formatMaya } from "@/lib/utils/coin-format";
 import { useTransactionHistory } from "@/hooks/use-transactions";
 import { PaymentStatus } from "@/types/api.types";
 
-interface EarningsTabProps {
-  coins?: number;
-  hourlyRate?: number;
+interface WalletTabProps {
+  coins?: number | string;
+  hourlyRate?: number | string;
   isLoading?: boolean;
 }
 
-export function EarningsTab({ coins = 0, hourlyRate, isLoading = false }: EarningsTabProps) {
+export const WalletTab = memo(function WalletTab({ coins, hourlyRate, isLoading = false }: WalletTabProps) {
   const { data: transactionsData, isLoading: transactionsLoading, refetch } = useTransactionHistory();
 
   const transactions = transactionsData?.transactions || [];
@@ -37,7 +39,7 @@ export function EarningsTab({ coins = 0, hourlyRate, isLoading = false }: Earnin
                 {isLoading ? (
                   <Skeleton className="h-8 w-24" />
                 ) : (
-                  <p className="text-2xl font-bold">{formatCoins(coins)}</p>
+                  <p className="text-2xl font-bold">{formatMaya(coins)} <span className="text-sm">m</span>AYA</p>
                 )}
               </div>
               <div className="p-3 bg-yellow-100 rounded-full">
@@ -56,7 +58,7 @@ export function EarningsTab({ coins = 0, hourlyRate, isLoading = false }: Earnin
                   <Skeleton className="h-8 w-24" />
                 ) : (
                   <p className="text-2xl font-bold text-green-600">
-                    +{formatCoins(totalEarned)}
+                    +{formatMaya(totalEarned)} <span className="text-sm">m</span>AYA
                   </p>
                 )}
               </div>
@@ -76,7 +78,7 @@ export function EarningsTab({ coins = 0, hourlyRate, isLoading = false }: Earnin
                   <Skeleton className="h-8 w-24" />
                 ) : (
                   <p className="text-2xl font-bold">
-                    {hourlyRate ? formatCoins(hourlyRate) : 'Not set'}
+                    {hourlyRate ? <>{formatMaya(hourlyRate)} <span className="text-sm">m</span>AYA</> : 'Not set'}
                   </p>
                 )}
               </div>
@@ -87,6 +89,9 @@ export function EarningsTab({ coins = 0, hourlyRate, isLoading = false }: Earnin
           </CardContent>
         </Card>
       </div>
+
+      {/* Wallet Activity Chart */}
+      <WalletChart isLoading={transactionsLoading} />
 
       {/* Transaction History */}
       <Card>
@@ -167,7 +172,7 @@ export function EarningsTab({ coins = 0, hourlyRate, isLoading = false }: Earnin
                       }`}
                     >
                       {transaction.type === 'PAYMENT_MADE' ? '-' : '+'}
-                      {formatCoins(transaction.amount)}
+                      {formatMaya(transaction.amount)} <span className="text-xs">m</span>AYA
                     </p>
                     <Badge
                       variant="outline"
@@ -190,4 +195,4 @@ export function EarningsTab({ coins = 0, hourlyRate, isLoading = false }: Earnin
       </Card>
     </div>
   );
-}
+});

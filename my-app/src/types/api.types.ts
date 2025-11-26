@@ -104,6 +104,7 @@ export interface CreateStudyRoomDto {
   maxParticipants: number;
   joiningFee?: number;
   gmeetLink?: string;
+  timezone: string;
 }
 
 export interface UpdateStudyRoomDto {
@@ -136,13 +137,14 @@ export interface PeerSession {
 
 export interface RequestSessionDto {
   peerId: string;
-  skills: string[];
+  skills?: string[];
   date: string;
   time: string;
   duration: number;
   message?: string;
   cost: number;
   gmeetLink?: string;
+  timezone: string;
 }
 
 export interface UpdateSessionStatusDto {
@@ -232,9 +234,11 @@ export interface PendingRequest {
   id: string;
   title: string;
   requestedBy: PublicUser;
+  requestedTo?: PublicUser;
   date: Date | string;
   duration: number;
   skills: string[];
+  direction?: 'received' | 'sent';
 }
 
 export interface UpcomingSession {
@@ -286,12 +290,20 @@ export interface PastStudyRoom {
 export interface DashboardData {
   metrics?: Metric[];
   pendingRequests?: PendingRequest[];
+  sentRequests?: PendingRequest[];
   upcomingSessions?: UpcomingSession[];
   pastSessions?: PastSession[];
   upcomingStudyRooms?: UpcomingStudyRoom[];
   pastStudyRooms?: PastStudyRoom[];
   pendingReviews?: number;
   notifications?: Notification[];
+  streak?: StreakData;
+  achievements?: {
+    unlocked: Achievement[];
+    inProgress: Achievement[];
+    totalUnlocked: number;
+    totalAvailable: number;
+  };
 }
 
 // Pagination Types
@@ -386,6 +398,8 @@ export interface DashboardQuery {
   includeRequests?: boolean;
   includeSessions?: boolean;
   includeNotifications?: boolean;
+  includeStreaks?: boolean;
+  includeAchievements?: boolean;
   [key: string]: unknown;
 }
 
@@ -412,4 +426,77 @@ export interface TransactionHistoryItem {
 export interface TransactionHistoryResponse {
   transactions: TransactionHistoryItem[];
   pagination: Pagination;
+}
+
+// Streak Types
+export interface StreakDay {
+  date: string; // ISO date string
+  hasActivity: boolean;
+  sessionCount: number;
+  minutesLearned: number;
+  minutesTaught: number;
+}
+
+export interface StreakData {
+  currentStreak: number;
+  longestStreak: number;
+  lastActivityDate: Date | string | null;
+}
+
+export interface StreakHistoryResponse {
+  days: StreakDay[];
+  currentStreak: number;
+}
+
+// Achievement Types
+export enum AchievementCategory {
+  LEARNING = 'LEARNING',
+  TEACHING = 'TEACHING',
+  SOCIAL = 'SOCIAL',
+  MILESTONE = 'MILESTONE',
+  STREAK = 'STREAK',
+}
+
+export enum AchievementRarity {
+  COMMON = 'COMMON',
+  RARE = 'RARE',
+  EPIC = 'EPIC',
+  LEGENDARY = 'LEGENDARY',
+}
+
+export interface Achievement {
+  id: string;
+  title: string;
+  description: string;
+  icon: string;
+  category: AchievementCategory;
+  rarity: AchievementRarity;
+  maxProgress: number;
+  progress: number;
+  coinReward: number;
+  unlocked: boolean;
+  unlockedAt?: Date | string | null;
+}
+
+export interface AchievementsResponse {
+  unlocked: Achievement[];
+  inProgress: Achievement[];
+  locked: Achievement[];
+  totalUnlocked: number;
+  totalAvailable: number;
+}
+
+export interface MonthlyTopUser {
+  id: string;
+  name: string;
+  avatar?: string;
+  sessionCount: number;
+  totalMinutes: number;
+}
+
+export interface MonthlyTopUsersResponse {
+  topLearner: MonthlyTopUser | null;
+  topTeacher: MonthlyTopUser | null;
+  month: number;
+  year: number;
 }

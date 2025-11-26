@@ -15,8 +15,10 @@ import { ArrowLeft, Coins, Loader2, AlertCircle } from "lucide-react";
 import { usersApi, peerSessionsApi } from "@/lib/api";
 import { User } from "@/types/api.types";
 import { setAuthToken } from "@/lib/api-client";
+import { ImprovedAvailabilityCalendar } from "@/components/availability/improved-availability-calendar";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { formatMaya } from "@/lib/utils/coin-format";
 
 export default function RequestSessionPage({
   params,
@@ -32,6 +34,8 @@ export default function RequestSessionPage({
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [availabilityWarning, setAvailabilityWarning] = useState<string | null>(null);
+  const [checkingAvailability, setCheckingAvailability] = useState(false);
 
   const [formData, setFormData] = useState({
     skills: [] as string[],
@@ -72,7 +76,7 @@ export default function RequestSessionPage({
           usersApi.getPublicUserProfile(userId),
           usersApi.getCurrentUser()
         ]);
-        
+
         setPeer(peerData);
         setCurrentUser(currentUserData.user);
       } catch (err) {
@@ -85,6 +89,52 @@ export default function RequestSessionPage({
 
     fetchData();
   }, [userId, isLoaded, isSignedIn, getToken]);
+
+  // Check availability when date, time, or duration changes
+  useEffect(() => {
+    const checkAvailability = async () => {
+      // Only check if we have all required data
+      if (!peer || !formData.date || !formData.time || !formData.duration) {
+        setAvailabilityWarning(null);
+        return;
+      }
+
+      try {
+        setCheckingAvailability(true);
+        setAvailabilityWarning(null);
+
+        // Construct the ISO date string for the requested time
+        const dateTimeString = `${formData.date}T${formData.time}:00`;
+        const localDateTime = new Date(dateTimeString);
+
+        // Check if the time is in the past
+        if (localDateTime < new Date()) {
+          setAvailabilityWarning('Cannot book sessions in the past');
+          return;
+        }
+
+        // Call the availability check API
+        const result = await peerSessionsApi.checkAvailability(
+          peer.id,
+          localDateTime.toISOString(),
+          parseInt(formData.duration)
+        );
+
+        if (!result.isAvailable) {
+          setAvailabilityWarning(result.reason || 'This time slot is not available');
+        }
+      } catch (err) {
+        console.error('Error checking availability:', err);
+        // Don't show error for availability check failures
+      } finally {
+        setCheckingAvailability(false);
+      }
+    };
+
+    // Debounce the availability check
+    const timeoutId = setTimeout(checkAvailability, 500);
+    return () => clearTimeout(timeoutId);
+  }, [peer, formData.date, formData.time, formData.duration]);
 
   // Show loading while Clerk is initializing
   if (!isLoaded) {
@@ -157,25 +207,31 @@ export default function RequestSessionPage({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!peer || !currentUser) return;
-    
+
     // Prevent users from requesting sessions to themselves
     if (peer.id === currentUser.id) {
       setError('You cannot request a session to yourself.');
       return;
     }
-    
+
     // Check if peer has set their hourly rate
     if (!peer.hourlyRate) {
       setError('This user has not set their hourly rate yet. Please contact them directly or ask them to set their rate in their profile.');
       return;
     }
+
+    // Note: We allow booking even when there's an availability warning
+    // The warning is just informational to let the user know there's a higher chance of cancellation
     
     try {
       setSubmitting(true);
       setError(null);
       
+      // Get user's timezone
+      const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
       const requestData = {
         peerId: peer.id,
         skills: formData.skills,
@@ -185,6 +241,7 @@ export default function RequestSessionPage({
         message: formData.message || undefined,
         cost: calculatedCost,
         gmeetLink: formData.gmeetLink || undefined,
+        timezone: userTimezone,
       };
       
       await peerSessionsApi.requestPeerSession(requestData);
@@ -198,6 +255,10 @@ export default function RequestSessionPage({
         const apiError = err as { response: { data: { code: string; message: string } } };
         if (apiError.response?.data?.code === 'CANNOT_REQUEST_SELF') {
           setError(apiError.response.data.message || 'You cannot request a session to yourself.');
+        } else if (apiError.response?.data?.code === 'TIME_SLOT_UNAVAILABLE') {
+          setError(apiError.response.data.message || 'The selected time slot is not available.');
+        } else if (apiError.response?.data?.code === 'INSUFFICIENT_FUNDS') {
+          setError('You do not have enough mAYA tokens to book this session. Please add funds to your wallet.');
         } else {
           setError(apiError.response?.data?.message || 'Failed to send session request');
         }
@@ -274,7 +335,7 @@ export default function RequestSessionPage({
 
                   {/* Skills */}
                   <div className="space-y-2">
-                    <Label>Topics / Skills *</Label>
+                    <Label>Topics / Skills (Optional)</Label>
                     <div className="flex flex-wrap gap-2">
                       {peer.hasSkills?.map((skillName) => (
                         <Badge
@@ -293,46 +354,9 @@ export default function RequestSessionPage({
                     </div>
                     {formData.skills.length === 0 && (
                       <p className="text-sm text-muted-foreground">
-                        Select at least one topic
+                        Select topics (optional - if none selected, session will be categorized as Communication)
                       </p>
                     )}
-                  </div>
-
-                  {/* Date & Time */}
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="date">Date *</Label>
-                      <Input
-                        id="date"
-                        type="date"
-                        value={formData.date}
-                        onChange={(e) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            date: e.target.value,
-                          }))
-                        }
-                        required
-                        min={new Date().toISOString().split("T")[0]}
-                        disabled={isSelfRequest}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="time">Time *</Label>
-                      <Input
-                        id="time"
-                        type="time"
-                        value={formData.time}
-                        onChange={(e) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            time: e.target.value,
-                          }))
-                        }
-                        required
-                        disabled={isSelfRequest}
-                      />
-                    </div>
                   </div>
 
                   {/* Duration */}
@@ -341,9 +365,9 @@ export default function RequestSessionPage({
                     <Input
                       id="duration"
                       type="number"
-                      min="1"
+                      min="30"
                       max="180"
-                      step="1"
+                      step="30"
                       value={formData.duration}
                       onChange={(e) =>
                         setFormData((prev) => ({
@@ -355,9 +379,118 @@ export default function RequestSessionPage({
                       disabled={isSelfRequest}
                     />
                     <p className="text-sm text-muted-foreground">
-                      Between 1 and 180 minutes
+                      Between 30 and 180 minutes (in 30-minute increments)
                     </p>
                   </div>
+
+                  {/* Availability Calendar */}
+                  {!isSelfRequest && (
+                    <ImprovedAvailabilityCalendar
+                      peerId={peer.id}
+                      onSlotSelect={(date, time, duration, isAvailable, reason) => {
+                        setFormData((prev) => ({
+                          ...prev,
+                          date,
+                          time,
+                          duration: duration.toString(),
+                        }));
+
+                        // Set warning if slot is not available
+                        if (!isAvailable) {
+                          setAvailabilityWarning(
+                            `This time slot may not be ideal: ${reason || 'User may not be available'}. There is a high chance this booking might be cancelled.`
+                          );
+                        } else {
+                          setAvailabilityWarning(null);
+                        }
+                      }}
+                      selectedDate={formData.date}
+                      selectedTime={formData.time}
+                      selectedDuration={parseInt(formData.duration)}
+                    />
+                  )}
+
+                  {/* Manual Date & Time (fallback/override) */}
+                  <details className="space-y-4">
+                    <summary className="text-sm font-medium cursor-pointer text-muted-foreground hover:text-foreground">
+                      Or manually enter date and time
+                    </summary>
+                    <div className="grid sm:grid-cols-2 gap-4 pt-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="date">Date *</Label>
+                        <Input
+                          id="date"
+                          type="date"
+                          value={formData.date}
+                          onChange={(e) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              date: e.target.value,
+                            }))
+                          }
+                          required
+                          min={new Date().toISOString().split("T")[0]}
+                          disabled={isSelfRequest}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="time">Time *</Label>
+                        <Input
+                          id="time"
+                          type="time"
+                          value={formData.time}
+                          onChange={(e) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              time: e.target.value,
+                            }))
+                          }
+                          required
+                          disabled={isSelfRequest}
+                        />
+                      </div>
+                    </div>
+                  </details>
+
+                  {/* Availability Warning */}
+                  {checkingAvailability && formData.date && formData.time && formData.duration && (
+                    <div className="p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md">
+                      <div className="flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                        <p className="text-sm text-blue-600 dark:text-blue-400">Checking availability...</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {availabilityWarning && !checkingAvailability && (
+                    <div className="p-4 bg-orange-50 dark:bg-orange-950 border-2 border-orange-300 dark:border-orange-700 rounded-lg">
+                      <div className="flex items-start gap-3">
+                        <AlertCircle className="h-5 w-5 text-orange-600 dark:text-orange-400 flex-shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                          <p className="text-sm font-semibold text-orange-800 dark:text-orange-200 mb-1">
+                            ⚠️ High Cancellation Risk
+                          </p>
+                          <p className="text-sm text-orange-700 dark:text-orange-300 mb-2">
+                            {availabilityWarning}
+                          </p>
+                          <p className="text-xs text-orange-600 dark:text-orange-400 italic">
+                            You can still proceed with booking, but be prepared for potential cancellation.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {!checkingAvailability && !availabilityWarning && formData.date && formData.time && formData.duration && (
+                    <div className="p-3 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-md">
+                      <div className="flex items-center gap-2">
+                        <svg className="h-4 w-4 text-green-600 dark:text-green-400" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                          <path d="M5 13l4 4L19 7"></path>
+                        </svg>
+                        <p className="text-sm text-green-600 dark:text-green-400">This time slot is available!</p>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Message */}
                   <div className="space-y-2">
@@ -422,7 +555,6 @@ export default function RequestSessionPage({
                       disabled={
                         isSelfRequest ||
                         submitting ||
-                        formData.skills.length === 0 ||
                         !formData.date ||
                         !formData.time ||
                         !peer?.hourlyRate ||
@@ -461,7 +593,7 @@ export default function RequestSessionPage({
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Rate</span>
                     <span className="font-medium">
-                      {peer?.hourlyRate ? `${costPerHour} coins/hour` : 'Not set'}
+                      {peer?.hourlyRate ? <>{formatMaya(costPerHour)} <span className="text-[10px]">m</span>AYA/hour</> : 'Not set'}
                     </span>
                   </div>
                   <div className="border-t pt-2 mt-2">
@@ -470,7 +602,7 @@ export default function RequestSessionPage({
                       <div className="flex items-center gap-1">
                         <Coins className="h-4 w-4 text-yellow-600" />
                         <span className="font-semibold">
-                          {peer?.hourlyRate ? `${Math.round(calculatedCost)} coins` : 'N/A'}
+                          {peer?.hourlyRate ? <>{formatMaya(calculatedCost)} <span className="text-xs">m</span>AYA</> : 'N/A'}
                         </span>
                       </div>
                     </div>
@@ -484,7 +616,7 @@ export default function RequestSessionPage({
                     </span>
                     <div className="flex items-center gap-1">
                       <Coins className="h-4 w-4 text-yellow-600" />
-                      <span className="font-medium">{typeof currentUser.coins === 'string' ? parseFloat(currentUser.coins) : currentUser.coins} coins</span>
+                      <span className="font-medium">{formatMaya(typeof currentUser.coins === 'string' ? parseFloat(currentUser.coins) : currentUser.coins)} <span className="text-xs">m</span>AYA</span>
                     </div>
                   </div>
 

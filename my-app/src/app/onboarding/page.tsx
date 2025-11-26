@@ -95,7 +95,7 @@ export default function OnboardingPage() {
       formData.append('bio', bio);
       formData.append('location', location);
       formData.append('school', school);
-      formData.append('hourlyRate', hourlyRate.toString());
+      formData.append('hourlyRate', (hourlyRate / 100).toString()); // Convert mAYA input to AYA for storage
       formData.append('skillsIHave', JSON.stringify(skillsIHave));
       formData.append('skillsIWant', JSON.stringify(skillsIWant));
 
@@ -111,15 +111,12 @@ export default function OnboardingPage() {
 
       // Reload the user's data from the Clerk API to get updated metadata
       await user.reload();
-      
-      setStep("complete");
-      
+
       // Get the redirect URL from search params or default to dashboard
       const redirectUrl = searchParams.get('redirect_url') || '/dashboard';
-      
-      setTimeout(() => {
-        router.push(redirectUrl);
-      }, 2000);
+
+      // Redirect immediately after onboarding completion
+      router.push(redirectUrl);
     } catch (error) {
       console.error("Error completing onboarding:", error);
       alert("Failed to complete onboarding. Please try again.");
@@ -268,7 +265,7 @@ export default function OnboardingPage() {
                   {/* Hourly Rate */}
                   <div className="space-y-2">
                     <label className="text-sm font-medium">
-                      Hourly Rate (Coins) <span className="text-muted-foreground">(Optional)</span>
+                      Hourly Rate (<span className="text-xs">m</span>AYA) <span className="text-muted-foreground">(Optional)</span>
                     </label>
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">🪙</span>
@@ -283,7 +280,7 @@ export default function OnboardingPage() {
                       />
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Set your hourly rate in coins for teaching sessions. You can change this later in your profile.
+                      Set your hourly rate in mAYA tokens for teaching sessions. You can change this later in your profile.
                     </p>
                   </div>
 
@@ -296,7 +293,7 @@ export default function OnboardingPage() {
                       <div>
                         <p className="font-semibold">Welcome Bonus!</p>
                         <p className="text-sm text-muted-foreground">
-                          You&apos;ll receive 10 coins to start your learning journey
+                          You&apos;ll receive 1000 <span className="text-xs">m</span>AYA to start your learning journey
                         </p>
                       </div>
                     </div>

@@ -21,6 +21,8 @@ export class DashboardController {
       query.includeRequests ? true : false,
       query.includeSessions ? true : false,
       query.includeNotifications ? true : false,
+      query.includeStreaks ? true : false,
+      query.includeAchievements ? true : false,
     );
   }
 }

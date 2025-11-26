@@ -5,6 +5,10 @@ import { RequestSessionDto, UpdateSessionStatusDto } from './dto/peer-session.dt
 import { SessionStatus, PaymentStatus, NotifType } from '@prisma/client';
 import { normalizeGoogleMeetLink, isValidGoogleMeetLink } from '../utils/gmeet-generator';
 import { ChatService } from '../chat/chat.service';
+import { convertLocalToUTC } from '../utils/timezone';
+import { AvailabilityService } from '../availability/availability.service';
+import { StreaksService } from '../streaks/streaks.service';
+import { AchievementsService } from '../achievements/achievements.service';
 
 @Injectable()
 export class PeerSessionsService {
@@ -12,6 +16,9 @@ export class PeerSessionsService {
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
     private chatService: ChatService,
+    private availabilityService: AvailabilityService,
+    private streaksService: StreaksService,
+    private achievementsService: AchievementsService,
   ) {}
 
   async getPeerSessions(
@@ -175,7 +182,24 @@ export class PeerSessionsService {
       });
     }
 
-    const dateTime = new Date(`${requestDto.date}T${requestDto.time}`);
+    // Convert user's local time to UTC
+    // Example: 11 AM IST -> 5:30 AM UTC
+    const dateTime = convertLocalToUTC(requestDto.date, requestDto.time, requestDto.timezone);
+
+    // Check if the peer is available at the requested time
+    const availabilityCheck = await this.availabilityService.checkTimeSlotAvailability(
+      peer.id,
+      dateTime,
+      requestDto.duration,
+    );
+
+    // if (!availabilityCheck.isAvailable) {
+    //   throw new BadRequestException({
+    //     code: 'TIME_SLOT_UNAVAILABLE',
+    //     message: availabilityCheck.reason || 'The requested time slot is not available',
+    //     conflicts: availabilityCheck.conflicts,
+    //   });
+    // }
 
     // Normalize Google Meet link if provided
     const gmeetLink = requestDto.gmeetLink ? normalizeGoogleMeetLink(requestDto.gmeetLink) : null;
@@ -193,8 +217,10 @@ export class PeerSessionsService {
       },
     });
 
-    // Add skills
-    for (const skillName of requestDto.skills) {
+    // Add skills - if no skills provided, default to "Communication"
+    const skillsToAdd = requestDto.skills && requestDto.skills.length > 0 ? requestDto.skills : ['Communication'];
+
+    for (const skillName of skillsToAdd) {
       const skill = await this.prisma.skill.findUnique({
         where: { name: skillName },
       });
@@ -297,6 +323,52 @@ export class PeerSessionsService {
         where: { id: peerSession.requestedToId },
         data: { coins: { increment: payment.amountReceived || 0 } },
       });
+
+      // Track activity and update streaks for both learner and teacher
+      const coinsEarned = Number(payment.amountReceived || 0);
+
+      // Update learner's activity (requestedBy is the learner)
+      await this.streaksService.updateUserActivity(
+        peerSession.requestedById,
+        peerSession.date,
+        peerSession.duration,
+        'learner',
+        Number(payment.amountMade),
+      );
+
+      // Update teacher's activity (requestedTo is the teacher)
+      await this.streaksService.updateUserActivity(
+        peerSession.requestedToId,
+        peerSession.date,
+        peerSession.duration,
+        'teacher',
+        coinsEarned,
+      );
+
+      // Check and update achievements for both users
+      await this.achievementsService.checkSessionAchievements(
+        peerSession.requestedById,
+        'learner',
+      );
+
+      await this.achievementsService.checkSessionAchievements(
+        peerSession.requestedToId,
+        'teacher',
+      );
+
+      // Check streak achievements
+      const learnerStreak = await this.streaksService.getUserStreak(peerSession.requestedById);
+      const teacherStreak = await this.streaksService.getUserStreak(peerSession.requestedToId);
+
+      await this.achievementsService.checkStreakAchievements(
+        peerSession.requestedById,
+        learnerStreak.currentStreak,
+      );
+
+      await this.achievementsService.checkStreakAchievements(
+        peerSession.requestedToId,
+        teacherStreak.currentStreak,
+      );
 
       // Notify both parties to leave reviews
       await this.notificationsService.createAndPushNotification(
@@ -426,5 +498,34 @@ export class PeerSessionsService {
         throw new ForbiddenException('Only session participants can cancel the session');
       }
     }
+  }
+
+  async checkIsHost(peerSessionId: string, userId: string) {
+    // userId is actually clerkId, so we need to find the user by clerkId first
+    const user = await this.prisma.user.findUnique({
+      where: { clerkId: userId },
+      select: { id: true },
+    });
+
+    if (!user) {
+      throw new BadRequestException({
+        code: 'USER_NOT_FOUND',
+        message: 'User not found',
+      });
+    }
+
+    const peerSession = await this.prisma.peerSession.findUnique({
+      where: { id: peerSessionId },
+      select: { requestedToId: true },
+    });
+
+    if (!peerSession) {
+      throw new NotFoundException('Peer session not found');
+    }
+
+    // For peer sessions, the host is the tutor (requestedToId)
+    const isHost = peerSession.requestedToId === user.id;
+
+    return { isHost };
   }
 }

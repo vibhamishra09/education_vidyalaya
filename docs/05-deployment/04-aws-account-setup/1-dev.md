@@ -50,6 +50,7 @@ echo "ECR Repository URI: $DEV_ECR_URI"
 
 Create CloudWatch log group for development environment.
 
+TODO: Fix the issue in inputting slash via bash terminal
 ```bash
 aws logs create-log-group \
   --log-group-name /ecs/webyalaya-dev-backend-task \
@@ -75,6 +76,7 @@ aws s3api put-bucket-versioning \
   --versioning-configuration Status=Enabled \
   --region $AWS_REGION
 
+TODO: Need to enable public access
 # Block public access (recommended)
 aws s3api put-public-access-block \
   --bucket webyalaya-dev-uploads \

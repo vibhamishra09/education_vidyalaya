@@ -1,10 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SessionStatus } from '@prisma/client';
+import { StreaksService } from '../streaks/streaks.service';
+import { AchievementsService } from '../achievements/achievements.service';
 
 @Injectable()
 export class DashboardService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private streaksService: StreaksService,
+    private achievementsService: AchievementsService,
+  ) {}
 
   async getDashboardData(
     userId: string,
@@ -12,6 +18,8 @@ export class DashboardService {
     includeRequests: boolean = true,
     includeSessions: boolean = true,
     includeNotifications: boolean = true,
+    includeStreaks: boolean = true,
+    includeAchievements: boolean = true,
   ) {
     console.log('includeMetrics', includeMetrics);
     // userId is actually clerkId, so we need to find the user by clerkId first
@@ -60,34 +68,57 @@ export class DashboardService {
           value: Math.round(avgRating * 10) / 10,
           description: 'Out of 5 stars',
         },
-        {
-          name: 'Total Reviews',
-          value: receivedReviews.length,
-          description: 'Reviews received',
-        },
       ];
     }
 
     if (includeRequests) {
-      const pendingRequests = await this.prisma.peerSession.findMany({
-        where: {
-          requestedToId: user.id,
-          sessionStatus: SessionStatus.PENDING,
-        },
-        include: {
-          requestedBy: { select: { id: true, name: true, avatar: true } },
-          skills: { include: { skill: { select: { name: true } } } },
-        },
-        take: 5,
-      });
+      const [pendingRequests, sentRequests] = await Promise.all([
+        this.prisma.peerSession.findMany({
+          where: {
+            requestedToId: user.id,
+            sessionStatus: SessionStatus.PENDING,
+          },
+          include: {
+            requestedBy: { select: { id: true, name: true, avatar: true } },
+            requestedTo: { select: { id: true, name: true, avatar: true } },
+            skills: { include: { skill: { select: { name: true } } } },
+          },
+          take: 5,
+        }),
+        this.prisma.peerSession.findMany({
+          where: {
+            requestedById: user.id,
+            sessionStatus: SessionStatus.PENDING,
+          },
+          include: {
+            requestedBy: { select: { id: true, name: true, avatar: true } },
+            requestedTo: { select: { id: true, name: true, avatar: true } },
+            skills: { include: { skill: { select: { name: true } } } },
+          },
+          take: 5,
+        }),
+      ]);
 
       data.pendingRequests = pendingRequests.map((ps) => ({
         id: ps.id,
         title: ps.title,
         requestedBy: ps.requestedBy,
+        requestedTo: ps.requestedTo,
         date: ps.date,
         duration: ps.duration,
         skills: ps.skills.map((s) => s.skill.name),
+        direction: 'received',
+      }));
+
+      data.sentRequests = sentRequests.map((ps) => ({
+        id: ps.id,
+        title: ps.title,
+        requestedBy: ps.requestedBy,
+        requestedTo: ps.requestedTo,
+        date: ps.date,
+        duration: ps.duration,
+        skills: ps.skills.map((s) => s.skill.name),
+        direction: 'sent',
       }));
     }
 
@@ -220,6 +251,20 @@ export class DashboardService {
         orderBy: { createdAt: 'desc' },
         take: 5,
       });
+    }
+
+    if (includeStreaks) {
+      data.streak = await this.streaksService.getUserStreak(user.id);
+    }
+
+    if (includeAchievements) {
+      const achievements = await this.achievementsService.getUserAchievements(user.id);
+      data.achievements = {
+        unlocked: achievements.unlocked.slice(0, 5), // Latest 5 unlocked
+        inProgress: achievements.inProgress.slice(0, 3), // Top 3 in progress
+        totalUnlocked: achievements.totalUnlocked,
+        totalAvailable: achievements.totalAvailable,
+      };
     }
 
     return data;

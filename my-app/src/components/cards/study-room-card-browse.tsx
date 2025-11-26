@@ -5,9 +5,11 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Users, Play, Clock, Calendar, Coins } from "lucide-react";
+import { Users, Play, Calendar, Coins } from "lucide-react";
 import { motion } from "framer-motion";
 import { StudyRoomCard, SessionStatus } from "@/types/api.types";
+import { getRelativeTimeString } from "@/lib/utils/date-time";
+import { formatMaya } from "@/lib/utils/coin-format";
 
 interface StudyRoomCardBrowseProps {
   studyRoom: StudyRoomCard;
@@ -18,15 +20,8 @@ export function StudyRoomCardBrowse({ studyRoom }: StudyRoomCardBrowseProps) {
   const isUpcoming = studyRoom.sessionStatus === SessionStatus.UPCOMING;
   const isDone = studyRoom.sessionStatus === SessionStatus.DONE;
 
-  const sessionDate = new Date(studyRoom.date);
-  const formattedDate = sessionDate.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-  });
-  const formattedTime = sessionDate.toLocaleTimeString("en-US", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  // Get timezone-aware formatted time
+  const formattedDateTime = getRelativeTimeString(studyRoom.date);
 
   return (
     <Link href={`/studyroom/${studyRoom.id}`}>
@@ -77,15 +72,9 @@ export function StudyRoomCardBrowse({ studyRoom }: StudyRoomCardBrowseProps) {
           <CardContent className="flex-1 flex flex-col justify-end space-y-4">
             {/* Date and Time */}
             {!isDone && (
-              <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                <div className="flex items-center gap-1">
-                  <Calendar className="h-4 w-4" />
-                  <span>{formattedDate}</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Clock className="h-4 w-4" />
-                  <span>{formattedTime}</span>
-                </div>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Calendar className="h-4 w-4" />
+                <span className="font-medium">{formattedDateTime}</span>
               </div>
             )}
 
@@ -115,7 +104,7 @@ export function StudyRoomCardBrowse({ studyRoom }: StudyRoomCardBrowseProps) {
               <div className="flex items-center gap-2 text-sm">
                 <Coins className="h-4 w-4 text-yellow-600" />
                 <span className="text-yellow-600 font-medium">
-                  {parseFloat(studyRoom.joiningFee.toString()).toFixed(2)} coins to join
+                  {formatMaya(studyRoom.joiningFee)} <span className="text-xs">m</span>AYA to join
                 </span>
               </div>
             )}

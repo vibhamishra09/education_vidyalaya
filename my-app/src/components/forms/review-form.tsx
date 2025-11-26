@@ -40,8 +40,8 @@ export function ReviewForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (rating === 0 || review.length < 20) {
-      toast.error("Please provide a rating and at least 20 characters for your review");
+    if (rating === 0 || review.length < 1) {
+      toast.error("Please provide a rating and at least 1 character for your review");
       return;
     }
 
@@ -150,11 +150,7 @@ export function ReviewForm({
               rows={6}
               required
               disabled={createReviewMutation.isPending}
-              minLength={20}
             />
-            <p className="text-sm text-muted-foreground">
-              {review.length}/20 characters minimum
-            </p>
           </div>
 
           {/* Tips */}
@@ -184,7 +180,7 @@ export function ReviewForm({
             <Button
               type="submit"
               className="flex-1"
-              disabled={rating === 0 || review.length < 20 || createReviewMutation.isPending}
+              disabled={rating === 0 || review.length < 1 || createReviewMutation.isPending}
             >
               {createReviewMutation.isPending ? (
                 <>
