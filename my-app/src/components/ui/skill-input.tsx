@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { X, Plus, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { skillsApi } from "@/lib/api/skills.api";
+import { AxiosError } from "axios";
 
 interface SkillInputProps {
   placeholder?: string;
@@ -83,6 +84,28 @@ export function SkillInput({
     }
   };
 
+  const persistSkill = useCallback(async (skillName: string) => {
+    const normalizedSkill = skillName.trim();
+    if (!normalizedSkill) return;
+
+    try {
+      await skillsApi.createSkill({ name: normalizedSkill });
+      setAvailableSkills((prev) =>
+        prev.includes(normalizedSkill) ? prev : [...prev, normalizedSkill]
+      );
+    } catch (error) {
+      const axiosError = error as AxiosError;
+      if (axiosError?.response?.status === 409) {
+        // Skill already exists—ensure it appears in the dropdown locally
+        setAvailableSkills((prev) =>
+          prev.includes(normalizedSkill) ? prev : [...prev, normalizedSkill]
+        );
+        return;
+      }
+      console.error(`Error creating skill "${normalizedSkill}":`, error);
+    }
+  }, []);
+
   const parseAndAddSkills = (input: string) => {
     const skills = input
       .split(',')
@@ -92,12 +115,17 @@ export function SkillInput({
     if (skills.length > 0) {
       setIsClickingSuggestion(true);
       const newSkills = [...selectedSkills];
+      const skillsToPersist: string[] = [];
       skills.forEach(skill => {
         if (newSkills.length < maxSkills && !newSkills.includes(skill)) {
           newSkills.push(skill);
+          if (!availableSkills.includes(skill)) {
+            skillsToPersist.push(skill);
+          }
         }
       });
       onSkillsChange(newSkills);
+      skillsToPersist.forEach((skill) => void persistSkill(skill));
       setShowSuggestions(false);
       setHighlightedIndex(-1);
       setInputValue("");
@@ -122,7 +150,7 @@ export function SkillInput({
       if (highlightedIndex >= 0 && filteredSuggestions[highlightedIndex]) {
         addSkill(filteredSuggestions[highlightedIndex]);
       } else if (isValidNewSkill) {
-        addSkill(inputValue.trim());
+        addSkill(inputValue.trim(), { persist: true });
       }
       return;
     }
@@ -149,12 +177,15 @@ export function SkillInput({
     }
   };
 
-  const addSkill = (skill: string) => {
+  const addSkill = (skill: string, options?: { persist?: boolean }) => {
     if (selectedSkills.length >= maxSkills) return;
     
     const trimmedSkill = skill.trim();
     if (trimmedSkill && !selectedSkills.includes(trimmedSkill)) {
       onSkillsChange([...selectedSkills, trimmedSkill]);
+      if (options?.persist) {
+        void persistSkill(trimmedSkill);
+      }
     }
     setInputValue("");
     setShowSuggestions(false);
@@ -201,7 +232,7 @@ export function SkillInput({
   const handleAddCustomSkill = () => {
     if (isValidNewSkill) {
       setIsClickingSuggestion(true);
-      addSkill(inputValue.trim());
+      addSkill(inputValue.trim(), { persist: true });
       setShowSuggestions(false);
       setHighlightedIndex(-1);
       setInputValue("");

@@ -108,11 +108,11 @@ function ProfileContent() {
     <div className="min-h-screen flex flex-col">
       <Navigation />
 
-      <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-20 md:pb-8">
+      <main className="flex-1 container mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-8 pb-20 md:pb-8">
         {/* Profile Header */}
         <Card className="mb-8">
           <CardContent className="pt-6">
-            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
+            <div className="flex flex-col lg:flex-row items-center lg:items-start gap-6 lg:gap-8">
               <Avatar className="h-24 w-24 sm:h-32 sm:w-32">
                 <AvatarImage src={currentUser.avatar} alt={currentUser.name} />
                 <AvatarFallback className="text-2xl sm:text-4xl">
@@ -121,15 +121,15 @@ function ProfileContent() {
               </Avatar>
 
               <div className="flex-1 min-w-0 w-full">
-                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-                  <div className="flex-1 text-center sm:text-left">
+                <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 lg:gap-6">
+                  <div className="flex-1 text-center lg:text-left">
                     <h1 className="text-2xl sm:text-3xl font-bold">{currentUser.name}</h1>
-                    <p className="text-muted-foreground mt-1 text-sm sm:text-base">
+                    <p className="text-muted-foreground mt-1 text-sm md:text-base">
                       @{currentUser.username || currentUser.email.split('@')[0]}
                     </p>
 
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 mt-3">
-                      <div className="flex items-center justify-center sm:justify-start">
+                    <div className="flex flex-col md:flex-row md:flex-wrap md:items-center gap-3 md:gap-4 mt-3">
+                      <div className="flex items-center justify-center md:justify-start">
                         <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
                         <span className="ml-1 font-medium">
                           {avgRating.toFixed(1)}
@@ -139,7 +139,7 @@ function ProfileContent() {
                         </span>
                       </div>
 
-                      <div className="flex items-center justify-center sm:justify-start">
+                      <div className="flex items-center justify-center md:justify-start">
                         <Coins className="h-5 w-5 text-yellow-600" />
                         <span className="ml-1 font-medium">
                           {formatMaya(currentUser.coins)} <span className="text-xs">m</span>AYA
@@ -147,7 +147,7 @@ function ProfileContent() {
                       </div>
 
                       {currentUser.hourlyRate && (
-                        <div className="flex items-center justify-center sm:justify-start">
+                        <div className="flex items-center justify-center md:justify-start">
                           <Coins className="h-5 w-5 text-green-600" />
                           <span className="ml-1 font-medium">
                             {formatMaya(currentUser.hourlyRate)} <span className="text-xs">m</span>AYA/hr
@@ -158,22 +158,22 @@ function ProfileContent() {
                     </div>
                   </div>
 
-                  <Button 
-                    className="w-full sm:w-auto"
+                  <Button
+                    className="w-full md:w-auto"
                     onClick={() => setIsEditModalOpen(true)}
                   >
                     <Edit className="h-4 w-4 mr-2" />
-                    <span className="hidden sm:inline">Edit Profile</span>
-                    <span className="sm:hidden">Edit</span>
+                    <span className="hidden md:inline">Edit Profile</span>
+                    <span className="md:hidden">Edit</span>
                   </Button>
                 </div>
 
                 {currentUser.bio && (
-                  <p className="mt-4 text-muted-foreground text-center sm:text-left">{currentUser.bio}</p>
+                  <p className="mt-4 text-muted-foreground text-center lg:text-left">{currentUser.bio}</p>
                 )}
                 
                 {(currentUser.location || currentUser.school) && (
-                  <div className="mt-3 flex flex-wrap gap-4 text-sm text-muted-foreground text-center sm:text-left">
+                  <div className="mt-3 flex flex-wrap gap-4 text-sm text-muted-foreground justify-center lg:justify-start text-center lg:text-left">
                     {currentUser.location && (
                       <span className="flex items-center gap-1">
                         📍 {currentUser.location}
@@ -193,7 +193,7 @@ function ProfileContent() {
 
         {/* Tabs */}
         <Tabs className="w-full">
-          <TabsList className="grid w-full grid-cols-4 mb-6">
+          <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 gap-2 mb-6">
             <TabsTrigger active={activeTab === "about"} onClick={() => setActiveTab("about")}>
               About
             </TabsTrigger>
@@ -211,7 +211,7 @@ function ProfileContent() {
           {/* About Tab */}
           {activeTab === "about" && <TabsContent>
             <div className="space-y-6">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8 items-start">
                 {/* Skills & Interests */}
                 <div className="space-y-6">
                   <Card>
@@ -277,12 +277,24 @@ function ProfileContent() {
                   </Card>
 
                   {/* Achievement Showcase */}
-                  <AchievementShowcaseConnected />
+                  <div className="rounded-2xl border bg-background/60 p-1 shadow-sm">
+                    <AchievementShowcaseConnected />
+                  </div>
                 </div>
 
                 {/* Availability Settings */}
-                <div>
-                  <AvailabilitySettings userId={currentUser.id} isOwnProfile={true} />
+                <div className="space-y-6">
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle>Availability</CardTitle>
+                      <p className="text-sm text-muted-foreground">
+                        Keep your weekly slots current so learners know when to book you.
+                      </p>
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                      <AvailabilitySettings userId={currentUser.id} isOwnProfile={true} />
+                    </CardContent>
+                  </Card>
                 </div>
               </div>
             </div>

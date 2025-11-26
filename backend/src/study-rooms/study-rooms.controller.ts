@@ -20,6 +20,7 @@ export class StudyRoomsController {
       query.dateTo,
       query.page || 1,
       query.limit || 10,
+      query.trending,
     );
   }
 
