@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -49,6 +49,28 @@ export function ImprovedAvailabilityCalendar({
   const [detailedSlots, setDetailedSlots] = useState<DetailedSlot[]>([]);
   const [loadingDetailed, setLoadingDetailed] = useState(false);
   const [popoverOpen, setPopoverOpen] = useState(false);
+  const [pinnedDate, setPinnedDate] = useState<string | null>(null);
+  const [isInteractingWithPopover, setIsInteractingWithPopover] = useState(false);
+
+  const hoverCloseTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pinnedDateRef = useRef<string | null>(null);
+  const interactionRef = useRef(false);
+
+  useEffect(() => {
+    pinnedDateRef.current = pinnedDate;
+  }, [pinnedDate]);
+
+  useEffect(() => {
+    interactionRef.current = isInteractingWithPopover;
+  }, [isInteractingWithPopover]);
+
+  useEffect(() => {
+    return () => {
+      if (hoverCloseTimeout.current) {
+        clearTimeout(hoverCloseTimeout.current);
+      }
+    };
+  }, []);
 
   const monthNames = [
     "January", "February", "March", "April", "May", "June",
@@ -110,10 +132,47 @@ export function ImprovedAvailabilityCalendar({
     }
   };
 
-  const handleDateHover = (date: Date) => {
+  const stopHoverCloseTimer = () => {
+    if (hoverCloseTimeout.current) {
+      clearTimeout(hoverCloseTimeout.current);
+      hoverCloseTimeout.current = null;
+    }
+  };
+
+  const schedulePopoverClose = () => {
+    stopHoverCloseTimer();
+    hoverCloseTimeout.current = setTimeout(() => {
+      if (!pinnedDateRef.current && !interactionRef.current) {
+        setPopoverOpen(false);
+        setHoveredDate(null);
+      }
+    }, 160);
+  };
+
+  const handleDateHover = (date: Date, shouldPin = false) => {
     const dateStr = date.toISOString().split('T')[0];
+
+    if (!shouldPin && pinnedDateRef.current && pinnedDateRef.current !== dateStr) {
+      return;
+    }
+
     setHoveredDate(dateStr);
+    stopHoverCloseTimer();
+    setPopoverOpen(true);
+
+    if (shouldPin) {
+      setPinnedDate(dateStr);
+    } else if (pinnedDateRef.current && pinnedDateRef.current !== dateStr) {
+      setPinnedDate(null);
+    }
+
     fetchDetailedSlots(dateStr, selectedDurationTab);
+  };
+
+  const closePopover = () => {
+    setPopoverOpen(false);
+    setHoveredDate(null);
+    setPinnedDate(null);
   };
 
   const handleSlotClick = (slot: DetailedSlot) => {
@@ -127,7 +186,8 @@ export function ImprovedAvailabilityCalendar({
     });
 
     onSlotSelect(hoveredDate, timeString, selectedDurationTab, slot.isAvailable, slot.reason);
-    setPopoverOpen(false);
+    closePopover();
+    setIsInteractingWithPopover(false);
   };
 
   const getDaysInMonth = () => {
@@ -210,7 +270,7 @@ export function ImprovedAvailabilityCalendar({
           </div>
           <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
             <Info className="h-4 w-4" />
-            <span>Hover over a date to see available time slots</span>
+            <span>Hover to preview slots, click to keep the popover open</span>
           </div>
         </CardHeader>
         <CardContent>
@@ -258,15 +318,20 @@ export function ImprovedAvailabilityCalendar({
                       open={popoverOpen && hoveredDate === date.toISOString().split('T')[0]}
                       onOpenChange={(open) => {
                         setPopoverOpen(open);
-                        if (!open) setHoveredDate(null);
+                        if (!open) {
+                          closePopover();
+                          setIsInteractingWithPopover(false);
+                          stopHoverCloseTimer();
+                        }
                       }}
                     >
                       <PopoverTrigger asChild>
                         <button
                           type="button"
-                          onClick={() => handleDateHover(date)}
+                          onClick={() => handleDateHover(date, true)}
                           disabled={isPast || !hasAnySlots}
                           onMouseEnter={() => !isPast && hasAnySlots && handleDateHover(date)}
+                          onMouseLeave={() => schedulePopoverClose()}
                           className={cn(
                             "relative aspect-square p-2 rounded-md text-sm font-medium transition-colors",
                             isPast || !hasAnySlots
@@ -290,7 +355,19 @@ export function ImprovedAvailabilityCalendar({
                         </button>
                       </PopoverTrigger>
                       {hasAnySlots && !isPast && (
-                        <PopoverContent className="w-80 p-0" align="start" side="right">
+                        <PopoverContent
+                          className="w-80 p-0"
+                          align="start"
+                          side="right"
+                          onMouseEnter={() => {
+                            stopHoverCloseTimer();
+                            setIsInteractingWithPopover(true);
+                          }}
+                          onMouseLeave={() => {
+                            setIsInteractingWithPopover(false);
+                            schedulePopoverClose();
+                          }}
+                        >
                           <div className="p-4">
                             <h3 className="font-semibold mb-2">
                               {date.toLocaleDateString('en-US', {

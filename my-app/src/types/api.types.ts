@@ -234,9 +234,11 @@ export interface PendingRequest {
   id: string;
   title: string;
   requestedBy: PublicUser;
+  requestedTo?: PublicUser;
   date: Date | string;
   duration: number;
   skills: string[];
+  direction?: 'received' | 'sent';
 }
 
 export interface UpcomingSession {
@@ -288,6 +290,7 @@ export interface PastStudyRoom {
 export interface DashboardData {
   metrics?: Metric[];
   pendingRequests?: PendingRequest[];
+  sentRequests?: PendingRequest[];
   upcomingSessions?: UpcomingSession[];
   pastSessions?: PastSession[];
   upcomingStudyRooms?: UpcomingStudyRoom[];
