@@ -14,6 +14,7 @@ env:
   ECR_REPOSITORY: webyalaya-test-backend-app
   ECS_CLUSTER: webyalaya-test-backend-app
   ECS_SERVICE: webyalaya-test-backend-task-service
+  MIGRATION_TASK_DEF: webyalaya-test-backend-migrate-task
   MIGRATION_SG_NAME: ecs-webyalaya-test-tasks-sg
   SUBNET_TAG_KEY: Name
   SUBNET_TAG_VALUE: webyalaya-subnet
@@ -111,7 +112,7 @@ jobs:
 
       - name: Run Prisma Migrations in ECS
         run: |
-          TASK_DEF="webyalaya-test-backend-migrations"
+          TASK_DEF="${{ env.MIGRATION_TASK_DEF }}"
           CLUSTER="${{ env.ECS_CLUSTER }}"
           LAUNCH_TYPE="FARGATE"
 
