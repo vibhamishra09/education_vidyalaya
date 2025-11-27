@@ -365,7 +365,6 @@ export class StudyRoomsService {
   }
 
   async getStudyRoomDetails(studyRoomId: string, userId?: string) {
-    console.log(125, studyRoomId, userId);
     const studyRoom = await this.prisma.studyRoom.findUnique({
       where: { id: studyRoomId },
       include: {
@@ -423,8 +422,6 @@ export class StudyRoomsService {
         select: { id: true },
       });
 
-      console.log(182, user);
-
       if (user) {
         if (studyRoom.createdById === user.id) {
           role = 'teacher';
@@ -479,6 +476,14 @@ export class StudyRoomsService {
     // Convert user's local time to UTC
     // Example: 11 AM IST -> 5:30 AM UTC
     const dateTime = convertLocalToUTC(createDto.date, createDto.time, createDto.timezone);
+
+    // Validate that session is scheduled at least 2 minutes in the future
+    const now = new Date();
+    const minAdvanceTime = 2 * 60 * 1000; // 2 minutes in milliseconds
+    
+    if (dateTime.getTime() <= now.getTime() + minAdvanceTime) {
+      throw new BadRequestException('Sessions must be scheduled at least 2 minutes in advance');
+    }
 
     // Normalize Google Meet link if provided
     const gmeetLink = createDto.gmeetLink ? normalizeGoogleMeetLink(createDto.gmeetLink) : null;
@@ -719,23 +724,37 @@ export class StudyRoomsService {
   }
 
   async completeStudyRoom(studyRoomId: string, userId: string) {
+    console.log('🎯 [completeStudyRoom] Called with:', { studyRoomId, clerkUserId: userId });
+    
     // userId is actually clerkId, so we need to find the user by clerkId first
     const user = await this.prisma.user.findUnique({
       where: { clerkId: userId },
-      select: { id: true },
+      select: { id: true, name: true },
     });
 
     if (!user) {
+      console.error('❌ [completeStudyRoom] User not found for clerkId:', userId);
       throw new NotFoundException('User not found');
     }
+    
+    console.log('✅ [completeStudyRoom] User found:', { id: user.id, name: user.name });
 
     const studyRoom = await this.prisma.studyRoom.findUnique({
       where: { id: studyRoomId },
     });
 
     if (!studyRoom) {
+      console.error('❌ [completeStudyRoom] Study room not found:', studyRoomId);
       throw new NotFoundException('Study room not found');
     }
+    
+    console.log('✅ [completeStudyRoom] Study room found:', { 
+      id: studyRoom.id, 
+      title: studyRoom.title,
+      date: studyRoom.date,
+      duration: studyRoom.duration,
+      createdById: studyRoom.createdById
+    });
 
     // Check if user is part of the study room (creator or participant)
     const isCreator = studyRoom.createdById === user.id;
@@ -745,17 +764,97 @@ export class StudyRoomsService {
         userId: user.id,
       },
     });
+    
+    console.log('🔐 [completeStudyRoom] Authorization check:', { isCreator, hasParticipant: !!isParticipant });
 
     if (!isCreator && !isParticipant) {
+      console.error('❌ [completeStudyRoom] Not authorized to complete this study room');
       throw new ForbiddenException('Not authorized to complete this study room');
     }
 
     // Update study room status to COMPLETED
+    console.log('📝 [completeStudyRoom] Updating study room status to DONE...');
     const updatedRoom = await this.prisma.studyRoom.update({
       where: { id: studyRoomId },
       data: { sessionStatus: SessionStatus.DONE },
     });
+    console.log('✅ [completeStudyRoom] Study room status updated to DONE');
 
+    // Get all participants for streak tracking
+    const participants = await this.prisma.studyRoomParticipant.findMany({
+      where: { studyRoomId },
+      select: { userId: true },
+    });
+    
+    console.log(`👥 [completeStudyRoom] Found ${participants.length} participants`);
+
+    // Update streak for the creator (host/teacher)
+    console.log('🔥 [completeStudyRoom] Updating streak for creator (teacher):', studyRoom.createdById);
+    await this.streaksService.updateUserActivity(
+      studyRoom.createdById,
+      studyRoom.date,
+      studyRoom.duration,
+      'teacher',
+      0,
+    );
+    console.log('✅ [completeStudyRoom] Creator streak updated successfully');
+
+    // Check achievements for creator
+    console.log('🏆 [completeStudyRoom] Checking session achievements for creator');
+    await this.achievementsService.checkSessionAchievements(
+      studyRoom.createdById,
+      'teacher',
+    );
+
+    // Check streak achievements for creator
+    const creatorStreak = await this.streaksService.getUserStreak(studyRoom.createdById);
+    console.log('📊 [completeStudyRoom] Creator streak info:', { 
+      userId: studyRoom.createdById,
+      currentStreak: creatorStreak.currentStreak, 
+      longestStreak: creatorStreak.longestStreak,
+      lastActivityDate: creatorStreak.lastActivityDate
+    });
+    await this.achievementsService.checkStreakAchievements(
+      studyRoom.createdById,
+      creatorStreak.currentStreak,
+    );
+
+    // Update streak for all participants (learners)
+    console.log(`🔄 [completeStudyRoom] Starting streak updates for ${participants.length} participant(s)...`);
+    for (let i = 0; i < participants.length; i++) {
+      const participant = participants[i];
+      console.log(`🔥 [completeStudyRoom] Updating streak for participant ${i + 1}/${participants.length}:`, participant.userId);
+      
+      await this.streaksService.updateUserActivity(
+        participant.userId,
+        studyRoom.date,
+        studyRoom.duration,
+        'learner',
+        0,
+      );
+      console.log(`✅ [completeStudyRoom] Participant ${i + 1} streak updated successfully`);
+
+      // Check achievements for participant
+      await this.achievementsService.checkSessionAchievements(
+        participant.userId,
+        'learner',
+      );
+
+      // Check streak achievements for participant
+      const participantStreak = await this.streaksService.getUserStreak(participant.userId);
+      console.log(`📊 [completeStudyRoom] Participant ${i + 1} streak info:`, { 
+        userId: participant.userId,
+        currentStreak: participantStreak.currentStreak, 
+        longestStreak: participantStreak.longestStreak 
+      });
+      await this.achievementsService.checkStreakAchievements(
+        participant.userId,
+        participantStreak.currentStreak,
+      );
+    }
+
+    console.log('🎉 [completeStudyRoom] All streak updates completed successfully!');
+    
     return {
       success: true,
       message: 'Study room marked as completed',

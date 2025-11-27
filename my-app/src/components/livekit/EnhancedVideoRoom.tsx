@@ -13,6 +13,8 @@ import { SessionEndWarningDialog } from '@/components/study-room/session-end-war
 import { SessionEndedDialog } from '@/components/study-room/session-ended-dialog'
 import { useToast } from '@/contexts/toast-context'
 import { useAuth } from '@clerk/nextjs'
+import { useQueryClient } from '@tanstack/react-query'
+import { streakKeys } from '@/hooks/use-streaks'
 
 interface SessionData {
 	id: string;
@@ -39,6 +41,7 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 	const router = useRouter()
 	const { showSuccess } = useToast()
 	const { getToken } = useAuth()
+	const queryClient = useQueryClient()
 
 	// Store showSuccess in ref to avoid recreating handleWarning callback
 	const showSuccessRef = useRef(showSuccess)
@@ -61,24 +64,49 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 		if (sessionData?.id && sessionData?.sessionType && isHost) {
 			try {
 				const authToken = await getToken()
-				const endpoint = sessionData.sessionType === 'studyRoom'
-					? `/api/study-rooms/${sessionData.id}/complete`
-					: `/api/peer-sessions/${sessionData.id}/complete`
 				
-				await fetch(`${process.env.NEXT_PUBLIC_API_URL}${endpoint}`, {
-					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json',
-						'Authorization': `Bearer ${authToken}`,
-					},
-				})
+				if (sessionData.sessionType === 'studyRoom') {
+					const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/study-rooms/${sessionData.id}/complete`, {
+						method: 'POST',
+						headers: {
+							'Content-Type': 'application/json',
+							'Authorization': `Bearer ${authToken}`,
+						},
+					})
+					
+					if (!response.ok) {
+						console.error('Failed to complete study room:', response.status, await response.text())
+					} else {
+						console.log('✅ Study room completed, streaks updated')
+						// Invalidate streak queries to refresh UI
+						await queryClient.invalidateQueries({ queryKey: streakKeys.current() })
+						await queryClient.invalidateQueries({ queryKey: streakKeys.history(14) })
+					}
+				} else if (sessionData.sessionType === 'peerSession') {
+					const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/peer-sessions/${sessionData.id}/complete`, {
+						method: 'PATCH',
+						headers: {
+							'Content-Type': 'application/json',
+							'Authorization': `Bearer ${authToken}`,
+						},
+					})
+					
+					if (!response.ok) {
+						console.error('Failed to complete peer session:', response.status, await response.text())
+					} else {
+						console.log('✅ Peer session completed, streaks updated')
+						// Invalidate streak queries to refresh UI
+						await queryClient.invalidateQueries({ queryKey: streakKeys.current() })
+						await queryClient.invalidateQueries({ queryKey: streakKeys.history(14) })
+					}
+				}
 			} catch (error) {
 				console.error('Error completing session:', error)
 			}
 		}
 		// Show ended dialog for all users (host and participants)
 		setShowEnded(true)
-	}, [sessionData?.id, sessionData?.sessionType, isHost, getToken])
+	}, [sessionData?.id, sessionData?.sessionType, isHost, getToken, queryClient])
 
 	const handleWarning = useCallback((minutes: number) => {
 		setShowWarning(true)
