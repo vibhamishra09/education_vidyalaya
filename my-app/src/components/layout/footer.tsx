@@ -19,6 +19,9 @@ export function Footer() {
             Empowering peer-to-peer learning worldwide
           </p>
         </div>
+        <p className="text-xs text-muted-foreground text-center mt-4">
+          © {new Date().getFullYear()} Humitra Pvt Ltd. All rights reserved.
+        </p>
       </div>
     </footer>
   );
