@@ -7,6 +7,7 @@ import { NotificationProvider } from "@/contexts/notification-context";
 import { BottomNav } from "@/components/layout/bottom-nav";
 import { FloatingActionButtons } from "@/components/ui/floating-action-buttons";
 import { PushNotificationPrompt } from "@/components/notifications/push-notification-prompt";
+import { PushNotificationListener } from "@/components/notifications/push-notification-listener";
 import { HiddenSignInButton } from "@/components/auth/hidden-sign-in-button";
 import "./globals.css";
 
@@ -41,6 +42,7 @@ export default function RootLayout({
                 <BottomNav />
                 <FloatingActionButtons />
                 <PushNotificationPrompt />
+                <PushNotificationListener />
                 <HiddenSignInButton />
               </ToastProvider>
             </NotificationProvider>

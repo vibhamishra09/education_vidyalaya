@@ -704,6 +704,12 @@ export class StudyRoomsService {
       select: { name: true },
     });
 
+    console.log('🔔 [joinStudyRoom] Sending notification to room creator:', {
+      creatorId: studyRoom.createdById,
+      joinerName: userWithName?.name,
+      roomTitle: studyRoom.title,
+    });
+
     // Notify the study room creator
     await this.notificationsService.createAndPushNotification(
       studyRoom.createdById,
@@ -716,6 +722,8 @@ export class StudyRoomsService {
         actionData: { sessionId: studyRoomId, sessionType: 'studyRoom' },
       },
     );
+
+    console.log('✅ [joinStudyRoom] Notification sent successfully');
 
     return {
       success: true,

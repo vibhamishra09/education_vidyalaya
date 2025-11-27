@@ -12,15 +12,19 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('push', (event) => {
-  console.log('Push notification received:', event);
+  console.log('🔔 [ServiceWorker] Push notification received:', event);
+  console.log('🔔 [ServiceWorker] Event data available:', !!event.data);
 
   if (!event.data) {
-    console.log('Push event but no data');
+    console.log('⚠️  [ServiceWorker] Push event but no data');
     return;
   }
 
   const data = event.data.json();
-  console.log('Push data:', data);
+  console.log('📨 [ServiceWorker] Push data parsed:', data);
+  console.log('📨 [ServiceWorker] Title:', data.title);
+  console.log('📨 [ServiceWorker] Body:', data.body);
+  console.log('📨 [ServiceWorker] Data object:', data.data);
 
   const options = {
     body: data.body,
@@ -33,12 +37,32 @@ self.addEventListener('push', (event) => {
   };
 
   event.waitUntil(
-    self.registration.showNotification(data.title, options)
+    Promise.all([
+      // Show browser notification (for when tab is not focused or closed)
+      self.registration.showNotification(data.title, options),
+      // Send message to all open clients for in-app toast
+      self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+        console.log(`📤 [ServiceWorker] Sending notification to ${clients.length} open client(s)`);
+        clients.forEach((client, index) => {
+          console.log(`📤 [ServiceWorker] Sending to client ${index + 1}:`, client.url);
+          client.postMessage({
+            type: 'PUSH_NOTIFICATION',
+            notification: {
+              title: data.title,
+              body: data.body,
+              icon: data.icon,
+              data: data.data,
+            },
+          });
+          console.log(`✅ [ServiceWorker] Message sent to client ${index + 1}`);
+        });
+      }),
+    ])
   );
 });
 
 self.addEventListener('notificationclick', (event) => {
-  console.log('Notification clicked:', event.notification);
+  console.log('🖱️ Notification clicked:', event.notification);
   event.notification.close();
 
   const notificationData = event.notification.data || {};
@@ -121,17 +145,20 @@ self.addEventListener('notificationclick', (event) => {
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      console.log(`🔍 Found ${clientList.length} open clients`);
       // Check if there's already a window open
       for (let i = 0; i < clientList.length; i++) {
         const client = clientList[i];
         if (client.url.includes(self.location.origin) && 'focus' in client) {
-          return client.focus().then((client) => {
+          console.log('✅ Focusing existing window and navigating to:', urlToOpen);
+          return client.focus().then((focusedClient) => {
             // Navigate to the URL
-            return client.navigate(urlToOpen);
+            return focusedClient.navigate(urlToOpen);
           });
         }
       }
       // If no window is open, open a new one
+      console.log('🆕 Opening new window:', urlToOpen);
       if (clients.openWindow) {
         return clients.openWindow(urlToOpen);
       }
