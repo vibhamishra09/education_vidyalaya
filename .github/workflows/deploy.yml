@@ -14,6 +14,10 @@ env:
   ECR_REPOSITORY: webyalaya-backend-app
   ECS_CLUSTER: webyalaya-backend-cluster
   ECS_SERVICE: webyalaya-backend-task-service
+  MIGRATION_TASK_DEF: webyalaya-backend-migrate-task
+  MIGRATION_SG_NAME: ecs-webyalaya-tasks-sg
+  SUBNET_TAG_KEY: Name
+  SUBNET_TAG_VALUE: webyalaya-subnet
 
 jobs:
   changes:
@@ -105,6 +109,63 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY" >> $GITHUB_OUTPUT
+
+      - name: Run Prisma Migrations in ECS
+        run: |
+          # --- Configuration (ADJUST THESE VALUES) ---
+          TASK_DEF="${{ env.MIGRATION_TASK_DEF }}"
+          CLUSTER="${{ env.ECS_CLUSTER }}"
+          LAUNCH_TYPE="FARGATE"
+
+          SECURITY_GROUPS=$(aws ec2 describe-security-groups \
+            --filters Name=group-name,Values="${{ env.MIGRATION_SG_NAME }}" \
+            --query 'SecurityGroups[0].GroupId' --output text)
+
+          SUBNETS=$(aws ec2 describe-subnets \
+            --filters "Name=tag:${{ env.SUBNET_TAG_KEY }},Values=${{ env.SUBNET_TAG_VALUE }}" \
+            --query 'Subnets[*].SubnetId' --output text | tr '\t' ',')
+            
+          if [ -z "$SECURITY_GROUPS" ] || [ -z "$SUBNETS" ]; then
+              echo "Failed to look up necessary network IDs. SG: $SECURITY_GROUPS, Subnets: $SUBNETS"
+              exit 1
+          fi
+
+          echo "Found Security Group ID: $SECURITY_GROUPS"
+          echo "Found Subnet IDs: $SUBNETS"
+          
+          echo "Starting migration task for Task Definition: $TASK_DEF"
+
+          TASK_ARN=$(aws ecs run-task \
+            --cluster "$CLUSTER" \
+            --launch-type "$LAUNCH_TYPE" \
+            --task-definition "$TASK_DEF" \
+            --count 1 \
+            --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SECURITY_GROUPS],assignPublicIp=DISABLED}" \
+            --query 'tasks[0].taskArn' --output text)
+
+          if [ -z "$TASK_ARN" ] || [ "$TASK_ARN" == "None" ]; then
+              echo "Failed to start migration task. Exiting."
+              exit 1
+          fi
+          
+          echo "Started migration task ARN: $TASK_ARN"
+
+          # Wait for Task Completion
+          # This command will block until the migration task finishes.
+          aws ecs wait tasks-stopped --cluster "$CLUSTER" --tasks "$TASK_ARN"
+
+          # Check for Success
+          # Retrieve the exit code of the migration container.
+          EXIT_CODE=$(aws ecs describe-tasks --cluster "$CLUSTER" --tasks "$TASK_ARN" \
+            --query 'tasks[0].containers[0].exitCode' --output text)
+
+          if [ "$EXIT_CODE" != "0" ]; then
+            echo "Migration task failed with exit code $EXIT_CODE"
+            # Crucial: Fail the workflow to prevent deploying the new service
+            exit 1 
+          fi
+
+          echo "Migration task succeeded. Proceeding with service deployment."
 
       - name: Force ECS to pull latest image
         run: |
