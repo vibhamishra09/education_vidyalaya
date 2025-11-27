@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import Image from "next/image";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Bell, UserPlus, Calendar, AlertCircle, Star } from "lucide-react";
@@ -36,20 +37,20 @@ export function NotificationToast({
   const router = useRouter();
   const [isVisible, setIsVisible] = useState(true);
 
+  const handleDismiss = useCallback(() => {
+    setIsVisible(false);
+    setTimeout(() => {
+      onDismiss(id);
+    }, 300);
+  }, [id, onDismiss]);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       handleDismiss();
     }, duration);
 
     return () => clearTimeout(timer);
-  }, [duration]);
-
-  const handleDismiss = () => {
-    setIsVisible(false);
-    setTimeout(() => {
-      onDismiss(id);
-    }, 300);
-  };
+  }, [duration, handleDismiss]);
 
   const handleClick = () => {
     const url = getNotificationUrl(data);
@@ -133,7 +134,15 @@ export function NotificationToast({
 
   const getNotificationIcon = () => {
     if (icon) {
-      return <img src={icon} alt="" className="w-10 h-10 rounded-full" />;
+      return (
+        <Image
+          src={icon}
+          alt=""
+          width={40}
+          height={40}
+          className="w-10 h-10 rounded-full object-cover"
+        />
+      );
     }
 
     const iconClass = "w-5 h-5";

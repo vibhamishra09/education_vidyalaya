@@ -15,7 +15,7 @@ env:
   ECS_CLUSTER: webyalaya-dev-backend-cluster
   ECS_SERVICE: webyalaya-dev-backend-task-service
   MIGRATION_TASK_DEF: webyalaya-dev-backend-migrate-task
-  MIGRATION_SG_NAME: ecs-webyalaya-dev-backend-sg
+  MIGRATION_SG_NAME: webyalaya-dev-backend-sg
   SUBNET_TAG_KEY: Name
   SUBNET_TAG_VALUE: webyalaya-subnet
 

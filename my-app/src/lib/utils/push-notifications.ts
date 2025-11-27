@@ -170,13 +170,14 @@ export async function subscribeToPushNotifications(
     // Convert VAPID key
     console.log('🔧 Converting VAPID key to Uint8Array...');
     const applicationServerKey = urlBase64ToUint8Array(vapidPublicKey);
+    const applicationServerKeyBuffer: BufferSource = applicationServerKey.buffer as ArrayBuffer;
     console.log('🔧 VAPID key converted, length:', applicationServerKey.length);
 
     // Subscribe to push notifications
     console.log('🔧 Calling pushManager.subscribe...');
     const subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: applicationServerKey,
+      applicationServerKey: applicationServerKeyBuffer,
     });
 
     console.log('✅ Push subscription created:', subscription);
