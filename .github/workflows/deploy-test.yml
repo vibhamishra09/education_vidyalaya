@@ -19,6 +19,10 @@ env:
   SUBNET_TAG_KEY: Name
   SUBNET_TAG_VALUE: webyalaya-subnet
 
+permissions:
+  contents: read
+  actions: read
+
 jobs:
   changes:
     name: Detect changes
