@@ -186,6 +186,17 @@ export class PeerSessionsService {
     // Example: 11 AM IST -> 5:30 AM UTC
     const dateTime = convertLocalToUTC(requestDto.date, requestDto.time, requestDto.timezone);
 
+    // Validate that session is scheduled at least 2 minutes in the future
+    const now = new Date();
+    const minAdvanceTime = 2 * 60 * 1000; // 2 minutes in milliseconds
+    
+    if (dateTime.getTime() <= now.getTime() + minAdvanceTime) {
+      throw new BadRequestException({
+        code: 'INSUFFICIENT_ADVANCE_TIME',
+        message: 'Sessions must be scheduled at least 2 minutes in advance',
+      });
+    }
+
     // Check if the peer is available at the requested time
     const availabilityCheck = await this.availabilityService.checkTimeSlotAvailability(
       peer.id,

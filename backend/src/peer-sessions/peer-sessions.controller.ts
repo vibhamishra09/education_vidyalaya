@@ -83,7 +83,10 @@ export class PeerSessionsController {
     @Param('peerSessionId') peerSessionId: string,
     @CurrentUser() userId: string,
   ) {
-    return this.peerSessionsService.completePeerSession(peerSessionId, userId);
+    console.log('🎯 [PeerSessionsController.completePeerSession] Endpoint called:', { peerSessionId, userId });
+    const result = await this.peerSessionsService.completePeerSession(peerSessionId, userId);
+    console.log('✅ [PeerSessionsController.completePeerSession] Completed successfully');
+    return result;
   }
 
   @Get(':peerSessionId/is-host')

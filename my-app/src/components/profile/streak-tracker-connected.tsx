@@ -9,6 +9,10 @@ export function StreakTrackerConnected() {
   const { data: streakData, isLoading: streakLoading } = useCurrentStreak();
   const { data: historyData, isLoading: historyLoading } = useStreakHistory(14);
 
+  console.log('🔥 [StreakTrackerConnected] Streak data:', streakData);
+  console.log('📅 [StreakTrackerConnected] History data:', historyData);
+  console.log('⏳ [StreakTrackerConnected] Loading:', { streakLoading, historyLoading });
+
   if (streakLoading || historyLoading) {
     return (
       <Card>
@@ -27,6 +31,7 @@ export function StreakTrackerConnected() {
   }
 
   if (!streakData) {
+    console.warn('⚠️ [StreakTrackerConnected] No streak data available');
     return null;
   }
 
@@ -36,6 +41,12 @@ export function StreakTrackerConnected() {
     hasActivity: day.hasActivity,
     activityCount: day.sessionCount,
   })) || [];
+
+  console.log('📊 [StreakTrackerConnected] Rendering with:', {
+    currentStreak: streakData.currentStreak,
+    longestStreak: streakData.longestStreak,
+    daysCount: streakDays.length,
+  });
 
   return (
     <StreakTracker
