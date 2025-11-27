@@ -21,21 +21,38 @@ export class StreaksService {
     role: 'learner' | 'teacher',
     coinsEarned: number = 0,
   ) {
+    console.log('🔥 [StreaksService.updateUserActivity] Called with:', { 
+      userId, 
+      sessionDate: sessionDate.toISOString(), 
+      duration, 
+      role, 
+      coinsEarned 
+    });
+    
     // Get user's timezone
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { timezone: true },
+      select: { timezone: true, name: true },
     });
 
+    if (!user) {
+      console.error('❌ [StreaksService.updateUserActivity] User not found:', userId);
+      throw new Error(`User not found: ${userId}`);
+    }
+
     const timezone = user?.timezone || 'UTC';
+    console.log('✅ [StreaksService.updateUserActivity] User found:', { name: user.name, timezone });
 
     // Normalize session date to midnight in user's timezone
     const normalizedDate = DateTime.fromJSDate(sessionDate)
       .setZone(timezone)
       .startOf('day')
       .toJSDate();
+      
+    console.log('📅 [StreaksService.updateUserActivity] Normalized date:', normalizedDate.toISOString());
 
     // Upsert daily activity record
+    console.log('💾 [StreaksService.updateUserActivity] Upserting daily activity...');
     const activity = await this.prisma.dailyActivity.upsert({
       where: {
         userId_date: {
@@ -64,9 +81,18 @@ export class StreaksService {
         coinsEarned,
       },
     });
+    
+    console.log('✅ [StreaksService.updateUserActivity] Daily activity saved:', {
+      date: activity.date.toISOString(),
+      sessionCount: activity.sessionCount,
+      minutesLearned: activity.minutesLearned,
+      minutesTaught: activity.minutesTaught
+    });
 
     // Update user's streak
+    console.log('🔄 [StreaksService.updateUserActivity] Updating user streak...');
     await this.updateUserStreak(userId);
+    console.log('✅ [StreaksService.updateUserActivity] User streak updated successfully');
 
     return activity;
   }
@@ -76,18 +102,27 @@ export class StreaksService {
    * @param userId User ID
    */
   async updateUserStreak(userId: string) {
+    console.log('📊 [StreaksService.updateUserStreak] Calculating streak for:', userId);
     const streak = await this.calculateStreak(userId);
+    console.log('📊 [StreaksService.updateUserStreak] Calculated streak:', streak);
 
     // Get current longest streak
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { longestStreak: true },
+      select: { longestStreak: true, name: true },
     });
 
     const longestStreak = Math.max(
       streak.currentStreak,
       user?.longestStreak || 0,
     );
+    
+    console.log('💾 [StreaksService.updateUserStreak] Updating user record:', {
+      name: user?.name,
+      currentStreak: streak.currentStreak,
+      longestStreak,
+      lastActivityDate: streak.lastActivityDate
+    });
 
     // Update user's streak data
     await this.prisma.user.update({
@@ -98,6 +133,8 @@ export class StreaksService {
         lastActivityDate: streak.lastActivityDate,
       },
     });
+    
+    console.log('✅ [StreaksService.updateUserStreak] User streak updated in database');
 
     return {
       currentStreak: streak.currentStreak,
@@ -258,22 +295,32 @@ export class StreaksService {
    * @returns Streak information
    */
   async getUserStreak(userId: string) {
+    console.log('🔍 [StreaksService.getUserStreak] Fetching streak for userId:', userId);
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
         currentStreak: true,
         longestStreak: true,
         lastActivityDate: true,
+        name: true,
       },
     });
 
     if (!user) {
+      console.warn('⚠️ [StreaksService.getUserStreak] User not found:', userId);
       return {
         currentStreak: 0,
         longestStreak: 0,
         lastActivityDate: null,
       };
     }
+
+    console.log('✅ [StreaksService.getUserStreak] Found user:', { 
+      name: user.name,
+      currentStreak: user.currentStreak,
+      longestStreak: user.longestStreak,
+      lastActivityDate: user.lastActivityDate
+    });
 
     return {
       currentStreak: user.currentStreak,

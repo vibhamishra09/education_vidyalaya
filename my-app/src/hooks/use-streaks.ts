@@ -17,13 +17,16 @@ export function useCurrentStreak() {
   return useQuery({
     queryKey: streakKeys.current(),
     queryFn: async () => {
+      console.log('🔥 [useCurrentStreak] Fetching streak data...');
       if (isLoaded) {
         const token = await getToken();
         if (token) {
           setAuthToken(token);
         }
       }
-      return streaksApi.getCurrentStreak();
+      const result = await streaksApi.getCurrentStreak();
+      console.log('✅ [useCurrentStreak] Received:', result);
+      return result;
     },
     enabled: isLoaded,
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -37,13 +40,16 @@ export function useStreakHistory(days: number = 14) {
   return useQuery({
     queryKey: streakKeys.history(days),
     queryFn: async () => {
+      console.log('📅 [useStreakHistory] Fetching history for', days, 'days...');
       if (isLoaded) {
         const token = await getToken();
         if (token) {
           setAuthToken(token);
         }
       }
-      return streaksApi.getStreakHistory(days);
+      const result = await streaksApi.getStreakHistory(days);
+      console.log('✅ [useStreakHistory] Received:', result);
+      return result;
     },
     enabled: isLoaded,
     staleTime: 5 * 60 * 1000, // 5 minutes
