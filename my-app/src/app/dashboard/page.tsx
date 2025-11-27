@@ -56,23 +56,23 @@ export default function DashboardPage() {
   const pastStudyRooms = dashboardData?.pastStudyRooms || [];
   const pendingReviews = dashboardData?.pendingReviews || 0;
 
-  // Filter ongoing sessions (sessions happening today)
+
+  // Filter ongoing sessions (sessions currently happening)
   const ongoingSessions = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    const now = new Date();
 
     const ongoingPeerSessions = upcomingSessions.filter(s => {
-      const sessionDate = new Date(s.date);
-      sessionDate.setHours(0, 0, 0, 0);
-      return sessionDate.getTime() === today.getTime();
+      const sessionStart = new Date(s.date);
+      const sessionEnd = new Date(sessionStart.getTime() + s.duration * 60 * 1000);
+      // Session is ongoing if current time is between start and end
+      return now >= sessionStart && now <= sessionEnd;
     });
 
     const ongoingRooms = upcomingStudyRooms.filter(sr => {
-      const roomDate = new Date(sr.date);
-      roomDate.setHours(0, 0, 0, 0);
-      return roomDate.getTime() === today.getTime();
+      const roomStart = new Date(sr.date);
+      const roomEnd = new Date(roomStart.getTime() + sr.duration * 60 * 1000);
+      // Room is ongoing if current time is between start and end
+      return now >= roomStart && now <= roomEnd;
     });
 
     return [...ongoingPeerSessions, ...ongoingRooms];
@@ -403,12 +403,11 @@ export default function DashboardPage() {
               upcomingSessions={[
                 ...upcomingSessions
                   .filter(s => {
-                    // Filter out today's sessions from upcoming
-                    const today = new Date();
-                    today.setHours(0, 0, 0, 0);
-                    const sessionDate = new Date(s.date);
-                    sessionDate.setHours(0, 0, 0, 0);
-                    return sessionDate.getTime() > today.getTime();
+                    // Exclude sessions that are currently ongoing
+                    const now = new Date();
+                    const sessionStart = new Date(s.date);
+                    const sessionEnd = new Date(sessionStart.getTime() + s.duration * 60 * 1000);
+                    return !(now >= sessionStart && now <= sessionEnd);
                   })
                   .map(s => ({
                     id: s.id,
@@ -422,12 +421,11 @@ export default function DashboardPage() {
                   })),
                 ...upcomingStudyRooms
                   .filter(sr => {
-                    // Filter out today's rooms from upcoming
-                    const today = new Date();
-                    today.setHours(0, 0, 0, 0);
-                    const roomDate = new Date(sr.date);
-                    roomDate.setHours(0, 0, 0, 0);
-                    return roomDate.getTime() > today.getTime();
+                    // Exclude rooms that are currently ongoing
+                    const now = new Date();
+                    const roomStart = new Date(sr.date);
+                    const roomEnd = new Date(roomStart.getTime() + sr.duration * 60 * 1000);
+                    return !(now >= roomStart && now <= roomEnd);
                   })
                   .map(sr => ({
                     id: sr.id,

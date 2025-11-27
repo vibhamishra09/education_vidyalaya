@@ -171,6 +171,14 @@ export class NotificationsService {
 
     // Send push notification if requested
     if (options?.sendPush) {
+      console.log('🔔 [NotificationsService] Triggering push notification:', {
+        userId,
+        pushTitle: options.pushTitle || 'New Notification',
+        message,
+        notificationId: notification.id,
+        actionType: options.actionType,
+      });
+
       await this.pushNotificationService.sendPushNotification(
         userId,
         options.pushTitle || 'New Notification',
@@ -181,6 +189,8 @@ export class NotificationsService {
           ...options.actionData,
         },
       );
+
+      console.log('✅ [NotificationsService] Push notification triggered successfully');
     }
 
     return notification;

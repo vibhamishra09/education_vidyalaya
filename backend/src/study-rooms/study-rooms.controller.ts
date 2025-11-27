@@ -68,7 +68,10 @@ export class StudyRoomsController {
     @Param('studyRoomId') studyRoomId: string,
     @CurrentUser() userId: string,
   ) {
-    return this.studyRoomsService.completeStudyRoom(studyRoomId, userId);
+    console.log('🎯 [StudyRoomsController.completeStudyRoom] Endpoint called:', { studyRoomId, userId });
+    const result = await this.studyRoomsService.completeStudyRoom(studyRoomId, userId);
+    console.log('✅ [StudyRoomsController.completeStudyRoom] Completed successfully');
+    return result;
   }
 
   @Get(':studyRoomId/is-host')

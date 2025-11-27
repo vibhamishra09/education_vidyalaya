@@ -1,183 +1,248 @@
 import { useState, useEffect, useCallback } from 'react';
-import { notificationsApi } from '@/lib/api';
+import { useAuth } from '@clerk/nextjs';
 import {
   isPushNotificationSupported,
-  hasNotificationPermission,
+  getNotificationPermissionStatus,
   requestNotificationPermission,
   subscribeToPushNotifications,
   unsubscribeFromPushNotifications,
   getCurrentPushSubscription,
-  getNotificationPermissionStatus,
 } from '@/lib/utils/push-notifications';
+import apiClient from '@/lib/api-client';
 
-interface UsePushNotificationsResult {
+interface UsePushNotificationsReturn {
   isSupported: boolean;
   permission: NotificationPermission;
   isSubscribed: boolean;
   isLoading: boolean;
   error: string | null;
-  requestPermission: () => Promise<boolean>;
   subscribe: () => Promise<boolean>;
   unsubscribe: () => Promise<boolean>;
+  checkSubscription: () => Promise<void>;
 }
 
-export function usePushNotifications(): UsePushNotificationsResult {
+// Helper function to add timeout to promises
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, errorMessage: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(errorMessage)), timeoutMs)
+    ),
+  ]);
+}
+
+export function usePushNotifications(): UsePushNotificationsReturn {
+  const { getToken, isLoaded, isSignedIn } = useAuth();
   const [isSupported] = useState(() => isPushNotificationSupported());
   const [permission, setPermission] = useState<NotificationPermission>('default');
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Check initial permission and subscription status
-  useEffect(() => {
-    const checkStatus = async () => {
-      if (!isSupported) {
-        return;
-      }
+  // Check initial subscription status
+  const checkSubscription = useCallback(async () => {
+    console.log('🔍 Checking subscription status...');
+    if (!isSupported) {
+      console.log('❌ Push notifications not supported');
+      return;
+    }
 
+    try {
+      const subscription = await getCurrentPushSubscription();
+      const hasSubscription = subscription !== null;
+      setIsSubscribed(hasSubscription);
+      console.log('✅ Subscription check complete:', hasSubscription ? 'Subscribed' : 'Not subscribed');
+    } catch (err) {
+      console.error('❌ Error checking subscription:', err);
+      setIsSubscribed(false);
+    }
+  }, [isSupported]);
+
+  // Update permission status
+  useEffect(() => {
+    if (!isSupported) return;
+
+    const updatePermission = () => {
       const currentPermission = getNotificationPermissionStatus();
       setPermission(currentPermission);
-
-      if (currentPermission === 'granted') {
-        try {
-          const subscription = await getCurrentPushSubscription();
-          setIsSubscribed(!!subscription);
-        } catch (error) {
-          console.error('Error checking subscription status:', error);
-          setIsSubscribed(false);
-        }
-      } else {
-        setIsSubscribed(false);
-      }
+      console.log('🔔 Permission status:', currentPermission);
     };
 
-    checkStatus();
+    updatePermission();
+
+    // Listen for permission changes
+    const interval = setInterval(updatePermission, 1000);
+    return () => clearInterval(interval);
   }, [isSupported]);
 
-  // Request notification permission
-  const handleRequestPermission = useCallback(async (): Promise<boolean> => {
-    if (!isSupported) {
-      setError('Push notifications are not supported in this browser');
-      return false;
+  // Check subscription on mount and when permission changes
+  useEffect(() => {
+    if (permission === 'granted') {
+      checkSubscription();
+    } else {
+      setIsSubscribed(false);
     }
+  }, [permission, checkSubscription]);
 
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const permissionResult = await requestNotificationPermission();
-      setPermission(permissionResult);
-
-      if (permissionResult === 'granted') {
-        return true;
-      } else if (permissionResult === 'denied') {
-        setError('Notification permission denied. Please enable it in your browser settings.');
-        return false;
-      } else {
-        setError('Notification permission request dismissed.');
-        return false;
-      }
-    } catch (err) {
-      console.error('Error requesting notification permission:', err);
-      setError('Failed to request notification permission');
-      return false;
-    } finally {
-      setIsLoading(false);
-    }
-  }, [isSupported]);
-
-  // Subscribe to push notifications
   const handleSubscribe = useCallback(async (): Promise<boolean> => {
-    if (!isSupported) {
-      setError('Push notifications are not supported');
-      return false;
-    }
-
-    if (!hasNotificationPermission()) {
-      const granted = await handleRequestPermission();
-      if (!granted) {
-        return false;
-      }
-    }
-
+    console.log('🚀 Starting subscription process...');
     setIsLoading(true);
     setError(null);
 
     try {
-      // Get VAPID public key from backend
-      const { publicKey } = await notificationsApi.getVapidPublicKey();
+      // Step 1: Check authentication
+      console.log('🔐 Checking authentication...');
+      if (!isLoaded) {
+        throw new Error('Authentication not loaded yet. Please wait a moment.');
+      }
+      if (!isSignedIn) {
+        throw new Error('You must be signed in to enable notifications.');
+      }
+      console.log('✅ User is authenticated');
 
-      if (!publicKey) {
-        throw new Error('Failed to get VAPID public key from server');
+      // Step 2: Request notification permission
+      console.log('🔔 Requesting notification permission...');
+      const permissionResult = await withTimeout(
+        requestNotificationPermission(),
+        120000, // 120 second timeout (2 minutes)
+        'Permission request timed out. Please try again.'
+      );
+      
+      setPermission(permissionResult);
+      console.log('✅ Permission result:', permissionResult);
+
+      if (permissionResult !== 'granted') {
+        throw new Error('Notification permission denied. Please enable notifications in your browser settings.');
       }
 
-      // Subscribe to push notifications
-      const subscription = await subscribeToPushNotifications(publicKey);
+      // Step 3: Get authentication token
+      console.log('🔑 Getting authentication token...');
+      const token = await withTimeout(
+        getToken(),
+        10000, // 10 second timeout
+        'Failed to get authentication token. Please try signing in again.'
+      );
+      
+      if (!token) {
+        throw new Error('Authentication token not available. Please sign in again.');
+      }
+      console.log('✅ Auth token obtained');
 
+      // Step 4: Get VAPID public key from backend
+      console.log('🔑 Fetching VAPID public key...');
+      const vapidResponse = await withTimeout(
+        apiClient.get<{ publicKey: string }>('/api/notifications/vapid-public-key', {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        10000, // 10 second timeout
+        'Failed to fetch VAPID key. Server is not responding.'
+      );
+      
+      const vapidPublicKey = vapidResponse.data.publicKey;
+      console.log('✅ VAPID public key received:', vapidPublicKey.substring(0, 20) + '...');
+
+      // Step 5: Subscribe to push notifications
+      console.log('📡 Subscribing to push manager...');
+      const subscription = await withTimeout(
+        subscribeToPushNotifications(vapidPublicKey),
+        15000, // 15 second timeout
+        'Failed to create push subscription. Please check your browser settings.'
+      );
+      
       if (!subscription) {
-        throw new Error('Failed to create push subscription');
+        throw new Error('Failed to create push subscription. Please try again.');
       }
+      console.log('✅ Push subscription created');
 
-      // Send subscription to backend
-      const subscriptionJSON = subscription.toJSON();
-      const result = await notificationsApi.subscribeToPush(subscriptionJSON);
+      // Step 6: Send subscription to backend
+      console.log('💾 Sending subscription to backend...');
+      await withTimeout(
+        apiClient.post(
+          '/api/notifications/push/subscribe',
+          { subscription: subscription.toJSON() },
+          { headers: { Authorization: `Bearer ${token}` } }
+        ),
+        10000, // 10 second timeout
+        'Failed to save subscription to server. Please try again.'
+      );
+      
+      console.log('✅ Subscription saved to backend');
 
-      if (result.success) {
-        setIsSubscribed(true);
-        setPermission('granted');
-        console.log('Successfully subscribed to push notifications');
-        return true;
-      } else {
-        throw new Error('Backend subscription failed');
-      }
-    } catch (err) {
-      console.error('Error subscribing to push notifications:', err);
-      setError(err instanceof Error ? err.message : 'Failed to subscribe to push notifications');
+      setIsSubscribed(true);
+      setError(null);
+      console.log('🎉 Successfully subscribed to push notifications!');
+      return true;
+    } catch (err: unknown) {
+      console.error('❌ Subscription error:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to enable notifications. Please try again.';
+      setError(errorMessage);
       setIsSubscribed(false);
       return false;
     } finally {
       setIsLoading(false);
+      console.log('🏁 Subscription process complete');
     }
-  }, [isSupported, handleRequestPermission]);
+  }, [getToken, isLoaded, isSignedIn]);
 
-  // Unsubscribe from push notifications
   const handleUnsubscribe = useCallback(async (): Promise<boolean> => {
-    if (!isSupported) {
-      return false;
-    }
-
+    console.log('🔕 Starting unsubscribe process...');
     setIsLoading(true);
     setError(null);
 
     try {
-      const subscription = await getCurrentPushSubscription();
-
-      if (subscription) {
-        // Unsubscribe from backend
-        const result = await notificationsApi.unsubscribeFromPush(subscription.endpoint);
-
-        if (result.success) {
-          // Unsubscribe locally
-          await unsubscribeFromPushNotifications();
-          setIsSubscribed(false);
-          console.log('Successfully unsubscribed from push notifications');
-          return true;
-        } else {
-          throw new Error('Backend unsubscribe failed');
-        }
-      } else {
-        // No subscription found, just update state
-        setIsSubscribed(false);
-        return true;
+      // Check authentication
+      if (!isLoaded || !isSignedIn) {
+        throw new Error('You must be signed in');
       }
-    } catch (err) {
-      console.error('Error unsubscribing from push notifications:', err);
-      setError(err instanceof Error ? err.message : 'Failed to unsubscribe from push notifications');
+
+      // Get token
+      const token = await withTimeout(
+        getToken(),
+        10000,
+        'Failed to get authentication token'
+      );
+      
+      if (!token) {
+        throw new Error('Authentication token not available');
+      }
+
+      // Unsubscribe from push notifications
+      console.log('📡 Unsubscribing from push manager...');
+      const unsubscribed = await withTimeout(
+        unsubscribeFromPushNotifications(),
+        10000,
+        'Failed to unsubscribe from push notifications'
+      );
+      
+      if (!unsubscribed) {
+        throw new Error('Failed to unsubscribe');
+      }
+
+      // Notify backend
+      console.log('💾 Notifying backend...');
+      await withTimeout(
+        apiClient.post(
+          '/api/notifications/push/unsubscribe',
+          {},
+          { headers: { Authorization: `Bearer ${token}` } }
+        ),
+        10000,
+        'Failed to notify server about unsubscription'
+      );
+
+      setIsSubscribed(false);
+      setError(null);
+      console.log('✅ Successfully unsubscribed from push notifications');
+      return true;
+    } catch (err: unknown) {
+      console.error('❌ Unsubscribe error:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to disable notifications';
+      setError(errorMessage);
       return false;
     } finally {
       setIsLoading(false);
     }
-  }, [isSupported]);
+  }, [getToken, isLoaded, isSignedIn]);
 
   return {
     isSupported,
@@ -185,8 +250,8 @@ export function usePushNotifications(): UsePushNotificationsResult {
     isSubscribed,
     isLoading,
     error,
-    requestPermission: handleRequestPermission,
     subscribe: handleSubscribe,
     unsubscribe: handleUnsubscribe,
+    checkSubscription,
   };
 }

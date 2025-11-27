@@ -65,7 +65,7 @@ export class NotificationsController {
   @Post('push/subscribe')
   async subscribeToPush(
     @CurrentUser() userId: string,
-    @Body() subscription: PushSubscriptionDto,
+    @Body('subscription') subscription: PushSubscriptionDto,
   ) {
     // Convert clerkId to database ID
     const user = await this.notificationsService['prisma'].user.findUnique({

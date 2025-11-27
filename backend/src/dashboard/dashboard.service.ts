@@ -161,6 +161,7 @@ export class DashboardService {
               { createdById: user.id },
               { learners: { some: { userId: user.id } } },
             ],
+            sessionStatus: SessionStatus.UPCOMING,
             date: { gte: now },
           },
           include: {
@@ -171,14 +172,14 @@ export class DashboardService {
           orderBy: { date: 'asc' },
           take: 10,
         }),
-        // Past study rooms (date < now)
+        // Past study rooms (DONE status)
         this.prisma.studyRoom.findMany({
           where: {
             OR: [
               { createdById: user.id },
               { learners: { some: { userId: user.id } } },
             ],
-            date: { lt: now },
+            sessionStatus: SessionStatus.DONE,
           },
           include: {
             createdBy: { select: { id: true, name: true, avatar: true } },
@@ -199,6 +200,7 @@ export class DashboardService {
         skills: ps.skills.map((s) => s.skill),
         description: ps.description,
         requestedBy: ps.requestedBy,
+        sessionStatus: ps.sessionStatus,
       }));
 
       data.pastSessions = pastSessions.map((ps) => ({
@@ -210,6 +212,7 @@ export class DashboardService {
         skills: ps.skills.map((s) => s.skill),
         description: ps.description,
         requestedBy: ps.requestedBy,
+        sessionStatus: ps.sessionStatus,
       }));
 
       data.upcomingStudyRooms = upcomingStudyRooms.map((sr) => ({
@@ -222,6 +225,7 @@ export class DashboardService {
         createdBy: sr.createdBy,
         skills: sr.skills.map((s) => s.skill),
         description: sr.description,
+        sessionStatus: sr.sessionStatus,
       }));
 
       data.pastStudyRooms = pastStudyRooms.map((sr) => ({
@@ -234,6 +238,7 @@ export class DashboardService {
         createdBy: sr.createdBy,
         skills: sr.skills.map((s) => s.skill),
         description: sr.description,
+        sessionStatus: sr.sessionStatus,
       }));
 
       data.pendingReviews = await this.prisma.peerSession.count({
