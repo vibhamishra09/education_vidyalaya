@@ -22,7 +22,9 @@ export const metadata: Metadata = {
   title: "Webyalaya",
   description: "Peer to peer learning platform",
   icons: {
-    icon: "/favicon.ico",
+    icon: "/webyalaya-main-logo.svg",
+    shortcut: "/webyalaya-main-logo.svg",
+    apple: "/webyalaya-main-logo.svg",
   },
 };
 
@@ -34,6 +36,11 @@ export default function RootLayout({
   return (
     <ClerkProvider>
       <html lang="en">
+        <head>
+        {/* explicit favicon to override defaults / cache issues */}
+        <link rel="icon" href="/webyalaya-main-logo.svg?v=2" />
+        <link rel="apple-touch-icon" href="/webyalaya-main-logo.svg" />
+      </head>
         <body className={`${inter.variable} antialiased font-sans pb-16 md:pb-0`}>
           <QueryProvider>
             <NotificationProvider>

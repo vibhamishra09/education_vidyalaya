@@ -7,11 +7,11 @@ export function Footer() {
         <div className="flex flex-col items-center gap-4">
           <div className="flex items-center gap-2">
             <Image
-              src="/logo_green.png"
+              src="/webyalaya-main-logo.svg"
               alt="Webyalaya logo"
               width={128}
               height={128}
-              className="object-contain rounded-md bg-white dark:bg-gray-900 px-1"
+              className="object-contain rounded-md px-1"
               priority={false}
             />
           </div>

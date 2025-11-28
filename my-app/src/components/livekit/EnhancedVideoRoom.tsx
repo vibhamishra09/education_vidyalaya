@@ -259,9 +259,9 @@ function VideoRoomContent({
 					{/* Logo and Room Info */}
 					<div className="flex items-center gap-2 md:gap-4 min-w-0 flex-1">
 						<div className="flex items-center gap-2 md:gap-3 min-w-0">
-							<div className="relative h-6 w-6 md:h-8 md:w-8 rounded-lg overflow-hidden bg-white/10 backdrop-blur-sm flex-shrink-0">
+							<div className="relative h-6 w-6 md:h-8 md:w-8 rounded-lg overflow-hidden flex-shrink-0">
 								<Image
-									src="/logo_green.png"
+									src="/webyalaya-main-logo.svg"
 									alt="Webyalaya"
 									fill
 									className="object-contain p-1"
