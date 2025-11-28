@@ -11,7 +11,6 @@ on:
 
 env:
   AWS_REGION: us-west-2
-  AWS_PROFILE: namaste
   ECR_REPOSITORY: webyalaya-dev-backend-app
   ECS_CLUSTER: webyalaya-dev-backend-cluster
   ECS_SERVICE: webyalaya-dev-backend-task-service
@@ -230,7 +229,7 @@ jobs:
         run: |
           echo "Forcing ECS service to pull latest image..."
           echo "Service will pull: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}"
-          echo "Using AWS Profile: ${{ env.AWS_PROFILE }}"
+          echo "Using AWS credentials: Namaste profile (via static credentials)"
 
           # Force new deployment - ECS will pull the image (default :latest)
           aws ecs update-service \
@@ -245,7 +244,7 @@ jobs:
           echo "Image: ${{ steps.build-image.outputs.image }}"
           echo "ECS Service: ${{ env.ECS_SERVICE }}"
           echo "Cluster: ${{ env.ECS_CLUSTER }}"
-          echo "AWS Profile: ${{ env.AWS_PROFILE }}"
+          echo "AWS Credentials: Namaste profile (via static credentials)"
           echo "Deployment is in progress. ECS will pull the updated image."
 
   deploy-frontend:
@@ -292,5 +291,4 @@ jobs:
           echo "✅ Dev environment frontend deployment to Vercel triggered successfully!"
           echo "Preview deployment is in progress. Check Vercel dashboard for status."
           echo "Project ID: ${{ secrets.VERCEL_PROJECT_ID_DEV }}"
-          echo "AWS Profile: ${{ env.AWS_PROFILE }}"
 
