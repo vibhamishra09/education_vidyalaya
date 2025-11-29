@@ -18,6 +18,7 @@ async function bootstrap() {
     'https://webyalaya.com',
     'https://webyalaya-next.vercel.app',
     'https://test.webyalaya.com',
+    'https://test2.webyalaya.com',
     'https://webyalaya-next-test.vercel.app',
     'https://dev.webyalaya.com',
     'https://dev2.webyalaya.com',
@@ -73,3 +74,7 @@ async function bootstrap() {
 }
 
 bootstrap();
+<<<<<<< HEAD
+=======
+//
+>>>>>>> origin/test
