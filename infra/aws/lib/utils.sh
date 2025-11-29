@@ -9,20 +9,41 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Logging functions
+# These functions handle the case where SETUP_LOG might not be set yet
 log() {
-    echo -e "${BLUE}[$(date +'%Y-%m-%d %H:%M:%S')]${NC} $1" | tee -a "$SETUP_LOG"
+    local message="${BLUE}[$(date +'%Y-%m-%d %H:%M:%S')]${NC} $1"
+    if [ -n "${SETUP_LOG:-}" ]; then
+        echo -e "$message" | tee -a "$SETUP_LOG"
+    else
+        echo -e "$message"
+    fi
 }
 
 log_success() {
-    echo -e "${GREEN}✅ $1${NC}" | tee -a "$SETUP_LOG"
+    local message="${GREEN}✅ $1${NC}"
+    if [ -n "${SETUP_LOG:-}" ]; then
+        echo -e "$message" | tee -a "$SETUP_LOG"
+    else
+        echo -e "$message"
+    fi
 }
 
 log_error() {
-    echo -e "${RED}❌ $1${NC}" | tee -a "$SETUP_LOG"
+    local message="${RED}❌ $1${NC}"
+    if [ -n "${SETUP_LOG:-}" ]; then
+        echo -e "$message" | tee -a "$SETUP_LOG" >&2
+    else
+        echo -e "$message" >&2
+    fi
 }
 
 log_warning() {
-    echo -e "${YELLOW}⚠️  $1${NC}" | tee -a "$SETUP_LOG"
+    local message="${YELLOW}⚠️  $1${NC}"
+    if [ -n "${SETUP_LOG:-}" ]; then
+        echo -e "$message" | tee -a "$SETUP_LOG"
+    else
+        echo -e "$message"
+    fi
 }
 
 # Check prerequisites

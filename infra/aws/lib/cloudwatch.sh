@@ -4,8 +4,6 @@
 setup_cloudwatch_logs() {
     log "Setting up CloudWatch log group..."
     
-    LOG_GROUP="/ecs/webyalaya-dev-backend-task"
-    
     # Disable path conversion for Git Bash to prevent /ecs/ from being converted to C:/Program Files/Git/ecs/
     disable_pathconv
     

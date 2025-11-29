@@ -6,15 +6,15 @@ setup_security_groups() {
     
     # ALB Security Group
     ALB_SG_ID=$($AWS_CMD ec2 describe-security-groups \
-        --filters "Name=group-name,Values=webyalaya-alb-sg" "Name=vpc-id,Values=$DEFAULT_VPC_ID" \
+        --filters "Name=group-name,Values=$ALB_SG_NAME" "Name=vpc-id,Values=$DEFAULT_VPC_ID" \
         --query 'SecurityGroups[0].GroupId' \
         --output text 2>/dev/null || echo "")
     
     if [ "$ALB_SG_ID" = "None" ] || [ -z "$ALB_SG_ID" ]; then
         if [ "$DRY_RUN" = false ]; then
             ALB_SG_ID=$($AWS_CMD ec2 create-security-group \
-                --group-name webyalaya-alb-sg \
-                --description "Security group for Webyalaya ALB" \
+                --group-name "$ALB_SG_NAME" \
+                --description "Security group for ${PROJECT_NAME} ALB" \
                 --vpc-id $DEFAULT_VPC_ID \
                 --query 'GroupId' \
                 --output text)
@@ -44,15 +44,15 @@ setup_security_groups() {
     
     # ECS Task Security Group
     ECS_SG_ID=$($AWS_CMD ec2 describe-security-groups \
-        --filters "Name=group-name,Values=webyalaya-ecs-task-sg" "Name=vpc-id,Values=$DEFAULT_VPC_ID" \
+        --filters "Name=group-name,Values=$ECS_SG_NAME" "Name=vpc-id,Values=$DEFAULT_VPC_ID" \
         --query 'SecurityGroups[0].GroupId' \
         --output text 2>/dev/null || echo "")
     
     if [ "$ECS_SG_ID" = "None" ] || [ -z "$ECS_SG_ID" ]; then
         if [ "$DRY_RUN" = false ]; then
             ECS_SG_ID=$($AWS_CMD ec2 create-security-group \
-                --group-name webyalaya-ecs-task-sg \
-                --description "Security group for Webyalaya ECS tasks" \
+                --group-name "$ECS_SG_NAME" \
+                --description "Security group for ${PROJECT_NAME} ECS tasks" \
                 --vpc-id $DEFAULT_VPC_ID \
                 --query 'GroupId' \
                 --output text)

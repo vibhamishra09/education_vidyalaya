@@ -4,8 +4,6 @@
 setup_alb() {
     log "Setting up Application Load Balancer..."
     
-    ALB_NAME="webyalaya-dev-alb"
-    
     # Check if ALB already exists
     EXISTING_ALB=$($AWS_CMD elbv2 describe-load-balancers \
         --query "LoadBalancers[?LoadBalancerName=='$ALB_NAME'].LoadBalancerArn" \
@@ -44,7 +42,6 @@ setup_alb() {
     fi
     
     # Create Target Group
-    TG_NAME="webyalaya-dev-tg"
     EXISTING_TG=$($AWS_CMD elbv2 describe-target-groups \
         --query "TargetGroups[?TargetGroupName=='$TG_NAME'].TargetGroupArn" \
         --output text 2>/dev/null || echo "")

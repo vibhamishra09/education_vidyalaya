@@ -1,21 +1,21 @@
-name: Deploy (Dev - Namaste Profile)
+name: Deploy (Test - Namaste Profile)
 
 on:
   push:
     branches:
-      - dev
+      - test
     paths:
       - 'backend/**'
       - 'my-app/**'
-      - '.github/workflows/deploy-dev-namaste.yml'
+      - '.github/workflows/deploy-test-namaste.yml'
 
 env:
   AWS_REGION: us-west-2
-  ECR_REPOSITORY: webyalaya-dev-backend-app
-  ECS_CLUSTER: webyalaya-dev-backend-cluster
-  ECS_SERVICE: webyalaya-dev-backend-task-service
-  MIGRATION_TASK_DEF: webyalaya-dev-backend-migrate-task
-  MIGRATION_SG_NAME: webyalaya-dev-backend-sg
+  ECR_REPOSITORY: webyalaya-test-backend-app
+  ECS_CLUSTER: webyalaya-test-backend-app
+  ECS_SERVICE: webyalaya-test-backend-task-service
+  MIGRATION_TASK_DEF: webyalaya-test-backend-migrate-task
+  MIGRATION_SG_NAME: ecs-webyalaya-test-tasks-sg
   SUBNET_TAG_KEY: Name
   SUBNET_TAG_VALUE: webyalaya-subnet
 
@@ -48,7 +48,7 @@ jobs:
               - 'backend/**'
             frontend:
               - 'my-app/**'
-      - name: Lookup last successful dev deploy SHA
+      - name: Lookup last successful test deploy SHA
         id: last_success
         uses: actions/github-script@v7
         with:
@@ -59,15 +59,15 @@ jobs:
             const { data } = await github.rest.actions.listWorkflowRuns({
               owner,
               repo,
-              workflow_id: 'deploy-dev-namaste.yml',
+              workflow_id: 'deploy-test-namaste.yml',
               branch,
               status: 'success',
               per_page: 1
             });
             const sha = data.workflow_runs?.[0]?.head_sha ?? '';
-            core.info(`Last successful dev deploy SHA: ${sha || 'none found'}`);
+            core.info(`Last successful test deploy SHA: ${sha || 'none found'}`);
             core.setOutput('sha', sha);
-      - name: Detect Prisma migration changes since last dev deploy
+      - name: Detect Prisma migration changes since last test deploy
         id: prisma_migrations
         run: |
           LAST_SUCCESS="${{ steps.last_success.outputs.sha }}"
@@ -80,7 +80,7 @@ jobs:
           fi
 
           if [ -z "$LAST_SUCCESS" ]; then
-            echo "No prior successful dev deployment. Running migrations."
+            echo "No prior successful test deployment. Running migrations."
             echo "changed=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -103,12 +103,12 @@ jobs:
             echo "No skip directive found."
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
-      - name: Detect skip-dev-namaste directive in commit message
+      - name: Detect skip-test-namaste directive in commit message
         id: skip_deploy
         run: |
           COMMIT_MSG="${{ github.event.head_commit.message }}"
-          if echo "$COMMIT_MSG" | grep -iq "\[skip dev-namaste\]"; then
-            echo "Skip dev-namaste directive found."
+          if echo "$COMMIT_MSG" | grep -iq "\[skip test-namaste\]"; then
+            echo "Skip test-namaste directive found."
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
             echo "No skip directive found."
@@ -120,10 +120,10 @@ jobs:
           echo "Frontend changes detected: ${{ steps.filter.outputs.frontend }}"
           echo "Prisma migrations changed: ${{ steps.prisma_migrations.outputs.changed }}"
           echo "Skip prisma migrate flag: ${{ steps.skip_migrate.outputs.skip }}"
-          echo "Skip dev-namaste deploy flag: ${{ steps.skip_deploy.outputs.skip }}"
+          echo "Skip test-namaste deploy flag: ${{ steps.skip_deploy.outputs.skip }}"
 
   deploy-backend:
-    name: Build and Deploy Backend (Namaste Profile)
+    name: Build and Deploy Backend (Test - Namaste Profile)
     runs-on: ubuntu-latest
     needs: changes
     if: needs.changes.outputs.backend == 'true' && needs.changes.outputs.skip_deploy != 'true'
@@ -171,18 +171,18 @@ jobs:
         id: build-image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
+          IMAGE_TAG: test-${{ github.sha }}
         working-directory: ./backend
         run: |
           # Build Docker image (no tag = implicitly uses :latest)
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY .
 
           # Also tag with SHA for traceability
-          docker tag $ECR_REGISTRY/$ECR_REPOSITORY $ECR_REGISTRY/$ECR_REPOSITORY:dev-$IMAGE_TAG
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
           # Push both: untagged (latest) and SHA-tagged
           docker push $ECR_REGISTRY/$ECR_REPOSITORY
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:dev-$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY" >> $GITHUB_OUTPUT
 
@@ -253,7 +253,7 @@ jobs:
 
       - name: Deployment summary
         run: |
-          echo "✅ Backend deployment triggered successfully!"
+          echo "✅ Test environment backend deployment triggered successfully!"
           echo "Image: ${{ steps.build-image.outputs.image }}"
           echo "ECS Service: ${{ env.ECS_SERVICE }}"
           echo "Cluster: ${{ env.ECS_CLUSTER }}"
@@ -261,7 +261,7 @@ jobs:
           echo "Deployment is in progress. ECS will pull the updated image."
 
   deploy-frontend:
-    name: Deploy Frontend to Vercel (Dev - Namaste)
+    name: Deploy Frontend to Vercel (Test - Namaste)
     runs-on: ubuntu-latest
     needs: changes
     if: needs.changes.outputs.frontend == 'true' && needs.changes.outputs.skip_deploy != 'true'
@@ -283,25 +283,25 @@ jobs:
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
 
-      - name: Deploy to Vercel (Dev Environment Preview)
+      - name: Deploy to Vercel (Test Environment Production)
         working-directory: ./my-app
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_DEV2 }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_TEST2 }}
         run: |
           # Link project if not already linked (non-interactive)
           if [ ! -f .vercel/project.json ]; then
-            echo "Linking Vercel dev project..."
+            echo "Linking Vercel test project..."
             vercel link --yes --token=$VERCEL_TOKEN --scope=$VERCEL_ORG_ID --project=$VERCEL_PROJECT_ID || true
           fi
 
-           # Deploy to production on test environment
+          # Deploy to production on test environment
           vercel deploy --prod --yes --token=$VERCEL_TOKEN
 
       - name: Deployment summary
         run: |
-          echo "✅ Dev environment frontend deployment to Vercel triggered successfully!"
-          echo "Preview deployment is in progress. Check Vercel dashboard for status."
-          echo "Project ID: ${{ secrets.VERCEL_PROJECT_ID_DEV2 }}"
+          echo "✅ Test environment frontend deployment to Vercel triggered successfully!"
+          echo "Production deployment (test environment) is in progress. Check Vercel dashboard for status."
+          echo "Project ID: ${{ secrets.VERCEL_PROJECT_ID_TEST2 }}"
 

@@ -9,12 +9,10 @@ parse_env_file() {
     local env_json=""
     
     if [ ! -f "$env_file" ]; then
-        log_error "Environment file not found: $env_file" >&2
         return 1
     fi
     
     if [ ! -r "$env_file" ]; then
-        log_error "Environment file is not readable: $env_file" >&2
         return 1
     fi
     
@@ -22,10 +20,8 @@ parse_env_file() {
     FIRST_CHAR=$(head -c 1 "$env_file" | tr -d '\n')
     IS_JSON=false
 
-    echo "First character: $FIRST_CHAR"
     if [ "$FIRST_CHAR" = "{" ] || [ "$FIRST_CHAR" = "[" ]; then
         IS_JSON=true
-        echo "File looks like JSON"
     fi
     
     # Try to parse as JSON format if it looks like JSON
@@ -34,12 +30,10 @@ parse_env_file() {
         if jq -e '. | type == "array"' "$env_file" &> /dev/null; then
             # Already in ECS format
             env_json=$(jq -c '.' "$env_file")
-            log "Parsed environment variables from JSON array format"
         # Try to parse as JSON object format: {"VAR":"val",...}
         elif jq -e '. | type == "object"' "$env_file" &> /dev/null; then
             # Convert object to array format
             env_json=$(jq -c '[to_entries[] | {name: .key, value: .value}]' "$env_file")
-            log "Parsed environment variables from JSON object format"
         else
             IS_JSON=false
         fi
@@ -47,7 +41,6 @@ parse_env_file() {
     
     # If not JSON or JSON parsing failed, try key-value format (.env style)
     if [ -z "$env_json" ] || [ "$IS_JSON" = false ]; then
-        log "Parsing environment variables from key-value format (.env style)..."
         env_json="["
         FIRST=true
         VAR_COUNT=0
@@ -96,16 +89,9 @@ parse_env_file() {
             fi
         done < "$env_file"
         env_json+="]"
-        
-        if [ $VAR_COUNT -eq 0 ]; then
-            log_warning "No environment variables found in key-value format"
-        else
-            log "Parsed $VAR_COUNT environment variables from key-value format"
-        fi
     fi
     
     if [ -z "$env_json" ] || [ "$env_json" = "[]" ]; then
-        log_warning "No environment variables parsed from file"
         return 1
     fi
     

@@ -89,10 +89,10 @@ EOF
         "s3:ListBucket"
       ],
       "Resource": [
-        "arn:aws:s3:::webyalaya-*-uploads",
-        "arn:aws:s3:::webyalaya-*-uploads/*",
-        "arn:aws:s3:::webyalaya-dev-media-namaste",
-        "arn:aws:s3:::webyalaya-dev-media-namaste/*"
+        "arn:aws:s3:::${PROJECT_NAME}-*-uploads",
+        "arn:aws:s3:::${PROJECT_NAME}-*-uploads/*",
+        "arn:aws:s3:::${BUCKET_NAME}",
+        "arn:aws:s3:::${BUCKET_NAME}/*"
       ]
     }
   ]

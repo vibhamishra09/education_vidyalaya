@@ -4,8 +4,6 @@
 setup_ecr() {
     log "Setting up ECR repository..."
     
-    REPO_NAME="webyalaya-dev-backend-app"
-    
     if $AWS_CMD ecr describe-repositories --repository-names $REPO_NAME &> /dev/null; then
         log_warning "ECR repository '$REPO_NAME' already exists"
     else

@@ -4,7 +4,6 @@
 setup_s3() {
     log "Setting up S3 bucket..."
     
-    BUCKET_NAME="webyalaya-dev-media-namaste"
     BUCKET_EXISTS=false
     
     # Check if bucket exists
@@ -167,9 +166,6 @@ EOF
 setup_s3_user() {
     log "Setting up S3 IAM user..."
     
-    S3_USER_NAME="webyalaya-dev-s3-user"
-    BUCKET_NAME="webyalaya-dev-media-namaste"
-    
     # Check if user already exists
     if $AWS_CMD iam get-user --user-name "$S3_USER_NAME" &> /dev/null; then
         log_warning "IAM user '$S3_USER_NAME' already exists"
@@ -215,8 +211,8 @@ setup_s3_user() {
         "s3:ListBucket"
       ],
       "Resource": [
-        "arn:aws:s3:::webyalaya-*-uploads",
-        "arn:aws:s3:::webyalaya-*-uploads/*",
+        "arn:aws:s3:::${PROJECT_NAME}-*-uploads",
+        "arn:aws:s3:::${PROJECT_NAME}-*-uploads/*",
         "arn:aws:s3:::${BUCKET_NAME}",
         "arn:aws:s3:::${BUCKET_NAME}/*"
       ]

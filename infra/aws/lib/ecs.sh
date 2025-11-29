@@ -43,8 +43,6 @@ setup_ecs_cluster() {
     # Ensure ECS service linked role exists first
     setup_ecs_service_linked_role
     
-    CLUSTER_NAME="webyalaya-dev-backend-cluster"
-    
     if $AWS_CMD ecs describe-clusters --clusters $CLUSTER_NAME --query 'clusters[0].status' --output text 2>/dev/null | grep -q "ACTIVE"; then
         log_warning "ECS cluster '$CLUSTER_NAME' already exists"
     else
@@ -75,7 +73,6 @@ setup_task_definition() {
     log "Setting up ECS Task Definition..."
     
     AWS_ACCOUNT_ID=$(get_account_id)
-    TASK_FAMILY="webyalaya-dev-backend-task"
     
     # Parse environment variables from file if provided
     ENV_VARS_JSON=""
@@ -102,7 +99,7 @@ setup_task_definition() {
                 --arg access_key "$S3_ACCESS_KEY_ID" \
                 --arg secret_key "$S3_SECRET_ACCESS_KEY" \
                 --arg region "$REGION" \
-                --arg bucket "${S3_BUCKET_NAME:-webyalaya-dev-media-namaste}" \
+                --arg bucket "${S3_BUCKET_NAME:-$BUCKET_NAME}" \
                 '[
                     {"name": "AWS_ACCESS_KEY_ID", "value": $access_key},
                     {"name": "AWS_SECRET_ACCESS_KEY", "value": $secret_key},
@@ -111,7 +108,7 @@ setup_task_definition() {
                 ]')
         else
             # Fallback: manual JSON construction
-            S3_BUCKET="${S3_BUCKET_NAME:-webyalaya-dev-media-namaste}"
+            S3_BUCKET="${S3_BUCKET_NAME:-$BUCKET_NAME}"
             S3_ENV_JSON="[{\"name\":\"AWS_ACCESS_KEY_ID\",\"value\":\"$S3_ACCESS_KEY_ID\"},{\"name\":\"AWS_SECRET_ACCESS_KEY\",\"value\":\"$S3_SECRET_ACCESS_KEY\"},{\"name\":\"AWS_REGION\",\"value\":\"$REGION\"},{\"name\":\"AWS_S3_BUCKET_NAME\",\"value\":\"$S3_BUCKET\"}]"
         fi
     fi
@@ -131,14 +128,14 @@ setup_task_definition() {
     
     # TODO: Fix jq issue
     # Merge all arrays
-    # if command -v jq &> /dev/null && [ ${#ALL_ENV_ARRAYS[@]} -gt 0 ]; then
-    #     # Merge arrays, with later arrays taking precedence over earlier ones
-    #     ENV_VARS_JSON=$(printf '%s\n' "${ALL_ENV_ARRAYS[@]}" | jq -s 'add | group_by(.name) | map(.[-1])')
-    #     if [ $? -ne 0 ]; then
-    #         log_error "Failed to merge environment variables"
-    #         exit 1
-    #     fi
-    if [ ${#ALL_ENV_ARRAYS[@]} -gt 1 ]; then
+    if command -v jq &> /dev/null && [ ${#ALL_ENV_ARRAYS[@]} -gt 0 ]; then
+        # Merge arrays, with later arrays taking precedence over earlier ones
+        ENV_VARS_JSON=$(printf '%s\n' "${ALL_ENV_ARRAYS[@]}" | jq -s 'add | group_by(.name) | map(.[-1])')
+        if [ $? -ne 0 ]; then
+            log_error "Failed to merge environment variables"
+            exit 1
+        fi
+    elif [ ${#ALL_ENV_ARRAYS[@]} -gt 1 ]; then
         # Fallback: if jq not available, manually merge
         ENV_VARS_JSON="${ALL_ENV_ARRAYS[0]}"
         for i in $(seq 1 $((${#ALL_ENV_ARRAYS[@]} - 1))); do
@@ -163,6 +160,12 @@ setup_task_definition() {
         fi
     else
         if [ "$DRY_RUN" = false ]; then
+            # Disable path conversion to prevent Git Bash from converting /ecs/... to a file path
+            disable_pathconv
+            
+            # Strip leading slash from LOG_GROUP for ECS task definition (awslogs-group doesn't accept leading /)
+            LOG_GROUP_FOR_TASK="${LOG_GROUP#/}"
+            
             # Create task definition JSON with environment variables
             if command -v jq &> /dev/null; then
                 # Use jq to build the complete JSON
@@ -172,8 +175,9 @@ setup_task_definition() {
                     --arg memory "512" \
                     --arg execution_role "arn:aws:iam::${AWS_ACCOUNT_ID}:role/ecsTaskExecutionRole" \
                     --arg task_role "arn:aws:iam::${AWS_ACCOUNT_ID}:role/ecsTaskRole" \
-                    --arg image "${AWS_ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/webyalaya-dev-backend-app:latest" \
+                    --arg image "${AWS_ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/${REPO_NAME}:latest" \
                     --arg region "$REGION" \
+                    --arg log_group "$LOG_GROUP_FOR_TASK" \
                     --argjson env_vars "$ENV_VARS_JSON" \
                     '{
                       "family": $family,
@@ -194,7 +198,7 @@ setup_task_definition() {
                         "logConfiguration": {
                           "logDriver": "awslogs",
                           "options": {
-                            "awslogs-group": "/ecs/webyalaya-dev-backend-task",
+                            "awslogs-group": $log_group,
                             "awslogs-region": $region,
                             "awslogs-stream-prefix": "ecs"
                           }
@@ -205,6 +209,8 @@ setup_task_definition() {
             else
                 # Fallback: build JSON manually (simpler format, may not handle all edge cases)
                 log_warning "jq not available, using basic JSON generation"
+                # Strip leading slash from LOG_GROUP for ECS task definition (awslogs-group doesn't accept leading /)
+                LOG_GROUP_FOR_TASK="${LOG_GROUP#/}"
                 cat > "$OUTPUT_DIR/dev-task-definition.json" <<EOF
 {
   "family": "$TASK_FAMILY",
@@ -217,7 +223,7 @@ setup_task_definition() {
   "containerDefinitions": [
     {
       "name": "nestjs-container",
-      "image": "${AWS_ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/webyalaya-dev-backend-app:latest",
+      "image": "${AWS_ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/${REPO_NAME}:latest",
       "portMappings": [
         {
           "containerPort": 3000,
@@ -228,7 +234,7 @@ setup_task_definition() {
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {
-          "awslogs-group": "/ecs/webyalaya-dev-backend-task",
+          "awslogs-group": "$LOG_GROUP_FOR_TASK",
           "awslogs-region": "${REGION}",
           "awslogs-stream-prefix": "ecs"
         }
@@ -246,6 +252,9 @@ EOF
                 log_error "Task definition file was not created: $OUTPUT_DIR/dev-task-definition.json"
                 exit 1
             fi
+            
+            # Re-enable path conversion before AWS CLI call (file path needs conversion)
+            enable_pathconv
             
             TASK_DEF_FILE=$(convert_path_for_aws "$OUTPUT_DIR/dev-task-definition.json")
             $AWS_CMD ecs register-task-definition \
@@ -269,8 +278,6 @@ EOF
 
 setup_ecs_service() {
     log "Setting up ECS Service..."
-    
-    SERVICE_NAME="webyalaya-dev-backend-task-service"
     
     # Verify target group is associated with ALB before creating service
     if [ "$DRY_RUN" = false ] && [ -n "$DEV_TG_ARN" ] && [ "$DEV_TG_ARN" != "arn:aws:elasticloadbalancing:dryrun" ]; then
@@ -297,7 +304,7 @@ setup_ecs_service() {
             SERVICE_OUTPUT=$($AWS_CMD ecs create-service \
                 --cluster $CLUSTER_NAME \
                 --service-name $SERVICE_NAME \
-                --task-definition webyalaya-dev-backend-task \
+                --task-definition $TASK_FAMILY \
                 --desired-count 1 \
                 --launch-type FARGATE \
                 --network-configuration "awsvpcConfiguration={subnets=[$SUBNET_1,$SUBNET_2],securityGroups=[$ECS_SG_ID],assignPublicIp=ENABLED}" \
@@ -332,14 +339,14 @@ verify_setup() {
     echo "=== Verification Results ===" >> "$SETUP_LOG"
     
     # Verify ECR
-    if $AWS_CMD ecr describe-repositories --repository-names webyalaya-dev-backend-app &> /dev/null; then
+    if $AWS_CMD ecr describe-repositories --repository-names $REPO_NAME &> /dev/null; then
         log_success "ECR repository verified"
     else
         log_error "ECR repository verification failed"
     fi
     
     # Verify ECS cluster
-    if $AWS_CMD ecs describe-clusters --clusters webyalaya-dev-backend-cluster --query 'clusters[0].status' --output text 2>/dev/null | grep -q "ACTIVE"; then
+    if $AWS_CMD ecs describe-clusters --clusters $CLUSTER_NAME --query 'clusters[0].status' --output text 2>/dev/null | grep -q "ACTIVE"; then
         log_success "ECS cluster verified"
     else
         log_error "ECS cluster verification failed"
@@ -355,7 +362,7 @@ verify_setup() {
     fi
     
     # Verify S3
-    if $AWS_CMD s3 ls "s3://webyalaya-dev-media-namaste" &> /dev/null; then
+    if $AWS_CMD s3 ls "s3://$BUCKET_NAME" &> /dev/null; then
         log_success "S3 bucket verified"
     else
         log_error "S3 bucket verification failed"
@@ -365,7 +372,7 @@ verify_setup() {
     # Disable path conversion for Git Bash to prevent /ecs/ from being converted
     disable_pathconv
     
-    if $AWS_CMD logs describe-log-groups --log-group-name-prefix "/ecs/webyalaya-dev" --query "logGroups[?logGroupName=='/ecs/webyalaya-dev-backend-task']" --output text | grep -q "/ecs/webyalaya-dev-backend-task"; then
+    if $AWS_CMD logs describe-log-groups --log-group-name-prefix "$LOG_GROUP" --query "logGroups[?logGroupName=='$LOG_GROUP']" --output text | grep -q "$LOG_GROUP"; then
         log_success "CloudWatch log group verified"
     else
         log_error "CloudWatch log group verification failed"
