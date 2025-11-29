@@ -24,4 +24,3 @@ export class UploadResponseDto {
   fileUrl: string;
   key: string;
 }
-

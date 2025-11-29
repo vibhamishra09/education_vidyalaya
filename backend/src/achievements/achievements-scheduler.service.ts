@@ -57,7 +57,10 @@ export class AchievementsSchedulerService {
       `Manually triggered monthly badges for ${year}-${String(month).padStart(2, '0')}`,
     );
 
-    const topUsers = await this.achievementsService.getMonthlyTopUsers(month, year);
+    const topUsers = await this.achievementsService.getMonthlyTopUsers(
+      month,
+      year,
+    );
 
     this.logger.log(
       `Top Learner: ${topUsers.topLearners[0]?.userId || 'None'}`,

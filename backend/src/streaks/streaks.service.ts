@@ -21,14 +21,14 @@ export class StreaksService {
     role: 'learner' | 'teacher',
     coinsEarned: number = 0,
   ) {
-    console.log('🔥 [StreaksService.updateUserActivity] Called with:', { 
-      userId, 
-      sessionDate: sessionDate.toISOString(), 
-      duration, 
-      role, 
-      coinsEarned 
+    console.log('🔥 [StreaksService.updateUserActivity] Called with:', {
+      userId,
+      sessionDate: sessionDate.toISOString(),
+      duration,
+      role,
+      coinsEarned,
     });
-    
+
     // Get user's timezone
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -36,23 +36,34 @@ export class StreaksService {
     });
 
     if (!user) {
-      console.error('❌ [StreaksService.updateUserActivity] User not found:', userId);
+      console.error(
+        '❌ [StreaksService.updateUserActivity] User not found:',
+        userId,
+      );
       throw new Error(`User not found: ${userId}`);
     }
 
     const timezone = user?.timezone || 'UTC';
-    console.log('✅ [StreaksService.updateUserActivity] User found:', { name: user.name, timezone });
+    console.log('✅ [StreaksService.updateUserActivity] User found:', {
+      name: user.name,
+      timezone,
+    });
 
     // Normalize session date to midnight in user's timezone
     const normalizedDate = DateTime.fromJSDate(sessionDate)
       .setZone(timezone)
       .startOf('day')
       .toJSDate();
-      
-    console.log('📅 [StreaksService.updateUserActivity] Normalized date:', normalizedDate.toISOString());
+
+    console.log(
+      '📅 [StreaksService.updateUserActivity] Normalized date:',
+      normalizedDate.toISOString(),
+    );
 
     // Upsert daily activity record
-    console.log('💾 [StreaksService.updateUserActivity] Upserting daily activity...');
+    console.log(
+      '💾 [StreaksService.updateUserActivity] Upserting daily activity...',
+    );
     const activity = await this.prisma.dailyActivity.upsert({
       where: {
         userId_date: {
@@ -63,13 +74,8 @@ export class StreaksService {
       update: {
         sessionCount: { increment: 1 },
         minutesLearned:
-          role === 'learner'
-            ? { increment: duration }
-            : undefined,
-        minutesTaught:
-          role === 'teacher'
-            ? { increment: duration }
-            : undefined,
+          role === 'learner' ? { increment: duration } : undefined,
+        minutesTaught: role === 'teacher' ? { increment: duration } : undefined,
         coinsEarned: { increment: coinsEarned },
       },
       create: {
@@ -81,18 +87,25 @@ export class StreaksService {
         coinsEarned,
       },
     });
-    
-    console.log('✅ [StreaksService.updateUserActivity] Daily activity saved:', {
-      date: activity.date.toISOString(),
-      sessionCount: activity.sessionCount,
-      minutesLearned: activity.minutesLearned,
-      minutesTaught: activity.minutesTaught
-    });
+
+    console.log(
+      '✅ [StreaksService.updateUserActivity] Daily activity saved:',
+      {
+        date: activity.date.toISOString(),
+        sessionCount: activity.sessionCount,
+        minutesLearned: activity.minutesLearned,
+        minutesTaught: activity.minutesTaught,
+      },
+    );
 
     // Update user's streak
-    console.log('🔄 [StreaksService.updateUserActivity] Updating user streak...');
+    console.log(
+      '🔄 [StreaksService.updateUserActivity] Updating user streak...',
+    );
     await this.updateUserStreak(userId);
-    console.log('✅ [StreaksService.updateUserActivity] User streak updated successfully');
+    console.log(
+      '✅ [StreaksService.updateUserActivity] User streak updated successfully',
+    );
 
     return activity;
   }
@@ -102,9 +115,15 @@ export class StreaksService {
    * @param userId User ID
    */
   async updateUserStreak(userId: string) {
-    console.log('📊 [StreaksService.updateUserStreak] Calculating streak for:', userId);
+    console.log(
+      '📊 [StreaksService.updateUserStreak] Calculating streak for:',
+      userId,
+    );
     const streak = await this.calculateStreak(userId);
-    console.log('📊 [StreaksService.updateUserStreak] Calculated streak:', streak);
+    console.log(
+      '📊 [StreaksService.updateUserStreak] Calculated streak:',
+      streak,
+    );
 
     // Get current longest streak
     const user = await this.prisma.user.findUnique({
@@ -116,12 +135,12 @@ export class StreaksService {
       streak.currentStreak,
       user?.longestStreak || 0,
     );
-    
+
     console.log('💾 [StreaksService.updateUserStreak] Updating user record:', {
       name: user?.name,
       currentStreak: streak.currentStreak,
       longestStreak,
-      lastActivityDate: streak.lastActivityDate
+      lastActivityDate: streak.lastActivityDate,
     });
 
     // Update user's streak data
@@ -133,8 +152,10 @@ export class StreaksService {
         lastActivityDate: streak.lastActivityDate,
       },
     });
-    
-    console.log('✅ [StreaksService.updateUserStreak] User streak updated in database');
+
+    console.log(
+      '✅ [StreaksService.updateUserStreak] User streak updated in database',
+    );
 
     return {
       currentStreak: streak.currentStreak,
@@ -295,7 +316,10 @@ export class StreaksService {
    * @returns Streak information
    */
   async getUserStreak(userId: string) {
-    console.log('🔍 [StreaksService.getUserStreak] Fetching streak for userId:', userId);
+    console.log(
+      '🔍 [StreaksService.getUserStreak] Fetching streak for userId:',
+      userId,
+    );
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -315,11 +339,11 @@ export class StreaksService {
       };
     }
 
-    console.log('✅ [StreaksService.getUserStreak] Found user:', { 
+    console.log('✅ [StreaksService.getUserStreak] Found user:', {
       name: user.name,
       currentStreak: user.currentStreak,
       longestStreak: user.longestStreak,
-      lastActivityDate: user.lastActivityDate
+      lastActivityDate: user.lastActivityDate,
     });
 
     return {

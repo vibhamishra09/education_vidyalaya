@@ -1,14 +1,26 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import { RequestSessionDto, UpdateSessionStatusDto } from './dto/peer-session.dto';
+import {
+  RequestSessionDto,
+  UpdateSessionStatusDto,
+} from './dto/peer-session.dto';
 import { SessionStatus, PaymentStatus, NotifType } from '@prisma/client';
-import { normalizeGoogleMeetLink, isValidGoogleMeetLink } from '../utils/gmeet-generator';
+import {
+  normalizeGoogleMeetLink,
+  isValidGoogleMeetLink,
+} from '../utils/gmeet-generator';
 import { ChatService } from '../chat/chat.service';
 import { convertLocalToUTC } from '../utils/timezone';
 import { AvailabilityService } from '../availability/availability.service';
 import { StreaksService } from '../streaks/streaks.service';
 import { AchievementsService } from '../achievements/achievements.service';
+import { TranscriptsService } from '../transcripts/transcripts.service';
 
 @Injectable()
 export class PeerSessionsService {
@@ -19,6 +31,7 @@ export class PeerSessionsService {
     private availabilityService: AvailabilityService,
     private streaksService: StreaksService,
     private achievementsService: AchievementsService,
+    private transcriptsService: TranscriptsService,
   ) {}
 
   async getPeerSessions(
@@ -95,8 +108,12 @@ export class PeerSessionsService {
     const peerSession = await this.prisma.peerSession.findUnique({
       where: { id: peerSessionId },
       include: {
-        requestedBy: { select: { id: true, name: true, avatar: true, clerkId: true } },
-        requestedTo: { select: { id: true, name: true, avatar: true, clerkId: true } },
+        requestedBy: {
+          select: { id: true, name: true, avatar: true, clerkId: true },
+        },
+        requestedTo: {
+          select: { id: true, name: true, avatar: true, clerkId: true },
+        },
         skills: { include: { skill: { select: { id: true, name: true } } } },
       },
     });
@@ -130,6 +147,7 @@ export class PeerSessionsService {
       date: peerSession.date,
       duration: peerSession.duration,
       gmeetLink: peerSession.gmeetLink,
+      summary: peerSession.summary,
       requestedBy: {
         id: peerSession.requestedBy.id,
         name: peerSession.requestedBy.name,
@@ -184,12 +202,16 @@ export class PeerSessionsService {
 
     // Convert user's local time to UTC
     // Example: 11 AM IST -> 5:30 AM UTC
-    const dateTime = convertLocalToUTC(requestDto.date, requestDto.time, requestDto.timezone);
+    const dateTime = convertLocalToUTC(
+      requestDto.date,
+      requestDto.time,
+      requestDto.timezone,
+    );
 
     // Validate that session is scheduled at least 2 minutes in the future
     const now = new Date();
     const minAdvanceTime = 2 * 60 * 1000; // 2 minutes in milliseconds
-    
+
     if (dateTime.getTime() <= now.getTime() + minAdvanceTime) {
       throw new BadRequestException({
         code: 'INSUFFICIENT_ADVANCE_TIME',
@@ -198,11 +220,12 @@ export class PeerSessionsService {
     }
 
     // Check if the peer is available at the requested time
-    const availabilityCheck = await this.availabilityService.checkTimeSlotAvailability(
-      peer.id,
-      dateTime,
-      requestDto.duration,
-    );
+    const availabilityCheck =
+      await this.availabilityService.checkTimeSlotAvailability(
+        peer.id,
+        dateTime,
+        requestDto.duration,
+      );
 
     // if (!availabilityCheck.isAvailable) {
     //   throw new BadRequestException({
@@ -213,7 +236,9 @@ export class PeerSessionsService {
     // }
 
     // Normalize Google Meet link if provided
-    const gmeetLink = requestDto.gmeetLink ? normalizeGoogleMeetLink(requestDto.gmeetLink) : null;
+    const gmeetLink = requestDto.gmeetLink
+      ? normalizeGoogleMeetLink(requestDto.gmeetLink)
+      : null;
 
     const peerSession = await this.prisma.peerSession.create({
       data: {
@@ -229,7 +254,10 @@ export class PeerSessionsService {
     });
 
     // Add skills - if no skills provided, default to "Communication"
-    const skillsToAdd = requestDto.skills && requestDto.skills.length > 0 ? requestDto.skills : ['Communication'];
+    const skillsToAdd =
+      requestDto.skills && requestDto.skills.length > 0
+        ? requestDto.skills
+        : ['Communication'];
 
     for (const skillName of skillsToAdd) {
       const skill = await this.prisma.skill.findUnique({
@@ -278,7 +306,7 @@ export class PeerSessionsService {
     );
 
     return {
-      ...await this.getPeerSessionDetails(peerSession.id),
+      ...(await this.getPeerSessionDetails(peerSession.id)),
       payment: {
         id: payment.id,
         amount: payment.amountMade,
@@ -287,7 +315,11 @@ export class PeerSessionsService {
     };
   }
 
-  async updatePeerSessionStatus(peerSessionId: string, userId: string, updateDto: UpdateSessionStatusDto) {
+  async updatePeerSessionStatus(
+    peerSessionId: string,
+    userId: string,
+    updateDto: UpdateSessionStatusDto,
+  ) {
     // userId is actually clerkId, so we need to find the user by clerkId first
     const user = await this.prisma.user.findUnique({
       where: { clerkId: userId },
@@ -315,7 +347,12 @@ export class PeerSessionsService {
     }
 
     // Validate status transitions
-    this.validateStatusTransition(peerSession.sessionStatus, updateDto.status, user.id, peerSession);
+    this.validateStatusTransition(
+      peerSession.sessionStatus,
+      updateDto.status,
+      user.id,
+      peerSession,
+    );
 
     await this.prisma.peerSession.update({
       where: { id: peerSessionId },
@@ -323,7 +360,10 @@ export class PeerSessionsService {
     });
 
     // Handle payment based on status
-    if (updateDto.status === SessionStatus.DONE && peerSession.payments.length > 0) {
+    if (
+      updateDto.status === SessionStatus.DONE &&
+      peerSession.payments.length > 0
+    ) {
       const payment = peerSession.payments[0];
       await this.prisma.payment.update({
         where: { id: payment.id },
@@ -368,8 +408,12 @@ export class PeerSessionsService {
       );
 
       // Check streak achievements
-      const learnerStreak = await this.streaksService.getUserStreak(peerSession.requestedById);
-      const teacherStreak = await this.streaksService.getUserStreak(peerSession.requestedToId);
+      const learnerStreak = await this.streaksService.getUserStreak(
+        peerSession.requestedById,
+      );
+      const teacherStreak = await this.streaksService.getUserStreak(
+        peerSession.requestedToId,
+      );
 
       await this.achievementsService.checkStreakAchievements(
         peerSession.requestedById,
@@ -380,6 +424,31 @@ export class PeerSessionsService {
         peerSession.requestedToId,
         teacherStreak.currentStreak,
       );
+
+      // Generate AI summary from transcripts
+      try {
+        console.log(
+          '🤖 [completePeerSession] Generating AI summary for peer session:',
+          peerSessionId,
+        );
+        const summary =
+          await this.transcriptsService.compileAndSummarize(peerSessionId);
+
+        // Store summary in database
+        await this.prisma.peerSession.update({
+          where: { id: peerSessionId },
+          data: { summary },
+        });
+        console.log(
+          '✅ [completePeerSession] AI summary generated and stored successfully',
+        );
+      } catch (error) {
+        console.error(
+          '⚠️ [completePeerSession] Failed to generate summary:',
+          error,
+        );
+        // Continue execution even if summary generation fails
+      }
 
       // Notify both parties to leave reviews
       await this.notificationsService.createAndPushNotification(
@@ -405,7 +474,10 @@ export class PeerSessionsService {
           actionData: { sessionId: peerSession.id, sessionType: 'peerSession' },
         },
       );
-    } else if (updateDto.status === SessionStatus.CANCELLED && peerSession.payments.length > 0) {
+    } else if (
+      updateDto.status === SessionStatus.CANCELLED &&
+      peerSession.payments.length > 0
+    ) {
       const payment = peerSession.payments[0];
       await this.prisma.payment.update({
         where: { id: payment.id },
@@ -418,8 +490,14 @@ export class PeerSessionsService {
       });
 
       // Notify the other party about cancellation
-      const otherPartyId = user.id === peerSession.requestedById ? peerSession.requestedToId : peerSession.requestedById;
-      const otherPartyName = user.id === peerSession.requestedById ? peerSession.requestedTo.name : peerSession.requestedBy.name;
+      const otherPartyId =
+        user.id === peerSession.requestedById
+          ? peerSession.requestedToId
+          : peerSession.requestedById;
+      const otherPartyName =
+        user.id === peerSession.requestedById
+          ? peerSession.requestedTo.name
+          : peerSession.requestedBy.name;
 
       await this.notificationsService.createAndPushNotification(
         otherPartyId,
@@ -434,11 +512,12 @@ export class PeerSessionsService {
       );
     } else if (updateDto.status === SessionStatus.UPCOMING) {
       // Autocreate 1-1 chat channel for this session
-      const channel = await this.chatService.getOrCreateDirectChannelForPeerSession(
-        peerSession.id,
-        peerSession.requestedById,
-        peerSession.requestedToId,
-      );
+      const channel =
+        await this.chatService.getOrCreateDirectChannelForPeerSession(
+          peerSession.id,
+          peerSession.requestedById,
+          peerSession.requestedToId,
+        );
       // Session accepted - notify the requester
       await this.notificationsService.createAndPushNotification(
         peerSession.requestedById,
@@ -458,28 +537,37 @@ export class PeerSessionsService {
 
   // Convenience method to accept a peer session request
   async acceptPeerSession(peerSessionId: string, userId: string) {
-    return this.updatePeerSessionStatus(peerSessionId, userId, { status: SessionStatus.UPCOMING });
+    return this.updatePeerSessionStatus(peerSessionId, userId, {
+      status: SessionStatus.UPCOMING,
+    });
   }
 
   // Convenience method to reject/cancel a peer session request
   async rejectPeerSession(peerSessionId: string, userId: string) {
-    return this.updatePeerSessionStatus(peerSessionId, userId, { status: SessionStatus.CANCELLED });
+    return this.updatePeerSessionStatus(peerSessionId, userId, {
+      status: SessionStatus.CANCELLED,
+    });
   }
 
   // Convenience method to mark a session as done
   async completePeerSession(peerSessionId: string, userId: string) {
-    return this.updatePeerSessionStatus(peerSessionId, userId, { status: SessionStatus.DONE });
+    return this.updatePeerSessionStatus(peerSessionId, userId, {
+      status: SessionStatus.DONE,
+    });
   }
 
   private validateStatusTransition(
     currentStatus: SessionStatus,
     newStatus: SessionStatus,
     userId: string,
-    peerSession: any
+    peerSession: any,
   ) {
     // Define valid status transitions
     const validTransitions = {
-      [SessionStatus.PENDING]: [SessionStatus.UPCOMING, SessionStatus.CANCELLED],
+      [SessionStatus.PENDING]: [
+        SessionStatus.UPCOMING,
+        SessionStatus.CANCELLED,
+      ],
       [SessionStatus.UPCOMING]: [SessionStatus.DONE, SessionStatus.CANCELLED],
       [SessionStatus.DONE]: [], // No transitions from DONE
       [SessionStatus.CANCELLED]: [], // No transitions from CANCELLED
@@ -496,17 +584,26 @@ export class PeerSessionsService {
     if (newStatus === SessionStatus.UPCOMING) {
       // Only the requested peer can accept (PENDING -> UPCOMING)
       if (peerSession.requestedToId !== userId) {
-        throw new ForbiddenException('Only the requested peer can accept the session');
+        throw new ForbiddenException(
+          'Only the requested peer can accept the session',
+        );
       }
     } else if (newStatus === SessionStatus.DONE) {
       // Only the requested peer can mark as done (UPCOMING -> DONE)
       if (peerSession.requestedToId !== userId) {
-        throw new ForbiddenException('Only the requested peer can mark session as done');
+        throw new ForbiddenException(
+          'Only the requested peer can mark session as done',
+        );
       }
     } else if (newStatus === SessionStatus.CANCELLED) {
       // Either party can cancel
-      if (peerSession.requestedById !== userId && peerSession.requestedToId !== userId) {
-        throw new ForbiddenException('Only session participants can cancel the session');
+      if (
+        peerSession.requestedById !== userId &&
+        peerSession.requestedToId !== userId
+      ) {
+        throw new ForbiddenException(
+          'Only session participants can cancel the session',
+        );
       }
     }
   }

@@ -37,11 +37,11 @@ export function Navigation() {
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 relative group">
             <Image
-              src="/logo_green.png"
+              src="/webyalaya-main-logo.svg"
               alt="Webyalaya"
               width={128}
               height={128}
-              className="object-contain rounded-md bg-white dark:bg-gray-900 px-1 transition-transform group-hover:scale-105"
+              className="object-contain rounded-md px-1 transition-transform group-hover:scale-105"
             />
           </Link>
 

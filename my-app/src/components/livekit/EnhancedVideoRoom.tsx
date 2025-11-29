@@ -12,9 +12,11 @@ import { useSessionTimer } from '@/hooks/use-session-timer'
 import { SessionEndWarningDialog } from '@/components/study-room/session-end-warning-dialog'
 import { SessionEndedDialog } from '@/components/study-room/session-ended-dialog'
 import { useToast } from '@/contexts/toast-context'
-import { useAuth } from '@clerk/nextjs'
+import { useAuth, useUser } from '@clerk/nextjs'
 import { useQueryClient } from '@tanstack/react-query'
 import { streakKeys } from '@/hooks/use-streaks'
+import { io, Socket } from 'socket.io-client'
+import { useSpeechRecognition } from '@/hooks/use-speech-recognition'
 
 interface SessionData {
 	id: string;
@@ -41,7 +43,12 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 	const router = useRouter()
 	const { showSuccess } = useToast()
 	const { getToken } = useAuth()
+	const { user } = useUser()
 	const queryClient = useQueryClient()
+	
+	// Socket.io for transcripts
+	const [transcriptSocket, setTranscriptSocket] = useState<Socket | null>(null)
+	const socketConnectingRef = useRef(false)
 
 	// Store showSuccess in ref to avoid recreating handleWarning callback
 	const showSuccessRef = useRef(showSuccess)
@@ -134,6 +141,93 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 		window.addEventListener('resize', checkScreenSize)
 		return () => window.removeEventListener('resize', checkScreenSize)
 	}, [])
+	
+	// Setup Socket.io for transcripts
+	useEffect(() => {
+		if (!sessionData?.id || !user || socketConnectingRef.current) return
+		
+		let socket: Socket | null = null
+		socketConnectingRef.current = true
+		
+		async function connectTranscriptSocket() {
+			try {
+				const authToken = await getToken()
+				if (!authToken) return
+				
+				const url = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:3001'
+				console.log('🔌 [Transcripts] Connecting to WebSocket endpoint:', url)
+				console.log('🔌 [Transcripts] Session ID:', sessionData?.id)
+				console.log('🔌 [Transcripts] User ID:', user?.id)
+				
+				socket = io(url, {
+					transports: ['websocket'],
+					auth: { token: authToken },
+					reconnection: true,
+					reconnectionAttempts: 5,
+					reconnectionDelay: 1000,
+				})
+				
+				socket.on('connect', () => {
+					console.log('✅ [Transcripts] Socket connected successfully!')
+					console.log('🎤 [Transcripts] Speech recognition will now start')
+					setTranscriptSocket(socket) // Set socket only after successful connection
+				})
+				
+				socket.on('connect_error', (err: Error) => {
+					console.error('🚨 [Transcripts] Socket connection failed!')
+					console.error('🚨 [Transcripts] Error details:', err.message)
+					console.error('🚨 [Transcripts] Check if backend is running on:', url)
+					setTranscriptSocket(null) // Clear socket on connection error
+				})
+				
+				socket.on('disconnect', (reason) => {
+					console.log('🔌 [Transcripts] Socket disconnected:', reason)
+					console.log('⏸️  [Transcripts] Speech recognition paused')
+					setTranscriptSocket(null) // Clear socket on disconnect
+				})
+				
+				// Add transcript-specific event handlers
+				socket.on('transcript-received', (data) => {
+					console.log('📝 [Transcripts] Server acknowledged transcript:', data.text?.substring(0, 50))
+				})
+				
+				socket.on('transcript-error', (error) => {
+					console.error('❌ [Transcripts] Server error:', error)
+				})
+			} catch (err) {
+				console.error('❌ [Transcripts] Failed to connect socket:', err)
+			}
+		}
+		
+		connectTranscriptSocket()
+		
+		return () => {
+			socketConnectingRef.current = false
+			if (socket) {
+				socket.disconnect()
+				console.log('🛑 [Transcripts] Socket disconnected')
+			}
+			setTranscriptSocket(null)
+		}
+	}, [sessionData?.id, user, getToken])
+	
+	// Enable speech recognition
+	const { isListening, error: speechError } = useSpeechRecognition({
+		callId: sessionData?.id || null,
+		userId: user?.id || null,
+		socket: transcriptSocket,
+		enabled: !!sessionData?.id && !!user && !!transcriptSocket,
+	})
+	
+	// Log speech recognition status
+	useEffect(() => {
+		if (isListening) {
+			console.log('🎤 [SpeechRecognition] Listening...')
+		}
+		if (speechError) {
+			console.error('🚨 [SpeechRecognition] Error:', speechError)
+		}
+	}, [isListening, speechError])
 
 	const handleLeave = () => {
 		router.back()
@@ -141,15 +235,19 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 
 	return (
 		<div className="h-screen w-screen flex flex-col bg-gradient-to-br from-gray-950 via-gray-900 to-black overflow-hidden">
-			<LiveKitRoom 
-				video={true} 
-				audio={true} 
-				token={token} 
+			<LiveKitRoom
+				video={true}
+				audio={{
+					echoCancellation: true,
+					noiseSuppression: true,
+					autoGainControl: true,
+				}}
+				token={token}
 				serverUrl={serverUrl}
 				connect={true}
 				className="flex-1 flex flex-col"
 			>
-				<VideoRoomContent 
+				<VideoRoomContent
 					showChat={showChat}
 					setShowChat={setShowChat}
 					showParticipants={showParticipants}
@@ -161,6 +259,7 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 					timerEnabled={timerEnabled}
 					formattedTime={formattedTime}
 					minutesLeft={minutesLeft}
+					isRecording={isListening}
 				/>
 		</LiveKitRoom>
 
@@ -196,6 +295,7 @@ function VideoRoomContent({
 	timerEnabled,
 	formattedTime,
 	minutesLeft,
+	isRecording,
 }: {
 	showChat: boolean
 	setShowChat: (show: boolean) => void
@@ -208,6 +308,7 @@ function VideoRoomContent({
 	timerEnabled: boolean
 	formattedTime: string
 	minutesLeft: number
+	isRecording?: boolean
 }) {
 	const room = useRoomContext()
 	const params = useParams<{ room: string }>()
@@ -259,9 +360,9 @@ function VideoRoomContent({
 					{/* Logo and Room Info */}
 					<div className="flex items-center gap-2 md:gap-4 min-w-0 flex-1">
 						<div className="flex items-center gap-2 md:gap-3 min-w-0">
-							<div className="relative h-6 w-6 md:h-8 md:w-8 rounded-lg overflow-hidden bg-white/10 backdrop-blur-sm flex-shrink-0">
+							<div className="relative h-6 w-6 md:h-8 md:w-8 rounded-lg overflow-hidden flex-shrink-0">
 								<Image
-									src="/logo_green.png"
+									src="/webyalaya-main-logo.svg"
 									alt="Webyalaya"
 									fill
 									className="object-contain p-1"
@@ -292,7 +393,16 @@ function VideoRoomContent({
 					</div>
 
 					{/* Action Buttons */}
-					<div className="flex items-center gap-0.5 md:gap-1 flex-shrink-0">
+					<div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
+						{/* AI Transcript Recording Indicator */}
+						{isRecording && (
+							<div className="flex items-center gap-1.5 px-2 md:px-3 py-1 md:py-1.5 bg-red-500/20 backdrop-blur-sm rounded-full border border-red-500/30">
+								<div className="h-2 w-2 bg-red-500 rounded-full animate-pulse" />
+								<span className="text-red-400 text-[10px] md:text-xs font-medium hidden md:inline">AI Recording</span>
+								<span className="text-red-400 text-[10px] font-medium md:hidden">REC</span>
+							</div>
+						)}
+
 						<Button
 							variant="ghost"
 							size="sm"

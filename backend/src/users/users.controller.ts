@@ -1,4 +1,13 @@
-import { Controller, Get, Patch, Body, Param, UseGuards, Query, Post } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Patch,
+  Body,
+  Param,
+  UseGuards,
+  Query,
+  Post,
+} from '@nestjs/common';
 import { UsersService } from './users.service';
 import { ClerkAuthGuard } from '../common/guards/clerk-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -13,7 +22,6 @@ export class UsersController {
   async getCurrentUser(@CurrentUser() userId: string) {
     return this.usersService.getCurrentUser(userId);
   }
-
 
   @Patch('users/me')
   @UseGuards(ClerkAuthGuard)
@@ -34,7 +42,10 @@ export class UsersController {
       return { available: false };
     }
     try {
-      return await this.usersService.checkUsernameAvailability(username, userId);
+      return await this.usersService.checkUsernameAvailability(
+        username,
+        userId,
+      );
     } catch (error) {
       console.error('Error in checkUsernameAvailability controller:', error);
       // Return false on error to be safe
@@ -58,7 +69,18 @@ export class UsersController {
   @Post('users/onboarding')
   async completeOnboarding(@Body() body: any) {
     console.log('🔍 Complete onboarding called with body:', body);
-    const { clerkId, name, email, avatar, bio, location, school, hourlyRate, skillsIHave, skillsIWant } = body;
+    const {
+      clerkId,
+      name,
+      email,
+      avatar,
+      bio,
+      location,
+      school,
+      hourlyRate,
+      skillsIHave,
+      skillsIWant,
+    } = body;
     return this.usersService.completeOnboarding(clerkId, {
       name,
       email,
