@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
@@ -42,13 +42,7 @@ export function SessionSummaryModal({
   const [session, setSession] = useState<PeerSession | StudyRoom | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (open && sessionId) {
-      fetchSessionDetails();
-    }
-  }, [open, sessionId]);
-
-  const fetchSessionDetails = async () => {
+  const fetchSessionDetails = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -71,7 +65,13 @@ export function SessionSummaryModal({
     } finally {
       setLoading(false);
     }
-  };
+  }, [sessionId, sessionType, getToken]);
+
+  useEffect(() => {
+    if (open && sessionId) {
+      fetchSessionDetails();
+    }
+  }, [open, sessionId, fetchSessionDetails]);
 
   const formatDate = (date: string | Date) => {
     const d = typeof date === "string" ? new Date(date) : date;
@@ -264,10 +264,10 @@ export function SessionSummaryModal({
                   AI-Generated Summary
                 </h3>
                 <div className="bg-muted/50 rounded-lg p-4">
-                  {(session as any).summary ? (
+                  {session.summary ? (
                     <div className="prose prose-sm max-w-none dark:prose-invert">
                       <ReactMarkdown>
-                        {(session as any).summary}
+                        {session.summary}
                       </ReactMarkdown>
                     </div>
                   ) : (

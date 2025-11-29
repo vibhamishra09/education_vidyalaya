@@ -170,7 +170,6 @@ export async function subscribeToPushNotifications(
     // Convert VAPID key
     console.log('🔧 Converting VAPID key to Uint8Array...');
     const applicationServerKey = urlBase64ToUint8Array(vapidPublicKey);
-    const applicationServerKeyBuffer: BufferSource = applicationServerKey.buffer as ArrayBuffer;
     console.log('🔧 VAPID key converted, length:', applicationServerKey.length);
 
     // Subscribe to push notifications
