@@ -32,7 +32,7 @@ export class ReviewsService {
         where: { clerkId: userId },
         select: { id: true },
       });
-      
+
       if (user) {
         where.revieweeId = user.id;
       } else {
@@ -97,13 +97,13 @@ export class ReviewsService {
     const whereClause: any = {
       reviewerId: user.id, // Use the database ID, not clerkId
     };
-    
+
     if (createDto.sessionType === 'studyRoom') {
       whereClause.studyRoomId = createDto.sessionId;
     } else {
       whereClause.peerSessionId = createDto.sessionId;
     }
-    
+
     const existing = await this.prisma.review.findFirst({
       where: whereClause,
     });
@@ -128,12 +128,18 @@ export class ReviewsService {
       }
 
       if (studyRoom.createdById === user.id) {
-        throw new ForbiddenException('Creators cannot review their own study rooms');
+        throw new ForbiddenException(
+          'Creators cannot review their own study rooms',
+        );
       }
 
-      const isLearner = studyRoom.learners.some((learner) => learner.userId === user.id);
+      const isLearner = studyRoom.learners.some(
+        (learner) => learner.userId === user.id,
+      );
       if (!isLearner) {
-        throw new ForbiddenException('Only learners can review this study room');
+        throw new ForbiddenException(
+          'Only learners can review this study room',
+        );
       }
 
       revieweeId = studyRoom.createdById;
@@ -158,13 +164,13 @@ export class ReviewsService {
       reviewerId: user.id, // Use the database ID, not clerkId
       revieweeId,
     };
-    
+
     if (createDto.sessionType === 'studyRoom') {
       reviewData.studyRoomId = createDto.sessionId;
     } else {
       reviewData.peerSessionId = createDto.sessionId;
     }
-    
+
     const review = await this.prisma.review.create({
       data: reviewData,
       include: {
@@ -192,7 +198,11 @@ export class ReviewsService {
 
     // Check if this review completes the session (both parties have reviewed)
     // and release escrow payment if applicable
-    await this.checkAndReleaseEscrowPayment(createDto.sessionId, createDto.sessionType, user.id);
+    await this.checkAndReleaseEscrowPayment(
+      createDto.sessionId,
+      createDto.sessionType,
+      user.id,
+    );
 
     return {
       id: review.id,
@@ -203,9 +213,14 @@ export class ReviewsService {
     };
   }
 
-  async getSessionReviews(sessionId: string, sessionType: 'studyRoom' | 'peerSession', page: number = 1, limit: number = 10) {
+  async getSessionReviews(
+    sessionId: string,
+    sessionType: 'studyRoom' | 'peerSession',
+    page: number = 1,
+    limit: number = 10,
+  ) {
     const skip = (page - 1) * limit;
-    
+
     const whereClause: any = {};
     if (sessionType === 'studyRoom') {
       whereClause.studyRoomId = sessionId;
@@ -250,7 +265,11 @@ export class ReviewsService {
     };
   }
 
-  private async checkAndReleaseEscrowPayment(sessionId: string, sessionType: 'studyRoom' | 'peerSession', reviewerId?: string) {
+  private async checkAndReleaseEscrowPayment(
+    sessionId: string,
+    sessionType: 'studyRoom' | 'peerSession',
+    reviewerId?: string,
+  ) {
     if (sessionType === 'peerSession') {
       // For peer sessions, check if both parties have reviewed
       const peerSession = await this.prisma.peerSession.findUnique({
@@ -267,14 +286,18 @@ export class ReviewsService {
 
       // Check if both parties have reviewed
       const requesterReviewed = peerSession.reviews.some(
-        (r) => r.reviewerId === peerSession.requestedById
+        (r) => r.reviewerId === peerSession.requestedById,
       );
       const peerReviewed = peerSession.reviews.some(
-        (r) => r.reviewerId === peerSession.requestedToId
+        (r) => r.reviewerId === peerSession.requestedToId,
       );
 
       // If both have reviewed, release escrow payment
-      if (requesterReviewed && peerReviewed && peerSession.payments.length > 0) {
+      if (
+        requesterReviewed &&
+        peerReviewed &&
+        peerSession.payments.length > 0
+      ) {
         const payment = peerSession.payments[0];
         if (payment.paymentStatus === PaymentStatus.ESCROW) {
           await this.prisma.payment.update({
@@ -318,7 +341,9 @@ export class ReviewsService {
       if (reviewerId && reviewerId !== studyRoom.createdById) {
         // Find the payment made by this learner
         const learnerPayment = studyRoom.payments.find(
-          (p) => p.madeById === reviewerId && p.paymentStatus === PaymentStatus.ESCROW
+          (p) =>
+            p.madeById === reviewerId &&
+            p.paymentStatus === PaymentStatus.ESCROW,
         );
 
         if (learnerPayment) {

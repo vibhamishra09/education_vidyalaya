@@ -1,4 +1,11 @@
-import { Controller, Post, Body, UseGuards, Delete, Param } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  UseGuards,
+  Delete,
+  Param,
+} from '@nestjs/common';
 import { UploadService } from './upload.service';
 import { GenerateUploadUrlDto, UploadResponseDto } from './dto/upload.dto';
 import { ClerkAuthGuard } from '../common/guards/clerk-auth.guard';
@@ -28,10 +35,8 @@ export class UploadController {
       key = `${dto.type || 'uploads'}/${userId}/${timestamp}.${extension}`;
     }
 
-    const { uploadUrl, fileUrl } = await this.uploadService.generatePresignedUploadUrl(
-      key,
-      dto.contentType,
-    );
+    const { uploadUrl, fileUrl } =
+      await this.uploadService.generatePresignedUploadUrl(key, dto.contentType);
 
     return {
       uploadUrl,
@@ -51,7 +56,7 @@ export class UploadController {
   ): Promise<{ success: boolean }> {
     // Decode the key (it might be URL encoded)
     const decodedKey = decodeURIComponent(key);
-    
+
     // Verify the key belongs to the user (security check)
     if (!decodedKey.includes(userId)) {
       throw new Error('Unauthorized: You can only delete your own files');
@@ -61,4 +66,3 @@ export class UploadController {
     return { success: true };
   }
 }
-

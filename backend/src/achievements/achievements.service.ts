@@ -1,10 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import {
-  AchievementCategory,
-  AchievementRarity,
-  Prisma,
-} from '@prisma/client';
+import { AchievementCategory, AchievementRarity, Prisma } from '@prisma/client';
 
 @Injectable()
 export class AchievementsService {
@@ -204,14 +200,15 @@ export class AchievementsService {
       },
     });
 
-    const studyRoomsAsParticipant = await this.prisma.studyRoomParticipant.count({
-      where: {
-        userId,
-        studyRoom: {
-          sessionStatus: 'DONE',
+    const studyRoomsAsParticipant =
+      await this.prisma.studyRoomParticipant.count({
+        where: {
+          userId,
+          studyRoom: {
+            sessionStatus: 'DONE',
+          },
         },
-      },
-    });
+      });
 
     const studyRoomsAsHost = await this.prisma.studyRoom.count({
       where: {
@@ -220,7 +217,8 @@ export class AchievementsService {
       },
     });
 
-    const totalLearnerSessions = peerSessionsAsLearner + studyRoomsAsParticipant;
+    const totalLearnerSessions =
+      peerSessionsAsLearner + studyRoomsAsParticipant;
     const totalTeacherSessions = peerSessionsAsTeacher + studyRoomsAsHost;
     const totalSessions = totalLearnerSessions + totalTeacherSessions;
 
@@ -269,7 +267,11 @@ export class AchievementsService {
           });
 
           if (!userAchievement?.unlockedAt) {
-            await this.updateProgress(userId, milestone.id, totalTeacherSessions);
+            await this.updateProgress(
+              userId,
+              milestone.id,
+              totalTeacherSessions,
+            );
           }
         }
       }
@@ -414,10 +416,12 @@ export class AchievementsService {
     }
 
     // Sort and get top 3 learners and teachers
-    const userArray = Array.from(userStats.entries()).map(([userId, stats]) => ({
-      userId,
-      ...stats,
-    }));
+    const userArray = Array.from(userStats.entries()).map(
+      ([userId, stats]) => ({
+        userId,
+        ...stats,
+      }),
+    );
 
     const topLearners = userArray
       .sort((a, b) => b.minutesLearned - a.minutesLearned)

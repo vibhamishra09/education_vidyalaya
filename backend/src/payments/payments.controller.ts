@@ -16,8 +16,11 @@ export class PaymentsController {
   ) {
     const pageNum = page ? parseInt(page, 10) : 1;
     const limitNum = limit ? parseInt(limit, 10) : 20;
-    
-    return this.paymentsService.getTransactionHistory(userId, pageNum, limitNum);
+
+    return this.paymentsService.getTransactionHistory(
+      userId,
+      pageNum,
+      limitNum,
+    );
   }
 }
-

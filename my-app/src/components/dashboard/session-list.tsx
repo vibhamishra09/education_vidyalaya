@@ -13,9 +13,11 @@ import {
   ChevronDown,
   ChevronUp,
   BookOpen,
-  ArrowRight
+  ArrowRight,
+  Eye
 } from "lucide-react";
 import { LucideIcon } from "lucide-react";
+import { SessionSummaryModal } from "./session-summary-modal";
 
 interface Session {
   id: string;
@@ -45,9 +47,19 @@ export function SessionList({
 }: SessionListProps) {
   const [activeTab, setActiveTab] = useState<"upcoming" | "ongoing" | "past">("upcoming");
   const [expandedSession, setExpandedSession] = useState<string | null>(null);
+  const [summaryModalOpen, setSummaryModalOpen] = useState(false);
+  const [selectedSession, setSelectedSession] = useState<{ id: string; type: "peer" | "study-room" } | null>(null);
 
   const toggleExpand = (sessionId: string) => {
     setExpandedSession(expandedSession === sessionId ? null : sessionId);
+  };
+
+  const handleViewSummary = (sessionId: string, isPeerSession: boolean) => {
+    setSelectedSession({
+      id: sessionId,
+      type: isPeerSession ? "peer" : "study-room"
+    });
+    setSummaryModalOpen(true);
   };
 
   const formatDate = (date: string | Date) => {
@@ -67,7 +79,17 @@ export function SessionList({
     });
   };
 
-  const SessionCard = ({ session, showActions = true }: { session: Session; showActions?: boolean }) => {
+  const SessionCard = ({ 
+    session, 
+    showActions = true, 
+    showSummaryButton = false,
+    onViewSummary 
+  }: { 
+    session: Session; 
+    showActions?: boolean;
+    showSummaryButton?: boolean;
+    onViewSummary?: () => void;
+  }) => {
     const isExpanded = expandedSession === session.id;
     const isPeerSession = "requestedBy" in session;
 
@@ -183,6 +205,18 @@ export function SessionList({
                     </Link>
                   </div>
                 )}
+                {showSummaryButton && onViewSummary && (
+                  <div className="flex gap-2 pt-2">
+                    <Button 
+                      className="w-full" 
+                      size="sm"
+                      onClick={onViewSummary}
+                    >
+                      <Eye className="h-4 w-4 mr-2" />
+                      View Summary
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -274,9 +308,18 @@ export function SessionList({
             {pastSessions.length === 0 ? (
               <EmptyState message="No past sessions" icon={BookOpen} />
             ) : (
-              pastSessions.map((session) => (
-                <SessionCard key={session.id} session={session} showActions={false} />
-              ))
+              pastSessions.map((session) => {
+                const isPeerSession = "requestedBy" in session;
+                return (
+                  <SessionCard 
+                    key={session.id} 
+                    session={session} 
+                    showActions={false}
+                    showSummaryButton={true}
+                    onViewSummary={() => handleViewSummary(session.id, isPeerSession)}
+                  />
+                );
+              })
             )}
           </>
         )}
@@ -292,6 +335,16 @@ export function SessionList({
             <ArrowRight className="h-4 w-4 ml-2" />
           </Button>
         </div>
+      )}
+
+      {/* Session Summary Modal */}
+      {selectedSession && (
+        <SessionSummaryModal
+          open={summaryModalOpen}
+          onOpenChange={setSummaryModalOpen}
+          sessionId={selectedSession.id}
+          sessionType={selectedSession.type}
+        />
       )}
     </div>
   );

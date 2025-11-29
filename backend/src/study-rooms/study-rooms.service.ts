@@ -1,11 +1,22 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ChatService } from '../chat/chat.service';
 import { StreaksService } from '../streaks/streaks.service';
 import { AchievementsService } from '../achievements/achievements.service';
+import { TranscriptsService } from '../transcripts/transcripts.service';
 import { CreateStudyRoomDto, UpdateStudyRoomDto } from './dto/study-room.dto';
-import { Prisma, SessionStatus, NotifType, PaymentStatus } from '@prisma/client';
+import {
+  Prisma,
+  SessionStatus,
+  NotifType,
+  PaymentStatus,
+} from '@prisma/client';
 import { normalizeGoogleMeetLink } from '../utils/gmeet-generator';
 import { convertLocalToUTC } from '../utils/timezone';
 
@@ -47,6 +58,7 @@ export class StudyRoomsService {
     private chatService: ChatService,
     private streaksService: StreaksService,
     private achievementsService: AchievementsService,
+    private transcriptsService: TranscriptsService,
   ) {}
 
   async getStudyRooms(
@@ -134,7 +146,9 @@ export class StudyRoomsService {
       this.prisma.studyRoom.count({ where }),
     ]);
 
-    const studyRoomCards = studyRooms.map((room) => this.buildStudyRoomCard(room));
+    const studyRoomCards = studyRooms.map((room) =>
+      this.buildStudyRoomCard(room),
+    );
 
     return {
       studyRooms: studyRoomCards,
@@ -166,10 +180,7 @@ export class StudyRoomsService {
       },
       _avg: { rating: true },
       _count: { rating: true },
-      orderBy: [
-        { _avg: { rating: 'desc' } },
-        { _count: { rating: 'desc' } },
-      ],
+      orderBy: [{ _avg: { rating: 'desc' } }, { _count: { rating: 'desc' } }],
       take: normalizedLimit * 4,
     });
 
@@ -179,11 +190,15 @@ export class StudyRoomsService {
 
     const MIN_AVG_RATING = 4;
     const prioritizedTeachers = teacherRatings.filter(
-      (teacher) => (teacher._avg.rating ?? 0) >= MIN_AVG_RATING && (teacher._count.rating ?? 0) > 0,
+      (teacher) =>
+        (teacher._avg.rating ?? 0) >= MIN_AVG_RATING &&
+        (teacher._count.rating ?? 0) > 0,
     );
 
     const orderedTeachers =
-      prioritizedTeachers.length >= normalizedLimit ? prioritizedTeachers : teacherRatings;
+      prioritizedTeachers.length >= normalizedLimit
+        ? prioritizedTeachers
+        : teacherRatings;
 
     const roomEntries = await Promise.all(
       orderedTeachers.map(async (teacher) => {
@@ -238,7 +253,11 @@ export class StudyRoomsService {
       }),
     );
 
-    const uniqueRooms: Array<{ room: StudyRoomWithRelations; rating: number; reviewCount: number }> = [];
+    const uniqueRooms: Array<{
+      room: StudyRoomWithRelations;
+      rating: number;
+      reviewCount: number;
+    }> = [];
     const seenRoomIds = new Set<string>();
 
     for (const entry of roomEntries) {
@@ -328,7 +347,9 @@ export class StudyRoomsService {
       },
     });
 
-    const studyRoomCards = studyRooms.map((room) => this.buildStudyRoomCard(room));
+    const studyRoomCards = studyRooms.map((room) =>
+      this.buildStudyRoomCard(room),
+    );
 
     return {
       studyRooms: studyRoomCards,
@@ -447,6 +468,7 @@ export class StudyRoomsService {
       maxParticipants: studyRoom.maxParticipants,
       joiningFee: studyRoom.joiningFee,
       gmeetLink: (studyRoom as any).gmeetLink,
+      summary: studyRoom.summary,
       createdBy: studyRoom.createdBy,
       skills: studyRoom.skills.map((s) => s.skill),
       participants: studyRoom.learners.map((l) => l.user),
@@ -475,18 +497,26 @@ export class StudyRoomsService {
 
     // Convert user's local time to UTC
     // Example: 11 AM IST -> 5:30 AM UTC
-    const dateTime = convertLocalToUTC(createDto.date, createDto.time, createDto.timezone);
+    const dateTime = convertLocalToUTC(
+      createDto.date,
+      createDto.time,
+      createDto.timezone,
+    );
 
     // Validate that session is scheduled at least 2 minutes in the future
     const now = new Date();
     const minAdvanceTime = 2 * 60 * 1000; // 2 minutes in milliseconds
-    
+
     if (dateTime.getTime() <= now.getTime() + minAdvanceTime) {
-      throw new BadRequestException('Sessions must be scheduled at least 2 minutes in advance');
+      throw new BadRequestException(
+        'Sessions must be scheduled at least 2 minutes in advance',
+      );
     }
 
     // Normalize Google Meet link if provided
-    const gmeetLink = createDto.gmeetLink ? normalizeGoogleMeetLink(createDto.gmeetLink) : null;
+    const gmeetLink = createDto.gmeetLink
+      ? normalizeGoogleMeetLink(createDto.gmeetLink)
+      : null;
 
     // Create study room
     const studyRoom = await this.prisma.studyRoom.create({
@@ -529,12 +559,18 @@ export class StudyRoomsService {
     }
 
     // Create chat channel for the study room (creator is automatically added)
-    await this.chatService.getOrCreateChannelForStudyRoom(studyRoom.id, [user.id]);
+    await this.chatService.getOrCreateChannelForStudyRoom(studyRoom.id, [
+      user.id,
+    ]);
 
     return this.getStudyRoomDetails(studyRoom.id, userId);
   }
 
-  async updateStudyRoom(studyRoomId: string, userId: string, updateDto: UpdateStudyRoomDto) {
+  async updateStudyRoom(
+    studyRoomId: string,
+    userId: string,
+    updateDto: UpdateStudyRoomDto,
+  ) {
     // userId is actually clerkId, so we need to find the user by clerkId first
     const user = await this.prisma.user.findUnique({
       where: { clerkId: userId },
@@ -554,16 +590,21 @@ export class StudyRoomsService {
     }
 
     if (studyRoom.createdById !== user.id) {
-      throw new ForbiddenException('Only the creator can update this study room');
+      throw new ForbiddenException(
+        'Only the creator can update this study room',
+      );
     }
 
     const updateData: any = {};
 
     if (updateDto.title) updateData.title = updateDto.title;
-    if (updateDto.description !== undefined) updateData.description = updateDto.description;
+    if (updateDto.description !== undefined)
+      updateData.description = updateDto.description;
     if (updateDto.duration) updateData.duration = updateDto.duration;
-    if (updateDto.maxParticipants) updateData.maxParticipants = updateDto.maxParticipants;
-    if (updateDto.joiningFee !== undefined) updateData.joiningFee = updateDto.joiningFee;
+    if (updateDto.maxParticipants)
+      updateData.maxParticipants = updateDto.maxParticipants;
+    if (updateDto.joiningFee !== undefined)
+      updateData.joiningFee = updateDto.joiningFee;
 
     if (updateDto.date && updateDto.time) {
       updateData.date = new Date(`${updateDto.date}T${updateDto.time}`);
@@ -645,7 +686,10 @@ export class StudyRoomsService {
       };
     }
 
-    if (parseFloat(user.coins.toString()) < parseFloat(studyRoom.joiningFee.toString())) {
+    if (
+      parseFloat(user.coins.toString()) <
+      parseFloat(studyRoom.joiningFee.toString())
+    ) {
       throw new BadRequestException({
         code: 'INSUFFICIENT_COINS',
         message: `You need ${parseFloat(studyRoom.joiningFee.toString()).toFixed(2)} coins to join this study room. You have ${parseFloat(user.coins.toString()).toFixed(2)} coins.`,
@@ -696,7 +740,10 @@ export class StudyRoomsService {
     ];
 
     // Ensure chat channel exists and add the new member
-    await this.chatService.getOrCreateChannelForStudyRoom(studyRoomId, participantIds);
+    await this.chatService.getOrCreateChannelForStudyRoom(
+      studyRoomId,
+      participantIds,
+    );
 
     // Get user name for notification
     const userWithName = await this.prisma.user.findUnique({
@@ -732,8 +779,11 @@ export class StudyRoomsService {
   }
 
   async completeStudyRoom(studyRoomId: string, userId: string) {
-    console.log('🎯 [completeStudyRoom] Called with:', { studyRoomId, clerkUserId: userId });
-    
+    console.log('🎯 [completeStudyRoom] Called with:', {
+      studyRoomId,
+      clerkUserId: userId,
+    });
+
     // userId is actually clerkId, so we need to find the user by clerkId first
     const user = await this.prisma.user.findUnique({
       where: { clerkId: userId },
@@ -741,27 +791,36 @@ export class StudyRoomsService {
     });
 
     if (!user) {
-      console.error('❌ [completeStudyRoom] User not found for clerkId:', userId);
+      console.error(
+        '❌ [completeStudyRoom] User not found for clerkId:',
+        userId,
+      );
       throw new NotFoundException('User not found');
     }
-    
-    console.log('✅ [completeStudyRoom] User found:', { id: user.id, name: user.name });
+
+    console.log('✅ [completeStudyRoom] User found:', {
+      id: user.id,
+      name: user.name,
+    });
 
     const studyRoom = await this.prisma.studyRoom.findUnique({
       where: { id: studyRoomId },
     });
 
     if (!studyRoom) {
-      console.error('❌ [completeStudyRoom] Study room not found:', studyRoomId);
+      console.error(
+        '❌ [completeStudyRoom] Study room not found:',
+        studyRoomId,
+      );
       throw new NotFoundException('Study room not found');
     }
-    
-    console.log('✅ [completeStudyRoom] Study room found:', { 
-      id: studyRoom.id, 
+
+    console.log('✅ [completeStudyRoom] Study room found:', {
+      id: studyRoom.id,
       title: studyRoom.title,
       date: studyRoom.date,
       duration: studyRoom.duration,
-      createdById: studyRoom.createdById
+      createdById: studyRoom.createdById,
     });
 
     // Check if user is part of the study room (creator or participant)
@@ -772,12 +831,19 @@ export class StudyRoomsService {
         userId: user.id,
       },
     });
-    
-    console.log('🔐 [completeStudyRoom] Authorization check:', { isCreator, hasParticipant: !!isParticipant });
+
+    console.log('🔐 [completeStudyRoom] Authorization check:', {
+      isCreator,
+      hasParticipant: !!isParticipant,
+    });
 
     if (!isCreator && !isParticipant) {
-      console.error('❌ [completeStudyRoom] Not authorized to complete this study room');
-      throw new ForbiddenException('Not authorized to complete this study room');
+      console.error(
+        '❌ [completeStudyRoom] Not authorized to complete this study room',
+      );
+      throw new ForbiddenException(
+        'Not authorized to complete this study room',
+      );
     }
 
     // Update study room status to COMPLETED
@@ -793,11 +859,16 @@ export class StudyRoomsService {
       where: { studyRoomId },
       select: { userId: true },
     });
-    
-    console.log(`👥 [completeStudyRoom] Found ${participants.length} participants`);
+
+    console.log(
+      `👥 [completeStudyRoom] Found ${participants.length} participants`,
+    );
 
     // Update streak for the creator (host/teacher)
-    console.log('🔥 [completeStudyRoom] Updating streak for creator (teacher):', studyRoom.createdById);
+    console.log(
+      '🔥 [completeStudyRoom] Updating streak for creator (teacher):',
+      studyRoom.createdById,
+    );
     await this.streaksService.updateUserActivity(
       studyRoom.createdById,
       studyRoom.date,
@@ -808,19 +879,23 @@ export class StudyRoomsService {
     console.log('✅ [completeStudyRoom] Creator streak updated successfully');
 
     // Check achievements for creator
-    console.log('🏆 [completeStudyRoom] Checking session achievements for creator');
+    console.log(
+      '🏆 [completeStudyRoom] Checking session achievements for creator',
+    );
     await this.achievementsService.checkSessionAchievements(
       studyRoom.createdById,
       'teacher',
     );
 
     // Check streak achievements for creator
-    const creatorStreak = await this.streaksService.getUserStreak(studyRoom.createdById);
-    console.log('📊 [completeStudyRoom] Creator streak info:', { 
+    const creatorStreak = await this.streaksService.getUserStreak(
+      studyRoom.createdById,
+    );
+    console.log('📊 [completeStudyRoom] Creator streak info:', {
       userId: studyRoom.createdById,
-      currentStreak: creatorStreak.currentStreak, 
+      currentStreak: creatorStreak.currentStreak,
       longestStreak: creatorStreak.longestStreak,
-      lastActivityDate: creatorStreak.lastActivityDate
+      lastActivityDate: creatorStreak.lastActivityDate,
     });
     await this.achievementsService.checkStreakAchievements(
       studyRoom.createdById,
@@ -828,11 +903,16 @@ export class StudyRoomsService {
     );
 
     // Update streak for all participants (learners)
-    console.log(`🔄 [completeStudyRoom] Starting streak updates for ${participants.length} participant(s)...`);
+    console.log(
+      `🔄 [completeStudyRoom] Starting streak updates for ${participants.length} participant(s)...`,
+    );
     for (let i = 0; i < participants.length; i++) {
       const participant = participants[i];
-      console.log(`🔥 [completeStudyRoom] Updating streak for participant ${i + 1}/${participants.length}:`, participant.userId);
-      
+      console.log(
+        `🔥 [completeStudyRoom] Updating streak for participant ${i + 1}/${participants.length}:`,
+        participant.userId,
+      );
+
       await this.streaksService.updateUserActivity(
         participant.userId,
         studyRoom.date,
@@ -840,7 +920,9 @@ export class StudyRoomsService {
         'learner',
         0,
       );
-      console.log(`✅ [completeStudyRoom] Participant ${i + 1} streak updated successfully`);
+      console.log(
+        `✅ [completeStudyRoom] Participant ${i + 1} streak updated successfully`,
+      );
 
       // Check achievements for participant
       await this.achievementsService.checkSessionAchievements(
@@ -849,11 +931,13 @@ export class StudyRoomsService {
       );
 
       // Check streak achievements for participant
-      const participantStreak = await this.streaksService.getUserStreak(participant.userId);
-      console.log(`📊 [completeStudyRoom] Participant ${i + 1} streak info:`, { 
+      const participantStreak = await this.streaksService.getUserStreak(
+        participant.userId,
+      );
+      console.log(`📊 [completeStudyRoom] Participant ${i + 1} streak info:`, {
         userId: participant.userId,
-        currentStreak: participantStreak.currentStreak, 
-        longestStreak: participantStreak.longestStreak 
+        currentStreak: participantStreak.currentStreak,
+        longestStreak: participantStreak.longestStreak,
       });
       await this.achievementsService.checkStreakAchievements(
         participant.userId,
@@ -861,12 +945,40 @@ export class StudyRoomsService {
       );
     }
 
-    console.log('🎉 [completeStudyRoom] All streak updates completed successfully!');
-    
+    console.log(
+      '🎉 [completeStudyRoom] All streak updates completed successfully!',
+    );
+
+    // Generate AI summary from transcripts
+    let summary: string | null = null;
+    try {
+      console.log(
+        '🤖 [completeStudyRoom] Generating AI summary for study room:',
+        studyRoomId,
+      );
+      summary = await this.transcriptsService.compileAndSummarize(studyRoomId);
+
+      // Store summary in database
+      await this.prisma.studyRoom.update({
+        where: { id: studyRoomId },
+        data: { summary },
+      });
+      console.log(
+        '✅ [completeStudyRoom] AI summary generated and stored successfully',
+      );
+    } catch (error) {
+      console.error(
+        '⚠️ [completeStudyRoom] Failed to generate summary:',
+        error,
+      );
+      // Continue execution even if summary generation fails
+    }
+
     return {
       success: true,
       message: 'Study room marked as completed',
       studyRoom: updatedRoom,
+      summary,
     };
   }
 
