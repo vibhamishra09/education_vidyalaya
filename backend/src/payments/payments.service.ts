@@ -43,32 +43,33 @@ export class PaymentsService {
     const skip = (page - 1) * limit;
 
     // Get payments made and received
-    const [paymentsMade, paymentsReceived, totalMade, totalReceived] = await Promise.all([
-      this.prisma.payment.findMany({
-        where: { madeById: user.id },
-        skip,
-        take: limit,
-        include: {
-          receivedBy: { select: { id: true, name: true, avatar: true } },
-          peerSession: { select: { id: true, title: true } },
-          studyRoom: { select: { id: true, title: true } },
-        },
-        orderBy: { id: 'desc' },
-      }),
-      this.prisma.payment.findMany({
-        where: { receivedById: user.id },
-        skip,
-        take: limit,
-        include: {
-          madeBy: { select: { id: true, name: true, avatar: true } },
-          peerSession: { select: { id: true, title: true } },
-          studyRoom: { select: { id: true, title: true } },
-        },
-        orderBy: { id: 'desc' },
-      }),
-      this.prisma.payment.count({ where: { madeById: user.id } }),
-      this.prisma.payment.count({ where: { receivedById: user.id } }),
-    ]);
+    const [paymentsMade, paymentsReceived, totalMade, totalReceived] =
+      await Promise.all([
+        this.prisma.payment.findMany({
+          where: { madeById: user.id },
+          skip,
+          take: limit,
+          include: {
+            receivedBy: { select: { id: true, name: true, avatar: true } },
+            peerSession: { select: { id: true, title: true } },
+            studyRoom: { select: { id: true, title: true } },
+          },
+          orderBy: { id: 'desc' },
+        }),
+        this.prisma.payment.findMany({
+          where: { receivedById: user.id },
+          skip,
+          take: limit,
+          include: {
+            madeBy: { select: { id: true, name: true, avatar: true } },
+            peerSession: { select: { id: true, title: true } },
+            studyRoom: { select: { id: true, title: true } },
+          },
+          orderBy: { id: 'desc' },
+        }),
+        this.prisma.payment.count({ where: { madeById: user.id } }),
+        this.prisma.payment.count({ where: { receivedById: user.id } }),
+      ]);
 
     // Combine and format transactions
     const transactions: TransactionHistoryItem[] = [];
@@ -91,7 +92,10 @@ export class PaymentsService {
 
       transactions.push({
         id: payment.id,
-        type: payment.paymentStatus === PaymentStatus.REFUNDED ? 'REFUND_RECEIVED' : 'PAYMENT_MADE',
+        type:
+          payment.paymentStatus === PaymentStatus.REFUNDED
+            ? 'REFUND_RECEIVED'
+            : 'PAYMENT_MADE',
         amount: Number(payment.amountMade),
         description,
         status: payment.paymentStatus,
@@ -101,11 +105,13 @@ export class PaymentsService {
           name: payment.receivedBy.name,
           avatar: payment.receivedBy.avatar || undefined,
         },
-        relatedSession: sessionType ? {
-          id: payment.peerSession?.id || payment.studyRoom?.id || '',
-          title: sessionTitle,
-          type: sessionType,
-        } : undefined,
+        relatedSession: sessionType
+          ? {
+              id: payment.peerSession?.id || payment.studyRoom?.id || '',
+              title: sessionTitle,
+              type: sessionType,
+            }
+          : undefined,
       });
     });
 
@@ -137,11 +143,13 @@ export class PaymentsService {
           name: payment.madeBy.name,
           avatar: payment.madeBy.avatar || undefined,
         },
-        relatedSession: sessionType ? {
-          id: payment.peerSession?.id || payment.studyRoom?.id || '',
-          title: sessionTitle,
-          type: sessionType,
-        } : undefined,
+        relatedSession: sessionType
+          ? {
+              id: payment.peerSession?.id || payment.studyRoom?.id || '',
+              title: sessionTitle,
+              type: sessionType,
+            }
+          : undefined,
       });
     });
 
@@ -163,4 +171,3 @@ export class PaymentsService {
     };
   }
 }
-

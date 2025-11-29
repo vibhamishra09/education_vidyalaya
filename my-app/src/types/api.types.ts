@@ -103,6 +103,7 @@ export interface StudyRoom extends StudyRoomCard {
   participants: PublicUser[];
   role: 'teacher' | 'learner' | 'empty';
   reviews: ReviewCard[];
+  summary?: string;
   chatChannelId?: string | null;
 }
 
@@ -143,6 +144,7 @@ export interface PeerSession {
   requestedTo: PublicUser;
   skills: Skill[];
   gmeetLink?: string;
+  summary?: string;
   chatChannelId?: string | null;
   role?: 'requester' | 'requestedTo' | 'empty';
 }

@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Body, Query, Param, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Query,
+  Param,
+  UseGuards,
+} from '@nestjs/common';
 import { ReviewsService } from './reviews.service';
 import { ClerkAuthGuard } from '../common/guards/clerk-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -28,7 +36,10 @@ export class ReviewsController {
 
   @Post()
   @UseGuards(ClerkAuthGuard)
-  async createReview(@CurrentUser() userId: string, @Body() createDto: CreateReviewDto) {
+  async createReview(
+    @CurrentUser() userId: string,
+    @Body() createDto: CreateReviewDto,
+  ) {
     return this.reviewsService.createReview(userId, createDto);
   }
 

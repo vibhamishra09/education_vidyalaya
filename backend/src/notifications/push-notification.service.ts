@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as webpush from 'web-push';
 import { PrismaService } from '../prisma/prisma.service';
+import { redisClient } from '../redis/redis.provider';
 
 export interface PushSubscriptionDto {
   endpoint: string;
@@ -15,22 +16,26 @@ export interface PushSubscriptionDto {
 export class PushNotificationService {
   private readonly logger = new Logger(PushNotificationService.name);
 
+  // Redis client available for caching, rate-limiting, etc.
+  private redis = redisClient;
+
   constructor(
     private prisma: PrismaService,
     private configService: ConfigService,
   ) {
     const vapidPublicKey = this.configService.get<string>('VAPID_PUBLIC_KEY');
     const vapidPrivateKey = this.configService.get<string>('VAPID_PRIVATE_KEY');
-    const vapidSubject = this.configService.get<string>('VAPID_SUBJECT', 'mailto:admin@webyalaya.com');
+    const vapidSubject = this.configService.get<string>(
+      'VAPID_SUBJECT',
+      'mailto:admin@webyalaya.com',
+    );
 
     if (vapidPublicKey && vapidPrivateKey) {
-      webpush.setVapidDetails(
-        vapidSubject,
-        vapidPublicKey,
-        vapidPrivateKey,
-      );
+      webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
     } else {
-      this.logger.warn('VAPID keys not configured. Push notifications will not work.');
+      this.logger.warn(
+        'VAPID keys not configured. Push notifications will not work.',
+      );
     }
   }
 
@@ -103,10 +108,14 @@ export class PushNotificationService {
         where: { userId },
       });
 
-      console.log(`📱 [PushNotificationService] Found ${subscriptions.length} subscription(s) for user ${userId}`);
+      console.log(
+        `📱 [PushNotificationService] Found ${subscriptions.length} subscription(s) for user ${userId}`,
+      );
 
       if (subscriptions.length === 0) {
-        console.warn(`⚠️  [PushNotificationService] No push subscriptions found for user ${userId}`);
+        console.warn(
+          `⚠️  [PushNotificationService] No push subscriptions found for user ${userId}`,
+        );
         this.logger.debug(`No push subscriptions found for user ${userId}`);
         return { sent: 0 };
       }
@@ -121,9 +130,12 @@ export class PushNotificationService {
 
       const sendPromises = subscriptions.map(async (subscription, index) => {
         try {
-          console.log(`📤 [PushNotificationService] Sending to subscription ${index + 1}/${subscriptions.length}:`, {
-            endpoint: subscription.endpoint.substring(0, 50) + '...',
-          });
+          console.log(
+            `📤 [PushNotificationService] Sending to subscription ${index + 1}/${subscriptions.length}:`,
+            {
+              endpoint: subscription.endpoint.substring(0, 50) + '...',
+            },
+          );
 
           await webpush.sendNotification(
             {
@@ -136,15 +148,24 @@ export class PushNotificationService {
             payload,
           );
 
-          console.log(`✅ [PushNotificationService] Successfully sent push ${index + 1}/${subscriptions.length}`);
+          console.log(
+            `✅ [PushNotificationService] Successfully sent push ${index + 1}/${subscriptions.length}`,
+          );
           return true;
         } catch (error: any) {
-          console.error(`❌ [PushNotificationService] Failed to send push ${index + 1}/${subscriptions.length}:`, error.message);
-          
+          console.error(
+            `❌ [PushNotificationService] Failed to send push ${index + 1}/${subscriptions.length}:`,
+            error.message,
+          );
+
           // If subscription is invalid (410 Gone), remove it
           if (error.statusCode === 410 || error.statusCode === 404) {
-            console.log(`🗑️  [PushNotificationService] Removing invalid subscription (${error.statusCode})`);
-            this.logger.debug(`Removing invalid subscription for user ${userId}`);
+            console.log(
+              `🗑️  [PushNotificationService] Removing invalid subscription (${error.statusCode})`,
+            );
+            this.logger.debug(
+              `Removing invalid subscription for user ${userId}`,
+            );
             await this.prisma.pushSubscription.delete({
               where: { id: subscription.id },
             });
@@ -158,7 +179,9 @@ export class PushNotificationService {
       const results = await Promise.all(sendPromises);
       const sentCount = results.filter((r) => r).length;
 
-      console.log(`🎯 [PushNotificationService] Push notification summary: ${sentCount}/${subscriptions.length} sent successfully`);
+      console.log(
+        `🎯 [PushNotificationService] Push notification summary: ${sentCount}/${subscriptions.length} sent successfully`,
+      );
       this.logger.log(`Sent ${sentCount} push notifications to user ${userId}`);
       return { sent: sentCount };
     } catch (error) {
@@ -174,7 +197,9 @@ export class PushNotificationService {
     data?: Record<string, any>,
   ) {
     const results = await Promise.all(
-      userIds.map((userId) => this.sendPushNotification(userId, title, body, data)),
+      userIds.map((userId) =>
+        this.sendPushNotification(userId, title, body, data),
+      ),
     );
 
     const totalSent = results.reduce((sum, result) => sum + result.sent, 0);

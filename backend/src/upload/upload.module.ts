@@ -10,4 +10,3 @@ import { ConfigModule } from '@nestjs/config';
   exports: [UploadService],
 })
 export class UploadModule {}
-

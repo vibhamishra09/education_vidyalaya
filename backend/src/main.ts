@@ -2,13 +2,17 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { redisClient } from './redis/redis.provider';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   // Enable CORS
   // Merge environment variable URLs with hardcoded defaults
-  const envUrls = process.env.FRONTEND_URLS?.split(',').map(url => url.trim()).filter(Boolean) || [];
+  const envUrls =
+    process.env.FRONTEND_URLS?.split(',')
+      .map((url) => url.trim())
+      .filter(Boolean) || [];
   const defaultUrls = [
     'https://www.webyalaya.com',
     'https://webyalaya.com',
@@ -25,12 +29,12 @@ async function bootstrap() {
   ];
   // Combine and deduplicate
   const allowedOrigins = [...new Set([...envUrls, ...defaultUrls])];
-  
+
   app.enableCors({
     origin: allowedOrigins,
     credentials: true,
   });
-  
+
   console.log('🌐 CORS enabled for origins:', allowedOrigins);
 
   // Enable validation
@@ -58,6 +62,13 @@ async function bootstrap() {
 
   console.log(`🚀 Application is running on: http://localhost:${port}`);
   console.log(`📚 API Documentation: http://localhost:${port}/api/docs`);
+
+  // Graceful shutdown - disconnect Redis on app close
+  app.enableShutdownHooks();
+  process.on('SIGINT', async () => {
+    await redisClient.quit();
+    process.exit(0);
+  });
 }
 
 bootstrap();

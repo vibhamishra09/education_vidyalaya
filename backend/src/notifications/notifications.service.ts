@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotifType } from '@prisma/client';
 import { PushNotificationService } from './push-notification.service';
+import { redisClient } from '../redis/redis.provider';
 
 @Injectable()
 export class NotificationsService {
@@ -9,6 +10,9 @@ export class NotificationsService {
     private prisma: PrismaService,
     private pushNotificationService: PushNotificationService,
   ) {}
+
+  // Redis client available for caching, deduplication, etc.
+  private redis = redisClient;
 
   async getNotifications(
     userId: string,
@@ -163,7 +167,9 @@ export class NotificationsService {
         notifType: type,
         createdAt: new Date(),
         actionType: options?.actionType,
-        actionData: options?.actionData ? JSON.stringify(options.actionData) : undefined,
+        actionData: options?.actionData
+          ? JSON.stringify(options.actionData)
+          : undefined,
         peerSessionId: options?.peerSessionId,
         studyRoomId: options?.studyRoomId,
       },
@@ -190,7 +196,9 @@ export class NotificationsService {
         },
       );
 
-      console.log('✅ [NotificationsService] Push notification triggered successfully');
+      console.log(
+        '✅ [NotificationsService] Push notification triggered successfully',
+      );
     }
 
     return notification;
