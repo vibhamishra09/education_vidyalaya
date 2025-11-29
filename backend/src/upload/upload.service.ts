@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import {
+  S3Client,
+  PutObjectCommand,
+  DeleteObjectCommand,
+} from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 @Injectable()
@@ -15,10 +19,12 @@ export class UploadService {
       region: this.region,
       credentials: {
         accessKeyId: this.configService.get<string>('AWS_ACCESS_KEY_ID') || '',
-        secretAccessKey: this.configService.get<string>('AWS_SECRET_ACCESS_KEY') || '',
+        secretAccessKey:
+          this.configService.get<string>('AWS_SECRET_ACCESS_KEY') || '',
       },
     });
-    this.bucketName = this.configService.get<string>('AWS_S3_BUCKET_NAME') || '';
+    this.bucketName =
+      this.configService.get<string>('AWS_S3_BUCKET_NAME') || '';
   }
 
   /**
@@ -39,9 +45,10 @@ export class UploadService {
 
     // Generate the S3 URL (virtual-hosted style)
     // For us-east-1, use s3.amazonaws.com, otherwise use s3.region.amazonaws.com
-    const s3Domain = this.region === 'us-east-1' 
-      ? `${this.bucketName}.s3.amazonaws.com`
-      : `${this.bucketName}.s3.${this.region}.amazonaws.com`;
+    const s3Domain =
+      this.region === 'us-east-1'
+        ? `${this.bucketName}.s3.amazonaws.com`
+        : `${this.bucketName}.s3.${this.region}.amazonaws.com`;
     const fileUrl = `https://${s3Domain}/${key}`;
 
     return {
@@ -88,4 +95,3 @@ export class UploadService {
     }
   }
 }
-

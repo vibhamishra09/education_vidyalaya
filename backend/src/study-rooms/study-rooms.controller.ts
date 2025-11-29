@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { StudyRoomsService } from './study-rooms.service';
 import { ClerkAuthGuard } from '../common/guards/clerk-auth.guard';
 import { OptionalClerkAuthGuard } from '../common/guards/optional-clerk-auth.guard';
@@ -50,7 +59,11 @@ export class StudyRoomsController {
     @CurrentUser() userId: string,
     @Body() updateDto: UpdateStudyRoomDto,
   ) {
-    return this.studyRoomsService.updateStudyRoom(studyRoomId, userId, updateDto);
+    return this.studyRoomsService.updateStudyRoom(
+      studyRoomId,
+      userId,
+      updateDto,
+    );
   }
 
   @Post(':studyRoomId/join')
@@ -68,9 +81,17 @@ export class StudyRoomsController {
     @Param('studyRoomId') studyRoomId: string,
     @CurrentUser() userId: string,
   ) {
-    console.log('🎯 [StudyRoomsController.completeStudyRoom] Endpoint called:', { studyRoomId, userId });
-    const result = await this.studyRoomsService.completeStudyRoom(studyRoomId, userId);
-    console.log('✅ [StudyRoomsController.completeStudyRoom] Completed successfully');
+    console.log(
+      '🎯 [StudyRoomsController.completeStudyRoom] Endpoint called:',
+      { studyRoomId, userId },
+    );
+    const result = await this.studyRoomsService.completeStudyRoom(
+      studyRoomId,
+      userId,
+    );
+    console.log(
+      '✅ [StudyRoomsController.completeStudyRoom] Completed successfully',
+    );
     return result;
   }
 

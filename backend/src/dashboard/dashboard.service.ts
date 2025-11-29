@@ -35,32 +35,40 @@ export class DashboardService {
     const data: any = {};
 
     if (includeMetrics) {
-      const [completedSessions, totalEarnings, receivedReviews] = await Promise.all([
-        this.prisma.peerSession.count({
-          where: {
-            OR: [{ requestedById: user.id }, { requestedToId: user.id }],
-            sessionStatus: SessionStatus.DONE,
-          },
-        }),
-        this.prisma.payment.aggregate({
-          where: { receivedById: user.id, paymentStatus: 'RECEIVED' },
-          _sum: { amountReceived: true },
-        }),
-        this.prisma.review.findMany({
-          where: { revieweeId: user.id },
-        }),
-      ]);
+      const [completedSessions, totalEarnings, receivedReviews] =
+        await Promise.all([
+          this.prisma.peerSession.count({
+            where: {
+              OR: [{ requestedById: user.id }, { requestedToId: user.id }],
+              sessionStatus: SessionStatus.DONE,
+            },
+          }),
+          this.prisma.payment.aggregate({
+            where: { receivedById: user.id, paymentStatus: 'RECEIVED' },
+            _sum: { amountReceived: true },
+          }),
+          this.prisma.review.findMany({
+            where: { revieweeId: user.id },
+          }),
+        ]);
 
       const avgRating =
         receivedReviews.length > 0
-          ? receivedReviews.reduce((sum, r) => sum + r.rating, 0) / receivedReviews.length
+          ? receivedReviews.reduce((sum, r) => sum + r.rating, 0) /
+            receivedReviews.length
           : 0;
 
       data.metrics = [
-        { name: 'Sessions Completed', value: completedSessions, description: 'Total sessions' },
+        {
+          name: 'Sessions Completed',
+          value: completedSessions,
+          description: 'Total sessions',
+        },
         {
           name: 'Total Earnings',
-          value: Math.round(Number(totalEarnings._sum.amountReceived || 0) * 100) / 100,
+          value:
+            Math.round(Number(totalEarnings._sum.amountReceived || 0) * 100) /
+            100,
           description: 'Coins earned',
         },
         {
@@ -124,7 +132,12 @@ export class DashboardService {
 
     if (includeSessions) {
       const now = new Date();
-      const [upcomingSessions, pastSessions, upcomingStudyRooms, pastStudyRooms] = await Promise.all([
+      const [
+        upcomingSessions,
+        pastSessions,
+        upcomingStudyRooms,
+        pastStudyRooms,
+      ] = await Promise.all([
         // Upcoming peer sessions
         this.prisma.peerSession.findMany({
           where: {
@@ -135,7 +148,9 @@ export class DashboardService {
           include: {
             requestedBy: { select: { id: true, name: true, avatar: true } },
             requestedTo: { select: { id: true, name: true, avatar: true } },
-            skills: { include: { skill: { select: { id: true, name: true } } } },
+            skills: {
+              include: { skill: { select: { id: true, name: true } } },
+            },
           },
           orderBy: { date: 'asc' },
           take: 10,
@@ -149,7 +164,9 @@ export class DashboardService {
           include: {
             requestedBy: { select: { id: true, name: true, avatar: true } },
             requestedTo: { select: { id: true, name: true, avatar: true } },
-            skills: { include: { skill: { select: { id: true, name: true } } } },
+            skills: {
+              include: { skill: { select: { id: true, name: true } } },
+            },
           },
           orderBy: { date: 'desc' },
           take: 10,
@@ -166,7 +183,9 @@ export class DashboardService {
           },
           include: {
             createdBy: { select: { id: true, name: true, avatar: true } },
-            skills: { include: { skill: { select: { id: true, name: true } } } },
+            skills: {
+              include: { skill: { select: { id: true, name: true } } },
+            },
             learners: { select: { userId: true } },
           },
           orderBy: { date: 'asc' },
@@ -183,7 +202,9 @@ export class DashboardService {
           },
           include: {
             createdBy: { select: { id: true, name: true, avatar: true } },
-            skills: { include: { skill: { select: { id: true, name: true } } } },
+            skills: {
+              include: { skill: { select: { id: true, name: true } } },
+            },
             learners: { select: { userId: true } },
           },
           orderBy: { date: 'desc' },
@@ -263,7 +284,9 @@ export class DashboardService {
     }
 
     if (includeAchievements) {
-      const achievements = await this.achievementsService.getUserAchievements(user.id);
+      const achievements = await this.achievementsService.getUserAchievements(
+        user.id,
+      );
       data.achievements = {
         unlocked: achievements.unlocked.slice(0, 5), // Latest 5 unlocked
         inProgress: achievements.inProgress.slice(0, 3), // Top 3 in progress

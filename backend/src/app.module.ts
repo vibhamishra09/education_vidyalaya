@@ -18,6 +18,7 @@ import { UploadModule } from './upload/upload.module';
 import { AvailabilityModule } from './availability/availability.module';
 import { StreaksModule } from './streaks/streaks.module';
 import { AchievementsModule } from './achievements/achievements.module';
+import { TranscriptsModule } from './transcripts/transcripts.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { AchievementsModule } from './achievements/achievements.module';
     AvailabilityModule,
     StreaksModule,
     AchievementsModule,
+    TranscriptsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

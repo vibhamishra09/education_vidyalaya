@@ -1,4 +1,13 @@
-import { IsString, IsOptional, IsArray, IsInt, IsNumber, IsDateString, Min, Max } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsArray,
+  IsInt,
+  IsNumber,
+  IsDateString,
+  Min,
+  Max,
+} from 'class-validator';
 import { SessionStatus } from '@prisma/client';
 
 export class StudyRoomDto {

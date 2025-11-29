@@ -73,7 +73,7 @@ export class AvailabilityController {
   @UseGuards(ClerkAuthGuard)
   async createBlockedSlot(
     @CurrentUser() userId: string,
-    @Body() data: CreateBlockedSlotDto
+    @Body() data: CreateBlockedSlotDto,
   ) {
     return this.availabilityService.createBlockedSlot(userId, data);
   }

@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  BadRequestException,
+} from '@nestjs/common';
 import { SessionStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateUserDto } from './dto/user.dto';
@@ -8,7 +13,7 @@ export class UsersService {
   constructor(private prisma: PrismaService) {}
 
   async getCurrentUser(clerkUserId: string) {
-    let user = await this.prisma.user.findUnique({
+    const user = await this.prisma.user.findUnique({
       where: { clerkId: clerkUserId },
       include: {
         userSkills: {
@@ -22,7 +27,9 @@ export class UsersService {
     const isNewUser = !user;
 
     if (!user) {
-      throw new NotFoundException('User not found. Please complete onboarding first.');
+      throw new NotFoundException(
+        'User not found. Please complete onboarding first.',
+      );
     }
 
     const hasSkills = user.userSkills
@@ -52,9 +59,17 @@ export class UsersService {
     };
   }
 
-
   async updateUserProfile(userId: string, updateDto: UpdateUserDto) {
-    const { bio, avatar, location, school, username, hourlyRate, hasSkills, wantSkills } = updateDto;
+    const {
+      bio,
+      avatar,
+      location,
+      school,
+      username,
+      hourlyRate,
+      hasSkills,
+      wantSkills,
+    } = updateDto;
 
     // Get current user to check existing username
     const currentUser = await this.prisma.user.findUnique({
@@ -71,9 +86,9 @@ export class UsersService {
       // Check if username is already taken by another user
       // Use findFirst because username is nullable and findUnique doesn't work well with nullable unique fields
       const existingUser = await this.prisma.user.findFirst({
-        where: { 
+        where: {
           username: username,
-          id: { not: currentUser.id } // Exclude current user
+          id: { not: currentUser.id }, // Exclude current user
         },
         select: { id: true },
       });
@@ -86,7 +101,7 @@ export class UsersService {
     // Update user bio, avatar, location, school, username, and hourly rate
     const user = await this.prisma.user.update({
       where: { clerkId: userId },
-      data: { 
+      data: {
         bio,
         avatar,
         location,
@@ -173,9 +188,18 @@ export class UsersService {
       .filter((us) => us.type === 'WANTS')
       .map((us) => us.skill.name);
 
-    const acceptedStatuses = [SessionStatus.UPCOMING, SessionStatus.ONGOING, SessionStatus.DONE];
+    const acceptedStatuses = [
+      SessionStatus.UPCOMING,
+      SessionStatus.ONGOING,
+      SessionStatus.DONE,
+    ];
 
-    const [sessionsTaught, totalSessionRequests, acceptedSessions, reviewStats] = await Promise.all([
+    const [
+      sessionsTaught,
+      totalSessionRequests,
+      acceptedSessions,
+      reviewStats,
+    ] = await Promise.all([
       this.prisma.peerSession.count({
         where: {
           requestedToId: user.id,
@@ -227,12 +251,15 @@ export class UsersService {
     };
   }
 
-  async checkUsernameAvailability(username: string, currentUserId?: string): Promise<{ available: boolean }> {
+  async checkUsernameAvailability(
+    username: string,
+    currentUserId?: string,
+  ): Promise<{ available: boolean }> {
     try {
       // Check if username is already taken
       // Use findFirst instead of findUnique because username is nullable and findUnique doesn't work well with nullable unique fields
       const existingUser = await this.prisma.user.findFirst({
-        where: { 
+        where: {
           username: username, // This will match the exact username (case-sensitive in DB, but we handle case in frontend)
         },
         select: { id: true },
@@ -250,7 +277,7 @@ export class UsersService {
             where: { clerkId: currentUserId },
             select: { id: true, username: true },
           });
-          
+
           // If it's the current user's own username, it's available
           if (currentUser && existingUser.id === currentUser.id) {
             return { available: true };

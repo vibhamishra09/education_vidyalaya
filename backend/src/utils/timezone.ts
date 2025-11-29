@@ -1,7 +1,7 @@
 /**
  * Simple timezone conversion utility using date-fns-tz
  * Converts a local date/time in a specific timezone to UTC
- * 
+ *
  * Example: 11 AM IST -> 5:30 AM UTC
  */
 
@@ -17,7 +17,7 @@ import { fromZonedTime } from 'date-fns-tz';
 export function convertLocalToUTC(
   dateString: string,
   timeString: string,
-  timezone: string
+  timezone: string,
 ): Date {
   // Parse the input
   const [year, month, day] = dateString.split('-').map(Number);
@@ -30,4 +30,3 @@ export function convertLocalToUTC(
   // Convert from the zoned time to UTC
   return fromZonedTime(localDate, timezone);
 }
-

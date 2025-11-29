@@ -1,4 +1,14 @@
-import { Controller, Get, Patch, Post, Delete, Param, Query, Body, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Patch,
+  Post,
+  Delete,
+  Param,
+  Query,
+  Body,
+  UseGuards,
+} from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
 import { PushNotificationService } from './push-notification.service';
 import type { PushSubscriptionDto } from './push-notification.service';
@@ -39,7 +49,10 @@ export class NotificationsController {
     @Param('notificationId') notificationId: string,
     @CurrentUser() userId: string,
   ) {
-    return this.notificationsService.markNotificationAsRead(notificationId, userId);
+    return this.notificationsService.markNotificationAsRead(
+      notificationId,
+      userId,
+    );
   }
 
   @Patch('read-all')
@@ -52,7 +65,10 @@ export class NotificationsController {
     @Body() body: MarkNotificationsReadDto,
     @CurrentUser() userId: string,
   ) {
-    return this.notificationsService.markNotificationsAsRead(body.notificationIds, userId);
+    return this.notificationsService.markNotificationsAsRead(
+      body.notificationIds,
+      userId,
+    );
   }
 
   @Get('vapid-public-key')

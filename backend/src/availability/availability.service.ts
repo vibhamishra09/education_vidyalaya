@@ -163,7 +163,7 @@ export class AvailabilityService {
 
     if (existing.userId !== dbUserId) {
       throw new ForbiddenException(
-        'You cannot update another user\'s availability',
+        "You cannot update another user's availability",
       );
     }
 
@@ -200,7 +200,7 @@ export class AvailabilityService {
 
     if (existing.userId !== dbUserId) {
       throw new ForbiddenException(
-        'You cannot delete another user\'s availability',
+        "You cannot delete another user's availability",
       );
     }
 
@@ -282,7 +282,7 @@ export class AvailabilityService {
 
     if (existing.userId !== dbUserId) {
       throw new ForbiddenException(
-        'You cannot delete another user\'s blocked time slot',
+        "You cannot delete another user's blocked time slot",
       );
     }
 
@@ -427,7 +427,10 @@ export class AvailabilityService {
     if (unavailability && unavailability.isActive) {
       // Check if requested time overlaps with the unavailable hours
       // Unavailable if: request starts before block ends AND request ends after block starts
-      if (timeStr < unavailability.endTime && endTimeStr > unavailability.startTime) {
+      if (
+        timeStr < unavailability.endTime &&
+        endTimeStr > unavailability.startTime
+      ) {
         return {
           isAvailable: false,
           reason: `User is not available from ${unavailability.startTime} to ${unavailability.endTime} on this day`,
@@ -439,10 +442,7 @@ export class AvailabilityService {
     const blockedSlots = await this.prisma.blockedTimeSlot.findMany({
       where: {
         userId: dbUserId,
-        AND: [
-          { startTime: { lt: endTime } },
-          { endTime: { gt: startTime } },
-        ],
+        AND: [{ startTime: { lt: endTime } }, { endTime: { gt: startTime } }],
       },
     });
 
@@ -461,10 +461,7 @@ export class AvailabilityService {
 
     const conflictingSessions = await this.prisma.peerSession.findMany({
       where: {
-        OR: [
-          { requestedById: dbUserId },
-          { requestedToId: dbUserId },
-        ],
+        OR: [{ requestedById: dbUserId }, { requestedToId: dbUserId }],
         sessionStatus: {
           in: ['PENDING', 'UPCOMING'],
         },
@@ -666,39 +663,52 @@ export class AvailabilityService {
     const end = new Date(endDate);
 
     // Get all unavailability blocks, blocked slots, and sessions for the date range
-    const [unavailabilityBlocks, blockedSlots, sessions, user] = await Promise.all([
-      this.prisma.userAvailability.findMany({
-        where: { userId: dbUserId, isActive: true },
-      }),
-      this.prisma.blockedTimeSlot.findMany({
-        where: {
-          userId: dbUserId,
-          startTime: { lte: end },
-          endTime: { gte: start },
-        },
-      }),
-      this.prisma.peerSession.findMany({
-        where: {
-          OR: [{ requestedById: dbUserId }, { requestedToId: dbUserId }],
-          sessionStatus: { in: ['PENDING', 'UPCOMING'] },
-          date: { gte: start, lte: end },
-        },
-        select: { date: true, duration: true },
-      }),
-      this.prisma.user.findUnique({
-        where: { id: dbUserId },
-        select: { bufferTime: true, minAdvanceTime: true, maxFutureBooking: true },
-      }),
-    ]);
+    const [unavailabilityBlocks, blockedSlots, sessions, user] =
+      await Promise.all([
+        this.prisma.userAvailability.findMany({
+          where: { userId: dbUserId, isActive: true },
+        }),
+        this.prisma.blockedTimeSlot.findMany({
+          where: {
+            userId: dbUserId,
+            startTime: { lte: end },
+            endTime: { gte: start },
+          },
+        }),
+        this.prisma.peerSession.findMany({
+          where: {
+            OR: [{ requestedById: dbUserId }, { requestedToId: dbUserId }],
+            sessionStatus: { in: ['PENDING', 'UPCOMING'] },
+            date: { gte: start, lte: end },
+          },
+          select: { date: true, duration: true },
+        }),
+        this.prisma.user.findUnique({
+          where: { id: dbUserId },
+          select: {
+            bufferTime: true,
+            minAdvanceTime: true,
+            maxFutureBooking: true,
+          },
+        }),
+      ]);
 
     if (!user) {
       throw new NotFoundException('User not found');
     }
 
-    const availabilitySummary: Record<string, {
-      date: string;
-      hasSlots: { '15': boolean; '30': boolean; '60': boolean; '120': boolean };
-    }> = {};
+    const availabilitySummary: Record<
+      string,
+      {
+        date: string;
+        hasSlots: {
+          '15': boolean;
+          '30': boolean;
+          '60': boolean;
+          '120': boolean;
+        };
+      }
+    > = {};
 
     // Iterate through each day in the range
     const currentDate = new Date(start);
@@ -762,7 +772,11 @@ export class AvailabilityService {
     unavailBlock: { startTime: string; endTime: string } | undefined,
     blockedSlots: { startTime: Date; endTime: Date }[],
     sessions: { date: Date; duration: number }[],
-    user: { bufferTime: number; minAdvanceTime: number; maxFutureBooking: number },
+    user: {
+      bufferTime: number;
+      minAdvanceTime: number;
+      maxFutureBooking: number;
+    },
   ): boolean {
     return this.evaluateQuickAvailability(
       startTime,
@@ -780,7 +794,11 @@ export class AvailabilityService {
     unavailBlock: { startTime: string; endTime: string } | undefined,
     blockedSlots: { startTime: Date; endTime: Date }[],
     sessions: { date: Date; duration: number }[],
-    user: { bufferTime: number; minAdvanceTime: number; maxFutureBooking: number },
+    user: {
+      bufferTime: number;
+      minAdvanceTime: number;
+      maxFutureBooking: number;
+    },
   ): { isAvailable: boolean; reason?: string } {
     const endTime = new Date(startTime.getTime() + duration * 60000);
     const now = new Date();
@@ -812,7 +830,10 @@ export class AvailabilityService {
       const timeStr = `${startTime.getUTCHours().toString().padStart(2, '0')}:${startTime.getUTCMinutes().toString().padStart(2, '0')}`;
       const endTimeStr = `${endTime.getUTCHours().toString().padStart(2, '0')}:${endTime.getUTCMinutes().toString().padStart(2, '0')}`;
 
-      if (timeStr < unavailBlock.endTime && endTimeStr > unavailBlock.startTime) {
+      if (
+        timeStr < unavailBlock.endTime &&
+        endTimeStr > unavailBlock.startTime
+      ) {
         return {
           isAvailable: false,
           reason: `User is not available from ${unavailBlock.startTime} to ${unavailBlock.endTime}`,
