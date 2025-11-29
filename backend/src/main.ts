@@ -74,7 +74,3 @@ async function bootstrap() {
 }
 
 bootstrap();
-<<<<<<< HEAD
-=======
-//
->>>>>>> origin/test
