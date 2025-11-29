@@ -15,9 +15,6 @@ export function Footer() {
               priority={false}
             />
           </div>
-          <p className="text-sm text-muted-foreground text-center">
-            Empowering peer-to-peer learning worldwide
-          </p>
         </div>
       </div>
     </footer>
