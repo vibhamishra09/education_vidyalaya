@@ -16,6 +16,7 @@ async function bootstrap() {
     'https://test.webyalaya.com',
     'https://webyalaya-next-test.vercel.app',
     'https://dev.webyalaya.com',
+    'https://dev2.webyalaya.com',
     'https://hedera.webyalaya.com',
     'https://webyalaya-green.vercel.app',
     'https://webyalaya-purple.vercel.app',
