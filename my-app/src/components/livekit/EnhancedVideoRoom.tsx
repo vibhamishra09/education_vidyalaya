@@ -435,9 +435,9 @@ function VideoRoomContent({
 				</div>
 
 				{/* Video Grid - Clean and Spacious */}
-				<div className="flex-1 overflow-hidden bg-black/50 relative">
+				<div className="flex-1 overflow-y-auto bg-black/50 relative pb-16 md:pb-20">
 					{tracks.length > 0 ? (
-						<GridLayout tracks={tracks} className="h-full w-full">
+						<GridLayout tracks={tracks} className="h-full w-full min-h-full">
 							<ParticipantTile />
 						</GridLayout>
 					) : (
@@ -447,9 +447,10 @@ function VideoRoomContent({
 					)}
 					<RoomAudioRenderer />
 				</div>
+			</div>
 
-				{/* Custom Controls Bar */}
-				<div className="h-16 md:h-20 bg-black/60 backdrop-blur-md border-t border-white/10 flex items-center justify-center gap-2 md:gap-3 px-2 md:px-6">
+			{/* Custom Controls Bar - Fixed at bottom */}
+			<div className={`fixed bottom-0 left-0 right-0 h-16 md:h-20 bg-black/60 backdrop-blur-md border-t border-white/10 flex items-center justify-center gap-2 md:gap-3 px-2 md:px-6 z-50 ${showChat && !showParticipants ? 'md:right-80' : ''} ${showParticipants && !showChat ? 'md:right-64' : ''} ${showChat && showParticipants ? 'md:right-[22rem]' : ''}`}>
 					{/* Video Toggle */}
 					<Button
 						{...videoButtonProps}
@@ -502,7 +503,6 @@ function VideoRoomContent({
 						Leave
 					</Button>
 				</div>
-			</div>
 
 			{/* Chat Sidebar - Mobile: Full screen overlay, Desktop: Sidebar */}
 			{showChat && (
