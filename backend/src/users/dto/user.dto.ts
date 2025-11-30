@@ -1,4 +1,14 @@
-import { IsString, IsEmail, IsOptional, IsArray, IsInt, IsNumber, Matches, MinLength, MaxLength } from 'class-validator';
+import {
+  IsString,
+  IsEmail,
+  IsOptional,
+  IsArray,
+  IsInt,
+  IsNumber,
+  Matches,
+  MinLength,
+  MaxLength,
+} from 'class-validator';
 
 export class UserDto {
   id: string;
@@ -34,7 +44,10 @@ export class UpdateUserDto {
   @IsString()
   @MinLength(3, { message: 'Username must be at least 3 characters long' })
   @MaxLength(30, { message: 'Username must be at most 30 characters long' })
-  @Matches(/^[a-zA-Z0-9_-]+$/, { message: 'Username can only contain letters, numbers, underscores, and hyphens' })
+  @Matches(/^[a-zA-Z0-9_-]+$/, {
+    message:
+      'Username can only contain letters, numbers, underscores, and hyphens',
+  })
   username?: string;
 
   @IsOptional()

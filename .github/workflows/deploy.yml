@@ -32,6 +32,7 @@ jobs:
       frontend: ${{ steps.filter.outputs.frontend }}
       prisma_migrations: ${{ steps.prisma_migrations.outputs.changed }}
       skip_migrate: ${{ steps.skip_migrate.outputs.skip }}
+      skip_deploy: ${{ steps.skip_deploy.outputs.skip }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -91,12 +92,23 @@ jobs:
             echo "Prisma migration changes detected."
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
-      - name: Detect skip-migrate directive in commit message
+      - name: Detect skip-prisma-migrate directive in commit message
         id: skip_migrate
         run: |
           COMMIT_MSG="${{ github.event.head_commit.message }}"
-          if echo "$COMMIT_MSG" | grep -iq "\[skip migrate\]"; then
-            echo "Skip migrate directive found in commit message."
+          if echo "$COMMIT_MSG" | grep -iq "\[skip prisma migrate\]"; then
+            echo "Skip prisma migrate directive found in commit message."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No skip directive found."
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Detect skip-prod directive in commit message
+        id: skip_deploy
+        run: |
+          COMMIT_MSG="${{ github.event.head_commit.message }}"
+          if echo "$COMMIT_MSG" | grep -iq "\[skip prod\]"; then
+            echo "Skip prod directive found."
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
             echo "No skip directive found."
@@ -107,13 +119,14 @@ jobs:
           echo "Backend changes detected: ${{ steps.filter.outputs.backend }}"
           echo "Frontend changes detected: ${{ steps.filter.outputs.frontend }}"
           echo "Prisma migrations changed: ${{ steps.prisma_migrations.outputs.changed }}"
-          echo "Skip migrate flag: ${{ steps.skip_migrate.outputs.skip }}"
+          echo "Skip prisma migrate flag: ${{ steps.skip_migrate.outputs.skip }}"
+          echo "Skip prod deploy flag: ${{ steps.skip_deploy.outputs.skip }}"
 
   deploy-backend:
     name: Build and Deploy Backend
     runs-on: ubuntu-latest
     needs: changes
-    if: needs.changes.outputs.backend == 'true'
+    if: needs.changes.outputs.backend == 'true' && needs.changes.outputs.skip_deploy != 'true'
     
     steps:
       - name: Checkout code
@@ -174,7 +187,7 @@ jobs:
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY" >> $GITHUB_OUTPUT
 
       - name: Run Prisma Migrations in ECS
-        if: needs.changes.outputs.prisma_migrations == 'true' && needs.changes.outputs.skip_migrate != 'true'
+        if: needs.changes.outputs.prisma_migrations == 'true' && needs.changes.outputs.skip_migrate != 'true' && needs.changes.outputs.skip_deploy != 'true'
         run: |
           # --- Configuration (ADJUST THESE VALUES) ---
           TASK_DEF="${{ env.MIGRATION_TASK_DEF }}"
@@ -255,7 +268,7 @@ jobs:
     name: Deploy Frontend to Vercel
     runs-on: ubuntu-latest
     needs: changes
-    if: needs.changes.outputs.frontend == 'true'
+    if: needs.changes.outputs.frontend == 'true' && needs.changes.outputs.skip_deploy != 'true'
     
     steps:
       - name: Checkout code

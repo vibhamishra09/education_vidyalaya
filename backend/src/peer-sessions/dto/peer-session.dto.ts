@@ -1,4 +1,13 @@
-import { IsString, IsOptional, IsArray, IsInt, IsDateString, IsNumber, Min, Max } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsArray,
+  IsInt,
+  IsDateString,
+  IsNumber,
+  Min,
+  Max,
+} from 'class-validator';
 import { SessionStatus } from '@prisma/client';
 
 export class PeerSessionDto {

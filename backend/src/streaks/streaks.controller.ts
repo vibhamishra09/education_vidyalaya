@@ -1,4 +1,10 @@
-import { Controller, Get, Param, ParseIntPipe, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  ParseIntPipe,
+  UseGuards,
+} from '@nestjs/common';
 import { StreaksService } from './streaks.service';
 import { ClerkAuthGuard } from '../common/guards/clerk-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -17,24 +23,33 @@ export class StreaksController {
    */
   @Get('current')
   async getCurrentStreak(@CurrentUser('id') clerkUserId: string) {
-    console.log('🔍 [StreaksController.getCurrentStreak] Called for clerkUserId:', clerkUserId);
-    
+    console.log(
+      '🔍 [StreaksController.getCurrentStreak] Called for clerkUserId:',
+      clerkUserId,
+    );
+
     // Convert Clerk ID to database ID
     const user = await this.prisma.user.findUnique({
       where: { clerkId: clerkUserId },
       select: { id: true, name: true },
     });
-    
+
     if (!user) {
-      console.error('❌ [StreaksController.getCurrentStreak] User not found for clerkId:', clerkUserId);
+      console.error(
+        '❌ [StreaksController.getCurrentStreak] User not found for clerkId:',
+        clerkUserId,
+      );
       return {
         currentStreak: 0,
         longestStreak: 0,
         lastActivityDate: null,
       };
     }
-    
-    console.log('✅ [StreaksController.getCurrentStreak] User found:', { id: user.id, name: user.name });
+
+    console.log('✅ [StreaksController.getCurrentStreak] User found:', {
+      id: user.id,
+      name: user.name,
+    });
     const result = await this.streaksService.getUserStreak(user.id);
     console.log('📊 [StreaksController.getCurrentStreak] Returning:', result);
     return result;
@@ -53,11 +68,11 @@ export class StreaksController {
       where: { clerkId: clerkUserId },
       select: { id: true },
     });
-    
+
     if (!user) {
       return { days: [] };
     }
-    
+
     // Limit to max 90 days
     const limitedDays = Math.min(days, 90);
     return this.streaksService.getStreakHistory(user.id, limitedDays);
@@ -73,11 +88,11 @@ export class StreaksController {
       where: { clerkId: clerkUserId },
       select: { id: true },
     });
-    
+
     if (!user) {
       return { days: [] };
     }
-    
+
     return this.streaksService.getStreakHistory(user.id, 14);
   }
 }

@@ -22,5 +22,3 @@ export class BrowseQueryDto extends PaginationQueryDto {
   })
   skills?: string[];
 }
-
-

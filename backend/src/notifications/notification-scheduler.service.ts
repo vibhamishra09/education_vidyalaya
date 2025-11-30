@@ -24,10 +24,20 @@ export class NotificationSchedulerService {
     const fiveMinutesFromNow = new Date(now.getTime() + 5 * 60 * 1000);
 
     // Find upcoming peer sessions
-    await this.sendPeerSessionReminders(now, oneDayFromNow, oneHourFromNow, fiveMinutesFromNow);
+    await this.sendPeerSessionReminders(
+      now,
+      oneDayFromNow,
+      oneHourFromNow,
+      fiveMinutesFromNow,
+    );
 
     // Find upcoming study rooms
-    await this.sendStudyRoomReminders(now, oneDayFromNow, oneHourFromNow, fiveMinutesFromNow);
+    await this.sendStudyRoomReminders(
+      now,
+      oneDayFromNow,
+      oneHourFromNow,
+      fiveMinutesFromNow,
+    );
   }
 
   // Run every 5 minutes to check for sessions that have ended
@@ -134,7 +144,6 @@ export class NotificationSchedulerService {
           actionData: { sessionId: session.id, sessionType: 'peerSession' },
         },
       );
-
     }
 
     // Send 1-hour reminders (URGENT)
@@ -173,7 +182,6 @@ export class NotificationSchedulerService {
           actionData: { sessionId: session.id, sessionType: 'peerSession' },
         },
       );
-
     }
 
     // Send 5-minute reminders (URGENT)
@@ -212,7 +220,6 @@ export class NotificationSchedulerService {
           actionData: { sessionId: session.id, sessionType: 'peerSession' },
         },
       );
-
     }
 
     this.logger.log(
@@ -326,7 +333,6 @@ export class NotificationSchedulerService {
           },
         );
       }
-
     }
 
     // Send 1-hour reminders (URGENT)
@@ -369,7 +375,6 @@ export class NotificationSchedulerService {
           },
         );
       }
-
     }
 
     // Send 5-minute reminders (URGENT)
@@ -412,7 +417,6 @@ export class NotificationSchedulerService {
           },
         );
       }
-
     }
 
     this.logger.log(
@@ -488,7 +492,6 @@ export class NotificationSchedulerService {
           },
         );
       }
-
     }
 
     // Find completed study rooms without reviews
@@ -540,7 +543,6 @@ export class NotificationSchedulerService {
           );
         }
       }
-
     }
 
     this.logger.log(
@@ -565,8 +567,10 @@ export class NotificationSchedulerService {
     });
 
     // Filter sessions that have actually ended
-    const actuallyEndedSessions = endedSessions.filter(session => {
-      const endTime = new Date(session.date.getTime() + session.duration * 60 * 1000);
+    const actuallyEndedSessions = endedSessions.filter((session) => {
+      const endTime = new Date(
+        session.date.getTime() + session.duration * 60 * 1000,
+      );
       return endTime < now;
     });
 
@@ -609,7 +613,9 @@ export class NotificationSchedulerService {
       );
     }
 
-    this.logger.log(`Processed ${actuallyEndedSessions.length} ended peer sessions`);
+    this.logger.log(
+      `Processed ${actuallyEndedSessions.length} ended peer sessions`,
+    );
   }
 
   private async sendStudyRoomEndNotifications(now: Date) {
@@ -630,7 +636,7 @@ export class NotificationSchedulerService {
     });
 
     // Filter rooms that have actually ended
-    const actuallyEndedRooms = endedRooms.filter(room => {
+    const actuallyEndedRooms = endedRooms.filter((room) => {
       const endTime = new Date(room.date.getTime() + room.duration * 60 * 1000);
       return endTime < now;
     });

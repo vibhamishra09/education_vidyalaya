@@ -245,6 +245,7 @@ export function ImprovedAvailabilityCalendar({
                     date.getFullYear() === today.getFullYear();
 
                   const daySummary = getDaySummary(date);
+                  // Show all dates, even if they don't have available slots
                   const hasAnySlots = daySummary && (
                     daySummary.hasSlots['15'] ||
                     daySummary.hasSlots['30'] ||
@@ -265,11 +266,11 @@ export function ImprovedAvailabilityCalendar({
                         <button
                           type="button"
                           onClick={() => handleDateHover(date)}
-                          disabled={isPast || !hasAnySlots}
-                          onMouseEnter={() => !isPast && hasAnySlots && handleDateHover(date)}
+                          disabled={isPast}
+                          onMouseEnter={() => !isPast && handleDateHover(date)}
                           className={cn(
                             "relative aspect-square p-2 rounded-md text-sm font-medium transition-colors",
-                            isPast || !hasAnySlots
+                            isPast
                               ? "text-muted-foreground/30 cursor-not-allowed"
                               : "hover:bg-accent cursor-pointer",
                             isSelected && "bg-primary text-primary-foreground hover:bg-primary/90",
@@ -278,18 +279,19 @@ export function ImprovedAvailabilityCalendar({
                         >
                           <div className="flex flex-col items-center justify-center h-full">
                             <span>{date.getDate()}</span>
-                            {hasAnySlots && !isPast && (
+                            {!isPast && daySummary && (
                               <div className="flex gap-0.5 mt-1">
-                                {daySummary?.hasSlots['15'] && <div className="w-1 h-1 rounded-full bg-green-500" />}
-                                {daySummary?.hasSlots['30'] && <div className="w-1 h-1 rounded-full bg-blue-500" />}
-                                {daySummary?.hasSlots['60'] && <div className="w-1 h-1 rounded-full bg-purple-500" />}
-                                {daySummary?.hasSlots['120'] && <div className="w-1 h-1 rounded-full bg-orange-500" />}
+                                {daySummary.hasSlots['15'] && <div className="w-1 h-1 rounded-full bg-green-500" />}
+                                {daySummary.hasSlots['30'] && <div className="w-1 h-1 rounded-full bg-blue-500" />}
+                                {daySummary.hasSlots['60'] && <div className="w-1 h-1 rounded-full bg-purple-500" />}
+                                {daySummary.hasSlots['120'] && <div className="w-1 h-1 rounded-full bg-orange-500" />}
+                                {!hasAnySlots && <div className="w-1 h-1 rounded-full bg-red-500" />}
                               </div>
                             )}
                           </div>
                         </button>
                       </PopoverTrigger>
-                      {hasAnySlots && !isPast && (
+                      {!isPast && (
                         <PopoverContent className="w-80 p-0" align="start" side="right">
                           <div className="p-4">
                             <h3 className="font-semibold mb-2">
@@ -305,7 +307,6 @@ export function ImprovedAvailabilityCalendar({
                                   <TabsTrigger
                                     key={opt.value}
                                     active={selectedDurationTab === opt.value}
-                                    disabled={!daySummary?.hasSlots[opt.value.toString() as keyof typeof daySummary.hasSlots]}
                                     onClick={() => {
                                       setSelectedDurationTab(opt.value);
                                       if (hoveredDate) {
@@ -354,12 +355,12 @@ export function ImprovedAvailabilityCalendar({
                                                   ? "bg-primary text-primary-foreground border-primary"
                                                   : slot.isAvailable
                                                   ? "border-green-300 bg-green-50 dark:bg-green-950 hover:border-green-500 text-green-700 dark:text-green-300"
-                                                  : "border-orange-300 bg-orange-50 dark:bg-orange-950 hover:border-orange-500 text-orange-700 dark:text-orange-300"
+                                                  : "border-red-300 bg-red-50 dark:bg-red-950 hover:border-red-500 text-red-700 dark:text-red-300"
                                               )}
                                             >
                                               {slotTimeStr}
                                               {!slot.isAvailable && (
-                                                <span className="absolute -top-1 -right-1 w-2 h-2 bg-orange-500 rounded-full" title="May be cancelled" />
+                                                <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" title="May be cancelled" />
                                               )}
                                             </button>
                                           );
@@ -371,7 +372,7 @@ export function ImprovedAvailabilityCalendar({
                                           <span>Confirmed available</span>
                                         </p>
                                         <p className="flex items-center gap-2">
-                                          <span className="w-3 h-3 rounded bg-orange-500"></span>
+                                          <span className="w-3 h-3 rounded bg-red-500"></span>
                                           <span>Bookable but high chance of cancellation</span>
                                         </p>
                                       </div>

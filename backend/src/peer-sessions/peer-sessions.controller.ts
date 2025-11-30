@@ -1,9 +1,21 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { PeerSessionsService } from './peer-sessions.service';
 import { ClerkAuthGuard } from '../common/guards/clerk-auth.guard';
 import { OptionalClerkAuthGuard } from '../common/guards/optional-clerk-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { RequestSessionDto, UpdateSessionStatusDto } from './dto/peer-session.dto';
+import {
+  RequestSessionDto,
+  UpdateSessionStatusDto,
+} from './dto/peer-session.dto';
 import { SessionStatus } from '@prisma/client';
 
 @Controller('api/peer-sessions')
@@ -37,7 +49,10 @@ export class PeerSessionsController {
     @Param('peerSessionId') peerSessionId: string,
     @CurrentUser() userId?: string,
   ) {
-    return this.peerSessionsService.getPeerSessionDetails(peerSessionId, userId);
+    return this.peerSessionsService.getPeerSessionDetails(
+      peerSessionId,
+      userId,
+    );
   }
 
   @Post()
@@ -56,7 +71,11 @@ export class PeerSessionsController {
     @CurrentUser() userId: string,
     @Body() updateDto: UpdateSessionStatusDto,
   ) {
-    return this.peerSessionsService.updatePeerSessionStatus(peerSessionId, userId, updateDto);
+    return this.peerSessionsService.updatePeerSessionStatus(
+      peerSessionId,
+      userId,
+      updateDto,
+    );
   }
 
   @Patch(':peerSessionId/accept')
@@ -83,9 +102,17 @@ export class PeerSessionsController {
     @Param('peerSessionId') peerSessionId: string,
     @CurrentUser() userId: string,
   ) {
-    console.log('🎯 [PeerSessionsController.completePeerSession] Endpoint called:', { peerSessionId, userId });
-    const result = await this.peerSessionsService.completePeerSession(peerSessionId, userId);
-    console.log('✅ [PeerSessionsController.completePeerSession] Completed successfully');
+    console.log(
+      '🎯 [PeerSessionsController.completePeerSession] Endpoint called:',
+      { peerSessionId, userId },
+    );
+    const result = await this.peerSessionsService.completePeerSession(
+      peerSessionId,
+      userId,
+    );
+    console.log(
+      '✅ [PeerSessionsController.completePeerSession] Completed successfully',
+    );
     return result;
   }
 

@@ -67,6 +67,7 @@ model StudyRoom {
   reminder1hSent  Boolean                @default(false)
   reminder5mSent  Boolean                @default(false)
   gmeetLink       String?
+  summary         String?                @db.Text
   payments        Payment[]              @relation("StudyRoomPayments")
   reviews         Review[]               @relation("StudyRoomReviews")
   notifications   Notification[]
@@ -89,6 +90,7 @@ model PeerSession {
   reminder1hSent  Boolean          @default(false)
   reminder5mSent  Boolean          @default(false)
   gmeetLink     String?
+  summary       String?            @db.Text
   payments      Payment[]          @relation("PeerSessionPayments")
   notifications Notification[]
   requestedBy   User               @relation("RequestedBy", fields: [requestedById], references: [id])
