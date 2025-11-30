@@ -957,6 +957,8 @@ export class AvailabilityService {
       reason?: string;
     }[] = [];
 
+    // Generate slots with 5-minute intervals to show all possible slots (including conflicting ones)
+    // This provides good granularity without creating too many slots (288 slots per day)
     for (
       let slotStart = new Date(dayStart);
       slotStart.getTime() + duration * 60000 <= dayEnd.getTime();
