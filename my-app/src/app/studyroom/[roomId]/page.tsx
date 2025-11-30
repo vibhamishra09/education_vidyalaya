@@ -26,6 +26,7 @@ import Link from "next/link";
 import { SessionStatus } from "@/types";
 import { ReviewsSection } from "@/components/reviews/reviews-section";
 import { ChatWidget } from "@/components/chat/ChatWidget";
+import { formatMaya } from "@/lib/utils/coin-format";
 
 export default function StudyRoomPage({
   params,
@@ -227,7 +228,7 @@ export default function StudyRoomPage({
                   ) : (
                     <>
                       <Coins className="h-4 w-4 mr-2" />
-                      Join Room ({room.joiningFee} coins)
+                      Join Room ({formatMaya(room.joiningFee)} mAYA tokens)
                     </>
                   )}
                 </Button>
