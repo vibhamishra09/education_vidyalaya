@@ -234,6 +234,10 @@ export interface BrowsePeer {
 export interface BrowseResponse {
   peers: BrowsePeer[];
   studyRooms: StudyRoomCard[];
+  counts: {
+    peers: number;
+    studyRooms: number;
+  };
   pagination: Pagination;
 }
 

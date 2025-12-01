@@ -25,6 +25,8 @@ function BrowsePageContent() {
   const [allPeers, setAllPeers] = useState<BrowsePeer[]>([]);
   const [allStudyRooms, setAllStudyRooms] = useState<StudyRoomCard[]>([]);
   const [hasMore, setHasMore] = useState(false);
+  const [peerCount, setPeerCount] = useState<number>(0);
+  const [studyRoomCount, setStudyRoomCount] = useState<number>(0);
 
   // Initialize search query from URL parameters
   useEffect(() => {
@@ -63,6 +65,12 @@ function BrowsePageContent() {
   // Accumulate data as pages load
   useEffect(() => {
     if (browseData) {
+      // Update counts from API response
+      if (browseData.counts) {
+        setPeerCount(browseData.counts.peers);
+        setStudyRoomCount(browseData.counts.studyRooms);
+      }
+
       if (activeTab === "peers") {
         if (currentPage === 1) {
           setAllPeers(browseData.peers);
@@ -179,16 +187,26 @@ function BrowsePageContent() {
             <TabsTrigger
               active={activeTab === "peers"}
               onClick={() => setActiveTab("peers")}
-              className="text-sm sm:text-base"
+              className="text-sm sm:text-base flex items-center gap-2"
             >
-              Peers
+              <span>Peers</span>
+              {(searchQuery || selectedSkills.length > 0) && peerCount > 0 && (
+                <Badge variant="secondary" className="text-xs">
+                  {peerCount}
+                </Badge>
+              )}
             </TabsTrigger>
             <TabsTrigger
               active={activeTab === "studyRooms"}
               onClick={() => setActiveTab("studyRooms")}
-              className="text-sm sm:text-base"
+              className="text-sm sm:text-base flex items-center gap-2"
             >
-              Study Rooms
+              <span>Study Rooms</span>
+              {(searchQuery || selectedSkills.length > 0) && studyRoomCount > 0 && (
+                <Badge variant="secondary" className="text-xs">
+                  {studyRoomCount}
+                </Badge>
+              )}
             </TabsTrigger>
           </TabsList>
 
