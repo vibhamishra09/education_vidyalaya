@@ -20,6 +20,8 @@ export class DashboardService {
     includeNotifications: boolean = true,
     includeStreaks: boolean = true,
     includeAchievements: boolean = true,
+    sessionsPage: number = 1,
+    sessionsLimit: number = 10,
   ) {
     console.log('includeMetrics', includeMetrics);
     // userId is actually clerkId, so we need to find the user by clerkId first
@@ -132,18 +134,23 @@ export class DashboardService {
 
     if (includeSessions) {
       const now = new Date();
+      const skip = (sessionsPage - 1) * sessionsLimit;
+      
       const [
         upcomingSessions,
         pastSessions,
         upcomingStudyRooms,
         pastStudyRooms,
+        upcomingSessionsTotal,
+        pastSessionsTotal,
+        upcomingStudyRoomsTotal,
+        pastStudyRoomsTotal,
       ] = await Promise.all([
-        // Upcoming peer sessions
+        // Upcoming peer sessions (including ONGOING)
         this.prisma.peerSession.findMany({
           where: {
             OR: [{ requestedById: user.id }, { requestedToId: user.id }],
-            sessionStatus: SessionStatus.UPCOMING,
-            date: { gte: now },
+            sessionStatus: { in: [SessionStatus.UPCOMING, SessionStatus.ONGOING] },
           },
           include: {
             requestedBy: { select: { id: true, name: true, avatar: true } },
@@ -152,8 +159,9 @@ export class DashboardService {
               include: { skill: { select: { id: true, name: true } } },
             },
           },
-          orderBy: { date: 'asc' },
-          take: 10,
+          orderBy: { date: 'asc' }, // Sort by scheduled time
+          skip,
+          take: sessionsLimit,
         }),
         // Past peer sessions
         this.prisma.peerSession.findMany({
@@ -168,18 +176,18 @@ export class DashboardService {
               include: { skill: { select: { id: true, name: true } } },
             },
           },
-          orderBy: { date: 'desc' },
-          take: 10,
+          orderBy: { date: 'desc' }, // Most recent past sessions first
+          skip,
+          take: sessionsLimit,
         }),
-        // Upcoming study rooms (date >= now)
+        // Upcoming study rooms (including ONGOING)
         this.prisma.studyRoom.findMany({
           where: {
             OR: [
               { createdById: user.id },
               { learners: { some: { userId: user.id } } },
             ],
-            sessionStatus: SessionStatus.UPCOMING,
-            date: { gte: now },
+            sessionStatus: { in: [SessionStatus.UPCOMING, SessionStatus.ONGOING] },
           },
           include: {
             createdBy: { select: { id: true, name: true, avatar: true } },
@@ -188,8 +196,9 @@ export class DashboardService {
             },
             learners: { select: { userId: true } },
           },
-          orderBy: { date: 'asc' },
-          take: 10,
+          orderBy: { date: 'asc' }, // Sort by scheduled time
+          skip,
+          take: sessionsLimit,
         }),
         // Past study rooms (DONE status)
         this.prisma.studyRoom.findMany({
@@ -207,8 +216,40 @@ export class DashboardService {
             },
             learners: { select: { userId: true } },
           },
-          orderBy: { date: 'desc' },
-          take: 10,
+          orderBy: { date: 'desc' }, // Most recent past sessions first
+          skip,
+          take: sessionsLimit,
+        }),
+        // Counts for pagination
+        this.prisma.peerSession.count({
+          where: {
+            OR: [{ requestedById: user.id }, { requestedToId: user.id }],
+            sessionStatus: { in: [SessionStatus.UPCOMING, SessionStatus.ONGOING] },
+          },
+        }),
+        this.prisma.peerSession.count({
+          where: {
+            OR: [{ requestedById: user.id }, { requestedToId: user.id }],
+            sessionStatus: SessionStatus.DONE,
+          },
+        }),
+        this.prisma.studyRoom.count({
+          where: {
+            OR: [
+              { createdById: user.id },
+              { learners: { some: { userId: user.id } } },
+            ],
+            sessionStatus: { in: [SessionStatus.UPCOMING, SessionStatus.ONGOING] },
+          },
+        }),
+        this.prisma.studyRoom.count({
+          where: {
+            OR: [
+              { createdById: user.id },
+              { learners: { some: { userId: user.id } } },
+            ],
+            sessionStatus: SessionStatus.DONE,
+          },
         }),
       ]);
 
@@ -261,6 +302,38 @@ export class DashboardService {
         description: sr.description,
         sessionStatus: sr.sessionStatus,
       }));
+
+      // Add pagination metadata for sessions
+      data.sessionsPagination = {
+        upcomingSessions: {
+          total: upcomingSessionsTotal,
+          page: sessionsPage,
+          limit: sessionsLimit,
+          totalPages: Math.ceil(upcomingSessionsTotal / sessionsLimit),
+          hasMore: skip + sessionsLimit < upcomingSessionsTotal,
+        },
+        pastSessions: {
+          total: pastSessionsTotal,
+          page: sessionsPage,
+          limit: sessionsLimit,
+          totalPages: Math.ceil(pastSessionsTotal / sessionsLimit),
+          hasMore: skip + sessionsLimit < pastSessionsTotal,
+        },
+        upcomingStudyRooms: {
+          total: upcomingStudyRoomsTotal,
+          page: sessionsPage,
+          limit: sessionsLimit,
+          totalPages: Math.ceil(upcomingStudyRoomsTotal / sessionsLimit),
+          hasMore: skip + sessionsLimit < upcomingStudyRoomsTotal,
+        },
+        pastStudyRooms: {
+          total: pastStudyRoomsTotal,
+          page: sessionsPage,
+          limit: sessionsLimit,
+          totalPages: Math.ceil(pastStudyRoomsTotal / sessionsLimit),
+          hasMore: skip + sessionsLimit < pastStudyRoomsTotal,
+        },
+      };
 
       data.pendingReviews = await this.prisma.peerSession.count({
         where: {

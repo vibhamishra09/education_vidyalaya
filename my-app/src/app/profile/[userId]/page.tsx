@@ -275,14 +275,15 @@ export default function PublicProfilePage({
             <div className="space-y-3 sm:space-y-4">
               {upcomingRooms.length === 0 ? (
                 <Card>
-                  <CardContent className="pt-4 sm:pt-6 text-center text-muted-foreground text-sm sm:text-base">
+                  <CardContent className="pt-4 sm:pt-6 text-center text-muted-foreground text-sm sm:text-base font-tagline">
                     No upcoming study rooms
                   </CardContent>
                 </Card>
               ) : (
                 upcomingRooms.map((room) => (
-                  <StudyRoomCard 
+                  <StudyRoomCard
                     key={room.id}
+                    roomId={room.id}
                     status={room.sessionStatus === SessionStatus.UPCOMING ? "scheduled" : "live"}
                     category={typeof room.skills[0] === 'string' ? room.skills[0] : room.skills[0]?.name || "General"}
                     title={room.title}
@@ -315,7 +316,7 @@ export default function PublicProfilePage({
             <div className="space-y-3 sm:space-y-4">
               {userReviews.length === 0 ? (
                 <Card>
-                  <CardContent className="pt-4 sm:pt-6 text-center text-muted-foreground text-sm sm:text-base">
+                  <CardContent className="pt-4 sm:pt-6 text-center text-muted-foreground text-sm sm:text-base font-tagline">
                     No reviews yet
                   </CardContent>
                 </Card>

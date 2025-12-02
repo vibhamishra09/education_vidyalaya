@@ -6,10 +6,12 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Users, Play, Loader2, Star } from "lucide-react";
 import { motion } from "framer-motion";
+import { ShareButton } from "@/components/share/share-button";
 
 type ButtonVariant = "default" | "outline" | "secondary" | "ghost" | "destructive" | "link";
 
 interface StudyRoomCardProps {
+  roomId: string;
   status: "live" | "scheduled";
   category?: string;
   title: string;
@@ -32,6 +34,7 @@ interface StudyRoomCardProps {
 }
 
 export function StudyRoomCard({
+  roomId,
   status,
   category = "General",
   title,
@@ -78,7 +81,7 @@ export function StudyRoomCard({
           </div>
           <div className="space-y-2">
             <h3 className="font-semibold text-lg leading-tight line-clamp-2">{title}</h3>
-            <p className="text-sm text-muted-foreground line-clamp-2">
+            <p className="text-sm text-muted-foreground line-clamp-2 font-tagline">
               {description || "No description provided."}
             </p>
           </div>
@@ -114,29 +117,39 @@ export function StudyRoomCard({
             </div>
           </div>
 
-          <Button
-            type="button"
-            className="w-full"
-            variant={actionVariant ?? (statusIsLive ? "default" : "outline")}
-            onClick={onAction}
-            disabled={actionDisabled || actionLoading}
-          >
-            {actionLoading ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Working...
-              </>
-            ) : actionLabel ? (
-              actionLabel
-            ) : statusIsLive ? (
-              <>
-                <Play className="h-4 w-4 mr-2" />
-                Join Live
-              </>
-            ) : (
-              "Register"
-            )}
-          </Button>
+          <div className="flex gap-2">
+            <ShareButton
+              url={`${typeof window !== "undefined" ? window.location.origin : process.env.NEXT_PUBLIC_BASE_URL || ""}/studyroom/${roomId}`}
+              title={title}
+              description={description}
+              variant="outline"
+              size="default"
+              className="flex-1"
+            />
+            <Button
+              type="button"
+              className="flex-1"
+              variant={actionVariant ?? (statusIsLive ? "default" : "outline")}
+              onClick={onAction}
+              disabled={actionDisabled || actionLoading}
+            >
+              {actionLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Working...
+                </>
+              ) : actionLabel ? (
+                actionLabel
+              ) : statusIsLive ? (
+                <>
+                  <Play className="h-4 w-4 mr-2" />
+                  Join Live
+                </>
+              ) : (
+                "Register"
+              )}
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </motion.div>

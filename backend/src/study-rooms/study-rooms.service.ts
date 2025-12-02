@@ -503,15 +503,13 @@ export class StudyRoomsService {
       createDto.timezone,
     );
 
-    // Validate that session is scheduled at least 2 minutes in the future
+    // Determine session status based on start time
+    // If the room starts now or in the past, set it to ONGOING immediately
     const now = new Date();
-    const minAdvanceTime = 2 * 60 * 1000; // 2 minutes in milliseconds
-
-    if (dateTime.getTime() <= now.getTime() + minAdvanceTime) {
-      throw new BadRequestException(
-        'Sessions must be scheduled at least 2 minutes in advance',
-      );
-    }
+    const sessionStatus =
+      dateTime.getTime() <= now.getTime()
+        ? SessionStatus.ONGOING
+        : SessionStatus.UPCOMING;
 
     // Normalize Google Meet link if provided
     const gmeetLink = createDto.gmeetLink
@@ -527,7 +525,7 @@ export class StudyRoomsService {
         duration: createDto.duration,
         maxParticipants: createDto.maxParticipants,
         joiningFee: createDto.joiningFee || 0,
-        sessionStatus: SessionStatus.UPCOMING,
+        sessionStatus: sessionStatus,
         createdById: user.id, // Use the database ID, not clerkId
         gmeetLink: gmeetLink,
       },

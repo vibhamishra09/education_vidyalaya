@@ -1,6 +1,8 @@
-import { IsOptional, IsBooleanString } from 'class-validator';
+import { IsOptional, IsBooleanString, IsInt, Min, Max } from 'class-validator';
+import { Type } from 'class-transformer';
+import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 
-export class DashboardQueryDto {
+export class DashboardQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsBooleanString()
   includeMetrics?: string;

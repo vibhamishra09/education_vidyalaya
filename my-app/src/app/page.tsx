@@ -170,6 +170,7 @@ export default function Home() {
                     <FadeIn key={room.id} delay={index * 0.1}>
                     <div data-testid="study-room-card">
                       <StudyRoomCard
+                        roomId={room.id}
                         status={isLive ? "live" : "scheduled"}
                         category={
                           typeof room.skills?.[0] === "string"
@@ -215,7 +216,7 @@ export default function Home() {
             <FadeIn>
               <div className="mb-8">
                 <h2 className="text-3xl font-bold mb-2">Debate Rooms</h2>
-                <p className="text-muted-foreground">
+                <p className="text-muted-foreground font-tagline">
                   Engage in structured peer-to-peer debates
                 </p>
               </div>

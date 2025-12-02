@@ -62,16 +62,24 @@ export default function DashboardPage() {
     const now = new Date();
 
     const ongoingPeerSessions = upcomingSessions.filter(s => {
+      // Check if session status is ONGOING
+      if (s.sessionStatus === 'ONGOING') {
+        return true;
+      }
+      // Fallback: check if current time is between start and end
       const sessionStart = new Date(s.date);
       const sessionEnd = new Date(sessionStart.getTime() + s.duration * 60 * 1000);
-      // Session is ongoing if current time is between start and end
       return now >= sessionStart && now <= sessionEnd;
     });
 
     const ongoingRooms = upcomingStudyRooms.filter(sr => {
+      // Check if room status is ONGOING
+      if (sr.sessionStatus === 'ONGOING') {
+        return true;
+      }
+      // Fallback: check if current time is between start and end
       const roomStart = new Date(sr.date);
       const roomEnd = new Date(roomStart.getTime() + sr.duration * 60 * 1000);
-      // Room is ongoing if current time is between start and end
       return now >= roomStart && now <= roomEnd;
     });
 
@@ -209,7 +217,7 @@ export default function DashboardPage() {
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-2">
                 Welcome back, {currentUser?.name || "User"}!
               </h1>
-              <p className="text-sm sm:text-base text-muted-foreground">
+              <p className="text-sm sm:text-base text-muted-foreground font-tagline">
                 Here&apos;s what&apos;s happening with your learning journey
               </p>
             </>
@@ -404,6 +412,9 @@ export default function DashboardPage() {
                 ...upcomingSessions
                   .filter(s => {
                     // Exclude sessions that are currently ongoing
+                    if (s.sessionStatus === 'ONGOING') {
+                      return false;
+                    }
                     const now = new Date();
                     const sessionStart = new Date(s.date);
                     const sessionEnd = new Date(sessionStart.getTime() + s.duration * 60 * 1000);
@@ -422,6 +433,9 @@ export default function DashboardPage() {
                 ...upcomingStudyRooms
                   .filter(sr => {
                     // Exclude rooms that are currently ongoing
+                    if (sr.sessionStatus === 'ONGOING') {
+                      return false;
+                    }
                     const now = new Date();
                     const roomStart = new Date(sr.date);
                     const roomEnd = new Date(roomStart.getTime() + sr.duration * 60 * 1000);

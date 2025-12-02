@@ -31,9 +31,9 @@ export default function SignUpPage() {
             </svg>
           </div>
           <h1 className="text-4xl font-bold mb-3 text-gradient">
-            Join Webyalaya
+            Join <span className="font-brand">Webyalaya</span>
           </h1>
-          <p className="text-muted-foreground text-lg">
+          <p className="text-muted-foreground text-lg font-tagline">
             Create your account and start exploring amazing things
           </p>
         </div>
