@@ -365,9 +365,9 @@ export default function RequestSessionPage({
                     <Input
                       id="duration"
                       type="number"
-                      min="30"
-                      max="180"
-                      step="30"
+                      min="1"
+                      max="240"
+                      step="1"
                       value={formData.duration}
                       onChange={(e) =>
                         setFormData((prev) => ({
@@ -379,7 +379,7 @@ export default function RequestSessionPage({
                       disabled={isSelfRequest}
                     />
                     <p className="text-sm text-muted-foreground">
-                      Between 30 and 180 minutes (in 30-minute increments)
+                      Between 1 and 240 minutes
                     </p>
                   </div>
 

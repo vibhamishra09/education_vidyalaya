@@ -4,6 +4,22 @@ import { useEffect, useState, useCallback } from "react";
 import { NotificationToast } from "./notification-toast";
 import { useNotificationContext } from "@/contexts/notification-context";
 
+declare global {
+  interface Window {
+    webkitAudioContext?: typeof AudioContext;
+  }
+}
+
+interface PushMessagePayload {
+  type?: string;
+  notification?: {
+    title: string;
+    body: string;
+    icon?: string;
+    data?: PushNotificationData["data"];
+  };
+}
+
 interface PushNotificationData {
   id: string;
   title: string;
@@ -24,10 +40,16 @@ export function PushNotificationListener() {
   const { refetchNotifications } = useNotificationContext();
 
   const playNotificationSound = useCallback(() => {
+    const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
+
+    if (!AudioContextConstructor) {
+      console.warn('AudioContext not supported in this browser');
+      return;
+    }
+
     try {
       // Use Web Audio API to play a simple notification sound
-      const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      const audioContext = new AudioContextClass();
+      const audioContext = new AudioContextConstructor();
       const oscillator = audioContext.createOscillator();
       const gainNode = audioContext.createGain();
 
@@ -47,8 +69,8 @@ export function PushNotificationListener() {
     }
   }, []);
 
-  const handlePushNotification = useCallback((event: MessageEvent) => {
-    if (event.data?.type === 'PUSH_NOTIFICATION') {
+  const handlePushNotification = useCallback((event: MessageEvent<PushMessagePayload>) => {
+    if (event.data?.type === 'PUSH_NOTIFICATION' && event.data.notification) {
       console.log('📨 [PushNotificationListener] Service worker message received');
       console.log('📨 [PushNotificationListener] Message type:', event.data?.type);
       console.log('📨 [PushNotificationListener] Full event data:', event.data);

@@ -26,6 +26,7 @@ import Link from "next/link";
 import { SessionStatus } from "@/types";
 import { ReviewsSection } from "@/components/reviews/reviews-section";
 import { ChatWidget } from "@/components/chat/ChatWidget";
+import { formatMaya } from "@/lib/utils/coin-format";
 
 export default function StudyRoomPage({
   params,
@@ -227,7 +228,7 @@ export default function StudyRoomPage({
                   ) : (
                     <>
                       <Coins className="h-4 w-4 mr-2" />
-                      Join Room ({room.joiningFee} coins)
+                      Join Room ({formatMaya(room.joiningFee)} mAYA tokens)
                     </>
                   )}
                 </Button>
@@ -367,7 +368,7 @@ export default function StudyRoomPage({
             <CardTitle>Description</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-muted-foreground">
+            <p className="text-muted-foreground font-tagline">
               {room.description || "No description provided."}
             </p>
           </CardContent>
@@ -383,13 +384,13 @@ export default function StudyRoomPage({
               </CardHeader>
               <CardContent>
                 <div className="prose prose-sm max-w-none">
-                  <p className="text-muted-foreground mb-4">
+                  <p className="text-muted-foreground mb-4 font-tagline">
                     This session covered advanced React hooks including useState,
                     useEffect, and useContext. We explored best practices for
                     custom hooks and discussed common pitfalls to avoid.
                   </p>
                   <h4 className="font-semibold mb-2">Key Points:</h4>
-                  <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                  <ul className="list-disc list-inside space-y-1 text-muted-foreground font-tagline">
                     <li>Understanding the rules of hooks</li>
                     <li>Creating custom hooks for reusable logic</li>
                     <li>Performance optimization with useMemo and useCallback</li>

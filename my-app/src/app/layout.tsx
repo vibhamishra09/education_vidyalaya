@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import localFont from "next/font/local";
 import { ClerkProvider } from "@clerk/nextjs";
 import { QueryProvider } from "@/providers/query-provider";
 import { ToastProvider } from "@/contexts/toast-context";
@@ -15,6 +16,35 @@ const inter = Inter({
   variable: "--font-inter",
   subsets: ["latin"],
   weight: ["300", "400", "500", "600", "700", "800"],
+  display: "swap",
+});
+
+const harabara = localFont({
+  src: "../../public/fonts/Harabara.ttf",
+  variable: "--font-harabara",
+  weight: "400",
+  display: "swap",
+});
+
+const gotham = localFont({
+  src: [
+    {
+      path: "../../public/fonts/GOTHAM-LIGHT.ttf",
+      weight: "300",
+      style: "normal",
+    },
+    {
+      path: "../../public/fonts/GOTHAM-MEDIUM.ttf",
+      weight: "500",
+      style: "normal",
+    },
+    {
+      path: "../../public/fonts/GOTHAM-BOLD.ttf",
+      weight: "700",
+      style: "normal",
+    },
+  ],
+  variable: "--font-gotham",
   display: "swap",
 });
 
@@ -41,7 +71,7 @@ export default function RootLayout({
         <link rel="icon" href="/webyalaya-main-logo.svg?v=2" />
         <link rel="apple-touch-icon" href="/webyalaya-main-logo.svg" />
       </head>
-        <body className={`${inter.variable} antialiased font-sans pb-16 md:pb-0`}>
+        <body className={`${inter.variable} ${harabara.variable} ${gotham.variable} antialiased font-sans pb-16 md:pb-0`}>
           <QueryProvider>
             <NotificationProvider>
               <ToastProvider>

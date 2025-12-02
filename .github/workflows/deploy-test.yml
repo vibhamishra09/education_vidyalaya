@@ -19,6 +19,10 @@ env:
   SUBNET_TAG_KEY: Name
   SUBNET_TAG_VALUE: webyalaya-subnet
 
+permissions:
+  contents: read
+  actions: read
+
 jobs:
   changes:
     name: Detect changes
@@ -26,11 +30,14 @@ jobs:
     outputs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
+      prisma_migrations: ${{ steps.prisma_migrations.outputs.changed }}
+      skip_migrate: ${{ steps.skip_migrate.outputs.skip }}
+      skip_deploy: ${{ steps.skip_deploy.outputs.skip }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0
       - name: Detect changes
         uses: dorny/paths-filter@v2
         id: filter
@@ -41,16 +48,85 @@ jobs:
               - 'backend/**'
             frontend:
               - 'my-app/**'
+      - name: Lookup last successful test deploy SHA
+        id: last_success
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const [owner, repo] = process.env.GITHUB_REPOSITORY.split('/');
+            const branch = context.ref.replace('refs/heads/', '');
+            const { data } = await github.rest.actions.listWorkflowRuns({
+              owner,
+              repo,
+              workflow_id: 'deploy-test.yml',
+              branch,
+              status: 'success',
+              per_page: 1
+            });
+            const sha = data.workflow_runs?.[0]?.head_sha ?? '';
+            core.info(`Last successful test deploy SHA: ${sha || 'none found'}`);
+            core.setOutput('sha', sha);
+      - name: Detect Prisma migration changes since last test deploy
+        id: prisma_migrations
+        run: |
+          LAST_SUCCESS="${{ steps.last_success.outputs.sha }}"
+          TARGET_PATH="backend/prisma/migrations"
+
+          if [ ! -d "$TARGET_PATH" ]; then
+            echo "No migrations directory present. Treating as no change."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ -z "$LAST_SUCCESS" ]; then
+            echo "No prior successful test deployment. Running migrations."
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if git diff --quiet "$LAST_SUCCESS" HEAD -- "$TARGET_PATH"; then
+            echo "No Prisma migration changes detected."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Prisma migration changes detected."
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Detect skip-prisma-migrate directive in commit message
+        id: skip_migrate
+        run: |
+          COMMIT_MSG="${{ github.event.head_commit.message }}"
+          if echo "$COMMIT_MSG" | grep -iq "\[skip prisma migrate\]"; then
+            echo "Skip prisma migrate directive found."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No skip directive found."
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Detect skip-test directive in commit message
+        id: skip_deploy
+        run: |
+          COMMIT_MSG="${{ github.event.head_commit.message }}"
+          if echo "$COMMIT_MSG" | grep -iq "\[skip test\]"; then
+            echo "Skip test directive found."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No skip directive found."
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Debug changes
         run: |
           echo "Backend changes detected: ${{ steps.filter.outputs.backend }}"
           echo "Frontend changes detected: ${{ steps.filter.outputs.frontend }}"
+          echo "Prisma migrations changed: ${{ steps.prisma_migrations.outputs.changed }}"
+          echo "Skip prisma migrate flag: ${{ steps.skip_migrate.outputs.skip }}"
+          echo "Skip test deploy flag: ${{ steps.skip_deploy.outputs.skip }}"
 
   deploy-backend:
     name: Build and Deploy Backend (Test)
     runs-on: ubuntu-latest
     needs: changes
-    if: needs.changes.outputs.backend == 'true'
+    if: needs.changes.outputs.backend == 'true' && needs.changes.outputs.skip_deploy != 'true'
     
     steps:
       - name: Checkout code
@@ -111,6 +187,7 @@ jobs:
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY" >> $GITHUB_OUTPUT
 
       - name: Run Prisma Migrations in ECS
+        if: needs.changes.outputs.prisma_migrations == 'true' && needs.changes.outputs.skip_migrate != 'true' && needs.changes.outputs.skip_deploy != 'true'
         run: |
           TASK_DEF="${{ env.MIGRATION_TASK_DEF }}"
           CLUSTER="${{ env.ECS_CLUSTER }}"
@@ -185,7 +262,7 @@ jobs:
     name: Deploy Frontend to Vercel (Test)
     runs-on: ubuntu-latest
     needs: changes
-    if: needs.changes.outputs.frontend == 'true'
+    if: needs.changes.outputs.frontend == 'true' && needs.changes.outputs.skip_deploy != 'true'
     
     steps:
       - name: Checkout code

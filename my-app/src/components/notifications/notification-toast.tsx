@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import Image from "next/image";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Bell, UserPlus, Calendar, AlertCircle, Star } from "lucide-react";
@@ -134,10 +135,13 @@ export function NotificationToast({
   const getNotificationIcon = () => {
     if (icon) {
       return (
-        <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={icon} alt="" className="w-full h-full object-cover" />
-        </div>
+        <Image
+          src={icon}
+          alt=""
+          width={40}
+          height={40}
+          className="w-10 h-10 rounded-full object-cover"
+        />
       );
     }
 

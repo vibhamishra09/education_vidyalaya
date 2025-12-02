@@ -264,7 +264,7 @@ export function SessionSummaryModal({
                   AI-Generated Summary
                 </h3>
                 <div className="bg-muted/50 rounded-lg p-4">
-                  {session && 'summary' in session && session.summary ? (
+                  {session.summary ? (
                     <div className="prose prose-sm max-w-none dark:prose-invert">
                       <ReactMarkdown>
                         {session.summary}

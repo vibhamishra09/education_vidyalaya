@@ -60,7 +60,7 @@ export default function HowItWorksPage() {
                 Built for quick collaboration
               </p>
               <h1 className="text-4xl font-semibold mb-4">How it works</h1>
-              <p className="text-lg text-muted-foreground">
+              <p className="text-lg text-muted-foreground font-tagline">
                 A simple playbook for starting a study room, sending peer requests, and keeping
                 mAYA coin transfers clear and transparent.
               </p>
@@ -77,7 +77,7 @@ export default function HowItWorksPage() {
                   <CardDescription>{section.description}</CardDescription>
                 </CardHeader>
                 <CardContent className="flex-1 flex flex-col gap-4">
-                  <ul className="space-y-3 text-sm text-muted-foreground">
+                  <ul className="space-y-3 text-sm text-muted-foreground font-tagline">
                     {section.steps.map((step) => (
                       <li key={step} className="flex items-start gap-2">
                         <CheckCircle2 className="h-4 w-4 text-primary mt-0.5 shrink-0" />

@@ -172,7 +172,7 @@ export function usePushNotifications(): UsePushNotificationsReturn {
       setError(null);
       console.log('🎉 Successfully subscribed to push notifications!');
       return true;
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('❌ Subscription error:', err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to enable notifications. Please try again.';
       setError(errorMessage);
@@ -234,7 +234,7 @@ export function usePushNotifications(): UsePushNotificationsReturn {
       setError(null);
       console.log('✅ Successfully unsubscribed from push notifications');
       return true;
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('❌ Unsubscribe error:', err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to disable notifications';
       setError(errorMessage);
