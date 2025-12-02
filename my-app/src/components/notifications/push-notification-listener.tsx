@@ -26,7 +26,8 @@ export function PushNotificationListener() {
   const playNotificationSound = useCallback(() => {
     try {
       // Use Web Audio API to play a simple notification sound
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const audioContext = new AudioContextClass();
       const oscillator = audioContext.createOscillator();
       const gainNode = audioContext.createGain();
 
@@ -117,7 +118,7 @@ export function PushNotificationListener() {
     navigator.serviceWorker.addEventListener('message', handlePushNotification);
 
     // Check if service worker is ready and request an initial notification test
-    navigator.serviceWorker.ready.then((registration) => {
+    navigator.serviceWorker.ready.then(() => {
       console.log('✅ Service Worker is ready and listening for push notifications');
     });
 
