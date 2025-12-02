@@ -65,7 +65,7 @@ export function SessionSummaryModal({
     } finally {
       setLoading(false);
     }
-  }, [sessionId, sessionType, getToken]);
+  }, [getToken, sessionId, sessionType]);
 
   useEffect(() => {
     if (open && sessionId) {

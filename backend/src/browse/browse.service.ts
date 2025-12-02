@@ -15,39 +15,83 @@ export class BrowseService {
   ) {
     const skip = (page - 1) * limit;
 
-    if (tab === 'peers') {
-      const where: any = {};
-
-      if (search) {
-        where.OR = [
-          { name: { contains: search, mode: 'insensitive' } },
-          { bio: { contains: search, mode: 'insensitive' } },
-        ];
-      }
-
-      if (skills && skills.length > 0) {
-        where.userSkills = {
-          some: {
-            type: 'HAS',
-            skill: { name: { in: skills } },
-          },
-        };
-      }
-
-      const [users, total] = await Promise.all([
-        this.prisma.user.findMany({
-          where,
-          skip,
-          take: limit,
-          include: {
-            userSkills: {
-              where: { type: 'HAS' },
-              include: { skill: { select: { name: true } } },
+    // Build peer where clause for counting
+    const peerWhere: any = {};
+    if (search) {
+      peerWhere.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { bio: { contains: search, mode: 'insensitive' } },
+        {
+          userSkills: {
+            some: {
+              type: 'HAS',
+              skill: {
+                name: { contains: search, mode: 'insensitive' },
+              },
             },
           },
-        }),
-        this.prisma.user.count({ where }),
-      ]);
+        },
+      ];
+    }
+    if (skills && skills.length > 0) {
+      peerWhere.userSkills = {
+        some: {
+          type: 'HAS',
+          skill: { name: { in: skills } },
+        },
+      };
+    }
+
+    // Build study room where clause for counting
+    const studyRoomWhere: any = {
+      sessionStatus: SessionStatus.UPCOMING,
+    };
+    if (search) {
+      studyRoomWhere.OR = [
+        { title: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+        {
+          createdBy: {
+            name: { contains: search, mode: 'insensitive' },
+          },
+        },
+        {
+          skills: {
+            some: {
+              skill: {
+                name: { contains: search, mode: 'insensitive' },
+              },
+            },
+          },
+        },
+      ];
+    }
+    if (skills && skills.length > 0) {
+      studyRoomWhere.skills = {
+        some: {
+          skill: { name: { in: skills } },
+        },
+      };
+    }
+
+    // Get counts for both tabs (always calculated for search results display)
+    const [peerCount, studyRoomCount] = await Promise.all([
+      this.prisma.user.count({ where: peerWhere }),
+      this.prisma.studyRoom.count({ where: studyRoomWhere }),
+    ]);
+
+    if (tab === 'peers') {
+      const users = await this.prisma.user.findMany({
+        where: peerWhere,
+        skip,
+        take: limit,
+        include: {
+          userSkills: {
+            where: { type: 'HAS' },
+            include: { skill: { select: { name: true } } },
+          },
+        },
+      });
 
       return {
         peers: users.map((user) => ({
@@ -58,48 +102,30 @@ export class BrowseService {
           skills: user.userSkills.map((us) => us.skill.name),
         })),
         studyRooms: [],
+        counts: {
+          peers: peerCount,
+          studyRooms: studyRoomCount,
+        },
         pagination: {
-          total,
+          total: peerCount,
           page,
           limit,
-          totalPages: Math.ceil(total / limit),
-          hasMore: skip + limit < total,
+          totalPages: Math.ceil(peerCount / limit),
+          hasMore: skip + limit < peerCount,
         },
       };
     } else {
-      const where: any = {
-        sessionStatus: SessionStatus.UPCOMING,
-      };
-
-      if (search) {
-        where.OR = [
-          { title: { contains: search, mode: 'insensitive' } },
-          { description: { contains: search, mode: 'insensitive' } },
-        ];
-      }
-
-      if (skills && skills.length > 0) {
-        where.skills = {
-          some: {
-            skill: { name: { in: skills } },
-          },
-        };
-      }
-
-      const [studyRooms, total] = await Promise.all([
-        this.prisma.studyRoom.findMany({
-          where,
-          skip,
-          take: limit,
-          include: {
-            createdBy: { select: { id: true, name: true, avatar: true } },
-            skills: { include: { skill: { select: { name: true } } } },
-            learners: true,
-          },
-          orderBy: { date: 'asc' },
-        }),
-        this.prisma.studyRoom.count({ where }),
-      ]);
+      const studyRooms = await this.prisma.studyRoom.findMany({
+        where: studyRoomWhere,
+        skip,
+        take: limit,
+        include: {
+          createdBy: { select: { id: true, name: true, avatar: true } },
+          skills: { include: { skill: { select: { name: true } } } },
+          learners: true,
+        },
+        orderBy: { date: 'asc' },
+      });
 
       return {
         peers: [],
@@ -115,12 +141,16 @@ export class BrowseService {
           createdBy: room.createdBy,
           skills: room.skills.map((s) => s.skill.name),
         })),
+        counts: {
+          peers: peerCount,
+          studyRooms: studyRoomCount,
+        },
         pagination: {
-          total,
+          total: studyRoomCount,
           page,
           limit,
-          totalPages: Math.ceil(total / limit),
-          hasMore: skip + limit < total,
+          totalPages: Math.ceil(studyRoomCount / limit),
+          hasMore: skip + limit < studyRoomCount,
         },
       };
     }
