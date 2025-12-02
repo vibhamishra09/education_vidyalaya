@@ -143,8 +143,8 @@ export default function OnboardingPage() {
                   <div className="inline-flex items-center justify-center h-16 w-16 rounded-2xl bg-gradient-to-br from-primary-500 via-purple-600 to-secondary-500 mx-auto mb-4 shadow-primary">
                     <Sparkles className="w-8 h-8 text-white" />
                   </div>
-                  <CardTitle className="text-3xl">Welcome to Webyalaya!</CardTitle>
-                  <CardDescription className="text-base">
+                  <CardTitle className="text-3xl font-brand">Welcome to Webyalaya!</CardTitle>
+                  <CardDescription className="text-base font-tagline">
                     Let&apos;s set up your profile to get started
                   </CardDescription>
                 </CardHeader>
@@ -387,8 +387,8 @@ export default function OnboardingPage() {
                   </motion.div>
                   <div>
                     <h2 className="text-3xl font-bold mb-2">All Set!</h2>
-                    <p className="text-muted-foreground text-lg">
-                      Welcome to the Webyalaya community
+                    <p className="text-muted-foreground text-lg font-tagline">
+                      Welcome to the <span className="font-brand">Webyalaya</span> community
                     </p>
                   </div>
                   <div className="bg-primary-50 dark:bg-primary-950/20 border border-primary-200 dark:border-primary-800 rounded-lg p-6 inline-block">

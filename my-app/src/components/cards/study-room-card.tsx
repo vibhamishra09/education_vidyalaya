@@ -78,7 +78,7 @@ export function StudyRoomCard({
           </div>
           <div className="space-y-2">
             <h3 className="font-semibold text-lg leading-tight line-clamp-2">{title}</h3>
-            <p className="text-sm text-muted-foreground line-clamp-2">
+            <p className="text-sm text-muted-foreground line-clamp-2 font-tagline">
               {description || "No description provided."}
             </p>
           </div>

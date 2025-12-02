@@ -172,7 +172,7 @@ export function SessionList({
                 {session.description && (
                   <div>
                     <h4 className="text-sm font-medium mb-1">Description</h4>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-sm text-muted-foreground font-tagline">
                       {session.description}
                     </p>
                   </div>
