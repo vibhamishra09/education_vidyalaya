@@ -91,7 +91,11 @@ export function SessionList({
     onViewSummary?: () => void;
   }) => {
     const isExpanded = expandedSession === session.id;
-    const isPeerSession = "requestedBy" in session;
+    // A session is a peer session if it has requestedBy AND doesn't have participantCount/maxParticipants
+    // Study rooms have participantCount/maxParticipants, peer sessions don't
+    const isPeerSession = session.requestedBy !== undefined && 
+                          session.participantCount === undefined && 
+                          session.maxParticipants === undefined;
 
     return (
       <Card className="hover:shadow-md transition-shadow">

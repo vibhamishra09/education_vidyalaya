@@ -10,6 +10,7 @@ import { motion } from "framer-motion";
 import { StudyRoomCard, SessionStatus } from "@/types/api.types";
 import { getRelativeTimeString } from "@/lib/utils/date-time";
 import { formatMaya } from "@/lib/utils/coin-format";
+import { ShareButton } from "@/components/share/share-button";
 
 interface StudyRoomCardBrowseProps {
   studyRoom: StudyRoomCard;
@@ -109,21 +110,31 @@ export function StudyRoomCardBrowse({ studyRoom }: StudyRoomCardBrowseProps) {
               </div>
             )}
 
-            <Button
-              className="w-full"
-              variant={isLive ? "default" : "outline"}
-            >
-              {isLive ? (
-                <>
-                  <Play className="h-4 w-4 mr-2" />
-                  Join Live
-                </>
-              ) : isUpcoming ? (
-                "View Details"
-              ) : (
-                "View Summary"
-              )}
-            </Button>
+            <div className="flex gap-2">
+              <ShareButton
+                url={`${typeof window !== "undefined" ? window.location.origin : process.env.NEXT_PUBLIC_BASE_URL || ""}/studyroom/${studyRoom.id}`}
+                title={studyRoom.title}
+                description={studyRoom.description || ""}
+                variant="outline"
+                size="default"
+                className="flex-1"
+              />
+              <Button
+                className="flex-1"
+                variant={isLive ? "default" : "outline"}
+              >
+                {isLive ? (
+                  <>
+                    <Play className="h-4 w-4 mr-2" />
+                    Join Live
+                  </>
+                ) : isUpcoming ? (
+                  "View Details"
+                ) : (
+                  "View Summary"
+                )}
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </motion.div>

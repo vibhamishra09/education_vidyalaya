@@ -264,6 +264,7 @@ export interface UpcomingSession {
   skills?: Array<{ id: string; name: string } | string>;
   description?: string;
   requestedBy?: PublicUser;
+  sessionStatus?: SessionStatus;
 }
 
 export interface PastSession {
@@ -287,6 +288,7 @@ export interface UpcomingStudyRoom {
   createdBy: PublicUser;
   skills?: Array<{ id: string; name: string } | string>;
   description?: string;
+  sessionStatus?: SessionStatus;
 }
 
 export interface PastStudyRoom {

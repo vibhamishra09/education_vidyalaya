@@ -27,6 +27,7 @@ import { SessionStatus } from "@/types";
 import { ReviewsSection } from "@/components/reviews/reviews-section";
 import { ChatWidget } from "@/components/chat/ChatWidget";
 import { formatMaya } from "@/lib/utils/coin-format";
+import { ShareButton } from "@/components/share/share-button";
 
 export default function StudyRoomPage({
   params,
@@ -214,30 +215,39 @@ export default function StudyRoomPage({
                 </div>
               </div>
 
-              {role === "empty" && !isFull && (
-                <Button 
-                  size="lg" 
-                  onClick={handleJoinRoom}
-                  disabled={isJoining}
-                >
-                  {isJoining ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Joining...
-                    </>
-                  ) : (
-                    <>
-                      <Coins className="h-4 w-4 mr-2" />
-                      Join Room ({formatMaya(room.joiningFee)} mAYA tokens)
-                    </>
-                  )}
-                </Button>
-              )}
-              {isFull && role === "empty" && (
-                <Button size="lg" disabled>
-                  Room Full
-                </Button>
-              )}
+              <div className="flex items-center gap-2">
+                <ShareButton
+                  url={`${typeof window !== "undefined" ? window.location.origin : process.env.NEXT_PUBLIC_BASE_URL || ""}/studyroom/${roomId}`}
+                  title={room.title}
+                  description={room.description || ""}
+                  variant="outline"
+                  size="lg"
+                />
+                {role === "empty" && !isFull && (
+                  <Button 
+                    size="lg" 
+                    onClick={handleJoinRoom}
+                    disabled={isJoining}
+                  >
+                    {isJoining ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Joining...
+                      </>
+                    ) : (
+                      <>
+                        <Coins className="h-4 w-4 mr-2" />
+                        Join Room ({formatMaya(room.joiningFee)} mAYA tokens)
+                      </>
+                    )}
+                  </Button>
+                )}
+                {isFull && role === "empty" && (
+                  <Button size="lg" disabled>
+                    Room Full
+                  </Button>
+                )}
+              </div>
             </div>
 
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">

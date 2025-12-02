@@ -45,6 +45,7 @@ export class BrowseService {
               include: { skill: { select: { name: true } } },
             },
           },
+          orderBy: { name: 'asc' }, // Sort by name alphabetically
         }),
         this.prisma.user.count({ where }),
       ]);
