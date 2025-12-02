@@ -170,6 +170,7 @@ export default function Home() {
                     <FadeIn key={room.id} delay={index * 0.1}>
                     <div data-testid="study-room-card">
                       <StudyRoomCard
+                        roomId={room.id}
                         status={isLive ? "live" : "scheduled"}
                         category={
                           typeof room.skills?.[0] === "string"

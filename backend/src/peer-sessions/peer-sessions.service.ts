@@ -66,6 +66,9 @@ export class PeerSessionsService {
 
     const skip = (page - 1) * limit;
 
+    // Sort by scheduled time (date) - ascending: earliest scheduled time first
+    const orderBy = { date: 'asc' as const };
+
     const [peerSessions, total] = await Promise.all([
       this.prisma.peerSession.findMany({
         where,
@@ -76,7 +79,7 @@ export class PeerSessionsService {
           requestedTo: { select: { id: true, name: true, avatar: true } },
           skills: { include: { skill: { select: { id: true, name: true } } } },
         },
-        orderBy: { date: 'desc' },
+        orderBy,
       }),
       this.prisma.peerSession.count({ where }),
     ]);
