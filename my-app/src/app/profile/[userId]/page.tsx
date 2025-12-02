@@ -281,8 +281,9 @@ export default function PublicProfilePage({
                 </Card>
               ) : (
                 upcomingRooms.map((room) => (
-                  <StudyRoomCard 
+                  <StudyRoomCard
                     key={room.id}
+                    roomId={room.id}
                     status={room.sessionStatus === SessionStatus.UPCOMING ? "scheduled" : "live"}
                     category={typeof room.skills[0] === 'string' ? room.skills[0] : room.skills[0]?.name || "General"}
                     title={room.title}

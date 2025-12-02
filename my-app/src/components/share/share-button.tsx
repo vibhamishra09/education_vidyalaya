@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Share2, Twitter, Facebook, Linkedin, MessageCircle, Link as LinkIcon, Copy, Check } from "lucide-react";
+import { Share2, Twitter, Facebook, Linkedin, MessageCircle, Link as LinkIcon, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -14,7 +14,7 @@ interface ShareButtonProps {
   url: string;
   title: string;
   description?: string;
-  variant?: "default" | "outline" | "ghost" | "icon";
+  variant?: "default" | "outline" | "ghost" | "secondary" | "link" | "destructive";
   size?: "default" | "sm" | "lg" | "icon";
   className?: string;
 }
