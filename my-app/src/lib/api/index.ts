@@ -11,3 +11,4 @@ export { paymentsApi } from './payments.api';
 export { availabilityApi } from './availability.api';
 export { streaksApi } from './streaks.api';
 export { achievementsApi } from './achievements.api';
+export { feedbackApi, getDeviceInfo, fileToBase64 } from './feedback.api';
