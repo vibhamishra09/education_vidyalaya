@@ -139,15 +139,27 @@ setup_route() {
 
     # Grant API Gateway permission to invoke Lambda
     # For HTTP API, use wildcard source ARN
-    STATEMENT_ID="api-gateway-invoke-${LAMBDA_FUNCTION}-$(echo ${ROUTE_PATH} | tr '/' '-' | tr '{' '-' | tr '}' '-' | tr ' ' '-')"
-    aws lambda add-permission \
+    # Use a simple statement ID to avoid path issues
+    STATEMENT_ID="apigw-invoke-${LAMBDA_FUNCTION}"
+    
+    # Build source ARN - use string concatenation to avoid Git Bash path conversion
+    local SOURCE_ARN="arn:aws:execute-api:${REGION}:*:${API_ID}"
+    SOURCE_ARN="${SOURCE_ARN}/*"
+    SOURCE_ARN="${SOURCE_ARN}/*"
+    
+    echo -e "${YELLOW}Adding invoke permission for ${LAMBDA_FUNCTION}...${NC}"
+    if aws lambda add-permission \
         ${AWS_PROFILE_ARG} \
         --function-name "${LAMBDA_FUNCTION}" \
         --statement-id "${STATEMENT_ID}" \
         --action lambda:InvokeFunction \
         --principal apigateway.amazonaws.com \
-        --source-arn "arn:aws:execute-api:${REGION}:*:${API_ID}/*/*" \
-        --region "${REGION}" 2>/dev/null || echo "Permission may already exist"
+        --source-arn "${SOURCE_ARN}" \
+        --region "${REGION}" 2>&1; then
+        echo -e "${GREEN}Permission added${NC}"
+    else
+        echo -e "${YELLOW}Permission may already exist or failed - check manually if issues persist${NC}"
+    fi
 }
 
 # Setup routes

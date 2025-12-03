@@ -235,3 +235,45 @@ aws iam delete-role --role-name FeedbackSystemLambdaRole --profile <profile>
 aws iam delete-policy --policy-arn <policy-arn> --profile <profile>
 ```
 
+Manual commands to add permission to the API Gateway to invoke the Lambda functions:
+```bash
+# Add permission for SubmitFeedbackLambda
+aws lambda add-permission \
+  --function-name SubmitFeedbackLambda \
+  --statement-id api-gateway-invoke \
+  --action lambda:InvokeFunction \
+  --principal apigateway.amazonaws.com \
+  --source-arn "arn:aws:execute-api:us-west-2:410974772890:vdgzyms0a8/*/*" \
+  --profile namaste \
+  --region us-west-2
+
+# Add permission for GetFeedbackLambda
+aws lambda add-permission \
+  --function-name GetFeedbackLambda \
+  --statement-id api-gateway-invoke \
+  --action lambda:InvokeFunction \
+  --principal apigateway.amazonaws.com \
+  --source-arn "arn:aws:execute-api:us-west-2:410974772890:vdgzyms0a8/*/*" \
+  --profile namaste \
+  --region us-west-2
+
+# Add permission for FeedbackStatsLambda
+aws lambda add-permission \
+  --function-name FeedbackStatsLambda \
+  --statement-id api-gateway-invoke \
+  --action lambda:InvokeFunction \
+  --principal apigateway.amazonaws.com \
+  --source-arn "arn:aws:execute-api:us-west-2:410974772890:vdgzyms0a8/*/*" \
+  --profile namaste \
+  --region us-west-2
+
+# Add permission for UploadAttachmentLambda
+aws lambda add-permission \
+  --function-name UploadAttachmentLambda \
+  --statement-id api-gateway-invoke \
+  --action lambda:InvokeFunction \
+  --principal apigateway.amazonaws.com \
+  --source-arn "arn:aws:execute-api:us-west-2:410974772890:vdgzyms0a8/*/*" \
+  --profile namaste \
+  --region us-west-2
+```

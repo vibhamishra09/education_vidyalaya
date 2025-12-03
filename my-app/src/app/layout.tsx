@@ -10,6 +10,7 @@ import { FloatingActionButtons } from "@/components/ui/floating-action-buttons";
 import { PushNotificationPrompt } from "@/components/notifications/push-notification-prompt";
 import { PushNotificationListener } from "@/components/notifications/push-notification-listener";
 import { HiddenSignInButton } from "@/components/auth/hidden-sign-in-button";
+import { FeedbackWidget } from "@/components/feedback/feedback-widget";
 import "./globals.css";
 
 const inter = Inter({
@@ -81,6 +82,9 @@ export default function RootLayout({
                 <PushNotificationPrompt />
                 <PushNotificationListener />
                 <HiddenSignInButton />
+                {process.env.NEXT_PUBLIC_ENABLE_FEEDBACK === "true" && (
+                  <FeedbackWidget position="bottom-right" />
+                )}
               </ToastProvider>
             </NotificationProvider>
           </QueryProvider>
