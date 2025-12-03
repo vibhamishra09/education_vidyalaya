@@ -16,7 +16,7 @@ export function Footer() {
             />
           </div>
         </div>
-        <p className="text-xs text-muted-foreground text-center mt-4">
+        <p className="text-xs text-muted-foreground text-center mt-4 font-tagline">
           © {new Date().getFullYear()} Humitra Pvt Ltd. All rights reserved.
         </p>
       </div>

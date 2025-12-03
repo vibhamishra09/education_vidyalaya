@@ -23,6 +23,8 @@ export class DashboardController {
       query.includeNotifications ? true : false,
       query.includeStreaks ? true : false,
       query.includeAchievements ? true : false,
+      query.page || 1,
+      query.limit || 10,
     );
   }
 }

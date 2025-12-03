@@ -51,7 +51,7 @@ export function CoinDropdown({ coins = 0, isLoading = false }: CoinDropdownProps
         >
           <Coins className="h-4 w-4 text-yellow-600" />
           <span className="text-sm font-medium">
-            {isLoading ? '...' : formatMaya(displayCoins)} <span className="text-xs">m</span>AYA
+            {isLoading ? '...' : formatMaya(displayCoins)} AYA
           </span>
         </div>
 
@@ -66,31 +66,26 @@ export function CoinDropdown({ coins = 0, isLoading = false }: CoinDropdownProps
             >
               <Card className="shadow-lg">
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-lg flex items-center justify-between">
-                    <span><span className="text-sm">m</span>AYA Balance</span>
-                    <Link href="/profile?tab=wallet" onClick={() => setIsOpen(false)}>
-                      <Button variant="ghost" size="sm" className="h-8">
-                        View All
-                      </Button>
-                    </Link>
+                  <CardTitle className="text-lg">
+                    <span>AYA Balance</span>
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="p-0">
                   {/* Balance Display */}
-                  <div className="text-center py-4 bg-muted/30 rounded-lg">
+                  <div className="text-center py-3 bg-muted/30 px-4">
                     <div className="flex items-center justify-center gap-2">
                       <Coins className="h-6 w-6 text-yellow-600" />
                       <span className="text-3xl font-bold">
-                        {formatMaya(displayCoins)} <span className="text-xl">m</span>AYA
+                        {formatMaya(displayCoins)} AYA
                       </span>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1">
+                    <p className="text-xs text-muted-foreground mt-0.5">
                       Available Balance
                     </p>
                   </div>
 
                   {/* Recent Transactions */}
-                  <div>
+                  <div className="px-4 py-3">
                     <h4 className="text-sm font-medium mb-3">Recent Transactions</h4>
                     {transactionsLoading ? (
                       <div className="text-center py-4 text-sm text-muted-foreground">
@@ -142,7 +137,7 @@ export function CoinDropdown({ coins = 0, isLoading = false }: CoinDropdownProps
                                   : 'text-green-600'
                               }`}>
                                 {transaction.type === 'PAYMENT_MADE' ? '-' : '+'}
-                                {formatMaya(transaction.amount)} <span className="text-[10px]">m</span>AYA
+                                {formatMaya(transaction.amount)} AYA
                               </p>
                               <Badge
                                 variant="outline"
@@ -162,6 +157,15 @@ export function CoinDropdown({ coins = 0, isLoading = false }: CoinDropdownProps
                       </div>
                     )}
                   </div>
+                  {recentTransactions.length > 0 && (
+                    <div className="px-4 py-3 border-t">
+                      <Link href="/profile?tab=wallet" onClick={() => setIsOpen(false)}>
+                        <Button variant="ghost" size="sm" className="w-full">
+                          View All Transactions
+                        </Button>
+                      </Link>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </motion.div>

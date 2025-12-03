@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Navigation } from "@/components/layout/navigation";
 import { Footer } from "@/components/layout/footer";
@@ -10,9 +10,19 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { SkillInput } from "@/components/ui/skill-input";
-import { ArrowLeft, Users, Clock, Loader2, Coins } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { ArrowLeft, Users, Clock, Loader2, Coins, CheckCircle2 } from "lucide-react";
 import { studyRoomsApi } from "@/lib/api";
-import { CreateStudyRoomDto } from "@/types/api.types";
+import { CreateStudyRoomDto, StudyRoom } from "@/types/api.types";
+import { ShareButton } from "@/components/share/share-button";
 import Link from "next/link";
 
 export default function CreateStudyRoomPage() {
@@ -30,8 +40,25 @@ export default function CreateStudyRoomPage() {
     gmeetLink: "",
   });
 
+  const [isInstantRoom, setIsInstantRoom] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [createdRoom, setCreatedRoom] = useState<StudyRoom | null>(null);
+  const [showSuccessDialog, setShowSuccessDialog] = useState(false);
+
+  // Auto-fill date/time when instant room is enabled
+  useEffect(() => {
+    if (isInstantRoom) {
+      const now = new Date();
+      const dateStr = now.toISOString().split("T")[0];
+      const timeStr = now.toTimeString().slice(0, 5); // HH:MM format
+      setFormData((prev) => ({
+        ...prev,
+        date: dateStr,
+        time: timeStr,
+      }));
+    }
+  }, [isInstantRoom]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,10 +83,11 @@ export default function CreateStudyRoomPage() {
         timezone: userTimezone,
       };
       
-      await studyRoomsApi.createStudyRoom(createData);
+      const createdRoom = await studyRoomsApi.createStudyRoom(createData);
       
-      // Success - redirect to dashboard
-      router.push("/dashboard");
+      // Success - show success dialog with share link
+      setCreatedRoom(createdRoom);
+      setShowSuccessDialog(true);
     } catch (err: unknown) {
       console.error('Error creating study room:', err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to create study room';
@@ -147,10 +175,27 @@ export default function CreateStudyRoomPage() {
                   )}
                 </div>
 
+                {/* Instant Room Toggle */}
+                <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="instant-room" className="text-base font-semibold cursor-pointer">
+                      Create Instant Room
+                    </Label>
+                    <p className="text-sm text-muted-foreground">
+                      Start immediately. No waiting time required.
+                    </p>
+                  </div>
+                  <Switch
+                    id="instant-room"
+                    checked={isInstantRoom}
+                    onCheckedChange={setIsInstantRoom}
+                  />
+                </div>
+
                 {/* Date & Time */}
                 <div className="grid sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="date">Date *</Label>
+                    <Label htmlFor="date">Date {!isInstantRoom && "*"}</Label>
                     <Input
                       id="date"
                       type="date"
@@ -158,12 +203,13 @@ export default function CreateStudyRoomPage() {
                       onChange={(e) =>
                         setFormData((prev) => ({ ...prev, date: e.target.value }))
                       }
-                      required
+                      required={!isInstantRoom}
+                      disabled={isInstantRoom}
                       min={new Date().toISOString().split("T")[0]}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="time">Time *</Label>
+                    <Label htmlFor="time">Time {!isInstantRoom && "*"}</Label>
                     <Input
                       id="time"
                       type="time"
@@ -171,7 +217,8 @@ export default function CreateStudyRoomPage() {
                       onChange={(e) =>
                         setFormData((prev) => ({ ...prev, time: e.target.value }))
                       }
-                      required
+                      required={!isInstantRoom}
+                      disabled={isInstantRoom}
                     />
                   </div>
                 </div>
@@ -315,8 +362,7 @@ export default function CreateStudyRoomPage() {
                       submitting ||
                       !formData.title ||
                       formData.skills.length === 0 ||
-                      !formData.date ||
-                      !formData.time
+                      (!isInstantRoom && (!formData.date || !formData.time))
                     }
                   >
                     {submitting ? (
@@ -336,6 +382,68 @@ export default function CreateStudyRoomPage() {
       </main>
 
       <Footer />
+
+      {/* Success Dialog with Share Link */}
+      <Dialog open={showSuccessDialog} onOpenChange={setShowSuccessDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="flex items-center justify-center mb-4">
+              <div className="rounded-full bg-green-100 p-3">
+                <CheckCircle2 className="h-8 w-8 text-green-600" />
+              </div>
+            </div>
+            <DialogTitle className="text-center">Study Room Created!</DialogTitle>
+            <DialogDescription className="text-center">
+              Your study room is ready. Share the link with your friends to start learning together.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {createdRoom && (
+            <div className="space-y-4 py-4">
+              <div className="p-4 bg-muted rounded-lg">
+                <p className="text-sm font-medium mb-2">Room Link:</p>
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={`${typeof window !== "undefined" ? window.location.origin : ""}/studyroom/${createdRoom.id}`}
+                    readOnly
+                    className="flex-1 font-mono text-xs"
+                  />
+                </div>
+              </div>
+              
+              <div className="flex flex-col gap-2">
+                <ShareButton
+                  url={`${typeof window !== "undefined" ? window.location.origin : ""}/studyroom/${createdRoom.id}`}
+                  title={createdRoom.title}
+                  description={createdRoom.description || ""}
+                  variant="default"
+                  size="default"
+                  className="w-full"
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => router.push(`/studyroom/${createdRoom.id}`)}
+                  className="w-full"
+                >
+                  Go to Study Room
+                </Button>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setShowSuccessDialog(false);
+                router.push("/dashboard");
+              }}
+            >
+              Back to Dashboard
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

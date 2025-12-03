@@ -27,7 +27,7 @@ export function HeroSection() {
                 Community
               </span>
             </h1>
-            <p className="text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto">
+            <p className="text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto font-tagline">
               Connect, learn, and grow together. Share knowledge, join study
               rooms, and engage in meaningful debates with peers worldwide.
             </p>
@@ -78,7 +78,7 @@ export function HeroSection() {
                 </svg>
               </div>
               <h3 className="text-xl font-semibold">Start Study Room</h3>
-              <p className="text-sm text-muted-foreground text-center">
+              <p className="text-sm text-muted-foreground text-center font-tagline">
                 Create a room to teach and share knowledge
               </p>
             </div>

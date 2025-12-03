@@ -33,8 +33,8 @@ export default function SignInPage() {
           <h1 className="text-4xl font-bold mb-3 text-gradient">
             Welcome Back
           </h1>
-          <p className="text-muted-foreground text-lg">
-            Sign in to continue your journey with Webyalaya
+          <p className="text-muted-foreground text-lg font-tagline">
+            Sign in to continue your journey with <span className="font-brand">Webyalaya</span>
           </p>
         </div>
 
