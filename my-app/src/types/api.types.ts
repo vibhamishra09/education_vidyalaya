@@ -1,5 +1,148 @@
 // Import types from index.ts if needed
 
+// Feedback Types
+export type FeedbackType = 'structured' | 'freeform' | 'mixed';
+export type FeedbackStatus = 'submitted' | 'reviewed' | 'resolved' | 'archived';
+export type FeedbackPriority = 'low' | 'medium' | 'high' | 'critical';
+
+export type FeatureArea =
+  | 'studyRooms'
+  | 'peerSessions'
+  | 'dashboard'
+  | 'payments'
+  | 'reviews'
+  | 'notifications'
+  | 'browse'
+  | 'chat'
+  | 'profile'
+  | 'skills'
+  | 'achievements'
+  | 'streaks'
+  | 'availability'
+  | 'general'
+  | 'other';
+
+export type FeedbackCategory =
+  | 'bug'
+  | 'feature-request'
+  | 'ui-issue'
+  | 'performance'
+  | 'accessibility'
+  | 'documentation'
+  | 'other';
+
+export interface DeviceInfo {
+  browser?: string;
+  os?: string;
+  device?: string;
+  screenResolution?: string;
+}
+
+export interface FeedbackAttachment {
+  s3Key: string;
+  fileName: string;
+  fileType: string;
+  fileSize?: number;
+  uploadDate: string;
+  presignedUrl?: string;
+}
+
+export interface FeedbackMetadata {
+  sessionId?: string;
+  studyRoomId?: string;
+  peerSessionId?: string;
+  [key: string]: unknown;
+}
+
+export interface FeedbackSubmission {
+  userId?: string;
+  userEmail?: string;
+  featureArea: FeatureArea;
+  feedbackType: FeedbackType;
+  title?: string;
+  rating?: number; // 1-5
+  categories?: FeedbackCategory[];
+  structuredData?: Record<string, unknown>;
+  freeformText?: string;
+  deviceInfo: DeviceInfo;
+  metadata?: FeedbackMetadata;
+  tags?: string[];
+  priority?: FeedbackPriority;
+}
+
+export interface Feedback {
+  feedbackId: string;
+  userId: string;
+  userEmail?: string;
+  featureArea: FeatureArea;
+  feedbackType: FeedbackType;
+  title?: string;
+  rating?: number;
+  categories: FeedbackCategory[];
+  structuredData: Record<string, unknown>;
+  freeformText?: string;
+  deviceInfo: DeviceInfo;
+  metadata: FeedbackMetadata;
+  attachments: FeedbackAttachment[];
+  status: FeedbackStatus;
+  priority: FeedbackPriority;
+  tags: string[];
+  submittedAt: string;
+  updatedAt: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+}
+
+export interface FeedbackResponse {
+  success: boolean;
+  feedbackId: string;
+  message: string;
+}
+
+export interface AttachmentUploadRequest {
+  fileName: string;
+  fileType: string;
+  fileData: string; // base64 encoded
+}
+
+export interface AttachmentUploadResponse {
+  success: boolean;
+  attachment: FeedbackAttachment;
+  message: string;
+}
+
+export interface FeedbackFilters {
+  userId?: string;
+  featureArea?: FeatureArea;
+  status?: FeedbackStatus;
+  startDate?: string;
+  endDate?: string;
+  limit?: number;
+  lastEvaluatedKey?: string;
+}
+
+export interface FeedbackListResponse {
+  feedback: Feedback[];
+  pagination: {
+    lastEvaluatedKey: string | null;
+    hasMore: boolean;
+  };
+}
+
+export interface FeedbackStats {
+  total: number;
+  byFeatureArea: Record<string, number>;
+  byStatus: Record<string, number>;
+  byRating: Record<string, number>;
+  byCategory: Record<string, number>;
+  averageRating: number;
+  recentCount: number; // Last 7 days
+}
+
+export interface FeedbackStatsResponse {
+  stats: FeedbackStats;
+}
+
 // Session and Payment Enums
 export enum SessionStatus {
   PENDING = 'PENDING',

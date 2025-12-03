@@ -1,0 +1,32 @@
+# Node modules and build artifacts
+node_modules/
+dist/
+build/
+*.zip
+
+# Local/test/output data
+.env
+.env.*.local
+test-outputs/
+
+# Ignore all Lambda function package zips
+*.lambda.zip
+
+# Ignore compiled TypeScript output
+*.js
+*.js.map
+*.d.ts
+
+# VSCode and system files
+.vscode/
+.DS_Store
+
+node_modules/
+
+# Lambda subfolders (these are examples; adjust if you have different names)
+submit-feedback/node_modules/
+upload-attachment/node_modules/
+get-feedback/node_modules/
+feedback-stats/node_modules/
+scheduled-feedback/node_modules/
+

@@ -11,7 +11,7 @@ export function Footer() {
               alt="Webyalaya logo"
               width={128}
               height={128}
-              className="object-contain rounded-md px-1"
+              className="object-contain px-1"
               priority={false}
             />
           </div>

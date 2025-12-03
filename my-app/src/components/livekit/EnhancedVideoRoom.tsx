@@ -277,6 +277,7 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 				<SessionEndedDialog
 					open={showEnded}
 					sessionId={sessionData.id}
+					sessionType={sessionData.sessionType}
 				/>
 			)}
 		</div>
@@ -360,7 +361,7 @@ function VideoRoomContent({
 					{/* Logo and Room Info */}
 					<div className="flex items-center gap-2 md:gap-4 min-w-0 flex-1">
 						<div className="flex items-center gap-2 md:gap-3 min-w-0">
-							<div className="relative h-6 w-6 md:h-8 md:w-8 rounded-lg overflow-hidden flex-shrink-0">
+							<div className="relative h-6 w-6 md:h-8 md:w-8 flex-shrink-0">
 								<Image
 									src="/webyalaya-main-logo.svg"
 									alt="Webyalaya"
