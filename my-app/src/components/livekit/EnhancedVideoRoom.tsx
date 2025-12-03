@@ -277,6 +277,7 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 				<SessionEndedDialog
 					open={showEnded}
 					sessionId={sessionData.id}
+					sessionType={sessionData.sessionType}
 				/>
 			)}
 		</div>
