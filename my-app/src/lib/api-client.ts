@@ -63,7 +63,13 @@ const apiClient: AxiosInstance = axios.create({
 // Request interceptor to add auth token
 apiClient.interceptors.request.use(
   async (config: InternalAxiosRequestConfig) => {
-    // Always try to get the Clerk token for authenticated requests
+    // Check if token is already set in headers (manually set via setAuthToken)
+    if (config.headers && config.headers.Authorization) {
+      // Token already set, use it
+      return config;
+    }
+    
+    // Otherwise, try to get the Clerk token for authenticated requests
     const token = await getClerkToken();
     console.log(68, token);
     if (token && config.headers) {
