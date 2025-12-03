@@ -110,7 +110,7 @@ export const feedbackApi = {
     const response = await feedbackApiClient.get<FeedbackListResponse>(
       '/feedback',
       {
-        params: filters ? cleanQueryParams(filters) : {},
+        params: filters ? cleanQueryParams(filters as Record<string, unknown>) : {},
       }
     );
     return response.data;

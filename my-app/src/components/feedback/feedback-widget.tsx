@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -10,13 +10,13 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { MessageSquare, X } from "lucide-react";
+import { MessageSquare } from "lucide-react";
 import { FeedbackForm } from "./feedback-form";
 import { FeatureArea } from "@/types/api.types";
 
 interface FeedbackWidgetProps {
   initialFeatureArea?: FeatureArea;
-  initialMetadata?: Record<string, any>;
+  initialMetadata?: Record<string, unknown>;
   position?: "bottom-right" | "bottom-left" | "top-right" | "top-left";
 }
 
@@ -34,7 +34,7 @@ export function FeedbackWidget({
     "top-left": "top-6 left-6",
   };
 
-  const handleSuccess = (feedbackId: string) => {
+  const handleSuccess = () => {
     setIsOpen(false);
     // Could show a success message or trigger analytics
   };

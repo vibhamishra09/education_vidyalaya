@@ -41,7 +41,7 @@ export function Navigation() {
               alt="Webyalaya"
               width={128}
               height={128}
-              className="object-contain rounded-md px-1 transition-transform group-hover:scale-105"
+              className="object-contain px-1 transition-transform group-hover:scale-105"
             />
           </Link>
 

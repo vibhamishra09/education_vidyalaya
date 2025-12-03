@@ -51,7 +51,7 @@ export interface FeedbackMetadata {
   sessionId?: string;
   studyRoomId?: string;
   peerSessionId?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface FeedbackSubmission {
@@ -62,7 +62,7 @@ export interface FeedbackSubmission {
   title?: string;
   rating?: number; // 1-5
   categories?: FeedbackCategory[];
-  structuredData?: Record<string, any>;
+  structuredData?: Record<string, unknown>;
   freeformText?: string;
   deviceInfo: DeviceInfo;
   metadata?: FeedbackMetadata;
@@ -79,7 +79,7 @@ export interface Feedback {
   title?: string;
   rating?: number;
   categories: FeedbackCategory[];
-  structuredData: Record<string, any>;
+  structuredData: Record<string, unknown>;
   freeformText?: string;
   deviceInfo: DeviceInfo;
   metadata: FeedbackMetadata;

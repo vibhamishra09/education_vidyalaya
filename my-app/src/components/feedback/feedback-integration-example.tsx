@@ -28,6 +28,10 @@ export function StudyRoomFeedbackTrigger({ studyRoomId }: { studyRoomId: string 
 
   // Call triggerFeedback() after study room completion
   // This could be in a useEffect or after an async operation
+  // Expose for external use
+  if (typeof window !== 'undefined') {
+    (window as { __studyRoomFeedback?: () => void }).__studyRoomFeedback = triggerFeedback;
+  }
   return null; // This is just for demonstration
 }
 
@@ -39,6 +43,10 @@ export function PaymentFeedbackTrigger({ paymentId }: { paymentId: string }) {
     { paymentId }
   );
 
+  // Expose for external use
+  if (typeof window !== 'undefined') {
+    (window as { __paymentFeedback?: () => void }).__paymentFeedback = triggerFeedback;
+  }
   return null;
 }
 

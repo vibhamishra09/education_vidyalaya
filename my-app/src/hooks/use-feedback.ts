@@ -5,7 +5,7 @@ import { FeatureArea } from "@/types/api.types";
 
 interface UseFeedbackOptions {
   featureArea?: FeatureArea;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   onSuccess?: (feedbackId: string) => void;
 }
 
@@ -16,12 +16,9 @@ interface UseFeedbackOptions {
 export function useFeedback(options: UseFeedbackOptions = {}) {
   const [isOpen, setIsOpen] = useState(false);
 
-  const openFeedback = useCallback(
-    (overrideOptions?: Partial<UseFeedbackOptions>) => {
-      setIsOpen(true);
-    },
-    []
-  );
+  const openFeedback = useCallback(() => {
+    setIsOpen(true);
+  }, []);
 
   const closeFeedback = useCallback(() => {
     setIsOpen(false);
@@ -34,7 +31,7 @@ export function useFeedback(options: UseFeedbackOptions = {}) {
         options.onSuccess(feedbackId);
       }
     },
-    [options.onSuccess]
+    [options]
   );
 
   return {
@@ -54,7 +51,7 @@ export function useFeedback(options: UseFeedbackOptions = {}) {
 export function useActionFeedback(
   action: string,
   featureArea: FeatureArea,
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 ) {
   const { openFeedback } = useFeedback({
     featureArea,

@@ -26,7 +26,7 @@ import { useUser } from "@clerk/nextjs";
 
 interface FeedbackFormProps {
   initialFeatureArea?: FeatureArea;
-  initialMetadata?: Record<string, any>;
+  initialMetadata?: Record<string, unknown>;
   onSuccess?: (feedbackId: string) => void;
   onCancel?: () => void;
 }
@@ -77,7 +77,7 @@ export function FeedbackForm({
   const [hoveredRating, setHoveredRating] = useState(0);
   const [categories, setCategories] = useState<FeedbackCategory[]>([]);
   const [freeformText, setFreeformText] = useState("");
-  const [structuredData, setStructuredData] = useState<Record<string, any>>({});
+  const [structuredData, setStructuredData] = useState<Record<string, unknown>>({});
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [priority, setPriority] = useState<FeedbackPriority>("medium");
@@ -151,6 +151,10 @@ export function FeedbackForm({
         categories: categories.length > 0 ? categories : undefined,
         structuredData: Object.keys(structuredData).length > 0 ? structuredData : undefined,
         freeformText: freeformText.trim() || undefined,
+        deviceInfo: {
+          browser: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
+          screenResolution: typeof window !== 'undefined' ? `${window.screen.width}x${window.screen.height}` : undefined,
+        },
         metadata: initialMetadata,
         tags: tags.length > 0 ? tags : undefined,
         priority,
@@ -191,10 +195,10 @@ export function FeedbackForm({
         setFiles([]);
         setPriority("medium");
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error submitting feedback:", error);
       toast.error(
-        error?.message || "Failed to submit feedback. Please try again."
+        error instanceof Error ? error.message : "Failed to submit feedback. Please try again."
       );
     } finally {
       setLoading(false);
