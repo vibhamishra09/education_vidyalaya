@@ -7,7 +7,7 @@ A comprehensive serverless feedback collection system using AWS services (API Ga
 ```
 Frontend (Next.js)
     ↓
-API Gateway (REST API)
+API Gateway (HTTP API)
     ↓
 Lambda Functions
     ├── SubmitFeedbackLambda → DynamoDB
@@ -24,7 +24,7 @@ Lambda Functions
 1. **DynamoDB Table**: Stores feedback records with GSIs for efficient querying
 2. **S3 Bucket**: Stores file attachments (screenshots, logs, documents)
 3. **Lambda Functions**: Process feedback submissions, uploads, and queries
-4. **API Gateway**: REST API endpoint for frontend integration
+4. **API Gateway**: HTTP API endpoint for frontend integration (cheaper than REST API)
 5. **CloudWatch**: Monitoring, logging, and alarms
 
 ### Frontend (Next.js)
@@ -39,29 +39,28 @@ Lambda Functions
 ### 1. AWS Infrastructure Setup
 
 ```bash
-cd scripts/aws
+cd infra/aws
 
 # Set environment variables (optional)
-export AWS_REGION=us-east-1
+export AWS_REGION=us-west-2
 export FEEDBACK_TABLE_NAME=Feedback
 export FEEDBACK_BUCKET_NAME=webyalaya-feedback-attachments
 
-# Create infrastructure
-./setup-feedback-system.sh
+# Create infrastructure (with AWS profile support)
+./setup-feedback-system.sh --profile <your-profile> --region us-west-2
 
 # Build and deploy Lambda functions
 cd ../../lambdas/feedback-system
 npm install
 npm run build
-cd ../../scripts/aws
-./deploy-lambdas.sh
+cd ../../infra/aws
+./deploy-lambdas.sh --profile <your-profile>
 
 # Configure API Gateway
-export FEEDBACK_API_ID=<api-id-from-setup>
-./update-api-gateway.sh
+./update-api-gateway.sh --profile <your-profile> --api-id <api-id-from-setup>
 
 # Set up monitoring (optional)
-./setup-monitoring.sh
+./setup-monitoring.sh --profile <your-profile>
 ```
 
 ### 2. Frontend Integration
@@ -72,6 +71,8 @@ Add to your `.env.local`:
 NEXT_PUBLIC_FEEDBACK_API_URL=https://<api-id>.execute-api.<region>.amazonaws.com/<stage>
 NEXT_PUBLIC_ENABLE_FEEDBACK=true
 ```
+
+**Note**: The API URL format is the same for HTTP API Gateway. The stage name is included in the path.
 
 Add to your `app/layout.tsx`:
 
@@ -307,7 +308,7 @@ https://console.aws.amazon.com/cloudwatch/home?region={region}#dashboards:name=F
 - **DynamoDB**: Pay-per-request billing mode
 - **Lambda**: Pay per invocation (first 1M requests free)
 - **S3**: Lifecycle policies move old files to Glacier
-- **API Gateway**: Pay per API call
+- **API Gateway**: HTTP API Gateway (cheaper than REST API Gateway - ~70% cost reduction)
 
 ## Troubleshooting
 
@@ -338,6 +339,6 @@ https://console.aws.amazon.com/cloudwatch/home?region={region}#dashboards:name=F
 ## Documentation
 
 - [Lambda Functions README](./lambdas/feedback-system/README.md)
-- [AWS Setup Scripts README](./scripts/aws/README.md)
+- [AWS Setup Scripts README](../infra/aws/README-feedback-system.md)
 - [Frontend Components README](./my-app/src/components/feedback/README.md)
 

@@ -26,6 +26,7 @@ interface FeedbackSubmission {
   };
   metadata?: Record<string, any>;
   tags?: string[];
+  priority?: 'low' | 'medium' | 'high' | 'critical';
 }
 
 export const handler = async (

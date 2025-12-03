@@ -5,10 +5,53 @@
 
 set -e
 
-# Configuration
-REGION="${AWS_REGION:-us-east-1}"
+# Parse command line arguments
+PROFILE=""
+REGION="${AWS_REGION:-us-west-2}"
 TABLE_NAME="${FEEDBACK_TABLE_NAME:-Feedback}"
 BUCKET_NAME="${FEEDBACK_BUCKET_NAME:-webyalaya-feedback-attachments}"
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --profile)
+            PROFILE="$2"
+            shift 2
+            ;;
+        --region)
+            REGION="$2"
+            shift 2
+            ;;
+        --table-name)
+            TABLE_NAME="$2"
+            shift 2
+            ;;
+        --bucket-name)
+            BUCKET_NAME="$2"
+            shift 2
+            ;;
+        --help)
+            echo "Usage: $0 [OPTIONS]"
+            echo "Options:"
+            echo "  --profile PROFILE     AWS profile to use"
+            echo "  --region REGION       AWS region (default: us-west-2)"
+            echo "  --table-name NAME     DynamoDB table name (default: Feedback)"
+            echo "  --bucket-name NAME    S3 bucket name (default: webyalaya-feedback-attachments)"
+            echo "  --help                Show this help message"
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Use --help for usage information"
+            exit 1
+            ;;
+    esac
+done
+
+# Build AWS CLI profile argument
+AWS_PROFILE_ARG=""
+if [ -n "${PROFILE}" ]; then
+    AWS_PROFILE_ARG="--profile ${PROFILE}"
+fi
 
 # Colors
 GREEN='\033[0;32m'
@@ -17,6 +60,9 @@ RED='\033[0;31m'
 NC='\033[0m'
 
 echo -e "${GREEN}Setting up CloudWatch monitoring for feedback system...${NC}"
+if [ -n "${PROFILE}" ]; then
+    echo -e "${YELLOW}AWS Profile: ${PROFILE}${NC}"
+fi
 
 # Lambda function names
 LAMBDA_FUNCTIONS=(
@@ -32,6 +78,7 @@ for FUNCTION_NAME in "${LAMBDA_FUNCTIONS[@]}"; do
   
   # Error rate alarm
   aws cloudwatch put-metric-alarm \
+    ${AWS_PROFILE_ARG} \
     --alarm-name "${FUNCTION_NAME}-HighErrorRate" \
     --alarm-description "Alert when ${FUNCTION_NAME} error rate exceeds 5%" \
     --metric-name Errors \
@@ -42,11 +89,11 @@ for FUNCTION_NAME in "${LAMBDA_FUNCTIONS[@]}"; do
     --comparison-operator GreaterThanThreshold \
     --evaluation-periods 1 \
     --dimensions Name=FunctionName,Value="${FUNCTION_NAME}" \
-    --region "${REGION}" \
-    --no-cli-pager || echo "Alarm may already exist"
+    --region "${REGION}" || echo "Alarm may already exist"
 
   # Duration alarm
   aws cloudwatch put-metric-alarm \
+    ${AWS_PROFILE_ARG} \
     --alarm-name "${FUNCTION_NAME}-HighDuration" \
     --alarm-description "Alert when ${FUNCTION_NAME} duration exceeds 5 seconds" \
     --metric-name Duration \
@@ -57,11 +104,11 @@ for FUNCTION_NAME in "${LAMBDA_FUNCTIONS[@]}"; do
     --comparison-operator GreaterThanThreshold \
     --evaluation-periods 2 \
     --dimensions Name=FunctionName,Value="${FUNCTION_NAME}" \
-    --region "${REGION}" \
-    --no-cli-pager || echo "Alarm may already exist"
+    --region "${REGION}" || echo "Alarm may already exist"
 
   # Throttles alarm
   aws cloudwatch put-metric-alarm \
+    ${AWS_PROFILE_ARG} \
     --alarm-name "${FUNCTION_NAME}-Throttles" \
     --alarm-description "Alert when ${FUNCTION_NAME} is throttled" \
     --metric-name Throttles \
@@ -72,8 +119,7 @@ for FUNCTION_NAME in "${LAMBDA_FUNCTIONS[@]}"; do
     --comparison-operator GreaterThanThreshold \
     --evaluation-periods 1 \
     --dimensions Name=FunctionName,Value="${FUNCTION_NAME}" \
-    --region "${REGION}" \
-    --no-cli-pager || echo "Alarm may already exist"
+    --region "${REGION}" || echo "Alarm may already exist"
 done
 
 # DynamoDB alarms
@@ -81,6 +127,7 @@ echo -e "${GREEN}Creating DynamoDB alarms...${NC}"
 
 # Read throttles
 aws cloudwatch put-metric-alarm \
+  ${AWS_PROFILE_ARG} \
   --alarm-name "${TABLE_NAME}-ReadThrottles" \
   --alarm-description "Alert when ${TABLE_NAME} read throttles occur" \
   --metric-name ReadThrottleEvents \
@@ -91,11 +138,11 @@ aws cloudwatch put-metric-alarm \
   --comparison-operator GreaterThanThreshold \
   --evaluation-periods 1 \
   --dimensions Name=TableName,Value="${TABLE_NAME}" \
-  --region "${REGION}" \
-  --no-cli-pager || echo "Alarm may already exist"
+  --region "${REGION}" || echo "Alarm may already exist"
 
 # Write throttles
 aws cloudwatch put-metric-alarm \
+  ${AWS_PROFILE_ARG} \
   --alarm-name "${TABLE_NAME}-WriteThrottles" \
   --alarm-description "Alert when ${TABLE_NAME} write throttles occur" \
   --metric-name WriteThrottleEvents \
@@ -106,8 +153,7 @@ aws cloudwatch put-metric-alarm \
   --comparison-operator GreaterThanThreshold \
   --evaluation-periods 1 \
   --dimensions Name=TableName,Value="${TABLE_NAME}" \
-  --region "${REGION}" \
-  --no-cli-pager || echo "Alarm may already exist"
+  --region "${REGION}" || echo "Alarm may already exist"
 
 # S3 alarms (if needed)
 echo -e "${GREEN}Creating S3 monitoring...${NC}"
@@ -205,10 +251,10 @@ EOF
 )
 
 aws cloudwatch put-dashboard \
+  ${AWS_PROFILE_ARG} \
   --dashboard-name "FeedbackSystem" \
   --dashboard-body "${DASHBOARD_BODY}" \
-  --region "${REGION}" \
-  --no-cli-pager
+  --region "${REGION}"
 
 echo ""
 echo -e "${GREEN}Monitoring setup completed!${NC}"

@@ -30,8 +30,8 @@ npm run build
 
 3. Deploy using the deployment script:
 ```bash
-cd ../../scripts/aws
-./deploy-lambdas.sh
+cd ../../infra/aws
+./deploy-lambdas.sh --profile <your-profile>
 ```
 
 ## Environment Variables
@@ -88,5 +88,5 @@ Optional function for scheduled feedback collection (placeholder implementation)
 
 ## Development
 
-To test locally, you can use AWS SAM or the AWS Lambda runtime interface emulator. For production deployment, use the provided deployment scripts in `scripts/aws/`.
+To test locally, you can use AWS SAM or the AWS Lambda runtime interface emulator. For production deployment, use the provided deployment scripts in `infra/aws/`.
 

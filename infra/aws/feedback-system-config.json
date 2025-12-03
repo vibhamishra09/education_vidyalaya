@@ -1,0 +1,9 @@
+{
+    "profile": "namaste",
+    "region": "us-west-2",
+    "tableName": "Feedback",
+    "bucketName": "webyalaya-feedback-attachments",
+    "apiId": "vdgzyms0a8",
+    "apiName": "feedback-api",
+    "roleArn": "arn:aws:iam::410974772890:role/FeedbackSystemLambdaRole"
+}
