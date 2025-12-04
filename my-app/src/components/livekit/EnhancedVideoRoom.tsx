@@ -265,7 +265,6 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 					timerEnabled={timerEnabled}
 					formattedTime={formattedTime}
 					minutesLeft={minutesLeft}
-					isRecording={isListening}
 				/>
 		</LiveKitRoom>
 
@@ -302,7 +301,6 @@ function VideoRoomContent({
 	timerEnabled,
 	formattedTime,
 	minutesLeft,
-	isRecording,
 }: {
 	showChat: boolean
 	setShowChat: (show: boolean) => void
@@ -315,7 +313,6 @@ function VideoRoomContent({
 	timerEnabled: boolean
 	formattedTime: string
 	minutesLeft: number
-	isRecording?: boolean
 }) {
 	const room = useRoomContext()
 	const params = useParams<{ room: string }>()
@@ -401,15 +398,6 @@ function VideoRoomContent({
 
 					{/* Action Buttons */}
 					<div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
-						{/* AI Transcript Recording Indicator
-						{isRecording && (
-							<div className="flex items-center gap-1.5 px-2 md:px-3 py-1 md:py-1.5 bg-red-500/20 backdrop-blur-sm rounded-full border border-red-500/30">
-								<div className="h-2 w-2 bg-red-500 rounded-full animate-pulse" />
-								<span className="text-red-400 text-[10px] md:text-xs font-medium hidden md:inline">AI Recording</span>
-								<span className="text-red-400 text-[10px] font-medium md:hidden">REC</span>
-							</div>
-						)} */}
-
 						<Button
 							variant="ghost"
 							size="sm"

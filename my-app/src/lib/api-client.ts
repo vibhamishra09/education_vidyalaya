@@ -71,7 +71,6 @@ apiClient.interceptors.request.use(
     
     // Otherwise, try to get the Clerk token for authenticated requests
     const token = await getClerkToken();
-    console.log(68, token);
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
     }
