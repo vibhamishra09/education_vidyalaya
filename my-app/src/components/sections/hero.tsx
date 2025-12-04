@@ -1,11 +1,13 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { useRouter } from "next/navigation";
 import { useRequireAuth } from "@/hooks/use-require-auth";
 import { SkillSearch } from "@/components/ui/skill-search";
 
 export function HeroSection() {
   const requireAuth = useRequireAuth();
+  const router = useRouter();
 
   return (
     <section className="relative py-20 lg:py-32 overflow-hidden">
@@ -56,8 +58,7 @@ export function HeroSection() {
               className="flex flex-col items-center justify-center space-y-4 border-2 border-green-500 rounded-lg p-6 hover:border-green-600 transition-colors cursor-pointer group"
               onClick={() =>
                 requireAuth(() => {
-                  // TODO: Navigate to create study room page
-                  console.log("Opening create study room...");
+                  router.push("/create-study-room");
                 })
               }
             >

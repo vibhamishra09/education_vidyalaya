@@ -29,23 +29,26 @@ export function SessionEndedDialog({
 }: SessionEndedDialogProps) {
   const router = useRouter();
   const [showFeedback, setShowFeedback] = useState(false);
+  const [countdown, setCountdown] = useState(10);
 
+  // Auto-redirect to review page after 10 seconds
   useEffect(() => {
-    if (open && !showFeedback) {
-      // Automatically redirect after 15 seconds (increased to give time for feedback)
-      const timeout = setTimeout(() => {
-        router.push(`/submit-review/${sessionId}`);
-      }, 15000);
-
-      return () => clearTimeout(timeout);
+    if (open && !showFeedback && countdown > 0) {
+      const timer = setTimeout(() => {
+        setCountdown(prev => prev - 1);
+      }, 1000);
+      return () => clearTimeout(timer);
+    } else if (open && !showFeedback && countdown === 0) {
+      // Redirect to review page
+      router.push(`/submit-review/${sessionId}?type=${sessionType}`);
     }
-  }, [open, sessionId, router, showFeedback]);
+  }, [open, showFeedback, countdown, sessionId, sessionType, router]);
 
   const handleReview = () => {
     if (onReview) {
       onReview();
     } else {
-      router.push(`/submit-review/${sessionId}`);
+      router.push(`/submit-review/${sessionId}?type=${sessionType}`);
     }
   };
 
@@ -103,6 +106,11 @@ export function SessionEndedDialog({
           <DialogDescription className="text-sm text-muted-foreground">
             Please take a moment to review your experience.
           </DialogDescription>
+          {countdown > 0 && (
+            <DialogDescription className="text-sm font-medium text-primary">
+              Redirecting to review page in {countdown} seconds...
+            </DialogDescription>
+          )}
         </div>
         <DialogFooter className="flex-col gap-2">
           <div className="flex flex-col sm:flex-row gap-2 w-full">
