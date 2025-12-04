@@ -503,11 +503,20 @@ export class StudyRoomsService {
       createDto.timezone,
     );
 
-    // Determine session status based on start time
-    // If the room starts now or in the past, set it to ONGOING immediately
+    // Validate that session is not scheduled in the past
     const now = new Date();
+    if (dateTime.getTime() < now.getTime()) {
+      throw new BadRequestException({
+        code: 'PAST_TIME_NOT_ALLOWED',
+        message: 'Study rooms cannot be scheduled in the past',
+      });
+    }
+
+    // Determine session status based on start time
+    // If the room starts within the next few minutes, consider it ready to start
+    const fiveMinutesFromNow = now.getTime() + (5 * 60 * 1000);
     const sessionStatus =
-      dateTime.getTime() <= now.getTime()
+      dateTime.getTime() <= fiveMinutesFromNow
         ? SessionStatus.ONGOING
         : SessionStatus.UPCOMING;
 

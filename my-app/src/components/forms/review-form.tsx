@@ -65,19 +65,35 @@ export function ReviewForm({
     } catch (error: unknown) {
       console.error("Error submitting review:", error);
       
-      const errorMessage = error && typeof error === 'object' && 'response' in error 
-        ? (error as { response?: { data?: { message?: string; code?: string } } }).response?.data?.message || "Failed to submit review"
-        : "Failed to submit review";
-      
-      const errorCode = error && typeof error === 'object' && 'response' in error 
-        ? (error as { response?: { data?: { code?: string } } }).response?.data?.code
-        : undefined;
-      
-      if (errorCode === 'ALREADY_REVIEWED') {
-        toast.error("You have already reviewed this session");
-      } else {
-        toast.error(errorMessage);
+      // Handle different error types
+      if (error && typeof error === 'object') {
+        // Check for API error with code
+        if ('code' in error) {
+          const apiError = error as { code?: string; message?: string };
+          if (apiError.code === 'ALREADY_REVIEWED') {
+            toast.error("You have already reviewed this session");
+            return;
+          } else if (apiError.code === 'UNAUTHORIZED') {
+            toast.error("Please sign in to submit a review");
+            return;
+          }
+        }
+        
+        // Check for message
+        if ('message' in error && typeof error.message === 'string') {
+          if (error.message.includes('not signed in')) {
+            toast.error("Please sign in to submit a review");
+          } else if (error.message.includes('authentication token')) {
+            toast.error("Authentication failed. Please try signing in again.");
+          } else {
+            toast.error(error.message);
+          }
+          return;
+        }
       }
+      
+      // Fallback error message
+      toast.error("Failed to submit review. Please try again.");
     }
   };
 

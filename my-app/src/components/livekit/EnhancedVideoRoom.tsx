@@ -110,10 +110,16 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 			} catch (error) {
 				console.error('Error completing session:', error)
 			}
+			
+			// Host: Redirect directly to dashboard (no review)
+			console.log('🏠 Host session ended, redirecting to dashboard')
+			router.push('/dashboard')
+		} else {
+			// Participant: Show review dialog
+			console.log('👤 Participant session ended, showing review dialog')
+			setShowEnded(true)
 		}
-		// Show ended dialog for all users (host and participants)
-		setShowEnded(true)
-	}, [sessionData?.id, sessionData?.sessionType, isHost, getToken, queryClient])
+	}, [sessionData?.id, sessionData?.sessionType, isHost, getToken, queryClient, router])
 
 	const handleWarning = useCallback((minutes: number) => {
 		setShowWarning(true)
@@ -272,8 +278,8 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 				/>
 			)}
 
-			{/* Session Ended Dialog */}
-			{timerEnabled && sessionData?.id && (
+			{/* Session Ended Dialog - Only for participants (not host) */}
+			{timerEnabled && sessionData?.id && !isHost && (
 				<SessionEndedDialog
 					open={showEnded}
 					sessionId={sessionData.id}
@@ -395,14 +401,14 @@ function VideoRoomContent({
 
 					{/* Action Buttons */}
 					<div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
-						{/* AI Transcript Recording Indicator */}
+						{/* AI Transcript Recording Indicator
 						{isRecording && (
 							<div className="flex items-center gap-1.5 px-2 md:px-3 py-1 md:py-1.5 bg-red-500/20 backdrop-blur-sm rounded-full border border-red-500/30">
 								<div className="h-2 w-2 bg-red-500 rounded-full animate-pulse" />
 								<span className="text-red-400 text-[10px] md:text-xs font-medium hidden md:inline">AI Recording</span>
 								<span className="text-red-400 text-[10px] font-medium md:hidden">REC</span>
 							</div>
-						)}
+						)} */}
 
 						<Button
 							variant="ghost"
