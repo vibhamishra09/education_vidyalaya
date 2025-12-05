@@ -356,15 +356,15 @@ export function EditProfileModal({
                 id="hourlyRate"
                 type="number"
                 min="0"
-                step="0.01"
-                placeholder="0.00"
+                step="1"
+                placeholder="0"
                 value={hourlyRate === "" ? "" : hourlyRate}
                 onChange={(e) => {
                   const value = e.target.value;
                   if (value === "") {
                     setHourlyRate("");
                   } else {
-                    const numValue = parseFloat(value);
+                    const numValue = parseInt(value);
                     setHourlyRate(isNaN(numValue) ? "" : numValue);
                   }
                 }}

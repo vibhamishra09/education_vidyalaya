@@ -36,7 +36,7 @@ export default function CreateStudyRoomPage() {
     time: "",
     duration: "60",
     maxParticipants: "10",
-    joiningFee: "0.00",
+    joiningFee: "0",
     gmeetLink: "",
   });
 
@@ -315,7 +315,7 @@ export default function CreateStudyRoomPage() {
                       type="number"
                       min="0"
                       max="100000"
-                      step="0.01"
+                      step="1"
                       value={formData.joiningFee}
                       onChange={(e) =>
                         setFormData((prev) => ({
@@ -328,7 +328,7 @@ export default function CreateStudyRoomPage() {
                     />
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    Amount participants will pay to join (0-1000 coins, supports decimals)
+                    Amount participants will pay to join (whole numbers only)
                   </p>
                 </div>
 
@@ -356,10 +356,10 @@ export default function CreateStudyRoomPage() {
                 <div className="bg-muted p-4 rounded-lg">
                   <h4 className="font-semibold mb-2">Earning Potential</h4>
                   <p className="text-sm text-muted-foreground">
-                    Each participant will pay {parseFloat(formData.joiningFee).toFixed(2)} <span className="text-xs">m</span>AYA to join. With{" "}
+                    Each participant will pay {parseInt(formData.joiningFee) || 0} <span className="text-xs">m</span>AYA to join. With{" "}
                     {formData.maxParticipants} participants, you could earn up to{" "}
                     <span className="font-semibold text-foreground">
-                      {(parseInt(formData.maxParticipants) * parseFloat(formData.joiningFee)).toFixed(2)} <span className="text-xs">m</span>AYA
+                      {parseInt(formData.maxParticipants) * (parseInt(formData.joiningFee) || 0)} <span className="text-xs">m</span>AYA
                     </span>
                     .
                   </p>
