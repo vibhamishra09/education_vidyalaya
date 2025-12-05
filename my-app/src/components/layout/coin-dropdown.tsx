@@ -43,26 +43,34 @@ export function CoinDropdown({ coins = 0, isLoading = false }: CoinDropdownProps
   }, [isOpen]);
 
   return (
-    <>
-      <div className="relative" ref={dropdownRef}>
-        <div
-          className="flex items-center gap-1 px-3 py-1 bg-muted rounded-full cursor-pointer hover:bg-muted/80 transition-colors"
-          onClick={() => setIsOpen(!isOpen)}
-        >
-          <Coins className="h-4 w-4 text-yellow-600" />
-          <span className="text-sm font-medium">
-            {isLoading ? '...' : formatMaya(displayCoins)} AYA
-          </span>
-        </div>
+    <div className="relative" ref={dropdownRef}>
+      <div
+        className="flex items-center gap-1 px-3 py-1 bg-muted rounded-full cursor-pointer hover:bg-muted/80 transition-colors"
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <Coins className="h-4 w-4 text-yellow-600" />
+        <span className="text-sm font-medium">
+          {isLoading ? '...' : formatMaya(displayCoins)} AYA
+        </span>
+      </div>
 
-        <AnimatePresence>
-          {isOpen && (
+      <AnimatePresence>
+        {isOpen && (
+          <>
+            {/* Backdrop */}
+            <div
+              className="fixed inset-0 z-40"
+              onClick={() => setIsOpen(false)}
+            />
+
+            {/* Dropdown */}
             <motion.div
               initial={{ opacity: 0, y: -10, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -10, scale: 0.95 }}
               transition={{ duration: 0.2 }}
               className="absolute right-0 mt-2 w-80 z-50"
+              onClick={(e) => e.stopPropagation()}
             >
               <Card className="shadow-lg">
                 <CardHeader className="pb-3">
@@ -169,22 +177,9 @@ export function CoinDropdown({ coins = 0, isLoading = false }: CoinDropdownProps
                 </CardContent>
               </Card>
             </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            className="fixed inset-0 z-40"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 0.2 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.15 }}
-            onClick={() => setIsOpen(false)}
-          />
+          </>
         )}
       </AnimatePresence>
-    </>
+    </div>
   );
 }
