@@ -246,9 +246,25 @@ export default function CreateStudyRoomPage() {
                         required
                       />
                     </div>
-                    <p className="text-sm text-muted-foreground">
-                      Between 1 and 240 minutes
-                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {[15, 30, 45, 60].map((mins) => (
+                        <Button
+                          key={mins}
+                          type="button"
+                          variant={formData.duration === String(mins) ? "default" : "outline"}
+                          size="sm"
+                          onClick={() =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              duration: String(mins),
+                            }))
+                          }
+                          className="text-xs"
+                        >
+                          {mins} min
+                        </Button>
+                      ))}
+                    </div>
                   </div>
 
                   <div className="space-y-2">
@@ -261,12 +277,24 @@ export default function CreateStudyRoomPage() {
                         min="2"
                         max="10"
                         value={formData.maxParticipants}
-                        onChange={(e) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            maxParticipants: e.target.value,
-                          }))
-                        }
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          // Allow empty string for typing, but clamp final value
+                          if (value === "") {
+                            setFormData((prev) => ({
+                              ...prev,
+                              maxParticipants: value,
+                            }));
+                          } else {
+                            const numValue = parseInt(value, 10);
+                            // Clamp value between 2 and 10
+                            const clampedValue = Math.min(10, Math.max(2, numValue));
+                            setFormData((prev) => ({
+                              ...prev,
+                              maxParticipants: String(clampedValue),
+                            }));
+                          }
+                        }}
                         className="pl-10"
                         required
                       />
