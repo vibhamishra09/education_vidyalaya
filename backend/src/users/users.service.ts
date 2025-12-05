@@ -4,7 +4,7 @@ import {
   ConflictException,
   BadRequestException,
 } from '@nestjs/common';
-import { SessionStatus } from '@prisma/client';
+import { Prisma, SessionStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateUserDto } from './dto/user.dto';
 
@@ -54,6 +54,7 @@ export class UsersService {
         hourlyRate: user.hourlyRate,
         hasSkills,
         wantSkills,
+        socialLinks: user.socialLinks as any[] || [],
       },
       isNewUser,
     };
@@ -69,6 +70,7 @@ export class UsersService {
       hourlyRate,
       hasSkills,
       wantSkills,
+      socialLinks,
     } = updateDto;
 
     // Get current user to check existing username
@@ -98,7 +100,7 @@ export class UsersService {
       }
     }
 
-    // Update user bio, avatar, location, school, username, and hourly rate
+    // Update user bio, avatar, location, school, username, hourly rate, and social links
     const user = await this.prisma.user.update({
       where: { clerkId: userId },
       data: {
@@ -108,6 +110,9 @@ export class UsersService {
         school,
         username: username !== undefined ? username : undefined,
         hourlyRate: hourlyRate !== undefined ? hourlyRate : undefined,
+        socialLinks: socialLinks !== undefined 
+          ? (socialLinks as unknown as Prisma.InputJsonValue) 
+          : undefined,
       },
     });
 
@@ -199,6 +204,8 @@ export class UsersService {
       totalSessionRequests,
       acceptedSessions,
       reviewStats,
+      peerSessionsAsLearner,
+      studyRoomsAsLearner,
     ] = await Promise.all([
       this.prisma.peerSession.count({
         where: {
@@ -222,7 +229,26 @@ export class UsersService {
         _avg: { rating: true },
         _count: { rating: true },
       }),
+      // Count peer sessions where user is the learner (requester)
+      this.prisma.peerSession.count({
+        where: {
+          requestedById: user.id,
+          sessionStatus: SessionStatus.DONE,
+        },
+      }),
+      // Count study rooms where user is a participant (not creator)
+      this.prisma.studyRoomParticipant.count({
+        where: {
+          userId: user.id,
+          studyRoom: {
+            sessionStatus: SessionStatus.DONE,
+            createdById: { not: user.id }, // Exclude rooms user created (taught)
+          },
+        },
+      }),
     ]);
+
+    const sessionsAttendedAsLearner = peerSessionsAsLearner + studyRoomsAsLearner;
 
     const acceptanceRate =
       totalSessionRequests > 0 ? acceptedSessions / totalSessionRequests : 0;
@@ -240,8 +266,10 @@ export class UsersService {
       hourlyRate: user.hourlyRate,
       hasSkills,
       wantSkills,
+      socialLinks: user.socialLinks as any[] || [],
       publicStats: {
         sessionsTaught,
+        sessionsAttendedAsLearner,
         totalSessionRequests,
         acceptedSessions,
         acceptanceRate,

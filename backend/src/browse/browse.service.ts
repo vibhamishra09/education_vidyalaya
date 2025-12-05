@@ -90,18 +90,43 @@ export class BrowseService {
             where: { type: 'HAS' },
             include: { skill: { select: { name: true } } },
           },
+          reviewsReceived: {
+            select: { rating: true },
+          },
+          _count: {
+            select: {
+              peerSessionsRequested: {
+                where: { sessionStatus: SessionStatus.DONE },
+              },
+              peerSessionsReceived: {
+                where: { sessionStatus: SessionStatus.DONE },
+              },
+            },
+          },
         },
         orderBy: { name: 'asc' }, // Sort by name alphabetically
       });
 
       return {
-        peers: users.map((user) => ({
-          id: user.id,
-          name: user.name,
-          avatar: user.avatar,
-          bio: user.bio,
-          skills: user.userSkills.map((us) => us.skill.name),
-        })),
+        peers: users.map((user) => {
+          const reviews = user.reviewsReceived;
+          const avgRating = reviews.length > 0
+            ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
+            : null;
+          const totalSessions = user._count.peerSessionsRequested + user._count.peerSessionsReceived;
+          
+          return {
+            id: user.id,
+            name: user.name,
+            avatar: user.avatar,
+            bio: user.bio,
+            skills: user.userSkills.map((us) => us.skill.name),
+            rating: avgRating,
+            reviewCount: reviews.length,
+            totalSessions,
+            socialLinks: user.socialLinks as any[] || [],
+          };
+        }),
         studyRooms: [],
         counts: {
           peers: peerCount,

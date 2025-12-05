@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Coins, Loader2, AlertCircle } from "lucide-react";
+import { SocialLinksDisplay } from "@/components/ui/social-links-display";
 import { usersApi, peerSessionsApi } from "@/lib/api";
 import { User } from "@/types/api.types";
 import { setAuthToken } from "@/lib/api-client";
@@ -325,8 +326,11 @@ export default function RequestSessionPage({
                       <AvatarImage src={peer.avatar} alt={peer.name} />
                       <AvatarFallback>{peer.name.charAt(0)}</AvatarFallback>
                     </Avatar>
-                    <div>
-                      <p className="font-semibold">{peer.name}</p>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-semibold">{peer.name}</p>
+                        <SocialLinksDisplay socialLinks={peer.socialLinks} size="sm" maxDisplay={4} />
+                      </div>
                       <p className="text-sm text-muted-foreground">
                         @{peer.username || peer.email.split('@')[0]}
                       </p>

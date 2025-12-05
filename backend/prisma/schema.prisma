@@ -23,6 +23,9 @@ model User {
   createdAt             DateTime               @default(now())
   onboarded             Boolean                @default(false)
   updatedAt             DateTime               @updatedAt
+  // Social media profile links (flexible JSON structure)
+  // Format: [{ "platform": "linkedin", "url": "..." }, { "platform": "custom", "label": "My Blog", "url": "..." }]
+  socialLinks           Json?
   // Availability settings (Users available 24/7 by default)
   bufferTime            Int                    @default(0) // Minutes between sessions (0 = back-to-back allowed)
   minAdvanceTime        Int                    @default(0) // Minimum minutes before booking (0 = instant booking)
