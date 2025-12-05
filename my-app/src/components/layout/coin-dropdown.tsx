@@ -43,31 +43,39 @@ export function CoinDropdown({ coins = 0, isLoading = false }: CoinDropdownProps
   }, [isOpen]);
 
   return (
-    <>
-      <div className="relative" ref={dropdownRef}>
-        <div
-          className="flex items-center gap-1 px-3 py-1 bg-muted rounded-full cursor-pointer hover:bg-muted/80 transition-colors"
-          onClick={() => setIsOpen(!isOpen)}
-        >
-          <Coins className="h-4 w-4 text-yellow-600" />
-          <span className="text-sm font-medium">
-            {isLoading ? '...' : formatMaya(displayCoins)} AYA
-          </span>
-        </div>
+    <div className="relative" ref={dropdownRef}>
+      <div
+        className="flex items-center gap-1 px-3 py-1 bg-muted rounded-full cursor-pointer hover:bg-muted/80 transition-colors"
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <Coins className="h-4 w-4 text-yellow-600" />
+        <span className="text-sm font-medium">
+          {isLoading ? '...' : formatMaya(displayCoins)} <span className="text-xs">m</span>AYA
+        </span>
+      </div>
 
-        <AnimatePresence>
-          {isOpen && (
+      <AnimatePresence>
+        {isOpen && (
+          <>
+            {/* Backdrop */}
+            <div
+              className="fixed inset-0 z-40"
+              onClick={() => setIsOpen(false)}
+            />
+
+            {/* Dropdown */}
             <motion.div
               initial={{ opacity: 0, y: -10, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -10, scale: 0.95 }}
               transition={{ duration: 0.2 }}
               className="absolute right-0 mt-2 w-80 z-50"
+              onClick={(e) => e.stopPropagation()}
             >
               <Card className="shadow-lg">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-lg">
-                    <span>AYA Balance</span>
+                    <span><span className="text-sm">m</span>AYA Balance</span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -76,7 +84,7 @@ export function CoinDropdown({ coins = 0, isLoading = false }: CoinDropdownProps
                     <div className="flex items-center justify-center gap-2">
                       <Coins className="h-6 w-6 text-yellow-600" />
                       <span className="text-3xl font-bold">
-                        {formatMaya(displayCoins)} AYA
+                        {formatMaya(displayCoins)} <span className="text-xl">m</span>AYA
                       </span>
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5">
@@ -137,7 +145,7 @@ export function CoinDropdown({ coins = 0, isLoading = false }: CoinDropdownProps
                                   : 'text-green-600'
                               }`}>
                                 {transaction.type === 'PAYMENT_MADE' ? '-' : '+'}
-                                {formatMaya(transaction.amount)} AYA
+                                {formatMaya(transaction.amount)} <span className="text-[10px]">m</span>AYA
                               </p>
                               <Badge
                                 variant="outline"
@@ -169,22 +177,9 @@ export function CoinDropdown({ coins = 0, isLoading = false }: CoinDropdownProps
                 </CardContent>
               </Card>
             </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            className="fixed inset-0 z-40"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 0.2 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.15 }}
-            onClick={() => setIsOpen(false)}
-          />
+          </>
         )}
       </AnimatePresence>
-    </>
+    </div>
   );
 }

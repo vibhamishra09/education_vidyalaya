@@ -272,10 +272,10 @@ export default function OnboardingPage() {
                       <Input
                         type="number"
                         min="0"
-                        step="0.01"
-                        placeholder="0.00"
+                        step="1"
+                        placeholder="0"
                         value={hourlyRate || ""}
-                        onChange={(e) => setHourlyRate(parseFloat(e.target.value) || 0)}
+                        onChange={(e) => setHourlyRate(parseInt(e.target.value) || 0)}
                         className="pl-8"
                       />
                     </div>

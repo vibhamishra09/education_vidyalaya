@@ -378,9 +378,26 @@ export default function RequestSessionPage({
                       required
                       disabled={isSelfRequest}
                     />
-                    <p className="text-sm text-muted-foreground">
-                      Between 1 and 240 minutes
-                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {[15, 30, 45, 60].map((mins) => (
+                        <Button
+                          key={mins}
+                          type="button"
+                          variant={formData.duration === String(mins) ? "default" : "outline"}
+                          size="sm"
+                          onClick={() =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              duration: String(mins),
+                            }))
+                          }
+                          disabled={isSelfRequest}
+                          className="text-xs"
+                        >
+                          {mins} min
+                        </Button>
+                      ))}
+                    </div>
                   </div>
 
                   {/* Availability Calendar */}
