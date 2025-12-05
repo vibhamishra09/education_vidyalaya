@@ -166,11 +166,42 @@ export enum NotifType {
 // User Types
 export interface PublicUserStats {
   sessionsTaught: number;
+  sessionsAttendedAsLearner: number;
   totalSessionRequests: number;
   acceptedSessions: number;
   acceptanceRate: number; // Stored as a decimal (0-1)
   avgRating: number;
   reviewCount: number;
+}
+
+// Social media link types
+export const SOCIAL_PLATFORMS = [
+  'linkedin',
+  'twitter',
+  'github',
+  'youtube',
+  'instagram',
+  'facebook',
+  'tiktok',
+  'discord',
+  'twitch',
+  'reddit',
+  'medium',
+  'devto',
+  'stackoverflow',
+  'dribbble',
+  'behance',
+  'figma',
+  'website',
+  'custom',
+] as const;
+
+export type SocialPlatform = (typeof SOCIAL_PLATFORMS)[number];
+
+export interface SocialLink {
+  platform: string; // Can be one of SOCIAL_PLATFORMS or any custom string
+  url: string;
+  label?: string; // Optional custom label (useful for 'custom' platform or renaming)
 }
 
 export interface User {
@@ -187,6 +218,8 @@ export interface User {
   hasSkills?: string[];
   wantSkills?: string[];
   publicStats?: PublicUserStats;
+  // Social media profile links (flexible array structure)
+  socialLinks?: SocialLink[];
 }
 
 export interface PublicUser {
@@ -205,6 +238,8 @@ export interface UpdateUserDto {
   hourlyRate?: number | string;
   hasSkills?: string[];
   wantSkills?: string[];
+  // Social media profile links (flexible array structure)
+  socialLinks?: SocialLink[];
 }
 
 export interface CurrentUserResponse {
@@ -372,6 +407,10 @@ export interface BrowsePeer {
   avatar?: string;
   bio?: string;
   skills: string[];
+  rating?: number | null;
+  reviewCount?: number;
+  totalSessions?: number;
+  socialLinks?: SocialLink[];
 }
 
 export interface BrowseResponse {
