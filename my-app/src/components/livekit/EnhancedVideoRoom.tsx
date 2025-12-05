@@ -5,7 +5,7 @@ import { Track } from 'livekit-client'
 import '@livekit/components-styles'
 import { ChatWidget } from '@/components/chat/ChatWidget'
 import { Button } from '@/components/ui/button'
-import { MessageSquare, X, Users, Maximize2, Minimize2, Video, VideoOff, Mic, MicOff, Volume2, VolumeX, Clock } from 'lucide-react'
+import { MessageSquare, X, Users, Maximize2, Minimize2, Video, VideoOff, Mic, MicOff, Volume2, VolumeX, Clock, MonitorUp, MonitorOff } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { useSessionTimer } from '@/hooks/use-session-timer'
@@ -320,15 +320,19 @@ function VideoRoomContent({
 	const room = useRoomContext()
 	const params = useParams<{ room: string }>()
 	
-	// Use useTrackToggle hooks for video and mic controls
+	// Use useTrackToggle hooks for video, mic, and screen share controls
 	const { buttonProps: videoButtonProps, enabled: isVideoEnabled } = useTrackToggle({ source: Track.Source.Camera })
 	const { buttonProps: micButtonProps, enabled: isMicEnabled } = useTrackToggle({ source: Track.Source.Microphone })
+	const { buttonProps: screenShareButtonProps, enabled: isScreenShareEnabled } = useTrackToggle({ source: Track.Source.ScreenShare })
 	
 	const [isAudioEnabled, setIsAudioEnabled] = useState(true)
 
-	// Get all camera tracks for the grid layout
+	// Get all camera and screen share tracks for the grid layout
 	const tracks = useTracks(
-		[{ source: Track.Source.Camera, withPlaceholder: true }],
+		[
+			{ source: Track.Source.Camera, withPlaceholder: true },
+			{ source: Track.Source.ScreenShare, withPlaceholder: false },
+		],
 		{ onlySubscribed: false }
 	)
 
@@ -479,21 +483,36 @@ function VideoRoomContent({
 						{isMicEnabled ? <Mic className="h-4 w-4 md:h-5 md:w-5" /> : <MicOff className="h-4 w-4 md:h-5 md:w-5" />}
 					</Button>
 
-					{/* Audio Output Toggle - Hidden on mobile */}
-					<Button
-						onClick={toggleAudio}
-						variant={isAudioEnabled ? "default" : "secondary"}
-						size="lg"
-						className={`h-10 w-10 md:h-12 md:w-auto md:px-6 rounded-full transition-all p-0 hidden md:flex ${
-							isAudioEnabled 
-								? 'bg-white/20 hover:bg-white/30 text-white' 
-								: 'bg-white/10 hover:bg-white/20 text-white/60'
-						}`}
-					>
-						{isAudioEnabled ? <Volume2 className="h-4 w-4 md:h-5 md:w-5" /> : <VolumeX className="h-4 w-4 md:h-5 md:w-5" />}
-					</Button>
+				{/* Audio Output Toggle - Hidden on mobile */}
+				<Button
+					onClick={toggleAudio}
+					variant={isAudioEnabled ? "default" : "secondary"}
+					size="lg"
+					className={`h-10 w-10 md:h-12 md:w-auto md:px-6 rounded-full transition-all p-0 hidden md:flex ${
+						isAudioEnabled 
+							? 'bg-white/20 hover:bg-white/30 text-white' 
+							: 'bg-white/10 hover:bg-white/20 text-white/60'
+					}`}
+				>
+					{isAudioEnabled ? <Volume2 className="h-4 w-4 md:h-5 md:w-5" /> : <VolumeX className="h-4 w-4 md:h-5 md:w-5" />}
+				</Button>
 
-					{/* Leave Button */}
+				{/* Screen Share Toggle */}
+				<Button
+					{...screenShareButtonProps}
+					variant={isScreenShareEnabled ? "default" : "secondary"}
+					size="lg"
+					className={`h-10 w-10 md:h-12 md:w-auto md:px-6 rounded-full transition-all p-0 hidden md:flex ${
+						isScreenShareEnabled 
+							? 'bg-emerald-600 hover:bg-emerald-700 text-white' 
+							: 'bg-white/20 hover:bg-white/30 text-white'
+					}`}
+					title={isScreenShareEnabled ? "Stop sharing" : "Share screen"}
+				>
+					{isScreenShareEnabled ? <MonitorOff className="h-4 w-4 md:h-5 md:w-5" /> : <MonitorUp className="h-4 w-4 md:h-5 md:w-5" />}
+				</Button>
+
+				{/* Leave Button */}
 					<Button
 						onClick={onLeave}
 						variant="destructive"

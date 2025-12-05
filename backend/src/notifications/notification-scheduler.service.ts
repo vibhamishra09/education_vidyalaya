@@ -2,6 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from './notifications.service';
+import { TranscriptsService } from '../transcripts/transcripts.service';
+import { StreaksService } from '../streaks/streaks.service';
 import { SessionStatus, NotifType } from '@prisma/client';
 
 @Injectable()
@@ -11,6 +13,8 @@ export class NotificationSchedulerService {
   constructor(
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
+    private transcriptsService: TranscriptsService,
+    private streaksService: StreaksService,
   ) {}
 
   // Run every 5 minutes to check for session reminders
@@ -584,6 +588,75 @@ export class NotificationSchedulerService {
         continue;
       }
 
+      // Generate AI summary from transcripts (if not already generated)
+      // This ensures summaries are created even if no one stayed till the end
+      if (!session.summary) {
+        try {
+          this.logger.log(
+            `[Scheduler] Generating AI summary for peer session: ${session.id}`,
+          );
+          const summary = await this.transcriptsService.compileAndSummarize(
+            session.id,
+          );
+
+          // Store summary in database
+          await this.prisma.peerSession.update({
+            where: { id: session.id },
+            data: { summary },
+          });
+          this.logger.log(
+            `[Scheduler] AI summary generated and stored for peer session: ${session.id}`,
+          );
+        } catch (error) {
+          this.logger.error(
+            `[Scheduler] Failed to generate summary for peer session ${session.id}:`,
+            error,
+          );
+          // Continue execution even if summary generation fails
+        }
+      }
+
+      // Update streaks for both participants
+      try {
+        this.logger.log(
+          `[Scheduler] Updating streaks for peer session: ${session.id}`,
+        );
+
+        // Update streak for teacher (requestedTo)
+        await this.streaksService.updateUserActivity(
+          session.requestedToId,
+          session.date,
+          session.duration,
+          'teacher',
+          0,
+        );
+
+        // Calculate total amount paid from payments
+        const totalAmountPaid = session.payments.reduce(
+          (sum, payment) => sum + Number(payment.amountMade || 0),
+          0,
+        );
+
+        // Update streak for learner (requestedBy)
+        await this.streaksService.updateUserActivity(
+          session.requestedById,
+          session.date,
+          session.duration,
+          'learner',
+          totalAmountPaid,
+        );
+
+        this.logger.log(
+          `[Scheduler] Streaks updated for peer session: ${session.id}`,
+        );
+      } catch (error) {
+        this.logger.error(
+          `[Scheduler] Failed to update streaks for peer session ${session.id}:`,
+          error,
+        );
+        // Continue execution even if streak update fails
+      }
+
       // Note: Escrow payment will be released after both parties submit reviews
       // This is handled in the reviews service
 
@@ -649,6 +722,79 @@ export class NotificationSchedulerService {
 
       if (!locked.count) {
         continue;
+      }
+
+      // Generate AI summary from transcripts (if not already generated)
+      // This ensures summaries are created even if no one stayed till the end
+      if (!room.summary) {
+        try {
+          this.logger.log(
+            `[Scheduler] Generating AI summary for study room: ${room.id}`,
+          );
+          const summary = await this.transcriptsService.compileAndSummarize(
+            room.id,
+          );
+
+          // Store summary in database
+          await this.prisma.studyRoom.update({
+            where: { id: room.id },
+            data: { summary },
+          });
+          this.logger.log(
+            `[Scheduler] AI summary generated and stored for study room: ${room.id}`,
+          );
+        } catch (error) {
+          this.logger.error(
+            `[Scheduler] Failed to generate summary for study room ${room.id}:`,
+            error,
+          );
+          // Continue execution even if summary generation fails
+        }
+      }
+
+      // Update streaks for all participants
+      try {
+        this.logger.log(
+          `🔥 [Scheduler] Updating streaks for study room: ${room.id}`,
+        );
+
+        // Update streak for creator (host/teacher)
+        await this.streaksService.updateUserActivity(
+          room.createdById,
+          room.date,
+          room.duration,
+          'teacher',
+          0,
+        );
+
+        // Update streak for all learners
+        for (const learner of room.learners) {
+          // Find the payment made by this learner
+          const learnerPayment = room.payments.find(
+            (p) => p.madeById === learner.userId,
+          );
+          const amountPaid = learnerPayment
+            ? Number(learnerPayment.amountMade || 0)
+            : 0;
+
+          await this.streaksService.updateUserActivity(
+            learner.userId,
+            room.date,
+            room.duration,
+            'learner',
+            amountPaid,
+          );
+        }
+
+        this.logger.log(
+          `[Scheduler] Streaks updated for study room: ${room.id}`,
+        );
+      } catch (error) {
+        this.logger.error(
+          `[Scheduler] Failed to update streaks for study room ${room.id}:`,
+          error,
+        );
+        // Continue execution even if streak update fails
       }
 
       // Note: Escrow payments will be released after all participants submit reviews
