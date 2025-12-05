@@ -5,10 +5,51 @@ import {
   IsArray,
   IsInt,
   IsNumber,
+  IsUrl,
   Matches,
   MinLength,
   MaxLength,
+  ValidateNested,
+  IsIn,
 } from 'class-validator';
+import { Type } from 'class-transformer';
+
+// Predefined platform types for common social media
+export const SOCIAL_PLATFORMS = [
+  'linkedin',
+  'twitter',
+  'github',
+  'youtube',
+  'instagram',
+  'facebook',
+  'tiktok',
+  'discord',
+  'twitch',
+  'reddit',
+  'medium',
+  'devto',
+  'stackoverflow',
+  'dribbble',
+  'behance',
+  'figma',
+  'website',
+  'custom', // For any other platform
+] as const;
+
+export type SocialPlatform = (typeof SOCIAL_PLATFORMS)[number];
+
+export class SocialLinkDto {
+  @IsString()
+  platform: string; // Can be one of SOCIAL_PLATFORMS or any custom string
+
+  @IsString()
+  @IsUrl({}, { message: 'Please enter a valid URL' })
+  url: string;
+
+  @IsOptional()
+  @IsString()
+  label?: string; // Optional custom label (useful for 'custom' platform or renaming)
+}
 
 export class UserDto {
   id: string;
@@ -21,6 +62,7 @@ export class UserDto {
   hourlyRate?: number;
   hasSkills?: string[];
   wantSkills?: string[];
+  socialLinks?: SocialLinkDto[];
 }
 
 export class UpdateUserDto {
@@ -63,6 +105,12 @@ export class UpdateUserDto {
   @IsArray()
   @IsString({ each: true })
   wantSkills?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SocialLinkDto)
+  socialLinks?: SocialLinkDto[];
 }
 
 export class ClerkUserDto {

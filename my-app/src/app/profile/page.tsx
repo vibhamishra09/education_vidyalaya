@@ -17,6 +17,7 @@ import { SessionsTab } from "@/components/profile/sessions-tab";
 import { AvailabilitySettings } from "@/components/profile/availability-settings";
 import { AchievementShowcaseConnected } from "@/components/achievements/achievement-showcase-connected";
 import { Edit, Star, Coins, Loader2 } from "lucide-react";
+import { SocialLinksDisplay } from "@/components/ui/social-links-display";
 import { useProfileData } from "@/hooks/use-profile-data";
 import { formatMaya } from "@/lib/utils/coin-format";
 import {
@@ -142,10 +143,13 @@ function ProfileContent() {
                 </AvatarFallback>
               </Avatar>
 
-              <div className="flex-1 min-w-0 w-full">
+                <div className="flex-1 min-w-0 w-full">
                 <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 lg:gap-6">
                   <div className="flex-1 text-center lg:text-left">
-                    <h1 className="text-2xl sm:text-3xl font-bold">{currentUser.name}</h1>
+                    <div className="flex items-center justify-center lg:justify-start gap-3 flex-wrap">
+                      <h1 className="text-2xl sm:text-3xl font-bold">{currentUser.name}</h1>
+                      <SocialLinksDisplay socialLinks={currentUser.socialLinks} size="lg" />
+                    </div>
                     <p className="text-muted-foreground mt-1 text-sm md:text-base">
                       @{currentUser.username || currentUser.email.split('@')[0]}
                     </p>

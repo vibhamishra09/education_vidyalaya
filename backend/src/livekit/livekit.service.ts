@@ -6,6 +6,7 @@ export class LivekitService {
   async createToken(params: {
     roomName: string;
     identity: string;
+    name?: string;
     metadata?: string;
     publish?: boolean;
     subscribe?: boolean;
@@ -22,6 +23,7 @@ export class LivekitService {
     };
     const at = new AccessToken(key, secret, {
       identity: params.identity,
+      name: params.name,
       metadata: params.metadata,
       ttl,
     });

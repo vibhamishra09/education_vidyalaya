@@ -1,5 +1,5 @@
 import { Card, CardContent } from '@/components/ui/card';
-import { LucideIcon, TrendingUp, Star, Book, Coins, CheckCircle, Users } from 'lucide-react';
+import { LucideIcon, TrendingUp, Star, Book, BookOpen, Coins, CheckCircle, Users } from 'lucide-react';
 import type { MetricCard } from '@/types';
 
 interface MetricCardProps {
@@ -10,6 +10,7 @@ const iconMap: Record<string, LucideIcon> = {
   'trending-up': TrendingUp,
   'star': Star,
   'book': Book,
+  'book-open': BookOpen,
   'coins': Coins,
   'check-circle': CheckCircle,
   'users': Users,

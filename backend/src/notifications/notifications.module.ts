@@ -5,9 +5,16 @@ import { NotificationsController } from './notifications.controller';
 import { NotificationsService } from './notifications.service';
 import { PushNotificationService } from './push-notification.service';
 import { NotificationSchedulerService } from './notification-scheduler.service';
+import { TranscriptsModule } from '../transcripts/transcripts.module';
+import { StreaksModule } from '../streaks/streaks.module';
 
 @Module({
-  imports: [ConfigModule, ScheduleModule.forRoot()],
+  imports: [
+    ConfigModule,
+    ScheduleModule.forRoot(),
+    TranscriptsModule,
+    StreaksModule,
+  ],
   controllers: [NotificationsController],
   providers: [
     NotificationsService,
