@@ -618,7 +618,7 @@ export function EditProfileModal({
             
             {socialLinks.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4 border border-dashed rounded-lg">
-                No social links added yet. Click "Add Link" to add your profiles.
+                No social links added yet. Click &quot;Add Link&quot; to add your profiles.
               </p>
             ) : (
               <div className="space-y-3">
