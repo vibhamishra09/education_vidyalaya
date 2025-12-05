@@ -265,6 +265,7 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 					timerEnabled={timerEnabled}
 					formattedTime={formattedTime}
 					minutesLeft={minutesLeft}
+					sessionTitle={sessionData?.title as string | undefined}
 				/>
 		</LiveKitRoom>
 
@@ -301,6 +302,7 @@ function VideoRoomContent({
 	timerEnabled,
 	formattedTime,
 	minutesLeft,
+	sessionTitle,
 }: {
 	showChat: boolean
 	setShowChat: (show: boolean) => void
@@ -313,6 +315,7 @@ function VideoRoomContent({
 	timerEnabled: boolean
 	formattedTime: string
 	minutesLeft: number
+	sessionTitle?: string
 }) {
 	const room = useRoomContext()
 	const params = useParams<{ room: string }>()
@@ -374,9 +377,11 @@ function VideoRoomContent({
 								/>
 							</div>
 							<div className="flex flex-col min-w-0">
-								<span className="text-white font-brand text-xs md:text-sm leading-tight truncate">Webyalaya</span>
+								<span className="text-white font-brand text-xs md:text-sm leading-tight truncate">
+									{sessionTitle || 'Webyalaya'}
+								</span>
 								<span className="text-white/60 text-[10px] md:text-xs truncate">
-									{params.room?.replace('session-', '').replace('studyroom-', '') || 'Video Call'}
+									{sessionTitle ? 'Video Call' : (params.room?.replace('session-', '').replace('studyroom-', '') || 'Video Call')}
 								</span>
 							</div>
 						</div>
