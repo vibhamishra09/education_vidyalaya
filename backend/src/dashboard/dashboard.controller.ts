@@ -1,5 +1,5 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
-import { DashboardService } from './dashboard.service';
+import { DashboardService, SessionActivityDataPoint, WalletActivityDataPoint } from './dashboard.service';
 import { ClerkAuthGuard } from '../common/guards/clerk-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { DashboardQueryDto } from './dto/dashboard-query.dto';
@@ -32,7 +32,7 @@ export class DashboardController {
   async getSessionActivity(
     @CurrentUser() userId: string,
     @Query('days') days?: string,
-  ) {
+  ): Promise<SessionActivityDataPoint[]> {
     const daysNum = days ? parseInt(days, 10) : 30;
     return this.dashboardService.getSessionActivity(userId, daysNum);
   }
@@ -41,7 +41,7 @@ export class DashboardController {
   async getWalletActivity(
     @CurrentUser() userId: string,
     @Query('months') months?: string,
-  ) {
+  ): Promise<WalletActivityDataPoint[]> {
     const monthsNum = months ? parseInt(months, 10) : 6;
     return this.dashboardService.getWalletActivity(userId, monthsNum);
   }

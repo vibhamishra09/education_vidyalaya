@@ -4,14 +4,14 @@ import { SessionStatus } from '@prisma/client';
 import { StreaksService } from '../streaks/streaks.service';
 import { AchievementsService } from '../achievements/achievements.service';
 
-interface SessionActivityDataPoint {
+export interface SessionActivityDataPoint {
   date: string;
   learned: number;
   taught: number;
   studyRooms: number;
 }
 
-interface WalletActivityDataPoint {
+export interface WalletActivityDataPoint {
   month: string;
   earned: number;
   spent: number;
@@ -518,16 +518,16 @@ export class DashboardService {
     // Get all payments in the date range
     const payments = await this.prisma.payment.findMany({
       where: {
-        OR: [{ paidById: user.id }, { receivedById: user.id }],
+        OR: [{ madeById: user.id }, { receivedById: user.id }],
         createdAt: {
           gte: startDate,
           lte: endDate,
         },
       },
       select: {
-        amount: true,
+        amountMade: true,
         amountReceived: true,
-        paidById: true,
+        madeById: true,
         receivedById: true,
         paymentStatus: true,
         createdAt: true,
@@ -575,8 +575,8 @@ export class DashboardService {
         ) {
           monthData.earned += Number(payment.amountReceived) || 0;
         }
-        if (payment.paidById === user.id) {
-          monthData.spent += Number(payment.amount) || 0;
+        if (payment.madeById === user.id) {
+          monthData.spent += Number(payment.amountMade) || 0;
         }
       }
     }
