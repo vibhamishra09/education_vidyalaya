@@ -230,6 +230,7 @@ export interface PublicUser {
 }
 
 export interface UpdateUserDto {
+  name?: string;
   username?: string;
   bio?: string;
   avatar?: string;

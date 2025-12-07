@@ -143,6 +143,7 @@ export class UsersService {
 
   async updateUserProfile(userId: string, updateDto: UpdateUserDto) {
     const {
+      name,
       bio,
       avatar,
       location,
@@ -181,10 +182,11 @@ export class UsersService {
       }
     }
 
-    // Update user bio, avatar, location, school, username, hourly rate, and social links
+    // Update user name, bio, avatar, location, school, username, hourly rate, and social links
     const user = await this.prisma.user.update({
       where: { clerkId: userId },
       data: {
+        name: name !== undefined ? name : undefined,
         bio,
         avatar,
         location,
