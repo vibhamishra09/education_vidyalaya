@@ -2,7 +2,6 @@ import { Suspense } from "react";
 import type { Metadata } from "next";
 import { NotificationsClient } from "./notifications-client";
 
-<<<<<<< HEAD
 export const metadata: Metadata = {
   title: "Notifications",
   description: "View and manage your Webyalaya notifications. Stay updated on session requests, reviews, and more.",

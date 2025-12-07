@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { HomeClient } from "./home-client";
 
-<<<<<<< HEAD
 export const metadata: Metadata = {
   title: "Webyalaya - Peer to Peer Learning Platform | Learn & Teach Together",
   description: "Join Webyalaya, the collaborative learning platform where you can connect with peers, host study rooms, attend live sessions, and earn mAYA coins while learning and teaching skills.",
