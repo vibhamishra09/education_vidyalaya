@@ -31,6 +31,33 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, errorMessage: st
   ]);
 }
 
+// Helper function to retry a promise with exponential backoff
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  maxRetries: number,
+  initialDelayMs: number,
+  errorMessage: string
+): Promise<T> {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      console.log(`⚠️ Attempt ${attempt + 1}/${maxRetries + 1} failed:`, lastError.message);
+      
+      if (attempt < maxRetries) {
+        const delay = initialDelayMs * Math.pow(2, attempt);
+        console.log(`⏳ Retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+  
+  throw new Error(errorMessage);
+}
+
 export function usePushNotifications(): UsePushNotificationsReturn {
   const { getToken, isLoaded, isSignedIn } = useAuth();
   const [isSupported] = useState(() => isPushNotificationSupported());
@@ -128,17 +155,27 @@ export function usePushNotifications(): UsePushNotificationsReturn {
       }
       console.log('✅ Auth token obtained');
 
-      // Step 4: Get VAPID public key from backend
+      // Step 4: Get VAPID public key from backend (with retry for mobile networks)
       console.log('🔑 Fetching VAPID public key...');
-      const vapidResponse = await withTimeout(
-        apiClient.get<{ publicKey: string }>('/api/notifications/vapid-public-key', {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        10000, // 10 second timeout
-        'Failed to fetch VAPID key. Server is not responding.'
+      const vapidResponse = await withRetry(
+        () => withTimeout(
+          apiClient.get<{ publicKey: string }>('/api/notifications/vapid-public-key', {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          20000, // 20 second timeout (increased for mobile)
+          'Server request timed out'
+        ),
+        2, // 2 retries (3 total attempts)
+        1000, // 1 second initial delay
+        'Failed to fetch VAPID key. Please check your internet connection and try again.'
       );
       
       const vapidPublicKey = vapidResponse.data.publicKey;
+      
+      if (!vapidPublicKey) {
+        throw new Error('VAPID key not configured on server. Please contact support.');
+      }
+      
       console.log('✅ VAPID public key received:', vapidPublicKey.substring(0, 20) + '...');
 
       // Step 5: Subscribe to push notifications
@@ -154,16 +191,21 @@ export function usePushNotifications(): UsePushNotificationsReturn {
       }
       console.log('✅ Push subscription created');
 
-      // Step 6: Send subscription to backend
+      // Step 6: Send subscription to backend (with retry for mobile networks)
       console.log('💾 Sending subscription to backend...');
-      await withTimeout(
-        apiClient.post(
-          '/api/notifications/push/subscribe',
-          { subscription: subscription.toJSON() },
-          { headers: { Authorization: `Bearer ${token}` } }
+      await withRetry(
+        () => withTimeout(
+          apiClient.post(
+            '/api/notifications/push/subscribe',
+            { subscription: subscription.toJSON() },
+            { headers: { Authorization: `Bearer ${token}` } }
+          ),
+          20000, // 20 second timeout (increased for mobile)
+          'Server request timed out'
         ),
-        10000, // 10 second timeout
-        'Failed to save subscription to server. Please try again.'
+        2, // 2 retries (3 total attempts)
+        1000, // 1 second initial delay
+        'Failed to save subscription to server. Please check your connection and try again.'
       );
       
       console.log('✅ Subscription saved to backend');
