@@ -16,9 +16,10 @@ import { WalletTab } from "@/components/profile/wallet-tab";
 import { SessionsTab } from "@/components/profile/sessions-tab";
 import { AvailabilitySettings } from "@/components/profile/availability-settings";
 import { AchievementShowcaseConnected } from "@/components/achievements/achievement-showcase-connected";
-import { Edit, Star, Coins, Loader2 } from "lucide-react";
+import { Edit, Star, Coins, Loader2, Users } from "lucide-react";
 import { SocialLinksDisplay } from "@/components/ui/social-links-display";
 import { useProfileData } from "@/hooks/use-profile-data";
+import { useTabPersistence } from "@/hooks/use-local-storage";
 import { formatMaya } from "@/lib/utils/coin-format";
 import {
   Select,
@@ -37,6 +38,8 @@ const TAB_OPTIONS: { label: string; value: TabKey }[] = [
   { label: "Reviews", value: "reviews" },
 ];
 
+const PROFILE_TABS = ["about", "sessions", "wallet", "reviews"] as const;
+
 const isTabKey = (value: string): value is TabKey =>
   TAB_OPTIONS.some((tab) => tab.value === value);
 
@@ -44,7 +47,13 @@ function ProfileContent() {
   const searchParams = useSearchParams();
   const { isLoaded } = useAuth();
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<TabKey>("about");
+  
+  // Use tab persistence hook for localStorage sync
+  const [activeTab, setActiveTab] = useTabPersistence<TabKey>(
+    "profile_tab",
+    "about",
+    PROFILE_TABS
+  );
 
   // Use React Query hook for optimized data fetching
   const {
@@ -56,16 +65,20 @@ function ProfileContent() {
 
   const currentUser = profileData?.user || null;
   const userReviews = profileData?.reviews || [];
-  const avgRating = profileData?.avgRating || 0;
+  const avgRating = currentUser?.publicStats?.avgRating ?? profileData?.avgRating ?? 0;
+  const reviewCount = currentUser?.publicStats?.reviewCount ?? userReviews.length;
+  const sessionsTaught = currentUser?.publicStats?.sessionsTaught ?? 0;
+  const sessionsAttendedAsLearner = currentUser?.publicStats?.sessionsAttendedAsLearner ?? 0;
+  const totalSessions = sessionsTaught + sessionsAttendedAsLearner;
   const error = queryError ? 'Failed to load profile data' : null;
 
-  // Handle URL parameters for tab navigation
+  // Handle URL parameters for tab navigation (URL takes priority over localStorage)
   useEffect(() => {
     const tab = searchParams.get("tab");
     if (tab && isTabKey(tab)) {
       setActiveTab(tab);
     }
-  }, [searchParams]);
+  }, [searchParams, setActiveTab]);
 
   const handleTabChange = (tab: TabKey) => {
     setActiveTab(tab);
@@ -80,7 +93,9 @@ function ProfileContent() {
   if (!isLoaded) {
     return (
       <div className="min-h-screen flex flex-col">
-        <Navigation />
+        <Suspense fallback={null}>
+          <Navigation />
+        </Suspense>
         <main className="flex-1 container mx-auto px-4 py-8 pb-20 md:pb-8">
           <div className="flex items-center justify-center min-h-[400px]">
             <div className="flex items-center gap-2">
@@ -97,7 +112,9 @@ function ProfileContent() {
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col">
-        <Navigation />
+        <Suspense fallback={null}>
+          <Navigation />
+        </Suspense>
         <main className="flex-1 container mx-auto px-4 py-8 pb-20 md:pb-8">
           <div className="flex items-center justify-center min-h-[400px]">
             <div className="flex items-center gap-2">
@@ -114,7 +131,9 @@ function ProfileContent() {
   if (error || !currentUser) {
     return (
       <div className="min-h-screen flex flex-col">
-        <Navigation />
+        <Suspense fallback={null}>
+          <Navigation />
+        </Suspense>
         <main className="flex-1 container mx-auto px-4 py-8 pb-20 md:pb-8">
           <div className="text-center">
             <h1 className="text-2xl font-bold">
@@ -129,7 +148,9 @@ function ProfileContent() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <Navigation />
+      <Suspense fallback={null}>
+        <Navigation />
+      </Suspense>
 
       <main className="flex-1 container mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-8 pb-20 md:pb-8">
         {/* Profile Header */}
@@ -155,14 +176,22 @@ function ProfileContent() {
                     </p>
 
                     <div className="flex flex-col md:flex-row md:flex-wrap md:items-center gap-3 md:gap-4 mt-3">
-                      <div className="flex items-center justify-center md:justify-start">
+                      <div className="flex items-center justify-center md:justify-start gap-1">
                         <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
-                        <span className="ml-1 font-medium">
+                        <span className="font-medium">
                           {avgRating.toFixed(1)}
                         </span>
-                        <span className="text-sm text-muted-foreground ml-1">
-                          ({userReviews.length} reviews)
+                        <span className="text-sm text-muted-foreground">
+                          ({reviewCount} reviews)
                         </span>
+                      </div>
+
+                      <div className="flex items-center justify-center md:justify-start gap-1 text-muted-foreground">
+                        <Users className="h-5 w-5" />
+                        <span className="font-medium text-foreground">
+                          {totalSessions}
+                        </span>
+                        <span className="text-sm">sessions</span>
                       </div>
 
                       <div className="flex items-center justify-center md:justify-start">

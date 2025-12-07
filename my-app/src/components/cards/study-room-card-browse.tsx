@@ -5,11 +5,10 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Users, Play, Calendar, Coins } from "lucide-react";
+import { Users, Play, Calendar, Star } from "lucide-react";
 import { motion } from "framer-motion";
 import { StudyRoomCard, SessionStatus } from "@/types/api.types";
 import { getRelativeTimeString } from "@/lib/utils/date-time";
-import { formatMaya } from "@/lib/utils/coin-format";
 import { ShareButton } from "@/components/share/share-button";
 
 interface StudyRoomCardBrowseProps {
@@ -87,28 +86,38 @@ export function StudyRoomCardBrowse({ studyRoom }: StudyRoomCardBrowseProps) {
                   {studyRoom.participantCount || 0}/{studyRoom.maxParticipants}
                 </span>
               </div>
-              <div className="flex items-center gap-2">
-                <Avatar className="h-6 w-6">
-                  <AvatarImage src={studyRoom.createdBy.avatar} />
-                  <AvatarFallback>
-                    {studyRoom.createdBy.name.charAt(0)}
-                  </AvatarFallback>
-                </Avatar>
-                <span className="text-muted-foreground text-xs truncate max-w-[100px]">
-                  {studyRoom.createdBy.name}
-                </span>
+              <div className="flex flex-col items-end gap-1">
+                <div className="flex items-center gap-2">
+                  <Avatar className="h-6 w-6">
+                    <AvatarImage src={studyRoom.createdBy.avatar} />
+                    <AvatarFallback>
+                      {studyRoom.createdBy.name.charAt(0)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="text-muted-foreground text-xs truncate max-w-[100px]">
+                    {studyRoom.createdBy.name}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-xs">
+                  {typeof studyRoom.hostAvgRating === "number" && (studyRoom.hostReviewCount ?? 0) > 0 ? (
+                    <div className="flex items-center gap-1 text-amber-600 font-semibold">
+                      <Star className="h-3.5 w-3.5 fill-current" />
+                      <span>{studyRoom.hostAvgRating.toFixed(1)}</span>
+                      <span className="text-[11px] text-muted-foreground">
+                        ({studyRoom.hostReviewCount})
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-muted-foreground">No reviews</span>
+                  )}
+                  {typeof studyRoom.hostTotalSessions === "number" && (
+                    <span className="text-muted-foreground">
+                      • {studyRoom.hostTotalSessions} sessions
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
-
-            {/* Joining Fee */}
-            {studyRoom.joiningFee > 0 && (
-              <div className="flex items-center gap-2 text-sm">
-                <Coins className="h-4 w-4 text-yellow-600" />
-                <span className="text-yellow-600 font-medium">
-                  {formatMaya(studyRoom.joiningFee)} <span className="text-xs">m</span>AYA to join
-                </span>
-              </div>
-            )}
 
             <div className="flex gap-2">
               <ShareButton

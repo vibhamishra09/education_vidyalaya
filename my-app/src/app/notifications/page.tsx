@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, Suspense } from "react";
 import Link from "next/link";
 import { Navigation } from "@/components/layout/navigation";
 import { Footer } from "@/components/layout/footer";
@@ -16,7 +16,9 @@ import type { Notification } from "@/types/api.types";
 export default function NotificationsPage() {
   return (
     <div className="min-h-screen flex flex-col">
-      <Navigation />
+      <Suspense fallback={null}>
+        <Navigation />
+      </Suspense>
       <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10">
         <NotificationsContent />
       </main>

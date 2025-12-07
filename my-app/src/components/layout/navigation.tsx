@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
+import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { useUser, useAuth, SignInButton, SignUpButton } from "@clerk/nextjs";
 import { NotificationDropdown } from "./notification-dropdown";
@@ -16,6 +17,13 @@ export function Navigation() {
   const { signOut } = useAuth();
   const { data: currentUserData, isLoading: isUserLoading } = useCurrentUser();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  // Build redirect URL for sign-in/sign-up to return users to current page
+  const redirectUrl = useMemo(() => {
+    const search = searchParams.toString();
+    return search ? `${pathname}?${search}` : pathname;
+  }, [pathname, searchParams]);
 
   const coinsValue = currentUserData?.user?.coins;
   const parsedCoins =
@@ -112,12 +120,12 @@ export function Navigation() {
                   How it works
                 </Link>
                 <div className="flex items-center gap-2">
-                  <SignInButton mode="modal">
+                  <SignInButton mode="modal" forceRedirectUrl={redirectUrl}>
                     <Button variant="ghost" size="sm">
                       Sign In
                     </Button>
                   </SignInButton>
-                  <SignUpButton mode="modal">
+                  <SignUpButton mode="modal" forceRedirectUrl={redirectUrl}>
                     <Button variant="outline" size="sm">
                       Sign Up
                     </Button>
@@ -137,12 +145,12 @@ export function Navigation() {
             </div>
           ) : (
             <div className="md:hidden flex items-center gap-2">
-              <SignInButton mode="modal">
+              <SignInButton mode="modal" forceRedirectUrl={redirectUrl}>
                 <Button variant="ghost" size="sm">
                   Sign In
                 </Button>
               </SignInButton>
-              <SignUpButton mode="modal">
+              <SignUpButton mode="modal" forceRedirectUrl={redirectUrl}>
                 <Button variant="outline" size="sm">
                   Sign Up
                 </Button>

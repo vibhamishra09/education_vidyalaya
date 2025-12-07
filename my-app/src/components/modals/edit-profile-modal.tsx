@@ -233,6 +233,7 @@ export function EditProfileModal({
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   
   // Form state
+  const [name, setName] = useState(user.name || "");
   const [avatar, setAvatar] = useState(user.avatar || "");
   const [username, setUsername] = useState(user.username || "");
   const [bio, setBio] = useState(user.bio || "");
@@ -254,6 +255,7 @@ export function EditProfileModal({
 
   // Reset form when user changes
   useEffect(() => {
+    setName(user.name || "");
     setAvatar(user.avatar || "");
     setUsername(user.username || "");
     setBio(user.bio || "");
@@ -428,6 +430,7 @@ export function EditProfileModal({
         }));
       
       const updateData: UpdateUserDto = {
+        name: name.trim() || undefined,
         avatar: avatar || undefined,
         username: trimmedUsername || undefined,
         bio: bio.trim() || undefined,
@@ -493,6 +496,21 @@ export function EditProfileModal({
             {uploadingAvatar && (
               <p className="text-xs text-muted-foreground">Uploading image...</p>
             )}
+          </div>
+
+          {/* Name */}
+          <div className="space-y-2">
+            <Label htmlFor="name">Display Name</Label>
+            <Input
+              id="name"
+              placeholder="Your name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              maxLength={100}
+            />
+            <p className="text-xs text-muted-foreground">
+              This is how other users will see your name
+            </p>
           </div>
 
           {/* Username */}

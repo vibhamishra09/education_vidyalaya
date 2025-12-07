@@ -1,6 +1,8 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { BrowseService } from './browse.service';
 import { BrowseQueryDto } from './dto/browse-query.dto';
+import { ClerkAuthGuard } from '../common/guards/clerk-auth.guard';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 
 @Controller('api/browse')
 export class BrowseController {
@@ -14,6 +16,22 @@ export class BrowseController {
       query.skills,
       query.page || 1,
       query.limit || 12,
+    );
+  }
+
+  /**
+   * Get personalized recommendations for the authenticated user
+   * based on their "want to learn" skills.
+   */
+  @Get('recommendations')
+  @UseGuards(ClerkAuthGuard)
+  async getRecommendations(
+    @CurrentUser() userId: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.browseService.getRecommendations(
+      userId,
+      limit ? parseInt(limit, 10) : 8,
     );
   }
 }

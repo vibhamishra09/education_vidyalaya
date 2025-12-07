@@ -230,6 +230,7 @@ export interface PublicUser {
 }
 
 export interface UpdateUserDto {
+  name?: string;
   username?: string;
   bio?: string;
   avatar?: string;
@@ -273,8 +274,9 @@ export interface StudyRoomCard {
   createdBy: PublicUser;
   skills: (string | Skill)[];
   gmeetLink?: string;
-  hostAvgRating?: number;
+  hostAvgRating?: number | null;
   hostReviewCount?: number;
+  hostTotalSessions?: number;
 }
 
 export interface StudyRoom extends StudyRoomCard {
