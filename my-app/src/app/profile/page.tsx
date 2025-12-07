@@ -19,6 +19,7 @@ import { AchievementShowcaseConnected } from "@/components/achievements/achievem
 import { Edit, Star, Coins, Loader2, Users } from "lucide-react";
 import { SocialLinksDisplay } from "@/components/ui/social-links-display";
 import { useProfileData } from "@/hooks/use-profile-data";
+import { useTabPersistence } from "@/hooks/use-local-storage";
 import { formatMaya } from "@/lib/utils/coin-format";
 import {
   Select,
@@ -37,6 +38,8 @@ const TAB_OPTIONS: { label: string; value: TabKey }[] = [
   { label: "Reviews", value: "reviews" },
 ];
 
+const PROFILE_TABS = ["about", "sessions", "wallet", "reviews"] as const;
+
 const isTabKey = (value: string): value is TabKey =>
   TAB_OPTIONS.some((tab) => tab.value === value);
 
@@ -44,7 +47,13 @@ function ProfileContent() {
   const searchParams = useSearchParams();
   const { isLoaded } = useAuth();
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<TabKey>("about");
+  
+  // Use tab persistence hook for localStorage sync
+  const [activeTab, setActiveTab] = useTabPersistence<TabKey>(
+    "profile_tab",
+    "about",
+    PROFILE_TABS
+  );
 
   // Use React Query hook for optimized data fetching
   const {
@@ -63,13 +72,13 @@ function ProfileContent() {
   const totalSessions = sessionsTaught + sessionsAttendedAsLearner;
   const error = queryError ? 'Failed to load profile data' : null;
 
-  // Handle URL parameters for tab navigation
+  // Handle URL parameters for tab navigation (URL takes priority over localStorage)
   useEffect(() => {
     const tab = searchParams.get("tab");
     if (tab && isTabKey(tab)) {
       setActiveTab(tab);
     }
-  }, [searchParams]);
+  }, [searchParams, setActiveTab]);
 
   const handleTabChange = (tab: TabKey) => {
     setActiveTab(tab);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Navigation } from "@/components/layout/navigation";
 import { Footer } from "@/components/layout/footer";
@@ -19,26 +19,50 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ArrowLeft, Users, Clock, Loader2, Coins, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Users, Clock, Loader2, Coins, CheckCircle2, RotateCcw } from "lucide-react";
 import { studyRoomsApi } from "@/lib/api";
 import { CreateStudyRoomDto, StudyRoom } from "@/types/api.types";
 import { ShareButton } from "@/components/share/share-button";
+import { useFormPersistence } from "@/hooks/use-local-storage";
 import Link from "next/link";
+
+interface StudyRoomFormData {
+  title: string;
+  description: string;
+  skills: string[];
+  date: string;
+  time: string;
+  duration: string;
+  maxParticipants: string;
+  joiningFee: string;
+  gmeetLink: string;
+}
+
+const initialFormData: StudyRoomFormData = {
+  title: "",
+  description: "",
+  skills: [],
+  date: "",
+  time: "",
+  duration: "60",
+  maxParticipants: "10",
+  joiningFee: "0",
+  gmeetLink: "",
+};
 
 export default function CreateStudyRoomPage() {
   const router = useRouter();
 
-  const [formData, setFormData] = useState({
-    title: "",
-    description: "",
-    skills: [] as string[],
-    date: "",
-    time: "",
-    duration: "60",
-    maxParticipants: "10",
-    joiningFee: "0",
-    gmeetLink: "",
-  });
+  // Use form persistence hook for automatic localStorage sync
+  const { formData, setFormData, updateField, clearForm, hasStoredData } = useFormPersistence<StudyRoomFormData>(
+    "create_study_room",
+    initialFormData,
+    {
+      debounceMs: 300,
+      expiresIn: 24 * 60 * 60 * 1000, // 24 hours
+      excludeFields: ["date", "time"], // Don't persist date/time as they can become stale
+    }
+  );
 
   const [isInstantRoom, setIsInstantRoom] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -58,7 +82,13 @@ export default function CreateStudyRoomPage() {
         time: timeStr,
       }));
     }
-  }, [isInstantRoom]);
+  }, [isInstantRoom, setFormData]);
+
+  // Handle clearing form and localStorage
+  const handleClearForm = useCallback(() => {
+    clearForm();
+    setFormData(initialFormData);
+  }, [clearForm, setFormData]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,6 +114,9 @@ export default function CreateStudyRoomPage() {
       };
       
       const createdRoom = await studyRoomsApi.createStudyRoom(createData);
+      
+      // Clear form from localStorage on successful submission
+      clearForm();
       
       // Success - show success dialog with share link
       setCreatedRoom(createdRoom);
@@ -125,6 +158,27 @@ export default function CreateStudyRoomPage() {
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-6">
+                {/* Restore Draft Notice */}
+                {hasStoredData && (
+                  <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-blue-600 dark:text-blue-400">
+                        📝 Draft restored from your previous session
+                      </span>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleClearForm}
+                      className="text-blue-600 dark:text-blue-400 hover:text-blue-800"
+                    >
+                      <RotateCcw className="h-4 w-4 mr-1" />
+                      Clear
+                    </Button>
+                  </div>
+                )}
+
                 {/* Title */}
                 <div className="space-y-2">
                   <Label htmlFor="title">Room Title *</Label>
@@ -133,9 +187,7 @@ export default function CreateStudyRoomPage() {
                     type="text"
                     placeholder="e.g., React Hooks Deep Dive"
                     value={formData.title}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, title: e.target.value }))
-                    }
+                    onChange={(e) => updateField("title", e.target.value)}
                     required
                   />
                 </div>
@@ -147,12 +199,7 @@ export default function CreateStudyRoomPage() {
                     id="description"
                     placeholder="What will you be teaching in this session?"
                     value={formData.description}
-                    onChange={(e) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        description: e.target.value,
-                      }))
-                    }
+                    onChange={(e) => updateField("description", e.target.value)}
                     rows={4}
                   />
                 </div>
@@ -163,9 +210,7 @@ export default function CreateStudyRoomPage() {
                     label="Topics / Skills *"
                     placeholder="Type skills separated by commas (e.g., JavaScript, React, Node.js)..."
                     selectedSkills={formData.skills}
-                    onSkillsChange={(skills) =>
-                      setFormData((prev) => ({ ...prev, skills }))
-                    }
+                    onSkillsChange={(skills) => updateField("skills", skills)}
                     maxSkills={20}
                   />
                   {formData.skills.length === 0 && (
@@ -200,9 +245,7 @@ export default function CreateStudyRoomPage() {
                       id="date"
                       type="date"
                       value={formData.date}
-                      onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, date: e.target.value }))
-                      }
+                      onChange={(e) => updateField("date", e.target.value)}
                       required={!isInstantRoom}
                       disabled={isInstantRoom}
                       min={new Date().toISOString().split("T")[0]}
@@ -214,9 +257,7 @@ export default function CreateStudyRoomPage() {
                       id="time"
                       type="time"
                       value={formData.time}
-                      onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, time: e.target.value }))
-                      }
+                      onChange={(e) => updateField("time", e.target.value)}
                       required={!isInstantRoom}
                       disabled={isInstantRoom}
                     />
@@ -236,12 +277,7 @@ export default function CreateStudyRoomPage() {
                         max="240"
                         step="1"
                         value={formData.duration}
-                        onChange={(e) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            duration: e.target.value,
-                          }))
-                        }
+                        onChange={(e) => updateField("duration", e.target.value)}
                         className="pl-10"
                         required
                       />
@@ -253,12 +289,7 @@ export default function CreateStudyRoomPage() {
                           type="button"
                           variant={formData.duration === String(mins) ? "default" : "outline"}
                           size="sm"
-                          onClick={() =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              duration: String(mins),
-                            }))
-                          }
+                          onClick={() => updateField("duration", String(mins))}
                           className="text-xs"
                         >
                           {mins} min
@@ -281,18 +312,12 @@ export default function CreateStudyRoomPage() {
                           const value = e.target.value;
                           // Allow empty string for typing, but clamp final value
                           if (value === "") {
-                            setFormData((prev) => ({
-                              ...prev,
-                              maxParticipants: value,
-                            }));
+                            updateField("maxParticipants", value);
                           } else {
                             const numValue = parseInt(value, 10);
                             // Clamp value between 2 and 10
                             const clampedValue = Math.min(10, Math.max(2, numValue));
-                            setFormData((prev) => ({
-                              ...prev,
-                              maxParticipants: String(clampedValue),
-                            }));
+                            updateField("maxParticipants", String(clampedValue));
                           }
                         }}
                         className="pl-10"
@@ -317,12 +342,7 @@ export default function CreateStudyRoomPage() {
                       max="100000"
                       step="1"
                       value={formData.joiningFee}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          joiningFee: e.target.value,
-                        }))
-                      }
+                      onChange={(e) => updateField("joiningFee", e.target.value)}
                       className="pl-10"
                       required
                     />
@@ -340,12 +360,7 @@ export default function CreateStudyRoomPage() {
                     type="url"
                     placeholder="https://meet.google.com/abc-defg-hij"
                     value={formData.gmeetLink}
-                    onChange={(e) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        gmeetLink: e.target.value,
-                      }))
-                    }
+                    onChange={(e) => updateField("gmeetLink", e.target.value)}
                   />
                   <p className="text-sm text-muted-foreground">
                     Create a Google Meet and paste the link here. Participants will use this to join the session.

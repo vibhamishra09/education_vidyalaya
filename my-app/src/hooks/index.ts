@@ -8,3 +8,4 @@ export * from './use-notifications';
 export * from './use-push-notifications';
 export * from './use-browse';
 export * from './use-dashboard';
+export * from './use-local-storage';
