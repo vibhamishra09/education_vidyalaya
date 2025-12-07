@@ -6,11 +6,12 @@ import { Navigation } from "@/components/layout/navigation";
 import { Footer } from "@/components/layout/footer";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { MetricCardComponent } from "@/components/cards/metric-card";
 import { StudyRoomCard } from "@/components/cards/study-room-card";
 import { ReviewCardComponent } from "@/components/cards/review-card";
+import { ProfileStatsChart } from "@/components/stats/profile-stats-chart";
 import { ArrowLeft, Star, MessageCircle, Users } from "lucide-react";
 import { SocialLinksDisplay } from "@/components/ui/social-links-display";
 import { usersApi, reviewsApi, studyRoomsApi } from "@/lib/api";
@@ -286,6 +287,16 @@ export default function PublicProfilePage({
           ))}
         </div>
 
+        {/* Performance Overview Chart */}
+        <div className="mb-6 sm:mb-8">
+          <ProfileStatsChart
+            reviews={userReviews}
+            avgRating={rating}
+            sessionsTaught={sessionsTaught}
+            sessionsAttended={sessionsAttendedAsLearner}
+          />
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
           {/* Upcoming Study Rooms */}
           <div>
@@ -323,42 +334,47 @@ export default function PublicProfilePage({
           </div>
 
           {/* Recent Reviews */}
-          <div>
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 mb-3 sm:mb-4">
-              <h2 className="text-xl sm:text-2xl font-semibold">Recent Reviews</h2>
-              {userReviews.length > 3 && (
-                <Button variant="ghost" size="sm" className="w-full sm:w-auto">
-                  View All
-                </Button>
-              )}
-            </div>
-
-            <div className="space-y-3 sm:space-y-4">
-              {userReviews.length === 0 ? (
-                <Card>
-                  <CardContent className="pt-4 sm:pt-6 text-center text-muted-foreground text-sm sm:text-base font-tagline">
+          <Card>
+            <CardHeader>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
+                <CardTitle className="flex items-center gap-2">
+                  <Star className="h-5 w-5 text-amber-500" />
+                  Recent Reviews ({userReviews.length})
+                </CardTitle>
+                {userReviews.length > 3 && (
+                  <Button variant="ghost" size="sm" className="w-full sm:w-auto">
+                    View All
+                  </Button>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3 sm:space-y-4">
+                {userReviews.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground text-sm sm:text-base font-tagline">
+                    <Star className="h-12 w-12 mx-auto mb-4 opacity-30" />
                     No reviews yet
-                  </CardContent>
-                </Card>
-              ) : (
-                userReviews.slice(0, 3).map((review) => (
-                  <ReviewCardComponent 
-                    key={review.id} 
-                    review={{
-                      id: review.id,
-                      rating: review.rating,
-                      review: review.review,
-                      reviewer: {
-                        id: review.reviewer.id,
-                        name: review.reviewer.name,
-                        avatar: review.reviewer.avatar,
-                      },
-                    }} 
-                  />
-                ))
-              )}
-            </div>
-          </div>
+                  </div>
+                ) : (
+                  userReviews.slice(0, 3).map((review) => (
+                    <ReviewCardComponent 
+                      key={review.id} 
+                      review={{
+                        id: review.id,
+                        rating: review.rating,
+                        review: review.review,
+                        reviewer: {
+                          id: review.reviewer.id,
+                          name: review.reviewer.name,
+                          avatar: review.reviewer.avatar,
+                        },
+                      }} 
+                    />
+                  ))
+                )}
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </main>
 
