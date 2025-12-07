@@ -338,7 +338,7 @@ export default function StudyRoomPage({
                 {canJoinVideoCall ? (
                   <Link href={`/rooms/${liveRoomName}`}>
                     <Button className="bg-blue-600 hover:bg-blue-700">
-                      {room.sessionStatus === SessionStatus.UPCOMING ? 'Start Video Call' : 'Join Live Session'}
+                      Join Study Room
                     </Button>
                   </Link>
                 ) : (
@@ -347,7 +347,7 @@ export default function StudyRoomPage({
                       className="bg-blue-600 hover:bg-blue-700" 
                       disabled
                     >
-                      {room.sessionStatus === SessionStatus.UPCOMING ? 'Start Video Call' : 'Join Live Session'}
+                      Join Study Room
                     </Button>
                     <p className="text-sm text-muted-foreground">
                       Video call will be available 5 minutes before the scheduled start time.

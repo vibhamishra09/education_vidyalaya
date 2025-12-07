@@ -19,8 +19,10 @@ export function MessageList({ messages }: { messages: Message[] }) {
 	const containerRef = useRef<HTMLDivElement | null>(null)
 	
 	useEffect(() => {
-		// Scroll to bottom when new messages arrive
-		bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+		// Scroll to bottom within the chat container only (not the page)
+		if (containerRef.current) {
+			containerRef.current.scrollTop = containerRef.current.scrollHeight
+		}
 	}, [messages])
 
 	const formatTime = (dateString: string) => {
