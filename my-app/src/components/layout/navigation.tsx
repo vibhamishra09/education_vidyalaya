@@ -3,27 +3,63 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useMemo } from "react";
+import { Suspense, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { useUser, useAuth, SignInButton, SignUpButton } from "@clerk/nextjs";
 import { NotificationDropdown } from "./notification-dropdown";
 import { UserDropdown } from "./user-dropdown";
 import { CoinDropdown } from "./coin-dropdown";
 import { useCurrentUser } from "@/hooks/use-users";
-// import { isAuthError } from "@/lib/utils/error-handling";
+
+// Separate component for search params dependent functionality
+function AuthButtons({ pathname }: { pathname: string }) {
+  const searchParams = useSearchParams();
+  
+  // Build redirect URL for sign-in/sign-up to return users to current page
+  const redirectUrl = useMemo(() => {
+    const search = searchParams.toString();
+    return search ? `${pathname}?${search}` : pathname;
+  }, [pathname, searchParams]);
+
+  return (
+    <div className="flex items-center gap-2">
+      <SignInButton mode="modal" forceRedirectUrl={redirectUrl}>
+        <Button variant="ghost" size="sm">
+          Sign In
+        </Button>
+      </SignInButton>
+      <SignUpButton mode="modal" forceRedirectUrl={redirectUrl}>
+        <Button variant="outline" size="sm">
+          Sign Up
+        </Button>
+      </SignUpButton>
+    </div>
+  );
+}
+
+// Fallback auth buttons without redirect URL
+function AuthButtonsFallback() {
+  return (
+    <div className="flex items-center gap-2">
+      <SignInButton mode="modal">
+        <Button variant="ghost" size="sm">
+          Sign In
+        </Button>
+      </SignInButton>
+      <SignUpButton mode="modal">
+        <Button variant="outline" size="sm">
+          Sign Up
+        </Button>
+      </SignUpButton>
+    </div>
+  );
+}
 
 export function Navigation() {
   const { isSignedIn, user } = useUser();
   const { signOut } = useAuth();
   const { data: currentUserData, isLoading: isUserLoading } = useCurrentUser();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
-
-  // Build redirect URL for sign-in/sign-up to return users to current page
-  const redirectUrl = useMemo(() => {
-    const search = searchParams.toString();
-    return search ? `${pathname}?${search}` : pathname;
-  }, [pathname, searchParams]);
 
   const coinsValue = currentUserData?.user?.coins;
   const parsedCoins =
@@ -34,9 +70,6 @@ export function Navigation() {
     typeof parsedCoins === "number" && !Number.isNaN(parsedCoins)
       ? parsedCoins
       : 0;
-  
-  // Check if the error is an authentication error
-  // const isAuthErrorOccurred = isAuthError(userError);
 
   return (
     <nav className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -119,18 +152,9 @@ export function Navigation() {
                 >
                   How it works
                 </Link>
-                <div className="flex items-center gap-2">
-                  <SignInButton mode="modal" forceRedirectUrl={redirectUrl}>
-                    <Button variant="ghost" size="sm">
-                      Sign In
-                    </Button>
-                  </SignInButton>
-                  <SignUpButton mode="modal" forceRedirectUrl={redirectUrl}>
-                    <Button variant="outline" size="sm">
-                      Sign Up
-                    </Button>
-                  </SignUpButton>
-                </div>
+                <Suspense fallback={<AuthButtonsFallback />}>
+                  <AuthButtons pathname={pathname} />
+                </Suspense>
               </>
             )}
           </div>
@@ -144,17 +168,10 @@ export function Navigation() {
               <NotificationDropdown />
             </div>
           ) : (
-            <div className="md:hidden flex items-center gap-2">
-              <SignInButton mode="modal" forceRedirectUrl={redirectUrl}>
-                <Button variant="ghost" size="sm">
-                  Sign In
-                </Button>
-              </SignInButton>
-              <SignUpButton mode="modal" forceRedirectUrl={redirectUrl}>
-                <Button variant="outline" size="sm">
-                  Sign Up
-                </Button>
-              </SignUpButton>
+            <div className="md:hidden">
+              <Suspense fallback={<AuthButtonsFallback />}>
+                <AuthButtons pathname={pathname} />
+              </Suspense>
             </div>
           )}
         </div>

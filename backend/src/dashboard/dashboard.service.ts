@@ -4,6 +4,20 @@ import { SessionStatus } from '@prisma/client';
 import { StreaksService } from '../streaks/streaks.service';
 import { AchievementsService } from '../achievements/achievements.service';
 
+interface SessionActivityDataPoint {
+  date: string;
+  learned: number;
+  taught: number;
+  studyRooms: number;
+}
+
+interface WalletActivityDataPoint {
+  month: string;
+  earned: number;
+  spent: number;
+  net: number;
+}
+
 @Injectable()
 export class DashboardService {
   constructor(
@@ -369,5 +383,213 @@ export class DashboardService {
     }
 
     return data;
+  }
+
+  /**
+   * Get session activity data for charts (last N days)
+   */
+  async getSessionActivity(
+    userId: string,
+    days: number = 30,
+  ): Promise<SessionActivityDataPoint[]> {
+    const user = await this.prisma.user.findUnique({
+      where: { clerkId: userId },
+      select: { id: true },
+    });
+
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days + 1);
+    startDate.setHours(0, 0, 0, 0);
+
+    // Get all completed peer sessions in the date range
+    const peerSessions = await this.prisma.peerSession.findMany({
+      where: {
+        OR: [{ requestedById: user.id }, { requestedToId: user.id }],
+        sessionStatus: SessionStatus.DONE,
+        date: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
+      select: {
+        date: true,
+        requestedById: true,
+        requestedToId: true,
+      },
+    });
+
+    // Get all completed study room sessions in the date range
+    const studyRoomParticipations = await this.prisma.studyRoom.findMany({
+      where: {
+        OR: [
+          { createdById: user.id },
+          { learners: { some: { userId: user.id } } },
+        ],
+        sessionStatus: SessionStatus.DONE,
+        date: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
+      select: {
+        date: true,
+        createdById: true,
+      },
+    });
+
+    // Create a map for each day
+    const activityMap = new Map<string, SessionActivityDataPoint>();
+
+    // Initialize all days
+    for (let i = 0; i < days; i++) {
+      const date = new Date(startDate);
+      date.setDate(date.getDate() + i);
+      const dateStr = date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+      });
+      activityMap.set(dateStr, {
+        date: dateStr,
+        learned: 0,
+        taught: 0,
+        studyRooms: 0,
+      });
+    }
+
+    // Count peer sessions
+    for (const session of peerSessions) {
+      const dateStr = new Date(session.date).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+      });
+      const dayData = activityMap.get(dateStr);
+      if (dayData) {
+        // requestedBy = learner, requestedTo = teacher
+        if (session.requestedById === user.id) {
+          dayData.learned++;
+        } else {
+          dayData.taught++;
+        }
+      }
+    }
+
+    // Count study room participations
+    for (const room of studyRoomParticipations) {
+      const dateStr = new Date(room.date).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+      });
+      const dayData = activityMap.get(dateStr);
+      if (dayData) {
+        dayData.studyRooms++;
+      }
+    }
+
+    return Array.from(activityMap.values());
+  }
+
+  /**
+   * Get wallet activity data for charts (last N months)
+   */
+  async getWalletActivity(
+    userId: string,
+    months: number = 6,
+  ): Promise<WalletActivityDataPoint[]> {
+    const user = await this.prisma.user.findUnique({
+      where: { clerkId: userId },
+      select: { id: true },
+    });
+
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setMonth(startDate.getMonth() - months + 1);
+    startDate.setDate(1);
+    startDate.setHours(0, 0, 0, 0);
+
+    // Get all payments in the date range
+    const payments = await this.prisma.payment.findMany({
+      where: {
+        OR: [{ paidById: user.id }, { receivedById: user.id }],
+        createdAt: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
+      select: {
+        amount: true,
+        amountReceived: true,
+        paidById: true,
+        receivedById: true,
+        paymentStatus: true,
+        createdAt: true,
+      },
+    });
+
+    // Create a map for each month
+    const activityMap = new Map<string, WalletActivityDataPoint>();
+    const monthNames = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+
+    // Initialize all months
+    for (let i = 0; i < months; i++) {
+      const date = new Date(startDate);
+      date.setMonth(date.getMonth() + i);
+      const monthStr = monthNames[date.getMonth()];
+      activityMap.set(monthStr, {
+        month: monthStr,
+        earned: 0,
+        spent: 0,
+        net: 0,
+      });
+    }
+
+    // Aggregate payments by month
+    for (const payment of payments) {
+      const monthStr = monthNames[new Date(payment.createdAt).getMonth()];
+      const monthData = activityMap.get(monthStr);
+      if (monthData) {
+        if (
+          payment.receivedById === user.id &&
+          payment.paymentStatus === 'RECEIVED'
+        ) {
+          monthData.earned += Number(payment.amountReceived) || 0;
+        }
+        if (payment.paidById === user.id) {
+          monthData.spent += Number(payment.amount) || 0;
+        }
+      }
+    }
+
+    // Calculate net for each month
+    for (const data of activityMap.values()) {
+      data.net = data.earned - data.spent;
+      // Round to 2 decimal places
+      data.earned = Math.round(data.earned * 100) / 100;
+      data.spent = Math.round(data.spent * 100) / 100;
+      data.net = Math.round(data.net * 100) / 100;
+    }
+
+    return Array.from(activityMap.values());
   }
 }

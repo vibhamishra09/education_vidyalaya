@@ -1,6 +1,36 @@
+import type { Metadata } from "next";
 import { SignIn } from "@clerk/nextjs";
 import Image from "next/image";
 import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "Sign In",
+  description: "Sign in to your Webyalaya account. Continue your learning journey with peer-to-peer education, study rooms, and skill sharing.",
+  keywords: [
+    "sign in",
+    "login",
+    "webyalaya login",
+    "peer learning login",
+  ],
+  openGraph: {
+    title: "Sign In | Webyalaya",
+    description: "Sign in to continue your learning journey on Webyalaya.",
+    url: "/sign-in",
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: "Sign In | Webyalaya",
+    description: "Sign in to continue your learning journey.",
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
+  alternates: {
+    canonical: "/sign-in",
+  },
+};
 
 export default function SignInPage() {
   return (
