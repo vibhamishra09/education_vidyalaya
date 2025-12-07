@@ -11,16 +11,40 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, X, Loader2 } from "lucide-react";
-import { useBrowse } from "@/hooks/use-browse";
+import { Search, X, Loader2, Sparkles } from "lucide-react";
+import { useBrowse, useBrowseRecommendations } from "@/hooks/use-browse";
 import { useSkills } from "@/hooks/use-skills";
+import { useCurrentUser } from "@/hooks/use-users";
 import { Skill, BrowseFilters, BrowsePeer, StudyRoomCard } from "@/types/api.types";
+import { useTabPersistence, useLocalStorage } from "@/hooks/use-local-storage";
+
+const BROWSE_TABS = ["peers", "studyRooms"] as const;
+type BrowseTab = typeof BROWSE_TABS[number];
 
 function BrowsePageContent() {
   const searchParams = useSearchParams();
-  const [activeTab, setActiveTab] = useState<"peers" | "studyRooms">("peers");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedSkills, setSelectedSkills] = useState<Skill[]>([]);
+  
+  // Persist active tab to localStorage
+  const [activeTab, setActiveTab] = useTabPersistence<BrowseTab>(
+    "browse_tab",
+    "peers",
+    BROWSE_TABS
+  );
+  
+  // Persist search query to localStorage
+  const [searchQuery, setSearchQuery] = useLocalStorage<string>(
+    "browse_search",
+    "",
+    { expiresIn: 60 * 60 * 1000 } // 1 hour
+  );
+  
+  // Persist selected skills to localStorage
+  const [selectedSkills, setSelectedSkills] = useLocalStorage<Skill[]>(
+    "browse_skills",
+    [],
+    { expiresIn: 60 * 60 * 1000 } // 1 hour
+  );
+  
   const [currentPage, setCurrentPage] = useState(1);
   const [allPeers, setAllPeers] = useState<BrowsePeer[]>([]);
   const [allStudyRooms, setAllStudyRooms] = useState<StudyRoomCard[]>([]);
@@ -28,13 +52,17 @@ function BrowsePageContent() {
   const [peerCount, setPeerCount] = useState<number>(0);
   const [studyRoomCount, setStudyRoomCount] = useState<number>(0);
 
-  // Initialize search query from URL parameters
+  // Get current user for recommendations
+  const { data: currentUserData } = useCurrentUser();
+  const userWantSkills = currentUserData?.user?.wantSkills || [];
+
+  // Initialize search query from URL parameters (overrides localStorage)
   useEffect(() => {
     const searchParam = searchParams.get("search");
     if (searchParam) {
       setSearchQuery(searchParam);
     }
-  }, [searchParams]);
+  }, [searchParams, setSearchQuery]);
 
   // Reset pagination when filters change
   useEffect(() => {
@@ -109,6 +137,17 @@ function BrowsePageContent() {
   const studyRooms = allStudyRooms;
   const skills = skillsData?.skills || [];
 
+  // Fetch recommendations based on user's "want to learn" skills
+  const { data: recommendationsData, isLoading: recommendationsLoading } = useBrowseRecommendations(
+    userWantSkills,
+    { enabled: userWantSkills.length > 0 && !searchQuery && selectedSkills.length === 0 }
+  );
+  
+  const recommendedPeers = recommendationsData?.peers || [];
+  const recommendedRooms = recommendationsData?.studyRooms || [];
+  const hasRecommendations = recommendedPeers.length > 0 || recommendedRooms.length > 0;
+  const showRecommendations = hasRecommendations && !searchQuery && selectedSkills.length === 0;
+
   return (
     <div className="min-h-screen flex flex-col">
       <Navigation />
@@ -121,6 +160,51 @@ function BrowsePageContent() {
             Discover peers and study rooms to learn and grow together
           </p>
         </div>
+
+        {/* Recommendations Section - Based on user's wantSkills */}
+        {showRecommendations && (
+          <div className="mb-8">
+            <div className="flex items-center gap-2 mb-4">
+              <Sparkles className="h-5 w-5 text-purple-500" />
+              <h2 className="text-xl font-semibold">Recommended for You</h2>
+              <Badge variant="secondary" className="text-xs">
+                Based on your interests
+              </Badge>
+            </div>
+            <p className="text-sm text-muted-foreground mb-4">
+              {activeTab === "peers" 
+                ? "Peers who can teach what you want to learn"
+                : "Study rooms matching your learning interests"}
+            </p>
+            
+            {recommendationsLoading ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {Array.from({ length: 4 }).map((_, index) => (
+                  <div key={index} className="h-full">
+                    <div className="border rounded-lg p-4 space-y-3">
+                      <Skeleton className="h-12 w-12 rounded-full" />
+                      <Skeleton className="h-4 w-3/4" />
+                      <Skeleton className="h-3 w-full" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {activeTab === "peers" 
+                  ? recommendedPeers.slice(0, 4).map((peer) => (
+                      <PeerCardComponent key={peer.id} peer={peer} />
+                    ))
+                  : recommendedRooms.slice(0, 4).map((room) => (
+                      <StudyRoomCardBrowse key={room.id} studyRoom={room} />
+                    ))
+                }
+              </div>
+            )}
+            
+            <div className="mt-4 border-b" />
+          </div>
+        )}
 
         {/* Search Bar */}
         <div className="mb-6">

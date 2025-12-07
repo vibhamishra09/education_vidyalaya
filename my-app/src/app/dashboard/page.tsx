@@ -24,14 +24,24 @@ import { setAuthToken } from "@/lib/api-client";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
 import { useToast } from "@/contexts/toast-context";
+import { useTabPersistence } from "@/hooks/use-local-storage";
 import Link from "next/link";
+
+const REQUEST_TABS = ["received", "sent"] as const;
+type RequestTab = typeof REQUEST_TABS[number];
 
 export default function DashboardPage() {
   const { getToken } = useAuth();
   const queryClient = useQueryClient();
   const { showSuccess, showError } = useToast();
   const [processingRequests, setProcessingRequests] = useState<Set<string>>(new Set());
-  const [activeRequestTab, setActiveRequestTab] = useState<'received' | 'sent'>('received');
+  
+  // Use tab persistence hook for localStorage sync
+  const [activeRequestTab, setActiveRequestTab] = useTabPersistence<RequestTab>(
+    "dashboard_request_tab",
+    "received",
+    REQUEST_TABS
+  );
 
   // Fetch dashboard data from API
   const { data: dashboardData, isLoading: dashboardLoading, error: dashboardError } = useDashboard({
