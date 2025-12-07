@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { Navigation } from "@/components/layout/navigation";
 import { Footer } from "@/components/layout/footer";
@@ -140,7 +140,9 @@ export default function CreateStudyRoomPage() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <Navigation />
+      <Suspense fallback={null}>
+        <Navigation />
+      </Suspense>
 
       <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Back Button */}

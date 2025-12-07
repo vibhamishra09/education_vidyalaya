@@ -413,7 +413,9 @@ export default function BrowsePage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen flex flex-col">
-        <Navigation />
+        <Suspense fallback={null}>
+          <Navigation />
+        </Suspense>
         <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="mb-6 sm:mb-8">
             <h1 className="text-3xl sm:text-4xl font-bold mb-2">Browse</h1>

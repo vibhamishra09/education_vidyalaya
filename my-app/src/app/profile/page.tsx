@@ -93,7 +93,9 @@ function ProfileContent() {
   if (!isLoaded) {
     return (
       <div className="min-h-screen flex flex-col">
-        <Navigation />
+        <Suspense fallback={null}>
+          <Navigation />
+        </Suspense>
         <main className="flex-1 container mx-auto px-4 py-8 pb-20 md:pb-8">
           <div className="flex items-center justify-center min-h-[400px]">
             <div className="flex items-center gap-2">
@@ -110,7 +112,9 @@ function ProfileContent() {
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col">
-        <Navigation />
+        <Suspense fallback={null}>
+          <Navigation />
+        </Suspense>
         <main className="flex-1 container mx-auto px-4 py-8 pb-20 md:pb-8">
           <div className="flex items-center justify-center min-h-[400px]">
             <div className="flex items-center gap-2">
@@ -127,7 +131,9 @@ function ProfileContent() {
   if (error || !currentUser) {
     return (
       <div className="min-h-screen flex flex-col">
-        <Navigation />
+        <Suspense fallback={null}>
+          <Navigation />
+        </Suspense>
         <main className="flex-1 container mx-auto px-4 py-8 pb-20 md:pb-8">
           <div className="text-center">
             <h1 className="text-2xl font-bold">
@@ -142,7 +148,9 @@ function ProfileContent() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <Navigation />
+      <Suspense fallback={null}>
+        <Navigation />
+      </Suspense>
 
       <main className="flex-1 container mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-8 pb-20 md:pb-8">
         {/* Profile Header */}
