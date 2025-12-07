@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, Clock, Calendar, Save } from "lucide-react";
+import { Loader2, Calendar, Save } from "lucide-react";
 import { availabilityApi } from "@/lib/api";
 import type { UserAvailability } from "@/lib/api/availability.api";
 import { toast } from "sonner";
@@ -37,19 +37,13 @@ export function AvailabilitySettings({ userId, isOwnProfile = false }: Availabil
     Record<number, { startTime: string; endTime: string; isActive: boolean }>
   >({});
 
-  const [editedPreferences, setEditedPreferences] = useState({
-    bufferTime: 0,
-    minAdvanceTime: 0,
-    maxFutureBooking: 365,
-  });
 
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const [availData, prefData] = await Promise.all([
-        isOwnProfile ? availabilityApi.getMyAvailability() : availabilityApi.getUserAvailability(userId),
-        isOwnProfile ? availabilityApi.getMyPreferences() : Promise.resolve(null),
-      ]);
+      const availData = isOwnProfile 
+        ? await availabilityApi.getMyAvailability() 
+        : await availabilityApi.getUserAvailability(userId);
 
       setAvailability(availData.availability);
 
@@ -63,14 +57,6 @@ export function AvailabilitySettings({ userId, isOwnProfile = false }: Availabil
         };
       });
       setEditedAvailability(editState);
-
-      if (prefData) {
-        setEditedPreferences({
-          bufferTime: prefData.bufferTime,
-          minAdvanceTime: prefData.minAdvanceTime,
-          maxFutureBooking: prefData.maxFutureBooking,
-        });
-      }
     } catch (error) {
       console.error("Error fetching availability:", error);
       toast.error("Failed to load availability settings");
@@ -137,23 +123,6 @@ export function AvailabilitySettings({ userId, isOwnProfile = false }: Availabil
     }
   };
 
-  const handleSavePreferences = async () => {
-    try {
-      setSaving(true);
-
-      await availabilityApi.updatePreferences(editedPreferences);
-
-      toast.success("Booking preferences saved successfully");
-
-      // Refresh data
-      await fetchData();
-    } catch (error) {
-      console.error("Error saving preferences:", error);
-      toast.error("Failed to save booking preferences");
-    } finally {
-      setSaving(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -281,105 +250,14 @@ export function AvailabilitySettings({ userId, isOwnProfile = false }: Availabil
         </CardContent>
       </Card>
 
-      {/* Booking Preferences */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Clock className="h-5 w-5" />
-            Booking Preferences
-          </CardTitle>
-          <CardDescription>
-            Configure buffer time and booking windows
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="bufferTime">Buffer Time (minutes)</Label>
-            <Input
-              id="bufferTime"
-              type="number"
-              min="0"
-              max="120"
-              value={editedPreferences.bufferTime}
-              onChange={(e) =>
-                setEditedPreferences((prev) => ({
-                  ...prev,
-                  bufferTime: parseInt(e.target.value) || 0,
-                }))
-              }
-            />
-            <p className="text-xs text-muted-foreground">
-              Minimum gap between sessions (0 = back-to-back sessions allowed)
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="minAdvanceTime">Minimum Advance Notice (minutes)</Label>
-            <Input
-              id="minAdvanceTime"
-              type="number"
-              min="0"
-              max="10080"
-              value={editedPreferences.minAdvanceTime}
-              onChange={(e) =>
-                setEditedPreferences((prev) => ({
-                  ...prev,
-                  minAdvanceTime: parseInt(e.target.value) || 0,
-                }))
-              }
-            />
-            <p className="text-xs text-muted-foreground">
-              How far in advance must sessions be booked (0 = instant booking allowed)
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="maxFutureBooking">Maximum Booking Window (days)</Label>
-            <Input
-              id="maxFutureBooking"
-              type="number"
-              min="1"
-              max="365"
-              value={editedPreferences.maxFutureBooking}
-              onChange={(e) =>
-                setEditedPreferences((prev) => ({
-                  ...prev,
-                  maxFutureBooking: parseInt(e.target.value) || 365,
-                }))
-              }
-            />
-            <p className="text-xs text-muted-foreground">
-              How far in advance can sessions be booked (365 = 1 year ahead)
-            </p>
-          </div>
-
-          <Button onClick={handleSavePreferences} disabled={saving} className="w-full">
-            {saving ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <Save className="h-4 w-4 mr-2" />
-                Save Preferences
-              </>
-            )}
-          </Button>
-        </CardContent>
-      </Card>
-
       {/* Quick Setup Guide */}
       <Card>
         <CardHeader>
           <CardTitle className="text-sm">Quick Setup Guide</CardTitle>
         </CardHeader>
         <CardContent className="text-sm text-muted-foreground space-y-2">
-          <p>• <strong>Default:</strong> You&apos;re available 24/7 with instant booking (no restrictions)</p>
+          <p>• <strong>Default:</strong> You&apos;re available 24/7 - anyone can book you anytime</p>
           <p>• <strong>Block Hours:</strong> Toggle days ON to block specific unavailable times</p>
-          <p>• <strong>Buffer Time (0):</strong> Back-to-back sessions allowed. Increase if you need breaks</p>
-          <p>• <strong>Advance Notice (0):</strong> Instant booking allowed. Increase to prevent last-minute bookings</p>
-          <p>• <strong>Booking Window (365):</strong> Sessions can be booked up to 1 year ahead</p>
         </CardContent>
       </Card>
     </div>

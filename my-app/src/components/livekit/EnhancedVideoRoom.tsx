@@ -5,7 +5,7 @@ import { Track } from 'livekit-client'
 import '@livekit/components-styles'
 import { ChatWidget } from '@/components/chat/ChatWidget'
 import { Button } from '@/components/ui/button'
-import { MessageSquare, X, Users, Maximize2, Minimize2, Video, VideoOff, Mic, MicOff, Volume2, VolumeX, Clock } from 'lucide-react'
+import { MessageSquare, X, Users, Maximize2, Minimize2, Video, VideoOff, Mic, MicOff, Volume2, VolumeX, Clock, MonitorUp, MonitorOff } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { useSessionTimer } from '@/hooks/use-session-timer'
@@ -15,6 +15,7 @@ import { useToast } from '@/contexts/toast-context'
 import { useAuth, useUser } from '@clerk/nextjs'
 import { useQueryClient } from '@tanstack/react-query'
 import { streakKeys } from '@/hooks/use-streaks'
+import { dashboardKeys } from '@/hooks/use-dashboard'
 import { io, Socket } from 'socket.io-client'
 import { useSpeechRecognition } from '@/hooks/use-speech-recognition'
 
@@ -85,9 +86,10 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 						console.error('Failed to complete study room:', response.status, await response.text())
 					} else {
 						console.log('✅ Study room completed, streaks updated')
-						// Invalidate streak queries to refresh UI
+						// Invalidate queries to refresh UI (streaks + dashboard)
 						await queryClient.invalidateQueries({ queryKey: streakKeys.current() })
 						await queryClient.invalidateQueries({ queryKey: streakKeys.history(14) })
+						await queryClient.invalidateQueries({ queryKey: dashboardKeys.all })
 					}
 				} else if (sessionData.sessionType === 'peerSession') {
 					const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/peer-sessions/${sessionData.id}/complete`, {
@@ -102,18 +104,25 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 						console.error('Failed to complete peer session:', response.status, await response.text())
 					} else {
 						console.log('✅ Peer session completed, streaks updated')
-						// Invalidate streak queries to refresh UI
+						// Invalidate queries to refresh UI (streaks + dashboard)
 						await queryClient.invalidateQueries({ queryKey: streakKeys.current() })
 						await queryClient.invalidateQueries({ queryKey: streakKeys.history(14) })
+						await queryClient.invalidateQueries({ queryKey: dashboardKeys.all })
 					}
 				}
 			} catch (error) {
 				console.error('Error completing session:', error)
 			}
+			
+			// Host: Redirect directly to dashboard (no review)
+			console.log('🏠 Host session ended, redirecting to dashboard')
+			router.push('/dashboard')
+		} else {
+			// Participant: Show review dialog
+			console.log('👤 Participant session ended, showing review dialog')
+			setShowEnded(true)
 		}
-		// Show ended dialog for all users (host and participants)
-		setShowEnded(true)
-	}, [sessionData?.id, sessionData?.sessionType, isHost, getToken, queryClient])
+	}, [sessionData?.id, sessionData?.sessionType, isHost, getToken, queryClient, router])
 
 	const handleWarning = useCallback((minutes: number) => {
 		setShowWarning(true)
@@ -259,7 +268,7 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 					timerEnabled={timerEnabled}
 					formattedTime={formattedTime}
 					minutesLeft={minutesLeft}
-					isRecording={isListening}
+					sessionTitle={sessionData?.title as string | undefined}
 				/>
 		</LiveKitRoom>
 
@@ -272,8 +281,8 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 				/>
 			)}
 
-			{/* Session Ended Dialog */}
-			{timerEnabled && sessionData?.id && (
+			{/* Session Ended Dialog - Only for participants (not host) */}
+			{timerEnabled && sessionData?.id && !isHost && (
 				<SessionEndedDialog
 					open={showEnded}
 					sessionId={sessionData.id}
@@ -296,7 +305,7 @@ function VideoRoomContent({
 	timerEnabled,
 	formattedTime,
 	minutesLeft,
-	isRecording,
+	sessionTitle,
 }: {
 	showChat: boolean
 	setShowChat: (show: boolean) => void
@@ -309,20 +318,24 @@ function VideoRoomContent({
 	timerEnabled: boolean
 	formattedTime: string
 	minutesLeft: number
-	isRecording?: boolean
+	sessionTitle?: string
 }) {
 	const room = useRoomContext()
 	const params = useParams<{ room: string }>()
 	
-	// Use useTrackToggle hooks for video and mic controls
+	// Use useTrackToggle hooks for video, mic, and screen share controls
 	const { buttonProps: videoButtonProps, enabled: isVideoEnabled } = useTrackToggle({ source: Track.Source.Camera })
 	const { buttonProps: micButtonProps, enabled: isMicEnabled } = useTrackToggle({ source: Track.Source.Microphone })
+	const { buttonProps: screenShareButtonProps, enabled: isScreenShareEnabled } = useTrackToggle({ source: Track.Source.ScreenShare })
 	
 	const [isAudioEnabled, setIsAudioEnabled] = useState(true)
 
-	// Get all camera tracks for the grid layout
+	// Get all camera and screen share tracks for the grid layout
 	const tracks = useTracks(
-		[{ source: Track.Source.Camera, withPlaceholder: true }],
+		[
+			{ source: Track.Source.Camera, withPlaceholder: true },
+			{ source: Track.Source.ScreenShare, withPlaceholder: false },
+		],
 		{ onlySubscribed: false }
 	)
 
@@ -371,9 +384,11 @@ function VideoRoomContent({
 								/>
 							</div>
 							<div className="flex flex-col min-w-0">
-								<span className="text-white font-brand text-xs md:text-sm leading-tight truncate">Webyalaya</span>
+								<span className="text-white font-brand text-xs md:text-sm leading-tight truncate">
+									{sessionTitle || 'Webyalaya'}
+								</span>
 								<span className="text-white/60 text-[10px] md:text-xs truncate">
-									{params.room?.replace('session-', '').replace('studyroom-', '') || 'Video Call'}
+									{sessionTitle ? 'Video Call' : (params.room?.replace('session-', '').replace('studyroom-', '') || 'Video Call')}
 								</span>
 							</div>
 						</div>
@@ -395,15 +410,6 @@ function VideoRoomContent({
 
 					{/* Action Buttons */}
 					<div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
-						{/* AI Transcript Recording Indicator */}
-						{isRecording && (
-							<div className="flex items-center gap-1.5 px-2 md:px-3 py-1 md:py-1.5 bg-red-500/20 backdrop-blur-sm rounded-full border border-red-500/30">
-								<div className="h-2 w-2 bg-red-500 rounded-full animate-pulse" />
-								<span className="text-red-400 text-[10px] md:text-xs font-medium hidden md:inline">AI Recording</span>
-								<span className="text-red-400 text-[10px] font-medium md:hidden">REC</span>
-							</div>
-						)}
-
 						<Button
 							variant="ghost"
 							size="sm"
@@ -480,21 +486,36 @@ function VideoRoomContent({
 						{isMicEnabled ? <Mic className="h-4 w-4 md:h-5 md:w-5" /> : <MicOff className="h-4 w-4 md:h-5 md:w-5" />}
 					</Button>
 
-					{/* Audio Output Toggle - Hidden on mobile */}
-					<Button
-						onClick={toggleAudio}
-						variant={isAudioEnabled ? "default" : "secondary"}
-						size="lg"
-						className={`h-10 w-10 md:h-12 md:w-auto md:px-6 rounded-full transition-all p-0 hidden md:flex ${
-							isAudioEnabled 
-								? 'bg-white/20 hover:bg-white/30 text-white' 
-								: 'bg-white/10 hover:bg-white/20 text-white/60'
-						}`}
-					>
-						{isAudioEnabled ? <Volume2 className="h-4 w-4 md:h-5 md:w-5" /> : <VolumeX className="h-4 w-4 md:h-5 md:w-5" />}
-					</Button>
+				{/* Audio Output Toggle - Hidden on mobile */}
+				<Button
+					onClick={toggleAudio}
+					variant={isAudioEnabled ? "default" : "secondary"}
+					size="lg"
+					className={`h-10 w-10 md:h-12 md:w-auto md:px-6 rounded-full transition-all p-0 hidden md:flex ${
+						isAudioEnabled 
+							? 'bg-white/20 hover:bg-white/30 text-white' 
+							: 'bg-white/10 hover:bg-white/20 text-white/60'
+					}`}
+				>
+					{isAudioEnabled ? <Volume2 className="h-4 w-4 md:h-5 md:w-5" /> : <VolumeX className="h-4 w-4 md:h-5 md:w-5" />}
+				</Button>
 
-					{/* Leave Button */}
+				{/* Screen Share Toggle */}
+				<Button
+					{...screenShareButtonProps}
+					variant={isScreenShareEnabled ? "default" : "secondary"}
+					size="lg"
+					className={`h-10 w-10 md:h-12 md:w-auto md:px-6 rounded-full transition-all p-0 hidden md:flex ${
+						isScreenShareEnabled 
+							? 'bg-emerald-600 hover:bg-emerald-700 text-white' 
+							: 'bg-white/20 hover:bg-white/30 text-white'
+					}`}
+					title={isScreenShareEnabled ? "Stop sharing" : "Share screen"}
+				>
+					{isScreenShareEnabled ? <MonitorOff className="h-4 w-4 md:h-5 md:w-5" /> : <MonitorUp className="h-4 w-4 md:h-5 md:w-5" />}
+				</Button>
+
+				{/* Leave Button */}
 					<Button
 						onClick={onLeave}
 						variant="destructive"

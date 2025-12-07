@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { useUser, useAuth } from "@clerk/nextjs";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -24,7 +24,7 @@ const RANDOM_AVATARS = [
   "https://api.dicebear.com/7.x/avataaars/svg?seed=Mia",
 ];
 
-export default function OnboardingPage() {
+function OnboardingContent() {
   const { user } = useUser();
   const { getToken } = useAuth();
   const router = useRouter();
@@ -272,10 +272,10 @@ export default function OnboardingPage() {
                       <Input
                         type="number"
                         min="0"
-                        step="0.01"
-                        placeholder="0.00"
+                        step="1"
+                        placeholder="0"
                         value={hourlyRate || ""}
-                        onChange={(e) => setHourlyRate(parseFloat(e.target.value) || 0)}
+                        onChange={(e) => setHourlyRate(parseInt(e.target.value) || 0)}
                         className="pl-8"
                       />
                     </div>
@@ -418,5 +418,19 @@ export default function OnboardingPage() {
         </AnimatePresence>
       </div>
     </div>
+  );
+}
+
+export default function OnboardingPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-primary-50 via-background to-secondary-50 dark:from-gray-900 dark:via-background dark:to-gray-800 flex items-center justify-center p-4">
+        <div className="text-center">
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    }>
+      <OnboardingContent />
+    </Suspense>
   );
 }

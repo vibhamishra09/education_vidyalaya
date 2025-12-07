@@ -11,7 +11,8 @@ import { Badge } from "@/components/ui/badge";
 import { MetricCardComponent } from "@/components/cards/metric-card";
 import { StudyRoomCard } from "@/components/cards/study-room-card";
 import { ReviewCardComponent } from "@/components/cards/review-card";
-import { ArrowLeft, Star, MessageCircle } from "lucide-react";
+import { ArrowLeft, Star, MessageCircle, Users } from "lucide-react";
+import { SocialLinksDisplay } from "@/components/ui/social-links-display";
 import { usersApi, reviewsApi, studyRoomsApi } from "@/lib/api";
 import { setAuthToken } from "@/lib/api-client";
 import Link from "next/link";
@@ -131,6 +132,7 @@ export default function PublicProfilePage({
   }
 
   const sessionsTaught = user.publicStats?.sessionsTaught ?? 0;
+  const sessionsAttendedAsLearner = user.publicStats?.sessionsAttendedAsLearner ?? 0;
   const acceptedSessions = user.publicStats?.acceptedSessions ?? 0;
   const totalSessionRequests = user.publicStats?.totalSessionRequests ?? 0;
   const acceptanceRateValue =
@@ -154,6 +156,12 @@ export default function PublicProfilePage({
       name: "Sessions Taught",
       value: sessionsTaught,
       icon: "check-circle",
+    },
+    {
+      name: "Sessions Attended",
+      value: sessionsAttendedAsLearner,
+      description: "as learner",
+      icon: "book-open",
     },
     {
       name: "Rating",
@@ -199,18 +207,30 @@ export default function PublicProfilePage({
               <div className="flex-1 min-w-0">
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                   <div className="flex-1">
-                    <h1 className="text-2xl sm:text-3xl font-bold">{user.name}</h1>
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <h1 className="text-2xl sm:text-3xl font-bold">{user.name}</h1>
+                      
+                      {/* Social Media Icons - Dynamic */}
+                      <SocialLinksDisplay socialLinks={user.socialLinks} size="lg" />
+                    </div>
 
-                    <div className="flex items-center gap-2 mt-2 sm:mt-3">
-                      <div className="flex items-center">
+                    <div className="flex items-center gap-4 mt-2 sm:mt-3">
+                      <div className="flex items-center gap-1">
                         <Star className="h-4 w-4 sm:h-5 sm:w-5 fill-yellow-400 text-yellow-400" />
-                        <span className="ml-1 font-medium text-sm sm:text-base">
+                        <span className="font-medium text-sm sm:text-base">
                           {rating.toFixed(1)}
                         </span>
+                        <span className="text-xs sm:text-sm text-muted-foreground">
+                          ({reviewCount} reviews)
+                        </span>
                       </div>
-                      <span className="text-xs sm:text-sm text-muted-foreground">
-                        ({reviewCount} reviews)
-                      </span>
+                      <div className="flex items-center gap-1 text-muted-foreground">
+                        <Users className="h-4 w-4 sm:h-5 sm:w-5" />
+                        <span className="text-sm sm:text-base font-medium">
+                          {sessionsTaught + sessionsAttendedAsLearner}
+                        </span>
+                        <span className="text-xs sm:text-sm">sessions</span>
+                      </div>
                     </div>
                   </div>
 
@@ -260,7 +280,7 @@ export default function PublicProfilePage({
         </Card>
 
         {/* Public Metrics */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
           {publicMetrics.map((metric) => (
             <MetricCardComponent key={metric.name} metric={metric} />
           ))}

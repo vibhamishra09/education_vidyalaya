@@ -211,14 +211,13 @@ export class PeerSessionsService {
       requestDto.timezone,
     );
 
-    // Validate that session is scheduled at least 2 minutes in the future
+    // Validate that session is not scheduled in the past
     const now = new Date();
-    const minAdvanceTime = 2 * 60 * 1000; // 2 minutes in milliseconds
 
-    if (dateTime.getTime() <= now.getTime() + minAdvanceTime) {
+    if (dateTime.getTime() < now.getTime()) {
       throw new BadRequestException({
-        code: 'INSUFFICIENT_ADVANCE_TIME',
-        message: 'Sessions must be scheduled at least 2 minutes in advance',
+        code: 'PAST_TIME_NOT_ALLOWED',
+        message: 'Sessions cannot be scheduled in the past',
       });
     }
 

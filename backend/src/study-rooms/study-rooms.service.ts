@@ -117,6 +117,19 @@ export class StudyRoomsService {
               id: true,
               name: true,
               avatar: true,
+              reviewsReceived: {
+                select: { rating: true },
+              },
+              _count: {
+                select: {
+                  studyRooms: {
+                    where: { sessionStatus: SessionStatus.DONE },
+                  },
+                  peerSessionsReceived: {
+                    where: { sessionStatus: SessionStatus.DONE },
+                  },
+                },
+              },
             },
           },
           skills: {
@@ -146,9 +159,23 @@ export class StudyRoomsService {
       this.prisma.studyRoom.count({ where }),
     ]);
 
-    const studyRoomCards = studyRooms.map((room) =>
-      this.buildStudyRoomCard(room),
-    );
+    const studyRoomCards = studyRooms.map((room) => {
+      const hostReviews = (room.createdBy as any).reviewsReceived || [];
+      const hostAvgRating =
+        hostReviews.length > 0
+          ? hostReviews.reduce((sum: number, r: { rating: number }) => sum + r.rating, 0) /
+            hostReviews.length
+          : undefined;
+      const hostTotalSessions =
+        ((room.createdBy as any)._count?.studyRooms || 0) +
+        ((room.createdBy as any)._count?.peerSessionsReceived || 0);
+
+      return this.buildStudyRoomCard(room, {
+        avgRating: hostAvgRating,
+        reviewCount: hostReviews.length,
+        totalSessions: hostTotalSessions,
+      });
+    });
 
     return {
       studyRooms: studyRoomCards,
@@ -214,6 +241,16 @@ export class StudyRoomsService {
                 id: true,
                 name: true,
                 avatar: true,
+                _count: {
+                  select: {
+                    studyRooms: {
+                      where: { sessionStatus: SessionStatus.DONE },
+                    },
+                    peerSessionsReceived: {
+                      where: { sessionStatus: SessionStatus.DONE },
+                    },
+                  },
+                },
               },
             },
             skills: {
@@ -245,10 +282,15 @@ export class StudyRoomsService {
           return null;
         }
 
+        const totalSessions =
+          ((room.createdBy as any)._count?.studyRooms || 0) +
+          ((room.createdBy as any)._count?.peerSessionsReceived || 0);
+
         return {
           room,
           rating: teacher._avg.rating ?? 0,
           reviewCount: teacher._count.rating ?? 0,
+          totalSessions,
         };
       }),
     );
@@ -257,6 +299,7 @@ export class StudyRoomsService {
       room: StudyRoomWithRelations;
       rating: number;
       reviewCount: number;
+      totalSessions: number;
     }> = [];
     const seenRoomIds = new Set<string>();
 
@@ -291,8 +334,8 @@ export class StudyRoomsService {
       })
       .slice(0, normalizedLimit);
 
-    const studyRoomCards = sortedRooms.map(({ room, rating, reviewCount }) =>
-      this.buildStudyRoomCard(room, { avgRating: rating, reviewCount }),
+    const studyRoomCards = sortedRooms.map(({ room, rating, reviewCount, totalSessions }) =>
+      this.buildStudyRoomCard(room, { avgRating: rating, reviewCount, totalSessions }),
     );
 
     return {
@@ -321,6 +364,19 @@ export class StudyRoomsService {
             id: true,
             name: true,
             avatar: true,
+            reviewsReceived: {
+              select: { rating: true },
+            },
+            _count: {
+              select: {
+                studyRooms: {
+                  where: { sessionStatus: SessionStatus.DONE },
+                },
+                peerSessionsReceived: {
+                  where: { sessionStatus: SessionStatus.DONE },
+                },
+              },
+            },
           },
         },
         skills: {
@@ -347,9 +403,23 @@ export class StudyRoomsService {
       },
     });
 
-    const studyRoomCards = studyRooms.map((room) =>
-      this.buildStudyRoomCard(room),
-    );
+    const studyRoomCards = studyRooms.map((room) => {
+      const hostReviews = (room.createdBy as any).reviewsReceived || [];
+      const hostAvgRating =
+        hostReviews.length > 0
+          ? hostReviews.reduce((sum: number, r: { rating: number }) => sum + r.rating, 0) /
+            hostReviews.length
+          : undefined;
+      const hostTotalSessions =
+        ((room.createdBy as any)._count?.studyRooms || 0) +
+        ((room.createdBy as any)._count?.peerSessionsReceived || 0);
+
+      return this.buildStudyRoomCard(room, {
+        avgRating: hostAvgRating,
+        reviewCount: hostReviews.length,
+        totalSessions: hostTotalSessions,
+      });
+    });
 
     return {
       studyRooms: studyRoomCards,
@@ -365,7 +435,7 @@ export class StudyRoomsService {
 
   private buildStudyRoomCard(
     room: StudyRoomWithRelations,
-    rating?: { avgRating?: number; reviewCount?: number },
+    rating?: { avgRating?: number; reviewCount?: number; totalSessions?: number },
   ) {
     return {
       id: room.id,
@@ -378,10 +448,15 @@ export class StudyRoomsService {
       joiningFee: room.joiningFee,
       gmeetLink: (room as any).gmeetLink,
       participantCount: room.learners.length,
-      createdBy: room.createdBy,
+      createdBy: {
+        id: room.createdBy.id,
+        name: room.createdBy.name,
+        avatar: room.createdBy.avatar,
+      },
       skills: room.skills.map((s) => s.skill.name),
       hostAvgRating: rating?.avgRating,
       hostReviewCount: rating?.reviewCount,
+      hostTotalSessions: rating?.totalSessions,
     };
   }
 
@@ -503,9 +578,20 @@ export class StudyRoomsService {
       createDto.timezone,
     );
 
-    // Determine session status based on start time
-    // If the room starts now or in the past, set it to ONGOING immediately
+    // Validate that session is not scheduled too far in the past
+    // Allow a small buffer (2 minutes) for instant rooms to account for form fill time
     const now = new Date();
+    const twoMinutesAgo = now.getTime() - 2 * 60 * 1000;
+
+    if (dateTime.getTime() < twoMinutesAgo) {
+      throw new BadRequestException({
+        code: 'PAST_TIME_NOT_ALLOWED',
+        message: 'Study rooms cannot be scheduled in the past',
+      });
+    }
+
+    // Determine session status based on start time
+    // If the room starts now or in the past (instant room), set it to ONGOING immediately
     const sessionStatus =
       dateTime.getTime() <= now.getTime()
         ? SessionStatus.ONGOING
@@ -666,6 +752,14 @@ export class StudyRoomsService {
 
     if (!studyRoom) {
       throw new NotFoundException('Study room not found');
+    }
+
+    // Teacher (creator) cannot join their own study room as a learner
+    if (studyRoom.createdById === user.id) {
+      return {
+        success: true,
+        message: 'You are the teacher of this study room',
+      };
     }
 
     if (studyRoom.learners.length >= studyRoom.maxParticipants) {

@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
 import { Navigation } from "@/components/layout/navigation";
 import { HeroSection } from "@/components/sections/hero";
+import { PlatformStats } from "@/components/sections/platform-stats";
 import { StudyRoomCard } from "@/components/cards/study-room-card";
 import { DebateRoomCard } from "@/components/cards/debate-room-card";
 import { Footer } from "@/components/layout/footer";
@@ -85,7 +86,9 @@ export default function Home() {
   if (!isLoaded) {
     return (
       <div className="min-h-screen flex flex-col">
-        <Navigation />
+        <Suspense fallback={null}>
+          <Navigation />
+        </Suspense>
         <main className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto mb-4"></div>
@@ -99,10 +102,15 @@ export default function Home() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <Navigation />
+      <Suspense fallback={null}>
+        <Navigation />
+      </Suspense>
 
       <main className="flex-1">
         <HeroSection />
+
+        {/* Platform Stats Section */}
+        <PlatformStats />
 
         {/* Trending Study Rooms Section */}
         <section className="py-16 bg-muted/30" id="features">
@@ -186,8 +194,8 @@ export default function Home() {
                         host={{
                           name: room.createdBy.name,
                           avatar: room.createdBy.avatar || "",
-                          rating: room.hostAvgRating,
-                          reviewCount: room.hostReviewCount,
+                          rating: room.hostAvgRating ?? undefined,
+                          reviewCount: room.hostReviewCount ?? undefined,
                         }}
                         actionLabel={
                           isFull ? "Room Full" : isLive ? "Join Live" : "Join Room"

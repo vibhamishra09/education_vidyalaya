@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState, useEffect } from "react";
+import { use, useState, useEffect, useCallback } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { Navigation } from "@/components/layout/navigation";
 import { Footer } from "@/components/layout/footer";
@@ -11,14 +11,34 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Coins, Loader2, AlertCircle } from "lucide-react";
+import { ArrowLeft, Coins, Loader2, AlertCircle, RotateCcw } from "lucide-react";
+import { SocialLinksDisplay } from "@/components/ui/social-links-display";
 import { usersApi, peerSessionsApi } from "@/lib/api";
 import { User } from "@/types/api.types";
 import { setAuthToken } from "@/lib/api-client";
 import { ImprovedAvailabilityCalendar } from "@/components/availability/improved-availability-calendar";
+import { useFormPersistence } from "@/hooks/use-local-storage";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatMaya } from "@/lib/utils/coin-format";
+
+interface SessionFormData {
+  skills: string[];
+  date: string;
+  time: string;
+  duration: string;
+  message: string;
+  gmeetLink: string;
+}
+
+const initialFormData: SessionFormData = {
+  skills: [],
+  date: "",
+  time: "",
+  duration: "60",
+  message: "",
+  gmeetLink: "",
+};
 
 export default function RequestSessionPage({
   params,
@@ -37,14 +57,22 @@ export default function RequestSessionPage({
   const [availabilityWarning, setAvailabilityWarning] = useState<string | null>(null);
   const [checkingAvailability, setCheckingAvailability] = useState(false);
 
-  const [formData, setFormData] = useState({
-    skills: [] as string[],
-    date: "",
-    time: "",
-    duration: "60",
-    message: "",
-    gmeetLink: "",
-  });
+  // Use form persistence hook - store per-user to avoid conflicts
+  const { formData, setFormData, updateField, clearForm, hasStoredData } = useFormPersistence<SessionFormData>(
+    `request_session_${userId}`,
+    initialFormData,
+    {
+      debounceMs: 300,
+      expiresIn: 4 * 60 * 60 * 1000, // 4 hours
+      excludeFields: ["date", "time"], // Don't persist date/time as they can become stale
+    }
+  );
+
+  // Handle clearing form
+  const handleClearForm = useCallback(() => {
+    clearForm();
+    setFormData(initialFormData);
+  }, [clearForm, setFormData]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -197,12 +225,10 @@ export default function RequestSessionPage({
   const calculatedCost = peer?.hourlyRate ? (parseInt(formData.duration) / 60) * costPerHour : 0;
 
   const toggleSkill = (skillId: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      skills: prev.skills.includes(skillId)
-        ? prev.skills.filter((id) => id !== skillId)
-        : [...prev.skills, skillId],
-    }));
+    const newSkills = formData.skills.includes(skillId)
+      ? formData.skills.filter((id) => id !== skillId)
+      : [...formData.skills, skillId];
+    updateField("skills", newSkills);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -245,6 +271,9 @@ export default function RequestSessionPage({
       };
       
       await peerSessionsApi.requestPeerSession(requestData);
+      
+      // Clear form from localStorage on successful submission
+      clearForm();
       
       // Success - redirect to dashboard
       router.push("/dashboard");
@@ -319,14 +348,38 @@ export default function RequestSessionPage({
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleSubmit} className="space-y-6">
+                  {/* Restore Draft Notice */}
+                  {hasStoredData && !isSelfRequest && (
+                    <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-blue-600 dark:text-blue-400">
+                          📝 Draft restored from your previous session
+                        </span>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleClearForm}
+                        className="text-blue-600 dark:text-blue-400 hover:text-blue-800"
+                      >
+                        <RotateCcw className="h-4 w-4 mr-1" />
+                        Clear
+                      </Button>
+                    </div>
+                  )}
+
                   {/* Peer Info */}
                   <div className="flex items-center gap-4 p-4 bg-muted rounded-lg">
                     <Avatar className="h-12 w-12">
                       <AvatarImage src={peer.avatar} alt={peer.name} />
                       <AvatarFallback>{peer.name.charAt(0)}</AvatarFallback>
                     </Avatar>
-                    <div>
-                      <p className="font-semibold">{peer.name}</p>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-semibold">{peer.name}</p>
+                        <SocialLinksDisplay socialLinks={peer.socialLinks} size="sm" maxDisplay={4} />
+                      </div>
                       <p className="text-sm text-muted-foreground">
                         @{peer.username || peer.email.split('@')[0]}
                       </p>
@@ -369,18 +422,25 @@ export default function RequestSessionPage({
                       max="240"
                       step="1"
                       value={formData.duration}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          duration: e.target.value,
-                        }))
-                      }
+                      onChange={(e) => updateField("duration", e.target.value)}
                       required
                       disabled={isSelfRequest}
                     />
-                    <p className="text-sm text-muted-foreground">
-                      Between 1 and 240 minutes
-                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {[15, 30, 45, 60].map((mins) => (
+                        <Button
+                          key={mins}
+                          type="button"
+                          variant={formData.duration === String(mins) ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => updateField("duration", String(mins))}
+                          disabled={isSelfRequest}
+                          className="text-xs"
+                        >
+                          {mins} min
+                        </Button>
+                      ))}
+                    </div>
                   </div>
 
                   {/* Availability Calendar */}
@@ -388,12 +448,9 @@ export default function RequestSessionPage({
                     <ImprovedAvailabilityCalendar
                       peerId={peer.id}
                       onSlotSelect={(date, time, duration, isAvailable, reason) => {
-                        setFormData((prev) => ({
-                          ...prev,
-                          date,
-                          time,
-                          duration: duration.toString(),
-                        }));
+                        updateField("date", date);
+                        updateField("time", time);
+                        updateField("duration", duration.toString());
 
                         // Set warning if slot is not available
                         if (!isAvailable) {
@@ -422,12 +479,7 @@ export default function RequestSessionPage({
                           id="date"
                           type="date"
                           value={formData.date}
-                          onChange={(e) =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              date: e.target.value,
-                            }))
-                          }
+                          onChange={(e) => updateField("date", e.target.value)}
                           required
                           min={new Date().toISOString().split("T")[0]}
                           disabled={isSelfRequest}
@@ -439,12 +491,7 @@ export default function RequestSessionPage({
                           id="time"
                           type="time"
                           value={formData.time}
-                          onChange={(e) =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              time: e.target.value,
-                            }))
-                          }
+                          onChange={(e) => updateField("time", e.target.value)}
                           required
                           disabled={isSelfRequest}
                         />
@@ -499,12 +546,7 @@ export default function RequestSessionPage({
                       id="message"
                       placeholder="Tell the peer what you'd like to learn..."
                       value={formData.message}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          message: e.target.value,
-                        }))
-                      }
+                      onChange={(e) => updateField("message", e.target.value)}
                       rows={4}
                       disabled={isSelfRequest}
                     />
@@ -518,12 +560,7 @@ export default function RequestSessionPage({
                       type="url"
                       placeholder="https://meet.google.com/abc-defg-hij"
                       value={formData.gmeetLink}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          gmeetLink: e.target.value,
-                        }))
-                      }
+                      onChange={(e) => updateField("gmeetLink", e.target.value)}
                       disabled={isSelfRequest}
                     />
                     <p className="text-sm text-muted-foreground">

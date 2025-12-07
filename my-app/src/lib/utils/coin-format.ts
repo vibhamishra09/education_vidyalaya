@@ -3,14 +3,14 @@
  */
 
 /**
- * Formats a coin value to show 2 decimal places
+ * Formats a coin value as a whole number (no decimals)
  * @param coins - The coin value to format
- * @returns Formatted string with 2 decimal places
+ * @returns Formatted string as whole number
  */
 export function formatCoins(coins: number | string | null | undefined): string {
   // Handle null, undefined, or empty string
   if (coins === null || coins === undefined || coins === '') {
-    return '0.00';
+    return '0';
   }
 
   // Convert to number if it's a string
@@ -18,24 +18,22 @@ export function formatCoins(coins: number | string | null | undefined): string {
 
   // Check if the conversion resulted in a valid number
   if (isNaN(numCoins)) {
-    return '0.00';
+    return '0';
   }
 
-  // Round to 2 decimal places to avoid floating point precision issues
-  const roundedCoins = Math.round(numCoins * 100) / 100;
-
-  return roundedCoins.toFixed(2);
+  // Round to whole number
+  return Math.round(numCoins).toString();
 }
 
 /**
  * Formats mAYA tokens for display (mAYA = AYA * 100)
  * @param ayaCoins - The AYA coin value to convert and format
- * @returns Formatted string with 2 decimal places representing mAYA value
+ * @returns Formatted string as whole number representing mAYA value
  */
 export function formatMaya(ayaCoins: number | string | null | undefined): string {
   // Handle null, undefined, or empty string
   if (ayaCoins === null || ayaCoins === undefined || ayaCoins === '') {
-    return '0.00';
+    return '0';
   }
 
   // Convert to number if it's a string
@@ -43,16 +41,14 @@ export function formatMaya(ayaCoins: number | string | null | undefined): string
 
   // Check if the conversion resulted in a valid number
   if (isNaN(numCoins)) {
-    return '0.00';
+    return '0';
   }
 
   // Convert AYA to mAYA (multiply by 100)
   const mAyaValue = numCoins * 100;
 
-  // Round to 2 decimal places to avoid floating point precision issues
-  const roundedMaya = Math.round(mAyaValue * 100) / 100;
-
-  return roundedMaya.toFixed(2);
+  // Round to whole number
+  return Math.round(mAyaValue).toString();
 }
 
 /**

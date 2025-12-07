@@ -25,17 +25,30 @@ export function useReviews(filters?: ReviewFilters) {
 // Create review
 export function useCreateReview() {
   const queryClient = useQueryClient();
-  const { getToken, isLoaded } = useAuth();
+  const { getToken, isLoaded, isSignedIn } = useAuth();
 
   return useMutation({
     mutationFn: async (data: CreateReviewDto) => {
-      // Ensure token is set before making the request
-      if (isLoaded) {
-        const token = await getToken();
-        if (token) {
-          setAuthToken(token);
-        }
+      // Wait for auth to be loaded
+      if (!isLoaded) {
+        throw new Error('Authentication is still loading');
       }
+
+      // Check if user is signed in
+      if (!isSignedIn) {
+        throw new Error('User is not signed in');
+      }
+
+      // Get fresh token for this request
+      const token = await getToken();
+      if (!token) {
+        throw new Error('Failed to get authentication token');
+      }
+
+      // Set token for this request
+      setAuthToken(token);
+      
+      // Make the API call
       return reviewsApi.createReview(data);
     },
     onSuccess: () => {
