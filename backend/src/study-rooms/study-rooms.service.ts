@@ -679,6 +679,14 @@ export class StudyRoomsService {
       throw new NotFoundException('Study room not found');
     }
 
+    // Teacher (creator) cannot join their own study room as a learner
+    if (studyRoom.createdById === user.id) {
+      return {
+        success: true,
+        message: 'You are the teacher of this study room',
+      };
+    }
+
     if (studyRoom.learners.length >= studyRoom.maxParticipants) {
       throw new BadRequestException({
         code: 'ROOM_FULL',
