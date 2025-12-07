@@ -343,8 +343,11 @@ export default function PeerSessionPage({
           <CardContent>
             <div className="grid sm:grid-cols-2 gap-6">
               {/* Requester */}
-              <div className="flex items-center gap-4">
-                <Avatar className="h-16 w-16">
+              <Link 
+                href={`/profile/${session.requestedBy.id}`}
+                className="flex items-center gap-4 hover:bg-muted/50 rounded-lg p-3 -m-3 transition-colors group"
+              >
+                <Avatar className="h-16 w-16 ring-2 ring-transparent group-hover:ring-primary/20 transition-all">
                   <AvatarImage
                     src={session.requestedBy.avatar}
                     alt={session.requestedBy.name}
@@ -354,17 +357,20 @@ export default function PeerSessionPage({
                   </AvatarFallback>
                 </Avatar>
                 <div>
-                  <p className="font-medium">{session.requestedBy.name}</p>
+                  <p className="font-medium group-hover:text-primary transition-colors">{session.requestedBy.name}</p>
                   <p className="text-sm text-muted-foreground">Session Requester</p>
                   {isRequester && (
                     <Badge variant="outline" className="mt-1">You</Badge>
                   )}
                 </div>
-              </div>
+              </Link>
 
               {/* Requested To */}
-              <div className="flex items-center gap-4">
-                <Avatar className="h-16 w-16">
+              <Link 
+                href={`/profile/${session.requestedTo.id}`}
+                className="flex items-center gap-4 hover:bg-muted/50 rounded-lg p-3 -m-3 transition-colors group"
+              >
+                <Avatar className="h-16 w-16 ring-2 ring-transparent group-hover:ring-primary/20 transition-all">
                   <AvatarImage
                     src={session.requestedTo.avatar}
                     alt={session.requestedTo.name}
@@ -374,13 +380,13 @@ export default function PeerSessionPage({
                   </AvatarFallback>
                 </Avatar>
                 <div>
-                  <p className="font-medium">{session.requestedTo.name}</p>
+                  <p className="font-medium group-hover:text-primary transition-colors">{session.requestedTo.name}</p>
                   <p className="text-sm text-muted-foreground">Session Provider</p>
                   {isRequestedTo && (
                     <Badge variant="outline" className="mt-1">You</Badge>
                   )}
                 </div>
-              </div>
+              </Link>
             </div>
           </CardContent>
         </Card>

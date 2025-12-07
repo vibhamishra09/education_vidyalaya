@@ -16,7 +16,7 @@ import { WalletTab } from "@/components/profile/wallet-tab";
 import { SessionsTab } from "@/components/profile/sessions-tab";
 import { AvailabilitySettings } from "@/components/profile/availability-settings";
 import { AchievementShowcaseConnected } from "@/components/achievements/achievement-showcase-connected";
-import { Edit, Star, Coins, Loader2 } from "lucide-react";
+import { Edit, Star, Coins, Loader2, Users } from "lucide-react";
 import { SocialLinksDisplay } from "@/components/ui/social-links-display";
 import { useProfileData } from "@/hooks/use-profile-data";
 import { formatMaya } from "@/lib/utils/coin-format";
@@ -56,7 +56,11 @@ function ProfileContent() {
 
   const currentUser = profileData?.user || null;
   const userReviews = profileData?.reviews || [];
-  const avgRating = profileData?.avgRating || 0;
+  const avgRating = currentUser?.publicStats?.avgRating ?? profileData?.avgRating ?? 0;
+  const reviewCount = currentUser?.publicStats?.reviewCount ?? userReviews.length;
+  const sessionsTaught = currentUser?.publicStats?.sessionsTaught ?? 0;
+  const sessionsAttendedAsLearner = currentUser?.publicStats?.sessionsAttendedAsLearner ?? 0;
+  const totalSessions = sessionsTaught + sessionsAttendedAsLearner;
   const error = queryError ? 'Failed to load profile data' : null;
 
   // Handle URL parameters for tab navigation
@@ -155,14 +159,22 @@ function ProfileContent() {
                     </p>
 
                     <div className="flex flex-col md:flex-row md:flex-wrap md:items-center gap-3 md:gap-4 mt-3">
-                      <div className="flex items-center justify-center md:justify-start">
+                      <div className="flex items-center justify-center md:justify-start gap-1">
                         <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
-                        <span className="ml-1 font-medium">
+                        <span className="font-medium">
                           {avgRating.toFixed(1)}
                         </span>
-                        <span className="text-sm text-muted-foreground ml-1">
-                          ({userReviews.length} reviews)
+                        <span className="text-sm text-muted-foreground">
+                          ({reviewCount} reviews)
                         </span>
+                      </div>
+
+                      <div className="flex items-center justify-center md:justify-start gap-1 text-muted-foreground">
+                        <Users className="h-5 w-5" />
+                        <span className="font-medium text-foreground">
+                          {totalSessions}
+                        </span>
+                        <span className="text-sm">sessions</span>
                       </div>
 
                       <div className="flex items-center justify-center md:justify-start">

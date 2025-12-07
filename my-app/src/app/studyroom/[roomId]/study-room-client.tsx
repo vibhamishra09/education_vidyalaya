@@ -277,8 +277,11 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <Avatar className="h-10 w-10">
+              <Link 
+                href={`/profile/${room.createdBy.id}`}
+                className="flex items-center gap-2 hover:bg-muted/50 rounded-lg p-2 -m-2 transition-colors group"
+              >
+                <Avatar className="h-10 w-10 ring-2 ring-transparent group-hover:ring-primary/20 transition-all">
                   <AvatarImage
                     src={room.createdBy.avatar}
                     alt={room.createdBy.name}
@@ -289,9 +292,9 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
                 </Avatar>
                 <div>
                   <p className="text-sm text-muted-foreground">Teacher</p>
-                  <p className="font-medium">{room.createdBy.name}</p>
+                  <p className="font-medium group-hover:text-primary transition-colors">{room.createdBy.name}</p>
                 </div>
-              </div>
+              </Link>
 
               {room.gmeetLink && room.gmeetLink !== "https://meet.google.com/your-meeting-code" && (
                 <div className="flex items-center gap-2">

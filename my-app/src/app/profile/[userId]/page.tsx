@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { MetricCardComponent } from "@/components/cards/metric-card";
 import { StudyRoomCard } from "@/components/cards/study-room-card";
 import { ReviewCardComponent } from "@/components/cards/review-card";
-import { ArrowLeft, Star, MessageCircle } from "lucide-react";
+import { ArrowLeft, Star, MessageCircle, Users } from "lucide-react";
 import { SocialLinksDisplay } from "@/components/ui/social-links-display";
 import { usersApi, reviewsApi, studyRoomsApi } from "@/lib/api";
 import { setAuthToken } from "@/lib/api-client";
@@ -214,16 +214,23 @@ export default function PublicProfilePage({
                       <SocialLinksDisplay socialLinks={user.socialLinks} size="lg" />
                     </div>
 
-                    <div className="flex items-center gap-2 mt-2 sm:mt-3">
-                      <div className="flex items-center">
+                    <div className="flex items-center gap-4 mt-2 sm:mt-3">
+                      <div className="flex items-center gap-1">
                         <Star className="h-4 w-4 sm:h-5 sm:w-5 fill-yellow-400 text-yellow-400" />
-                        <span className="ml-1 font-medium text-sm sm:text-base">
+                        <span className="font-medium text-sm sm:text-base">
                           {rating.toFixed(1)}
                         </span>
+                        <span className="text-xs sm:text-sm text-muted-foreground">
+                          ({reviewCount} reviews)
+                        </span>
                       </div>
-                      <span className="text-xs sm:text-sm text-muted-foreground">
-                        ({reviewCount} reviews)
-                      </span>
+                      <div className="flex items-center gap-1 text-muted-foreground">
+                        <Users className="h-4 w-4 sm:h-5 sm:w-5" />
+                        <span className="text-sm sm:text-base font-medium">
+                          {sessionsTaught + sessionsAttendedAsLearner}
+                        </span>
+                        <span className="text-xs sm:text-sm">sessions</span>
+                      </div>
                     </div>
                   </div>
 

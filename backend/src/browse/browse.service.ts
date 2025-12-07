@@ -146,7 +146,26 @@ export class BrowseService {
         skip,
         take: limit,
         include: {
-          createdBy: { select: { id: true, name: true, avatar: true } },
+          createdBy: {
+            select: {
+              id: true,
+              name: true,
+              avatar: true,
+              reviewsReceived: {
+                select: { rating: true },
+              },
+              _count: {
+                select: {
+                  studyRooms: {
+                    where: { sessionStatus: SessionStatus.DONE },
+                  },
+                  peerSessionsReceived: {
+                    where: { sessionStatus: SessionStatus.DONE },
+                  },
+                },
+              },
+            },
+          },
           skills: { include: { skill: { select: { name: true } } } },
           learners: true,
         },
@@ -155,18 +174,38 @@ export class BrowseService {
 
       return {
         peers: [],
-        studyRooms: studyRooms.map((room) => ({
-          id: room.id,
-          title: room.title,
-          description: room.description,
-          sessionStatus: room.sessionStatus,
-          date: room.date,
-          duration: room.duration,
-          maxParticipants: room.maxParticipants,
-          participantCount: room.learners.length,
-          createdBy: room.createdBy,
-          skills: room.skills.map((s) => s.skill.name),
-        })),
+        studyRooms: studyRooms.map((room) => {
+          const hostReviews = room.createdBy.reviewsReceived;
+          const hostAvgRating =
+            hostReviews.length > 0
+              ? hostReviews.reduce((sum, r) => sum + r.rating, 0) /
+                hostReviews.length
+              : null;
+          const hostTotalSessions =
+            room.createdBy._count.studyRooms +
+            room.createdBy._count.peerSessionsReceived;
+
+          return {
+            id: room.id,
+            title: room.title,
+            description: room.description,
+            sessionStatus: room.sessionStatus,
+            date: room.date,
+            duration: room.duration,
+            maxParticipants: room.maxParticipants,
+            joiningFee: room.joiningFee,
+            participantCount: room.learners.length,
+            createdBy: {
+              id: room.createdBy.id,
+              name: room.createdBy.name,
+              avatar: room.createdBy.avatar,
+            },
+            skills: room.skills.map((s) => s.skill.name),
+            hostAvgRating,
+            hostReviewCount: hostReviews.length,
+            hostTotalSessions,
+          };
+        }),
         counts: {
           peers: peerCount,
           studyRooms: studyRoomCount,
