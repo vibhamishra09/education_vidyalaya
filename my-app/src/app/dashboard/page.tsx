@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { DashboardClient } from "./dashboard-client";
 
+<<<<<<< HEAD
 export const metadata: Metadata = {
   title: "Dashboard",
   description: "Your personalized learning dashboard. Track your sessions, manage requests, view achievements, and monitor your learning progress on Webyalaya.",
