@@ -68,6 +68,12 @@ export class UserDto {
 export class UpdateUserDto {
   @IsOptional()
   @IsString()
+  @MinLength(1, { message: 'Name cannot be empty' })
+  @MaxLength(100, { message: 'Name must be at most 100 characters long' })
+  name?: string;
+
+  @IsOptional()
+  @IsString()
   bio?: string;
 
   @IsOptional()

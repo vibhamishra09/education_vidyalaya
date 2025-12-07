@@ -15,6 +15,7 @@ import { useToast } from '@/contexts/toast-context'
 import { useAuth, useUser } from '@clerk/nextjs'
 import { useQueryClient } from '@tanstack/react-query'
 import { streakKeys } from '@/hooks/use-streaks'
+import { dashboardKeys } from '@/hooks/use-dashboard'
 import { io, Socket } from 'socket.io-client'
 import { useSpeechRecognition } from '@/hooks/use-speech-recognition'
 
@@ -85,9 +86,10 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 						console.error('Failed to complete study room:', response.status, await response.text())
 					} else {
 						console.log('✅ Study room completed, streaks updated')
-						// Invalidate streak queries to refresh UI
+						// Invalidate queries to refresh UI (streaks + dashboard)
 						await queryClient.invalidateQueries({ queryKey: streakKeys.current() })
 						await queryClient.invalidateQueries({ queryKey: streakKeys.history(14) })
+						await queryClient.invalidateQueries({ queryKey: dashboardKeys.all })
 					}
 				} else if (sessionData.sessionType === 'peerSession') {
 					const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/peer-sessions/${sessionData.id}/complete`, {
@@ -102,9 +104,10 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 						console.error('Failed to complete peer session:', response.status, await response.text())
 					} else {
 						console.log('✅ Peer session completed, streaks updated')
-						// Invalidate streak queries to refresh UI
+						// Invalidate queries to refresh UI (streaks + dashboard)
 						await queryClient.invalidateQueries({ queryKey: streakKeys.current() })
 						await queryClient.invalidateQueries({ queryKey: streakKeys.history(14) })
+						await queryClient.invalidateQueries({ queryKey: dashboardKeys.all })
 					}
 				}
 			} catch (error) {
