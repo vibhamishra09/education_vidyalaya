@@ -20,10 +20,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ArrowLeft, Users, Clock, Loader2, Coins, CheckCircle2, RotateCcw } from "lucide-react";
-import { studyRoomsApi } from "@/lib/api";
 import { CreateStudyRoomDto, StudyRoom } from "@/types/api.types";
 import { ShareButton } from "@/components/share/share-button";
 import { useFormPersistence } from "@/hooks/use-local-storage";
+import { useCreateStudyRoom } from "@/hooks/use-study-rooms";
+import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 
 interface StudyRoomFormData {
@@ -52,6 +53,8 @@ const initialFormData: StudyRoomFormData = {
 
 export default function CreateStudyRoomPage() {
   const router = useRouter();
+  const { isLoaded: isAuthLoaded } = useAuth();
+  const createStudyRoomMutation = useCreateStudyRoom();
 
   // Use form persistence hook for automatic localStorage sync
   const { formData, setFormData, updateField, clearForm, hasStoredData } = useFormPersistence<StudyRoomFormData>(
@@ -65,7 +68,6 @@ export default function CreateStudyRoomPage() {
   );
 
   const [isInstantRoom, setIsInstantRoom] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createdRoom, setCreatedRoom] = useState<StudyRoom | null>(null);
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
@@ -93,41 +95,47 @@ export default function CreateStudyRoomPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    try {
-      setSubmitting(true);
-      setError(null);
-      
-      // Get user's timezone
-      const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-
-      const createData: CreateStudyRoomDto = {
-        title: formData.title,
-        description: formData.description || undefined,
-        skills: formData.skills,
-        date: formData.date,
-        time: formData.time,
-        duration: parseInt(formData.duration),
-        maxParticipants: parseInt(formData.maxParticipants),
-        joiningFee: parseFloat(formData.joiningFee) / 100, // Convert mAYA input to AYA for storage
-        gmeetLink: formData.gmeetLink || undefined,
-        timezone: userTimezone,
-      };
-      
-      const createdRoom = await studyRoomsApi.createStudyRoom(createData);
-      
-      // Clear form from localStorage on successful submission
-      clearForm();
-      
-      // Success - show success dialog with share link
-      setCreatedRoom(createdRoom);
-      setShowSuccessDialog(true);
-    } catch (err: unknown) {
-      console.error('Error creating study room:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Failed to create study room';
-      setError(errorMessage);
-    } finally {
-      setSubmitting(false);
+    // Ensure auth is loaded before submitting
+    if (!isAuthLoaded) {
+      setError('Please wait for authentication to load');
+      return;
     }
+    
+    setError(null);
+    
+    // Get user's timezone
+    const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+    const createData: CreateStudyRoomDto = {
+      title: formData.title,
+      description: formData.description || undefined,
+      skills: formData.skills,
+      date: formData.date,
+      time: formData.time,
+      duration: parseInt(formData.duration),
+      maxParticipants: parseInt(formData.maxParticipants),
+      joiningFee: parseFloat(formData.joiningFee) / 100, // Convert mAYA input to AYA for storage
+      gmeetLink: formData.gmeetLink || undefined,
+      timezone: userTimezone,
+    };
+    
+    createStudyRoomMutation.mutate(createData, {
+      onSuccess: (room) => {
+        // Clear form from localStorage on successful submission
+        clearForm();
+        
+        // Success - show success dialog with share link
+        setCreatedRoom(room);
+        setShowSuccessDialog(true);
+      },
+      onError: (err: unknown) => {
+        console.error('Error creating study room:', err);
+        const errorMessage = err instanceof Error ? err.message : 
+          (err && typeof err === 'object' && 'message' in err) ? String((err as { message: string }).message) : 
+          'Failed to create study room';
+        setError(errorMessage);
+      },
+    });
   };
 
   return (
@@ -394,7 +402,7 @@ export default function CreateStudyRoomPage() {
                     variant="outline"
                     className="flex-1"
                     onClick={() => router.back()}
-                    disabled={submitting}
+                    disabled={createStudyRoomMutation.isPending}
                   >
                     Cancel
                   </Button>
@@ -402,16 +410,22 @@ export default function CreateStudyRoomPage() {
                     type="submit"
                     className="flex-1"
                     disabled={
-                      submitting ||
+                      createStudyRoomMutation.isPending ||
+                      !isAuthLoaded ||
                       !formData.title ||
                       formData.skills.length === 0 ||
                       (!isInstantRoom && (!formData.date || !formData.time))
                     }
                   >
-                    {submitting ? (
+                    {createStudyRoomMutation.isPending ? (
                       <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                         Creating...
+                      </>
+                    ) : !isAuthLoaded ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Loading...
                       </>
                     ) : (
                       "Create Study Room"

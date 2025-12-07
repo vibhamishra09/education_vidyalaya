@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { browseApi, RecommendationsResponse } from '@/lib/api/browse.api';
-import { BrowseFilters, BrowseResponse, BrowsePeer, StudyRoomCard } from '@/types/api.types';
+import { browseApi } from '@/lib/api/browse.api';
+import { BrowseFilters, BrowsePeer, StudyRoomCard } from '@/types/api.types';
 
 // Query Keys
 export const browseKeys = {

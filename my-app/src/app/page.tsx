@@ -190,8 +190,8 @@ export default function Home() {
                         host={{
                           name: room.createdBy.name,
                           avatar: room.createdBy.avatar || "",
-                          rating: room.hostAvgRating,
-                          reviewCount: room.hostReviewCount,
+                          rating: room.hostAvgRating ?? undefined,
+                          reviewCount: room.hostReviewCount ?? undefined,
                         }}
                         actionLabel={
                           isFull ? "Room Full" : isLive ? "Join Live" : "Join Room"

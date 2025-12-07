@@ -160,7 +160,6 @@ export function useFormPersistence<T extends object>(
   clearForm: () => void;
   hasStoredData: boolean;
 } {
-  const debounceMs = options?.debounceMs ?? 500;
   const expiresIn = options?.expiresIn ?? 24 * 60 * 60 * 1000; // 24 hours
   const excludeFields = options?.excludeFields ?? [];
 
@@ -235,7 +234,7 @@ export function useTabPersistence<T extends string>(
     defaultTabRef.current = defaultTab;
   });
 
-  const [activeTab, setActiveTabInternal, _clear] = useLocalStorage<T>(
+  const [activeTab, setActiveTabInternal] = useLocalStorage<T>(
     `tab_${tabKey}`,
     defaultTab
   );
