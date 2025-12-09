@@ -162,12 +162,12 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       { url: "/favicon.ico", sizes: "any" },
-      { url: "/icons/icon-192x192.svg", sizes: "192x192", type: "image/svg+xml" },
-      { url: "/icons/icon-512x512.svg", sizes: "512x512", type: "image/svg+xml" },
+      { url: "/icons/icon-192x192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512x512.png", sizes: "512x512", type: "image/png" },
     ],
     shortcut: "/favicon.ico",
     apple: [
-      { url: "/apple-touch-icon.svg", sizes: "180x180", type: "image/svg+xml" },
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
     ],
     other: [
       {
@@ -230,7 +230,7 @@ export default function RootLayout({
           
           {/* Explicit favicon to override defaults / cache issues */}
           <link rel="icon" href="/webyalaya-main-logo.svg?v=2" />
-          <link rel="apple-touch-icon" href="/apple-touch-icon.svg" />
+          <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
           
           {/* Preconnect for performance */}
           <link rel="preconnect" href="https://fonts.googleapis.com" />
