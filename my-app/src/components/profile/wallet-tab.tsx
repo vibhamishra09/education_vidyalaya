@@ -91,7 +91,7 @@ export const WalletTab = memo(function WalletTab({ coins, hourlyRate, isLoading 
       </div>
 
       {/* Wallet Activity Chart */}
-      <WalletChart isLoading={transactionsLoading} />
+      <WalletChart />
 
       {/* Transaction History */}
       <Card>

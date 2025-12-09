@@ -3,12 +3,22 @@
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { motion } from "framer-motion";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useRequireAuth } from "@/hooks/use-require-auth";
 
 export function FloatingActionButtons() {
   const router = useRouter();
+  const pathname = usePathname();
   const requireAuth = useRequireAuth();
+
+  // Hide on video call routes
+  const isVideoCallRoute = pathname?.includes('/rooms/') || 
+                          pathname?.includes('/sessions/') || 
+                          pathname?.includes('/studyroom/');
+
+  if (isVideoCallRoute) {
+    return null;
+  }
 
   const handleCreateRoom = () => {
     requireAuth(() => {

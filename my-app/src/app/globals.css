@@ -305,6 +305,36 @@
     line-height: 1.6;
     font-weight: 400;
     letter-spacing: -0.01em;
+    overflow-x: hidden;
+  }
+
+  /* Prevent scrollbars on video call pages */
+  body:has([class*="video-grid-container"]) {
+    overflow: hidden !important;
+    position: fixed !important;
+    width: 100% !important;
+    height: 100% !important;
+  }
+
+  html:has([class*="video-grid-container"]) {
+    overflow: hidden !important;
+  }
+
+  /* Hide scrollbars on mobile for video call */
+  @media (max-width: 768px) {
+    body:has([class*="video-grid-container"]),
+    html:has([class*="video-grid-container"]) {
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none !important;
+      -ms-overflow-style: none !important;
+    }
+    
+    body:has([class*="video-grid-container"])::-webkit-scrollbar,
+    html:has([class*="video-grid-container"])::-webkit-scrollbar {
+      display: none !important;
+      width: 0 !important;
+      height: 0 !important;
+    }
   }
 
   h1, h2, h3, h4, h5, h6 {
