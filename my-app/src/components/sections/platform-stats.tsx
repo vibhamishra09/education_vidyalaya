@@ -125,12 +125,6 @@ export function PlatformStats() {
       gradient: "bg-gradient-to-br from-blue-500/5 to-transparent",
     },
     {
-      icon: <GraduationCap className="w-6 h-6 text-purple-600" />,
-      value: displayStats.sessionsCompleted,
-      label: "Sessions Completed",
-      gradient: "bg-gradient-to-br from-purple-500/5 to-transparent",
-    },
-    {
       icon: <Clock className="w-6 h-6 text-amber-600" />,
       value: displayStats.learningHours,
       label: "Hours of Learning",

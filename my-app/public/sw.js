@@ -10,8 +10,8 @@ const STATIC_ASSETS = [
   '/offline',
   '/manifest.json',
   '/webyalaya-main-logo.svg',
-  '/icons/icon-192x192.svg',
-  '/icons/icon-512x512.svg',
+  '/icons/icon-192x192.png',
+  '/icons/icon-512x512.png',
 ];
 
 // Install event - cache static assets
@@ -144,8 +144,8 @@ self.addEventListener('push', (event) => {
 
   const options = {
     body: data.body,
-    icon: data.icon || '/icons/icon-192x192.svg',
-    badge: '/icons/icon-72x72.svg',
+    icon: data.icon || '/icons/icon-192x192.png',
+    badge: '/icons/icon-72x72.png',
     vibrate: [200, 100, 200],
     tag: data.data?.notificationId || 'default',
     requireInteraction: data.data?.actionType?.includes('URGENT'),

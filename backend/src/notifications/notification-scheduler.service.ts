@@ -555,10 +555,13 @@ export class NotificationSchedulerService {
   }
 
   private async sendPeerSessionEndNotifications(now: Date) {
-    // Find peer sessions that should have ended (start time + duration < now) but are still UPCOMING
+    // Find peer sessions that should have ended (start time + duration < now) 
+    // but are still UPCOMING or ONGOING
     const endedSessions = await this.prisma.peerSession.findMany({
       where: {
-        sessionStatus: SessionStatus.UPCOMING,
+        sessionStatus: {
+          in: [SessionStatus.UPCOMING, SessionStatus.ONGOING],
+        },
         // Calculate end time: date + duration (in minutes)
         // We use raw SQL to calculate the end time
         // This finds sessions where (date + interval '1 minute' * duration) < now
@@ -579,8 +582,14 @@ export class NotificationSchedulerService {
     });
 
     for (const session of actuallyEndedSessions) {
+      // Update sessions that are either UPCOMING or ONGOING to DONE
       const locked = await this.prisma.peerSession.updateMany({
-        where: { id: session.id, sessionStatus: SessionStatus.UPCOMING },
+        where: { 
+          id: session.id, 
+          sessionStatus: {
+            in: [SessionStatus.UPCOMING, SessionStatus.ONGOING],
+          },
+        },
         data: { sessionStatus: SessionStatus.DONE },
       });
 
@@ -692,10 +701,13 @@ export class NotificationSchedulerService {
   }
 
   private async sendStudyRoomEndNotifications(now: Date) {
-    // Find study rooms that should have ended (start time + duration < now) but are still UPCOMING
+    // Find study rooms that should have ended (start time + duration < now) 
+    // but are still UPCOMING or ONGOING
     const endedRooms = await this.prisma.studyRoom.findMany({
       where: {
-        sessionStatus: SessionStatus.UPCOMING,
+        sessionStatus: {
+          in: [SessionStatus.UPCOMING, SessionStatus.ONGOING],
+        },
       },
       include: {
         createdBy: true,
@@ -715,8 +727,14 @@ export class NotificationSchedulerService {
     });
 
     for (const room of actuallyEndedRooms) {
+      // Update rooms that are either UPCOMING or ONGOING to DONE
       const locked = await this.prisma.studyRoom.updateMany({
-        where: { id: room.id, sessionStatus: SessionStatus.UPCOMING },
+        where: { 
+          id: room.id, 
+          sessionStatus: {
+            in: [SessionStatus.UPCOMING, SessionStatus.ONGOING],
+          },
+        },
         data: { sessionStatus: SessionStatus.DONE },
       });
 

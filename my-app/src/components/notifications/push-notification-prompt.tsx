@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Bell, X, AlertCircle } from "lucide-react";
 import { usePushNotifications } from "@/hooks";
 import { motion, AnimatePresence } from "framer-motion";
+import { useUser } from "@clerk/nextjs";
 
 const DISMISSED_KEY = "push-notification-prompt-dismissed";
 const DISMISS_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -13,6 +14,7 @@ const DISMISS_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days
 export function PushNotificationPrompt() {
   const [isDismissed, setIsDismissed] = useState(true);
   const [isVisible, setIsVisible] = useState(false);
+  const { isSignedIn } = useUser();
   const {
     isSupported,
     permission,
@@ -23,6 +25,11 @@ export function PushNotificationPrompt() {
   } = usePushNotifications();
 
   useEffect(() => {
+    // Don't show prompt if user is not signed in
+    if (!isSignedIn) {
+      return;
+    }
+
     // Check if prompt was dismissed
     const dismissedData = localStorage.getItem(DISMISSED_KEY);
     if (dismissedData) {
@@ -44,7 +51,7 @@ export function PushNotificationPrompt() {
 
       return () => clearTimeout(timer);
     }
-  }, [isSupported, isSubscribed, permission]);
+  }, [isSupported, isSubscribed, permission, isSignedIn]);
 
   const handleEnable = async () => {
     const success = await subscribe();
@@ -64,7 +71,8 @@ export function PushNotificationPrompt() {
     );
   };
 
-  if (isDismissed || !isSupported) {
+  // Don't show if user is not signed in, dismissed, or not supported
+  if (!isSignedIn || isDismissed || !isSupported) {
     return null;
   }
 

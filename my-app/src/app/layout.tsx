@@ -53,6 +53,11 @@ const gotham = localFont({
 // Base URL for the site
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://webyalaya.com";
 
+// Determine if this is a production domain (not test or dev)
+const isProduction = siteUrl.includes("webyalaya.com") && 
+                     !siteUrl.includes("test.webyalaya.com") && 
+                     !siteUrl.includes("dev.webyalaya.com");
+
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
@@ -94,20 +99,35 @@ export const metadata: Metadata = {
   creator: "Webyalaya",
   publisher: "Webyalaya",
   
-  // Robots
-  robots: {
-    index: true,
-    follow: true,
-    nocache: false,
-    googleBot: {
-      index: true,
-      follow: true,
-      noimageindex: false,
-      "max-video-preview": -1,
-      "max-image-preview": "large",
-      "max-snippet": -1,
-    },
-  },
+  // Robots - conditionally set based on environment
+  // For test/dev environments, set noindex to prevent search engine indexing
+  robots: isProduction
+    ? {
+        index: true,
+        follow: true,
+        nocache: false,
+        googleBot: {
+          index: true,
+          follow: true,
+          noimageindex: false,
+          "max-video-preview": -1,
+          "max-image-preview": "large",
+          "max-snippet": -1,
+        },
+      }
+    : {
+        index: false,
+        follow: false,
+        nocache: true,
+        googleBot: {
+          index: false,
+          follow: false,
+          noimageindex: true,
+          "max-video-preview": -1,
+          "max-image-preview": "none",
+          "max-snippet": -1,
+        },
+      },
   
   // Open Graph
   openGraph: {
@@ -142,12 +162,12 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       { url: "/favicon.ico", sizes: "any" },
-      { url: "/icons/icon-192x192.svg", sizes: "192x192", type: "image/svg+xml" },
-      { url: "/icons/icon-512x512.svg", sizes: "512x512", type: "image/svg+xml" },
+      { url: "/icons/icon-192x192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512x512.png", sizes: "512x512", type: "image/png" },
     ],
     shortcut: "/favicon.ico",
     apple: [
-      { url: "/apple-touch-icon.svg", sizes: "180x180", type: "image/svg+xml" },
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
     ],
     other: [
       {
@@ -210,7 +230,7 @@ export default function RootLayout({
           
           {/* Explicit favicon to override defaults / cache issues */}
           <link rel="icon" href="/webyalaya-main-logo.svg?v=2" />
-          <link rel="apple-touch-icon" href="/apple-touch-icon.svg" />
+          <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
           
           {/* Preconnect for performance */}
           <link rel="preconnect" href="https://fonts.googleapis.com" />
