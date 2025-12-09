@@ -6,6 +6,7 @@ import { useUser } from "@clerk/nextjs";
 import { Navigation } from "@/components/layout/navigation";
 import { HeroSection } from "@/components/sections/hero";
 import { PlatformStats } from "@/components/sections/platform-stats";
+import { RatingsSection } from "@/components/sections/ratings-section";
 import { StudyRoomCard } from "@/components/cards/study-room-card";
 import { DebateRoomCard } from "@/components/cards/debate-room-card";
 import { Footer } from "@/components/layout/footer";
@@ -104,9 +105,6 @@ export function HomeClient() {
 
       <main className="flex-1">
         <HeroSection />
-
-        {/* Platform Stats Section */}
-        <PlatformStats />
 
         {/* Trending Study Rooms Section */}
         <section className="py-16 bg-muted/30" id="features">
@@ -235,6 +233,12 @@ export function HomeClient() {
             </div>
           </div>
         </section>
+
+        {/* Platform Stats Section */}
+        <PlatformStats />
+
+        {/* Ratings & Reviews Section */}
+        <RatingsSection />
       </main>
 
       <Footer />

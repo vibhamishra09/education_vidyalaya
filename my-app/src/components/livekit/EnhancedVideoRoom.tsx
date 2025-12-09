@@ -243,7 +243,7 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 	}
 
 	return (
-		<div className="h-screen w-screen flex flex-col bg-gradient-to-br from-gray-950 via-gray-900 to-black overflow-hidden">
+		<div className="h-screen w-screen flex flex-col bg-[#202124] overflow-hidden" style={{ overflow: 'hidden', position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}>
 			<LiveKitRoom
 				video={true}
 				audio={{
@@ -254,7 +254,7 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 				token={token}
 				serverUrl={serverUrl}
 				connect={true}
-				className="flex-1 flex flex-col"
+				className="flex-1 flex flex-col overflow-hidden"
 			>
 				<VideoRoomContent
 					showChat={showChat}
@@ -366,40 +366,40 @@ function VideoRoomContent({
 	}
 
 	return (
-		<div className="flex-1 flex relative">
+		<div className="flex-1 flex relative bg-[#202124] overflow-hidden" style={{ overflow: 'hidden', height: '100%', width: '100%' }}>
 			{/* Main Video Area */}
-			<div className={`flex-1 flex flex-col transition-all duration-300 ease-in-out ${showChat && !showParticipants ? 'md:mr-80' : ''} ${showParticipants && !showChat ? 'md:mr-64' : ''} ${showChat && showParticipants ? 'md:mr-[22rem]' : ''}`}>
-				{/* Clean Top Bar */}
-				<div className="h-12 md:h-14 bg-black/40 backdrop-blur-md border-b border-white/10 flex items-center justify-between px-3 md:px-6 z-30">
+			<div className={`flex-1 flex flex-col transition-all duration-300 ease-in-out overflow-hidden ${showChat && !showParticipants ? 'md:mr-80' : ''} ${showParticipants && !showChat ? 'md:mr-64' : ''} ${showChat && showParticipants ? 'md:mr-[22rem]' : ''}`}>
+				{/* Top Bar - Google Meet style */}
+				<div className="h-12 md:h-14 bg-[#1f1f1f] border-b border-white/5 flex items-center justify-between px-4 md:px-6 z-30 flex-shrink-0">
 					{/* Logo and Room Info */}
-					<div className="flex items-center gap-2 md:gap-4 min-w-0 flex-1">
+					<div className="flex items-center gap-3 md:gap-4 min-w-0 flex-1">
 						<div className="flex items-center gap-2 md:gap-3 min-w-0">
-							<div className="relative h-6 w-6 md:h-8 md:w-8 flex-shrink-0">
+							<div className="relative h-7 w-7 md:h-8 md:w-8 flex-shrink-0">
 								<Image
 									src="/webyalaya-main-logo.svg"
 									alt="Webyalaya"
 									fill
-									className="object-contain p-1"
+									className="object-contain"
 									priority
 								/>
 							</div>
 							<div className="flex flex-col min-w-0">
-								<span className="text-white font-brand text-xs md:text-sm leading-tight truncate">
+								<span className="text-white font-sans font-medium text-sm md:text-base leading-tight truncate">
 									{sessionTitle || 'Webyalaya'}
 								</span>
-								<span className="text-white/60 text-[10px] md:text-xs truncate">
-									{sessionTitle ? 'Video Call' : (params.room?.replace('session-', '').replace('studyroom-', '') || 'Video Call')}
+								<span className="text-white/50 text-xs md:text-sm truncate">
+									{sessionTitle ? 'Video Call' : (params?.room?.replace('session-', '').replace('studyroom-', '') || 'Video Call')}
 								</span>
 							</div>
 						</div>
 
 						{/* Session Timer */}
 						{timerEnabled && (
-							<div className="hidden md:flex items-center gap-2 ml-4 px-3 py-1.5 bg-black/60 backdrop-blur-sm rounded-lg border border-white/10">
-								<Clock className="h-4 w-4 text-white/80" />
+							<div className="hidden md:flex items-center gap-2 ml-4 px-3 py-1.5 bg-white/5 rounded-md">
+								<Clock className="h-4 w-4 text-white/70" />
 								<span
-									className={`font-mono font-semibold text-sm ${
-										minutesLeft <= 2 ? "text-red-400 animate-pulse" : "text-white"
+									className={`font-mono font-medium text-sm ${
+										minutesLeft <= 2 ? "text-[#ea4335]" : "text-white/90"
 									}`}
 								>
 									{formattedTime}
@@ -409,140 +409,212 @@ function VideoRoomContent({
 					</div>
 
 					{/* Action Buttons */}
-					<div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
+					<div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
 						<Button
 							variant="ghost"
 							size="sm"
 							onClick={() => setShowParticipants(!showParticipants)}
-							className={`h-8 w-8 md:h-9 md:w-auto md:px-3 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-all p-0 ${
+							className={`h-9 w-9 md:h-10 md:w-10 text-white/70 hover:text-white hover:bg-white/10 rounded-full transition-all p-0 ${
 								showParticipants ? 'bg-white/10 text-white' : ''
 							}`}
+							title="Participants"
 						>
-							<Users className="h-3.5 w-3.5 md:h-4 md:w-4" />
+							<Users className="h-4 w-4 md:h-5 md:w-5" />
 						</Button>
 						<Button
 							variant="ghost"
 							size="sm"
 							onClick={() => setShowChat(!showChat)}
-							className={`h-8 w-8 md:h-9 md:w-auto md:px-3 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-all p-0 ${
+							className={`h-9 w-9 md:h-10 md:w-10 text-white/70 hover:text-white hover:bg-white/10 rounded-full transition-all p-0 ${
 								showChat ? 'bg-white/10 text-white' : ''
 							}`}
+							title="Chat"
 						>
-							<MessageSquare className="h-3.5 w-3.5 md:h-4 md:w-4" />
+							<MessageSquare className="h-4 w-4 md:h-5 md:w-5" />
 						</Button>
 						<Button
 							variant="ghost"
 							size="sm"
 							onClick={toggleFullscreen}
-							className="h-8 w-8 md:h-9 md:w-auto md:px-3 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-all p-0 hidden md:flex"
+							className="h-9 w-9 md:h-10 md:w-10 text-white/70 hover:text-white hover:bg-white/10 rounded-full transition-all p-0 hidden md:flex"
+							title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
 						>
-							{isFullscreen ? <Minimize2 className="h-3.5 w-3.5 md:h-4 md:w-4" /> : <Maximize2 className="h-3.5 w-3.5 md:h-4 md:w-4" />}
+							{isFullscreen ? <Minimize2 className="h-4 w-4 md:h-5 md:w-5" /> : <Maximize2 className="h-4 w-4 md:h-5 md:w-5" />}
 						</Button>
 					</div>
 				</div>
 
-				{/* Video Grid - Clean and Spacious */}
-				<div className="flex-1 overflow-y-auto bg-black/50 relative pb-16 md:pb-20">
+				{/* Video Grid - Google Meet style - Properly constrained and centered */}
+				<div className="flex-1 overflow-hidden bg-[#202124] relative min-h-0 video-grid-container">
+					<style dangerouslySetInnerHTML={{__html: `
+						/* Hide scrollbars on mobile */
+						@media (max-width: 768px) {
+							* {
+								-webkit-overflow-scrolling: touch;
+								scrollbar-width: none !important;
+								-ms-overflow-style: none !important;
+							}
+							*::-webkit-scrollbar {
+								display: none !important;
+								width: 0 !important;
+								height: 0 !important;
+							}
+						}
+						
+						.video-grid-container [class*="lk-grid"],
+						.video-grid-container [class*="grid-layout"],
+						.video-grid-container > div[class*="grid"] {
+							display: grid !important;
+							height: 100% !important;
+							width: 100% !important;
+							overflow: hidden !important;
+							place-items: center !important;
+							grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)) !important;
+							grid-auto-rows: minmax(0, 1fr) !important;
+							gap: 0 !important;
+							margin: 0 !important;
+							padding: 0 !important;
+						}
+						.video-grid-container [class*="lk-participant"],
+						.video-grid-container [class*="participant-tile"],
+						.video-grid-container > div[class*="grid"] > div {
+							width: 100% !important;
+							height: 100% !important;
+							max-width: 100% !important;
+							max-height: 100% !important;
+							display: flex !important;
+							align-items: center !important;
+							justify-content: center !important;
+							overflow: hidden !important;
+							position: relative !important;
+						}
+						/* Ensure participant names are visible */
+						.video-grid-container [class*="lk-participant"] [class*="name"],
+						.video-grid-container [class*="participant-tile"] [class*="name"],
+						.video-grid-container [class*="lk-participant"] [class*="identity"],
+						.video-grid-container [class*="participant-tile"] [class*="identity"],
+						.video-grid-container [class*="lk-participant"] > div:not([class*="video"]):not([class*="canvas"]),
+						.video-grid-container [class*="participant-tile"] > div:not([class*="video"]):not([class*="canvas"]) {
+							display: block !important;
+							visibility: visible !important;
+							opacity: 1 !important;
+							z-index: 10 !important;
+						}
+						.video-grid-container video,
+						.video-grid-container canvas {
+							width: 100% !important;
+							height: 100% !important;
+							object-fit: contain !important;
+							max-width: 100% !important;
+							max-height: 100% !important;
+						}
+					`}} />
 					{tracks.length > 0 ? (
-						<GridLayout tracks={tracks} className="h-full w-full min-h-full">
+						<GridLayout 
+							tracks={tracks} 
+							className="h-full w-full"
+						>
 							<ParticipantTile />
 						</GridLayout>
 					) : (
 						<div className="h-full w-full flex items-center justify-center">
-							<p className="text-white/60 text-sm">Waiting for participants...</p>
+							<p className="text-white/50 text-sm font-sans">Waiting for participants...</p>
 						</div>
 					)}
 					<RoomAudioRenderer />
 				</div>
 			</div>
 
-			{/* Custom Controls Bar - Fixed at bottom */}
-			<div className={`fixed bottom-0 left-0 right-0 h-16 md:h-20 bg-black/60 backdrop-blur-md border-t border-white/10 flex items-center justify-center gap-2 md:gap-3 px-2 md:px-6 z-50 ${showChat && !showParticipants ? 'md:right-80' : ''} ${showParticipants && !showChat ? 'md:right-64' : ''} ${showChat && showParticipants ? 'md:right-[22rem]' : ''}`}>
-					{/* Video Toggle */}
-					<Button
-						{...videoButtonProps}
-						variant={isVideoEnabled ? "default" : "destructive"}
-						size="lg"
-						className={`h-10 w-10 md:h-12 md:w-auto md:px-6 rounded-full transition-all p-0 ${
-							isVideoEnabled 
-								? 'bg-white/20 hover:bg-white/30 text-white' 
-								: 'bg-red-600 hover:bg-red-700 text-white'
-						}`}
-					>
-						{isVideoEnabled ? <Video className="h-4 w-4 md:h-5 md:w-5" /> : <VideoOff className="h-4 w-4 md:h-5 md:w-5" />}
-					</Button>
+			{/* Controls Bar - Google Meet style, fixed at bottom - Always visible */}
+			<div className={`fixed bottom-0 left-0 right-0 h-16 md:h-20 bg-[#1f1f1f] border-t border-white/5 flex items-center justify-center gap-1.5 md:gap-3 px-2 md:px-4 z-50 ${showChat && !showParticipants ? 'md:right-80' : ''} ${showParticipants && !showChat ? 'md:right-64' : ''} ${showChat && showParticipants ? 'md:right-[22rem]' : ''}`} style={{ overflowX: 'hidden', overflowY: 'hidden' }}>
+				{/* Video Toggle */}
+				<Button
+					{...videoButtonProps}
+					variant="ghost"
+					size="lg"
+					className={`h-10 w-10 md:h-12 md:w-12 rounded-full transition-all p-0 flex-shrink-0 ${
+						isVideoEnabled 
+							? 'bg-white/10 hover:bg-white/20 text-white' 
+							: 'bg-[#ea4335] hover:bg-[#d33b2c] text-white'
+					}`}
+					title={isVideoEnabled ? "Turn off camera" : "Turn on camera"}
+				>
+					{isVideoEnabled ? <Video className="h-5 w-5 md:h-6 md:w-6" /> : <VideoOff className="h-5 w-5 md:h-6 md:w-6" />}
+				</Button>
 
-					{/* Mic Toggle */}
-					<Button
-						{...micButtonProps}
-						variant={isMicEnabled ? "default" : "destructive"}
-						size="lg"
-						className={`h-10 w-10 md:h-12 md:w-auto md:px-6 rounded-full transition-all p-0 ${
-							isMicEnabled 
-								? 'bg-white/20 hover:bg-white/30 text-white' 
-								: 'bg-red-600 hover:bg-red-700 text-white'
-						}`}
-					>
-						{isMicEnabled ? <Mic className="h-4 w-4 md:h-5 md:w-5" /> : <MicOff className="h-4 w-4 md:h-5 md:w-5" />}
-					</Button>
+				{/* Mic Toggle */}
+				<Button
+					{...micButtonProps}
+					variant="ghost"
+					size="lg"
+					className={`h-10 w-10 md:h-12 md:w-12 rounded-full transition-all p-0 flex-shrink-0 ${
+						isMicEnabled 
+							? 'bg-white/10 hover:bg-white/20 text-white' 
+							: 'bg-[#ea4335] hover:bg-[#d33b2c] text-white'
+					}`}
+					title={isMicEnabled ? "Turn off microphone" : "Turn on microphone"}
+				>
+					{isMicEnabled ? <Mic className="h-5 w-5 md:h-6 md:w-6" /> : <MicOff className="h-5 w-5 md:h-6 md:w-6" />}
+				</Button>
 
 				{/* Audio Output Toggle - Hidden on mobile */}
 				<Button
 					onClick={toggleAudio}
-					variant={isAudioEnabled ? "default" : "secondary"}
+					variant="ghost"
 					size="lg"
-					className={`h-10 w-10 md:h-12 md:w-auto md:px-6 rounded-full transition-all p-0 hidden md:flex ${
+					className={`h-10 w-10 md:h-12 md:w-12 rounded-full transition-all p-0 hidden md:flex flex-shrink-0 ${
 						isAudioEnabled 
-							? 'bg-white/20 hover:bg-white/30 text-white' 
-							: 'bg-white/10 hover:bg-white/20 text-white/60'
+							? 'bg-white/10 hover:bg-white/20 text-white' 
+							: 'bg-white/5 hover:bg-white/10 text-white/50'
 					}`}
+					title={isAudioEnabled ? "Mute all" : "Unmute all"}
 				>
-					{isAudioEnabled ? <Volume2 className="h-4 w-4 md:h-5 md:w-5" /> : <VolumeX className="h-4 w-4 md:h-5 md:w-5" />}
+					{isAudioEnabled ? <Volume2 className="h-5 w-5 md:h-6 md:w-6" /> : <VolumeX className="h-5 w-5 md:h-6 md:w-6" />}
 				</Button>
 
 				{/* Screen Share Toggle */}
 				<Button
 					{...screenShareButtonProps}
-					variant={isScreenShareEnabled ? "default" : "secondary"}
+					variant="ghost"
 					size="lg"
-					className={`h-10 w-10 md:h-12 md:w-auto md:px-6 rounded-full transition-all p-0 hidden md:flex ${
+					className={`h-10 w-10 md:h-12 md:w-12 rounded-full transition-all p-0 hidden md:flex flex-shrink-0 ${
 						isScreenShareEnabled 
-							? 'bg-emerald-600 hover:bg-emerald-700 text-white' 
-							: 'bg-white/20 hover:bg-white/30 text-white'
+							? 'bg-[#00DC6E] hover:bg-[#00b058] text-white' 
+							: 'bg-white/10 hover:bg-white/20 text-white'
 					}`}
 					title={isScreenShareEnabled ? "Stop sharing" : "Share screen"}
 				>
-					{isScreenShareEnabled ? <MonitorOff className="h-4 w-4 md:h-5 md:w-5" /> : <MonitorUp className="h-4 w-4 md:h-5 md:w-5" />}
+					{isScreenShareEnabled ? <MonitorOff className="h-5 w-5 md:h-6 md:w-6" /> : <MonitorUp className="h-5 w-5 md:h-6 md:w-6" />}
 				</Button>
 
-				{/* Leave Button */}
-					<Button
-						onClick={onLeave}
-						variant="destructive"
-						size="lg"
-						className="h-10 px-4 md:h-12 md:px-8 rounded-full bg-red-600 hover:bg-red-700 text-white font-semibold text-xs md:text-base"
-					>
-						Leave
-					</Button>
-				</div>
+				{/* Leave Button - Always visible */}
+				<Button
+					onClick={onLeave}
+					variant="ghost"
+					size="lg"
+					className="h-10 px-3 md:h-12 md:px-6 rounded-full bg-[#ea4335] hover:bg-[#d33b2c] text-white font-medium text-xs md:text-base flex-shrink-0"
+				>
+					Leave
+				</Button>
+			</div>
 
 			{/* Chat Sidebar - Mobile: Full screen overlay, Desktop: Sidebar */}
 			{showChat && (
 				<>
 					{/* Mobile Overlay Backdrop */}
 					<div
-						className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden"
+						className="fixed inset-0 bg-black/70 z-40 md:hidden"
 						onClick={() => setShowChat(false)}
 					/>
 					{/* Chat Panel */}
-					<div className="fixed md:absolute right-0 top-0 bottom-0 w-full md:w-80 bg-card/95 backdrop-blur-xl border-l border-border flex flex-col shadow-2xl z-50 md:z-10">
-						<div className="h-12 md:h-14 bg-card/60 backdrop-blur-md border-b border-border flex items-center justify-between px-4">
-							<h3 className="font-semibold text-sm text-foreground">Chat</h3>
+					<div className="fixed md:absolute right-0 top-0 bottom-0 w-full md:w-80 bg-[#1f1f1f] border-l border-white/5 flex flex-col z-50 md:z-10">
+						<div className="h-12 md:h-14 bg-[#1f1f1f] border-b border-white/5 flex items-center justify-between px-4">
+							<h3 className="font-medium text-sm md:text-base text-white font-sans">Chat</h3>
 							<Button
 								variant="ghost"
 								size="sm"
 								onClick={() => setShowChat(false)}
-								className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground hover:bg-primary/10 rounded-lg"
+								className="h-8 w-8 p-0 text-white/60 hover:text-white hover:bg-white/10 rounded-full"
 							>
 								<X className="h-4 w-4" />
 							</Button>
@@ -552,7 +624,7 @@ function VideoRoomContent({
 								<ChatWidget channelId={channelId} className="h-full" />
 							) : (
 								<div className="flex items-center justify-center h-full">
-									<p className="text-muted-foreground text-sm px-4 text-center">
+									<p className="text-white/50 text-sm px-4 text-center font-sans">
 										Chat is not available for this session
 									</p>
 								</div>
@@ -567,18 +639,18 @@ function VideoRoomContent({
 				<>
 					{/* Mobile Overlay Backdrop */}
 					<div 
-						className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden"
+						className="fixed inset-0 bg-black/70 z-40 md:hidden"
 						onClick={() => setShowParticipants(false)}
 					/>
 					{/* Participants Panel */}
-					<div className={`fixed md:absolute right-0 top-0 bottom-0 w-full md:w-64 bg-gray-900/95 backdrop-blur-xl border-l border-white/10 flex flex-col shadow-2xl z-50 md:z-20 ${showChat ? 'md:right-80' : ''}`}>
-						<div className="h-12 md:h-14 bg-black/40 backdrop-blur-md border-b border-white/10 flex items-center justify-between px-4">
-							<h3 className="font-semibold text-sm text-white">Participants</h3>
+					<div className={`fixed md:absolute right-0 top-0 bottom-0 w-full md:w-64 bg-[#1f1f1f] border-l border-white/5 flex flex-col z-50 md:z-20 ${showChat ? 'md:right-80' : ''}`}>
+						<div className="h-12 md:h-14 bg-[#1f1f1f] border-b border-white/5 flex items-center justify-between px-4">
+							<h3 className="font-medium text-sm md:text-base text-white font-sans">Participants</h3>
 							<Button
 								variant="ghost"
 								size="sm"
 								onClick={() => setShowParticipants(false)}
-								className="h-8 w-8 p-0 text-white/60 hover:text-white hover:bg-white/10 rounded-lg"
+								className="h-8 w-8 p-0 text-white/60 hover:text-white hover:bg-white/10 rounded-full"
 							>
 								<X className="h-4 w-4" />
 							</Button>
@@ -597,29 +669,29 @@ function ParticipantList() {
 	const participants = useParticipants()
 
 	return (
-		<div className="space-y-1.5 md:space-y-2">
+		<div className="space-y-1">
 			{participants.length === 0 ? (
 				<div className="text-center py-6 md:py-8">
-					<p className="text-xs md:text-sm text-white/50">No other participants</p>
+					<p className="text-xs md:text-sm text-white/50 font-sans">No other participants</p>
 				</div>
 			) : (
 				participants.map((participant) => (
 					<div
 						key={participant.identity}
-						className="flex items-center gap-2 md:gap-3 p-2 md:p-3 rounded-lg hover:bg-white/5 transition-colors group"
+						className="flex items-center gap-3 p-2 md:p-3 rounded-lg hover:bg-white/5 transition-colors group"
 					>
-						<div className="relative h-8 w-8 md:h-10 md:w-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold flex-shrink-0 text-xs md:text-sm">
+						<div className="relative h-9 w-9 md:h-10 md:w-10 rounded-full bg-gradient-to-br from-[#008CD2] to-[#00DC6E] flex items-center justify-center text-white font-medium flex-shrink-0 text-sm md:text-base font-sans">
 							{participant.name?.charAt(0).toUpperCase() || participant.identity.charAt(0).toUpperCase()}
 							{participant.isSpeaking && (
-								<div className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 md:h-3 md:w-3 bg-green-500 rounded-full border-2 border-gray-900 animate-pulse" />
+								<div className="absolute -bottom-0.5 -right-0.5 h-3 w-3 md:h-3.5 md:w-3.5 bg-[#00DC6E] rounded-full border-2 border-[#1f1f1f] animate-pulse" />
 							)}
 						</div>
 						<div className="flex-1 min-w-0">
-							<p className="font-medium text-xs md:text-sm text-white truncate">
+							<p className="font-medium text-sm md:text-base text-white truncate font-sans">
 								{participant.name || participant.identity}
 							</p>
 							{participant.isSpeaking && (
-								<p className="text-[10px] md:text-xs text-green-400 mt-0.5">Speaking</p>
+								<p className="text-xs text-[#00DC6E] mt-0.5 font-sans">Speaking</p>
 							)}
 						</div>
 					</div>
