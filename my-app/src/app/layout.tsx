@@ -53,6 +53,11 @@ const gotham = localFont({
 // Base URL for the site
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://webyalaya.com";
 
+// Determine if this is a production domain (not test or dev)
+const isProduction = siteUrl.includes("webyalaya.com") && 
+                     !siteUrl.includes("test.webyalaya.com") && 
+                     !siteUrl.includes("dev.webyalaya.com");
+
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
@@ -94,20 +99,35 @@ export const metadata: Metadata = {
   creator: "Webyalaya",
   publisher: "Webyalaya",
   
-  // Robots
-  robots: {
-    index: true,
-    follow: true,
-    nocache: false,
-    googleBot: {
-      index: true,
-      follow: true,
-      noimageindex: false,
-      "max-video-preview": -1,
-      "max-image-preview": "large",
-      "max-snippet": -1,
-    },
-  },
+  // Robots - conditionally set based on environment
+  // For test/dev environments, set noindex to prevent search engine indexing
+  robots: isProduction
+    ? {
+        index: true,
+        follow: true,
+        nocache: false,
+        googleBot: {
+          index: true,
+          follow: true,
+          noimageindex: false,
+          "max-video-preview": -1,
+          "max-image-preview": "large",
+          "max-snippet": -1,
+        },
+      }
+    : {
+        index: false,
+        follow: false,
+        nocache: true,
+        googleBot: {
+          index: false,
+          follow: false,
+          noimageindex: true,
+          "max-video-preview": -1,
+          "max-image-preview": "none",
+          "max-snippet": -1,
+        },
+      },
   
   // Open Graph
   openGraph: {
