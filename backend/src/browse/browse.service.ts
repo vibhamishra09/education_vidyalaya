@@ -74,10 +74,12 @@ export class BrowseService {
       ],
     });
 
-    // Find upcoming study rooms that match user's wanted skills
+    // Find upcoming and ongoing study rooms that match user's wanted skills
     const recommendedStudyRooms = await this.prisma.studyRoom.findMany({
       where: {
-        sessionStatus: SessionStatus.UPCOMING,
+        sessionStatus: {
+          in: [SessionStatus.UPCOMING, SessionStatus.ONGOING],
+        },
         createdBy: { id: { not: userId } }, // Exclude own rooms
         skills: {
           some: {
@@ -221,8 +223,11 @@ export class BrowseService {
     }
 
     // Build study room where clause for counting
+    // Include both UPCOMING and ONGOING study rooms
     const studyRoomWhere: any = {
-      sessionStatus: SessionStatus.UPCOMING,
+      sessionStatus: {
+        in: [SessionStatus.UPCOMING, SessionStatus.ONGOING],
+      },
     };
     if (search) {
       studyRoomWhere.OR = [
@@ -350,40 +355,55 @@ export class BrowseService {
         orderBy: { date: 'asc' },
       });
 
+      // Map and sort study rooms: prioritize ongoing rooms first
+      const mappedStudyRooms = studyRooms.map((room) => {
+        const hostReviews = room.createdBy.reviewsReceived;
+        const hostAvgRating =
+          hostReviews.length > 0
+            ? hostReviews.reduce((sum, r) => sum + r.rating, 0) /
+              hostReviews.length
+            : null;
+        const hostTotalSessions =
+          room.createdBy._count.studyRooms +
+          room.createdBy._count.peerSessionsReceived;
+
+        return {
+          id: room.id,
+          title: room.title,
+          description: room.description,
+          sessionStatus: room.sessionStatus,
+          date: room.date,
+          duration: room.duration,
+          maxParticipants: room.maxParticipants,
+          joiningFee: room.joiningFee,
+          participantCount: room.learners.length,
+          createdBy: {
+            id: room.createdBy.id,
+            name: room.createdBy.name,
+            avatar: room.createdBy.avatar,
+          },
+          skills: room.skills.map((s) => s.skill.name),
+          hostAvgRating,
+          hostReviewCount: hostReviews.length,
+          hostTotalSessions,
+        };
+      });
+
+      // Sort: ongoing rooms first, then by date
+      mappedStudyRooms.sort((a, b) => {
+        if (a.sessionStatus === SessionStatus.ONGOING && b.sessionStatus !== SessionStatus.ONGOING) {
+          return -1;
+        }
+        if (a.sessionStatus !== SessionStatus.ONGOING && b.sessionStatus === SessionStatus.ONGOING) {
+          return 1;
+        }
+        // Both have same status priority, sort by date
+        return new Date(a.date).getTime() - new Date(b.date).getTime();
+      });
+
       return {
         peers: [],
-        studyRooms: studyRooms.map((room) => {
-          const hostReviews = room.createdBy.reviewsReceived;
-          const hostAvgRating =
-            hostReviews.length > 0
-              ? hostReviews.reduce((sum, r) => sum + r.rating, 0) /
-                hostReviews.length
-              : null;
-          const hostTotalSessions =
-            room.createdBy._count.studyRooms +
-            room.createdBy._count.peerSessionsReceived;
-
-          return {
-            id: room.id,
-            title: room.title,
-            description: room.description,
-            sessionStatus: room.sessionStatus,
-            date: room.date,
-            duration: room.duration,
-            maxParticipants: room.maxParticipants,
-            joiningFee: room.joiningFee,
-            participantCount: room.learners.length,
-            createdBy: {
-              id: room.createdBy.id,
-              name: room.createdBy.name,
-              avatar: room.createdBy.avatar,
-            },
-            skills: room.skills.map((s) => s.skill.name),
-            hostAvgRating,
-            hostReviewCount: hostReviews.length,
-            hostTotalSessions,
-          };
-        }),
+        studyRooms: mappedStudyRooms,
         counts: {
           peers: peerCount,
           studyRooms: studyRoomCount,
