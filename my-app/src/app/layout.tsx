@@ -6,6 +6,7 @@ import { ClerkProvider } from "@clerk/nextjs";
 import { QueryProvider } from "@/providers/query-provider";
 import { ToastProvider } from "@/contexts/toast-context";
 import { NotificationProvider } from "@/contexts/notification-context";
+import { AchievementNotificationProvider } from "@/contexts/achievement-notification-context";
 import { BottomNav } from "@/components/layout/bottom-nav";
 import { FloatingActionButtons } from "@/components/ui/floating-action-buttons";
 import { PushNotificationPrompt } from "@/components/notifications/push-notification-prompt";
@@ -243,15 +244,17 @@ export default function RootLayout({
           <QueryProvider>
             <NotificationProvider>
               <ToastProvider>
-                {children}
-                <BottomNav />
-                <FloatingActionButtons />
-                <PushNotificationPrompt />
-                <PushNotificationListener />
-                <Suspense fallback={null}>
-                  <HiddenSignInButton />
-                </Suspense>
-                <ServiceWorkerRegistration />
+                <AchievementNotificationProvider>
+                  {children}
+                  <BottomNav />
+                  <FloatingActionButtons />
+                  <PushNotificationPrompt />
+                  <PushNotificationListener />
+                  <Suspense fallback={null}>
+                    <HiddenSignInButton />
+                  </Suspense>
+                  <ServiceWorkerRegistration />
+                </AchievementNotificationProvider>
               </ToastProvider>
             </NotificationProvider>
           </QueryProvider>

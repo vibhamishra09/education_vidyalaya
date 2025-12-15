@@ -19,16 +19,32 @@ export function useAchievements() {
   return useQuery({
     queryKey: achievementKeys.list(),
     queryFn: async () => {
+      console.log('[useAchievements] Fetching achievements...');
       if (isLoaded) {
         const token = await getToken();
         if (token) {
           setAuthToken(token);
         }
       }
-      return achievementsApi.getAchievements();
+      const data = await achievementsApi.getAchievements();
+      console.log('[useAchievements] Received data:', {
+        totalUnlocked: data.totalUnlocked,
+        unlockedCount: data.unlocked.length,
+        inProgressCount: data.inProgress.length,
+        lockedCount: data.locked.length,
+        sampleUnlocked: data.unlocked[0] ? {
+          id: data.unlocked[0].id,
+          title: data.unlocked[0].title,
+          unlockedAt: data.unlocked[0].unlockedAt,
+          unlocked: data.unlocked[0].unlocked,
+        } : 'none',
+      });
+      return data;
     },
     enabled: isLoaded,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 30 * 1000, // 30 seconds - refresh more often to show updated progress
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
   });
 }
 

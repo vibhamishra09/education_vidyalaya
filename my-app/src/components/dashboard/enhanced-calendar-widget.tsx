@@ -21,6 +21,7 @@ interface CalendarSession {
   duration: number;
   type?: "learning" | "teaching";
   participantName?: string;
+  sessionType?: "peer" | "study-room";
 }
 
 interface EnhancedCalendarWidgetProps {
@@ -232,9 +233,10 @@ export function EnhancedCalendarWidget({ sessions = [] }: EnhancedCalendarWidget
     setIsInteractingWithPopover(false);
   };
 
-  const openSessionDetails = (sessionId: string) => {
+  const openSessionDetails = (sessionId: string, sessionType?: "peer" | "study-room") => {
     closeDayPopover();
-    router.push(`/sessions/${sessionId}`);
+    const url = sessionType === "study-room" ? `/studyroom/${sessionId}` : `/sessions/${sessionId}`;
+    router.push(url);
   };
 
   return (
@@ -396,7 +398,7 @@ export function EnhancedCalendarWidget({ sessions = [] }: EnhancedCalendarWidget
                             <button
                               key={session.id}
                               type="button"
-                              onClick={() => openSessionDetails(session.id)}
+                              onClick={() => openSessionDetails(session.id, session.sessionType)}
                               className="flex w-full items-start gap-2 rounded-md p-1.5 text-left transition-colors hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                             >
                               <div
@@ -466,7 +468,7 @@ export function EnhancedCalendarWidget({ sessions = [] }: EnhancedCalendarWidget
                         <button
                           key={session.id}
                           type="button"
-                          onClick={() => openSessionDetails(session.id)}
+                          onClick={() => openSessionDetails(session.id, session.sessionType)}
                           className={cn(
                             "w-full text-xs p-1 sm:p-1.5 rounded border text-center cursor-pointer hover:bg-muted/50 transition-colors group relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
                             session.type === "teaching"
@@ -519,7 +521,7 @@ export function EnhancedCalendarWidget({ sessions = [] }: EnhancedCalendarWidget
                 <button
                   key={session.id}
                   type="button"
-                  onClick={() => openSessionDetails(session.id)}
+                  onClick={() => openSessionDetails(session.id, session.sessionType)}
                   className="flex w-full items-start gap-3 p-3 rounded-lg border text-left hover:bg-muted/50 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
                   <div className="flex-shrink-0 text-center min-w-[60px]">
