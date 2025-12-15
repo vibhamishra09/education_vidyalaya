@@ -188,6 +188,20 @@ export function AvailabilitySettings({ userId, isOwnProfile = false }: Availabil
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Show status message at the top */}
+          {!Object.values(editedAvailability).some(d => d?.isActive) && (
+            <div className="p-4 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg mb-4">
+              <p className="text-sm text-green-700 dark:text-green-300 font-medium">✓ You&apos;re Available 24/7</p>
+              <p className="text-xs text-green-600 dark:text-green-400 mt-1">No blocked hours set - users can book sessions anytime</p>
+            </div>
+          )}
+          {Object.values(editedAvailability).some(d => d?.isActive) && (
+            <div className="p-4 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg mb-4">
+              <p className="text-sm text-amber-700 dark:text-amber-300 font-medium">⚠ Some Hours Blocked</p>
+              <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">You have unavailable hours set below</p>
+            </div>
+          )}
+          
           {DAYS_OF_WEEK.map((day) => {
             const dayData = editedAvailability[day.value];
             const isBlocked = dayData?.isActive ?? false;

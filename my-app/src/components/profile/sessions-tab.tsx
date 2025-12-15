@@ -6,7 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StreakTrackerConnected } from "@/components/profile/streak-tracker-connected";
-import { useUserStats } from "@/hooks/use-user-stats";
 import { SessionRequestCard } from "@/components/cards/session-request-card";
 import { SessionList } from "@/components/dashboard/session-list";
 import { useDashboard, dashboardKeys } from "@/hooks/use-dashboard";
@@ -22,15 +21,26 @@ import type {
   PastStudyRoom,
   UpcomingSession,
   UpcomingStudyRoom,
+  PublicUserStats,
 } from "@/types/api.types";
 
 interface SessionsTabProps {
-  userId: string;
+  publicStats?: PublicUserStats;
   isLoading?: boolean;
 }
 
-export const SessionsTab = memo(function SessionsTab({ userId, isLoading = false }: SessionsTabProps) {
-  const { data: stats, isLoading: statsLoading } = useUserStats(userId);
+export const SessionsTab = memo(function SessionsTab({ publicStats, isLoading = false }: SessionsTabProps) {
+  // Calculate stats from publicStats
+  const stats = useMemo(() => {
+    if (!publicStats) return null;
+    const totalSessions = (publicStats.sessionsTaught || 0) + (publicStats.sessionsAttendedAsLearner || 0);
+    return {
+      totalSessions,
+      hoursCompleted: 0, // This would need to be added to publicStats
+      averageRating: publicStats.avgRating || 0,
+      completionRate: publicStats.acceptanceRate ? Math.round(publicStats.acceptanceRate * 100) : 0,
+    };
+  }, [publicStats]);
   const {
     data: dashboardData,
     isLoading: dashboardLoading,
@@ -44,7 +54,7 @@ export const SessionsTab = memo(function SessionsTab({ userId, isLoading = false
   const { getToken } = useAuth();
   const [processingRequests, setProcessingRequests] = useState<Set<string>>(new Set());
 
-  const isDataLoading = isLoading || statsLoading;
+  const isDataLoading = isLoading;
   const pendingRequests = dashboardData?.pendingRequests || [];
 
   const splitByToday = <T extends { date: string | Date }>(items: T[]) => {

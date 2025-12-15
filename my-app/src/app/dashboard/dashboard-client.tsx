@@ -383,6 +383,7 @@ export function DashboardClient() {
                 duration: s.duration,
                 type: (s.requestedBy?.id && currentUser?.id && s.requestedBy.id === currentUser.id) ? "teaching" as const : "learning" as const,
                 participantName: s.peer?.name,
+                sessionType: "peer" as const,
               })),
               ...upcomingStudyRooms.map(sr => ({
                 id: sr.id,
@@ -391,6 +392,7 @@ export function DashboardClient() {
                 duration: sr.duration,
                 type: (sr.createdBy?.id && currentUser?.id && sr.createdBy.id === currentUser.id) ? "teaching" as const : "learning" as const,
                 participantName: `Group (${sr.participantCount}/${sr.maxParticipants})`,
+                sessionType: "study-room" as const,
               })),
             ]} />
           </div>

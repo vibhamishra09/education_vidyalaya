@@ -12,7 +12,7 @@ export const dashboardKeys = {
 
 // Get dashboard data
 export function useDashboard(query?: DashboardQuery) {
-  const { getToken, isLoaded } = useAuth();
+  const { getToken, isLoaded, isSignedIn } = useAuth();
 
   return useQuery({
     queryKey: dashboardKeys.data(query),
@@ -26,7 +26,9 @@ export function useDashboard(query?: DashboardQuery) {
       }
       return dashboardApi.getDashboardData(query);
     },
-    enabled: isLoaded, // Wait for Clerk to be loaded
-    staleTime: 2 * 60 * 1000, // 2 minutes
+    enabled: isLoaded && isSignedIn, // Wait for Clerk to be loaded and user signed in
+    staleTime: 30 * 1000, // 30 seconds - shorter to show updates faster
+    refetchOnWindowFocus: true, // Refetch when user returns to tab
+    refetchOnMount: true, // Always refetch on mount
   });
 }
