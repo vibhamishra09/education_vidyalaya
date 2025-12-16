@@ -1,11 +1,11 @@
 'use client'
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { LiveKitRoom, useParticipants, useRoomContext, useTrackToggle, useTracks, GridLayout, ParticipantTile, RoomAudioRenderer } from '@livekit/components-react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { LiveKitRoom, useParticipants, useRoomContext, useTrackToggle, useTracks, GridLayout, ParticipantTile, RoomAudioRenderer, useSpeakingParticipants } from '@livekit/components-react'
 import { Track } from 'livekit-client'
 import '@livekit/components-styles'
 import { ChatWidget } from '@/components/chat/ChatWidget'
 import { Button } from '@/components/ui/button'
-import { MessageSquare, X, Users, Maximize2, Minimize2, Video, VideoOff, Mic, MicOff, Volume2, VolumeX, Clock, MonitorUp, MonitorOff } from 'lucide-react'
+import { MessageSquare, X, Users, Maximize2, Minimize2, Video, VideoOff, Mic, MicOff, Volume2, VolumeX, Clock, MonitorUp, MonitorOff, Grid2X2, Presentation, Pin, PinOff } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { useSessionTimer } from '@/hooks/use-session-timer'
@@ -274,6 +274,7 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 					formattedTime={formattedTime}
 					minutesLeft={minutesLeft}
 					sessionTitle={sessionData?.title as string | undefined}
+					isHost={isHost}
 				/>
 		</LiveKitRoom>
 
@@ -311,6 +312,7 @@ function VideoRoomContent({
 	formattedTime,
 	minutesLeft,
 	sessionTitle,
+	isHost,
 }: {
 	showChat: boolean
 	setShowChat: (show: boolean) => void
@@ -324,9 +326,17 @@ function VideoRoomContent({
 	formattedTime: string
 	minutesLeft: number
 	sessionTitle?: string
+	isHost: boolean
 }) {
 	const room = useRoomContext()
 	const params = useParams<{ room: string }>()
+	const participants = useParticipants()
+	
+	// Layout mode: 'focus' shows speaker large with others small, 'grid' shows equal tiles
+	const [layoutMode, setLayoutMode] = useState<'focus' | 'grid'>('grid')
+	
+	// Pinned participant - manually pinned by user
+	const [pinnedParticipantId, setPinnedParticipantId] = useState<string | null>(null)
 	
 	// Use useTrackToggle hooks for video, mic, and screen share controls
 	const { buttonProps: videoButtonProps, enabled: isVideoEnabled } = useTrackToggle({ source: Track.Source.Camera })
@@ -336,13 +346,118 @@ function VideoRoomContent({
 	const [isAudioEnabled, setIsAudioEnabled] = useState(true)
 
 	// Get all camera and screen share tracks for the grid layout
-	const tracks = useTracks(
+	const allTracks = useTracks(
 		[
 			{ source: Track.Source.Camera, withPlaceholder: true },
 			{ source: Track.Source.ScreenShare, withPlaceholder: false },
 		],
 		{ onlySubscribed: false }
 	)
+	
+	// Separate camera and screen share tracks
+	const { cameraTracks, screenShareTracks } = useMemo(() => {
+		const camera = allTracks.filter(track => track.source === Track.Source.Camera)
+		const screenShare = allTracks.filter(track => track.source === Track.Source.ScreenShare)
+		return { cameraTracks: camera, screenShareTracks: screenShare }
+	}, [allTracks])
+	
+	// For grid view, show all camera tracks (no filtering - let LiveKit handle duplicates)
+	const tracks = cameraTracks
+	
+	// Find the focused participant (screenShare > pinned > speaking > host)
+	const speakingParticipants = useSpeakingParticipants()
+	
+	// Check if anyone is screen sharing (highest priority)
+	const activeScreenShare = screenShareTracks.length > 0 ? screenShareTracks[0] : null
+	
+	const focusedParticipant = useMemo(() => {
+		// Priority 1: Screen sharing participant (handled separately via activeScreenShare)
+		// We still need a focused participant for the thumbnail strip
+		
+		// Priority 2: Pinned participant
+		if (pinnedParticipantId && !activeScreenShare) {
+			if (room?.localParticipant?.identity === pinnedParticipantId) {
+				return room.localParticipant
+			}
+			const pinned = Array.from(room?.remoteParticipants.values() || []).find(
+				p => p.identity === pinnedParticipantId
+			)
+			if (pinned) return pinned
+		}
+		
+		// Priority 3: Speaking participant
+		if (speakingParticipants.length > 0 && !activeScreenShare) {
+			return speakingParticipants[0]
+		}
+		
+		// Priority 4: Host or first remote
+		if (room?.localParticipant) {
+			if (isHost) {
+				return room.localParticipant
+			}
+			const remotes = Array.from(room.remoteParticipants.values())
+			return remotes[0] || room.localParticipant
+		}
+		return null
+	}, [speakingParticipants, room, isHost, pinnedParticipantId, activeScreenShare])
+	
+	// Handle clicking on a thumbnail to focus/pin that participant
+	const handleThumbnailClick = useCallback((participantId: string) => {
+		if (pinnedParticipantId === participantId) {
+			// Unpin if clicking on already pinned
+			setPinnedParticipantId(null)
+		} else {
+			setPinnedParticipantId(participantId)
+		}
+	}, [pinnedParticipantId])
+	
+	// Toggle pin on the focused video
+	const togglePinFocused = useCallback(() => {
+		if (focusedParticipant) {
+			if (pinnedParticipantId === focusedParticipant.identity) {
+				setPinnedParticipantId(null)
+			} else {
+				setPinnedParticipantId(focusedParticipant.identity)
+			}
+		}
+	}, [focusedParticipant, pinnedParticipantId])
+	
+	// Separate focused track from other tracks
+	// Screen share gets highest priority in focus view
+	const { focusedTrack, otherTracks, isScreenShareFocused } = useMemo(() => {
+		if (layoutMode === 'grid' || tracks.length === 0) {
+			return { focusedTrack: null, otherTracks: tracks, isScreenShareFocused: false }
+		}
+		
+		// Priority 1: If someone is screen sharing, show that as the main view
+		if (activeScreenShare) {
+			// Show all camera tracks as thumbnails when screen sharing
+			return { 
+				focusedTrack: activeScreenShare, 
+				otherTracks: tracks, // All camera tracks go to thumbnails
+				isScreenShareFocused: true 
+			}
+		}
+		
+		// Priority 2: Show focused participant's camera
+		if (!focusedParticipant) {
+			return { focusedTrack: null, otherTracks: tracks, isScreenShareFocused: false }
+		}
+		
+		const focused = tracks.find(
+			t => t.participant.identity === focusedParticipant.identity
+		)
+		const others = tracks.filter(
+			t => t.participant.identity !== focusedParticipant.identity
+		)
+		
+		// If no focused track found but we have tracks, use the first one
+		if (!focused && tracks.length > 0) {
+			return { focusedTrack: tracks[0], otherTracks: tracks.slice(1), isScreenShareFocused: false }
+		}
+		
+		return { focusedTrack: focused || null, otherTracks: others, isScreenShareFocused: false }
+	}, [tracks, focusedParticipant, layoutMode, activeScreenShare])
 
 	const toggleAudio = () => {
 		// Toggle audio output (mute/unmute all remote audio)
@@ -415,33 +530,48 @@ function VideoRoomContent({
 
 					{/* Action Buttons */}
 					<div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
+						{/* Layout Toggle Button - Visible on all devices */}
+						<Button
+							variant="ghost"
+							size="sm"
+							onClick={() => setLayoutMode(layoutMode === 'focus' ? 'grid' : 'focus')}
+							className={`h-9 w-9 md:h-10 md:w-10 text-white/70 hover:text-white hover:bg-white/10 rounded-full transition-all p-0 flex items-center justify-center ${
+								layoutMode === 'focus' ? 'bg-white/10 text-white' : ''
+							}`}
+							title={layoutMode === 'focus' ? "Switch to grid view" : "Switch to speaker view"}
+						>
+							{layoutMode === 'grid' ? <Presentation className="h-4 w-4 md:h-5 md:w-5" /> : <Grid2X2 className="h-4 w-4 md:h-5 md:w-5" />}
+						</Button>
+						{/* Participants Button */}
 						<Button
 							variant="ghost"
 							size="sm"
 							onClick={() => setShowParticipants(!showParticipants)}
-							className={`h-9 w-9 md:h-10 md:w-10 text-white/70 hover:text-white hover:bg-white/10 rounded-full transition-all p-0 ${
+							className={`h-9 w-9 md:h-10 md:w-10 text-white/70 hover:text-white hover:bg-white/10 rounded-full transition-all p-0 flex items-center justify-center ${
 								showParticipants ? 'bg-white/10 text-white' : ''
 							}`}
 							title="Participants"
 						>
 							<Users className="h-4 w-4 md:h-5 md:w-5" />
 						</Button>
+						{/* Chat Button */}
 						<Button
 							variant="ghost"
 							size="sm"
 							onClick={() => setShowChat(!showChat)}
-							className={`h-9 w-9 md:h-10 md:w-10 text-white/70 hover:text-white hover:bg-white/10 rounded-full transition-all p-0 ${
+							className={`h-9 w-9 md:h-10 md:w-10 text-white/70 hover:text-white hover:bg-white/10 rounded-full transition-all p-0 flex items-center justify-center ${
 								showChat ? 'bg-white/10 text-white' : ''
 							}`}
 							title="Chat"
 						>
 							<MessageSquare className="h-4 w-4 md:h-5 md:w-5" />
 						</Button>
+						{/* Fullscreen Toggle - Desktop only in top bar */}
 						<Button
 							variant="ghost"
 							size="sm"
 							onClick={toggleFullscreen}
-							className="h-9 w-9 md:h-10 md:w-10 text-white/70 hover:text-white hover:bg-white/10 rounded-full transition-all p-0 hidden md:flex"
+							className="h-9 w-9 md:h-10 md:w-10 text-white/70 hover:text-white hover:bg-white/10 rounded-full transition-all p-0 hidden md:flex items-center justify-center"
 							title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
 						>
 							{isFullscreen ? <Minimize2 className="h-4 w-4 md:h-5 md:w-5" /> : <Maximize2 className="h-4 w-4 md:h-5 md:w-5" />}
@@ -449,78 +579,217 @@ function VideoRoomContent({
 					</div>
 				</div>
 
-				{/* Video Grid - Google Meet style - Properly constrained and centered */}
-				<div className="flex-1 overflow-hidden bg-[#202124] relative min-h-0 video-grid-container">
+				{/* Video Grid - Properly constrained */}
+				<div className="flex-1 overflow-hidden bg-[#202124] relative min-h-0 video-grid-container" style={{ paddingBottom: '80px' }}>
 					<style dangerouslySetInnerHTML={{__html: `
-						/* Hide scrollbars on mobile */
+						/* Reset any LiveKit speaking indicator colors that might cause green overlay */
+						.video-grid-container .lk-participant-tile[data-lk-speaking="true"]::before,
+						.video-grid-container [data-lk-speaking="true"]::before {
+							display: none !important;
+						}
+						
+						.video-grid-container .lk-participant-tile,
+						.video-grid-container [data-lk-participant-tile] {
+							border: none !important;
+							outline: none !important;
+						}
+						
+						/* Override any green background from LiveKit */
+						.video-grid-container .lk-video-container,
+						.video-grid-container video {
+							background: #2d2d2d !important;
+						}
+						
+						/* Grid Layout - Let LiveKit handle it */
+						.video-grid-container .grid-mode {
+							height: 100%;
+							width: 100%;
+							padding: 8px;
+						}
+						
 						@media (max-width: 768px) {
-							* {
-								-webkit-overflow-scrolling: touch;
-								scrollbar-width: none !important;
-								-ms-overflow-style: none !important;
-							}
-							*::-webkit-scrollbar {
-								display: none !important;
-								width: 0 !important;
-								height: 0 !important;
+							.video-grid-container .grid-mode {
+								padding: 4px;
 							}
 						}
 						
-						.video-grid-container [class*="lk-grid"],
-						.video-grid-container [class*="grid-layout"],
-						.video-grid-container > div[class*="grid"] {
-							display: grid !important;
-							height: 100% !important;
-							width: 100% !important;
-							overflow: hidden !important;
-							place-items: center !important;
-							grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)) !important;
-							grid-auto-rows: minmax(0, 1fr) !important;
-							gap: 0 !important;
-							margin: 0 !important;
-							padding: 0 !important;
+						/* Focus Layout Styles */
+						.focus-layout-container {
+							display: flex;
+							flex-direction: column;
+							height: 100%;
+							width: 100%;
+							padding: 8px;
+							gap: 8px;
+							overflow: hidden;
 						}
-						.video-grid-container [class*="lk-participant"],
-						.video-grid-container [class*="participant-tile"],
-						.video-grid-container > div[class*="grid"] > div {
-							width: 100% !important;
-							height: 100% !important;
-							max-width: 100% !important;
-							max-height: 100% !important;
-							display: flex !important;
-							align-items: center !important;
-							justify-content: center !important;
-							overflow: hidden !important;
-							position: relative !important;
+						
+						@media (max-width: 768px) {
+							.focus-layout-container {
+								padding: 4px;
+								gap: 4px;
+							}
 						}
-						/* Ensure participant names are visible */
-						.video-grid-container [class*="lk-participant"] [class*="name"],
-						.video-grid-container [class*="participant-tile"] [class*="name"],
-						.video-grid-container [class*="lk-participant"] [class*="identity"],
-						.video-grid-container [class*="participant-tile"] [class*="identity"],
-						.video-grid-container [class*="lk-participant"] > div:not([class*="video"]):not([class*="canvas"]),
-						.video-grid-container [class*="participant-tile"] > div:not([class*="video"]):not([class*="canvas"]) {
-							display: block !important;
-							visibility: visible !important;
-							opacity: 1 !important;
-							z-index: 10 !important;
+						
+						.focus-main-video {
+							flex: 1;
+							min-height: 0;
+							border-radius: 12px;
+							overflow: hidden;
+							background: #2d2d2d;
+							position: relative;
 						}
-						.video-grid-container video,
-						.video-grid-container canvas {
+						
+						/* Prevent any color overlay on the main video */
+						.focus-main-video > div,
+						.focus-main-video [data-lk-participant-tile],
+						.focus-main-video .lk-participant-tile {
 							width: 100% !important;
 							height: 100% !important;
+							background: #2d2d2d !important;
+						}
+						
+						/* Ensure video displays correctly without color tint */
+						.focus-main-video video {
 							object-fit: contain !important;
-							max-width: 100% !important;
-							max-height: 100% !important;
+							background: transparent !important;
+						}
+						
+						.focus-thumbnails {
+							display: flex;
+							gap: 8px;
+							height: 100px;
+							min-height: 100px;
+							max-height: 100px;
+							flex-shrink: 0;
+							overflow-x: auto;
+							overflow-y: hidden;
+							padding: 4px 0;
+							align-items: center;
+						}
+						
+						@media (max-width: 768px) {
+							.focus-thumbnails {
+								height: 70px;
+								min-height: 70px;
+								max-height: 70px;
+								gap: 4px;
+							}
+						}
+						
+						.focus-thumbnail {
+							width: 140px;
+							min-width: 140px;
+							height: 100%;
+							flex-shrink: 0;
+							border-radius: 8px;
+							overflow: hidden;
+							background: #2d2d2d;
+							border: 2px solid transparent;
+							position: relative;
+						}
+						
+						.focus-thumbnail > div {
+							width: 100% !important;
+							height: 100% !important;
+						}
+						
+						.focus-thumbnail.speaking {
+							border-color: #00DC6E;
+						}
+						
+						.focus-thumbnail.pinned {
+							border-color: #00DC6E;
+							box-shadow: 0 0 0 2px rgba(0, 220, 110, 0.3);
+						}
+						
+						@media (max-width: 768px) {
+							.focus-thumbnail {
+								width: 100px;
+								min-width: 100px;
+							}
 						}
 					`}} />
 					{tracks.length > 0 ? (
-						<GridLayout 
-							tracks={tracks} 
-							className="h-full w-full"
-						>
-							<ParticipantTile />
-						</GridLayout>
+						layoutMode === 'focus' && focusedTrack ? (
+							<div className="focus-layout-container">
+								{/* Main focused video */}
+								<div className="focus-main-video relative group">
+									<ParticipantTile trackRef={focusedTrack} />
+									{/* Screen Share indicator */}
+									{isScreenShareFocused && (
+										<div className="absolute top-2 left-2 flex items-center gap-1 bg-[#008CD2] text-white text-xs px-2 py-1 rounded-full z-10">
+											<MonitorUp className="h-3 w-3" />
+											<span>Screen Share - {focusedTrack.participant.name || focusedTrack.participant.identity}</span>
+										</div>
+									)}
+									{/* Pin/Unpin button overlay - only show when not screen sharing */}
+									{!isScreenShareFocused && (
+										<div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+											<Button
+												variant="ghost"
+												size="sm"
+												onClick={togglePinFocused}
+												className={`h-8 w-8 rounded-full p-0 ${
+													pinnedParticipantId === focusedParticipant?.identity
+														? 'bg-[#00DC6E] text-white hover:bg-[#00b058]'
+														: 'bg-black/50 text-white hover:bg-black/70'
+												}`}
+												title={pinnedParticipantId === focusedParticipant?.identity ? 'Unpin' : 'Pin this video'}
+											>
+												{pinnedParticipantId === focusedParticipant?.identity ? (
+													<PinOff className="h-4 w-4" />
+												) : (
+													<Pin className="h-4 w-4" />
+												)}
+											</Button>
+										</div>
+									)}
+									{/* Pinned indicator - only show when not screen sharing */}
+									{!isScreenShareFocused && pinnedParticipantId === focusedParticipant?.identity && (
+										<div className="absolute top-2 left-2 flex items-center gap-1 bg-[#00DC6E] text-white text-xs px-2 py-1 rounded-full z-10">
+											<Pin className="h-3 w-3" />
+											<span>Pinned</span>
+										</div>
+									)}
+								</div>
+								
+								{/* Thumbnail strip for other participants */}
+								{otherTracks.length > 0 && (
+									<div className="focus-thumbnails">
+										{otherTracks.map((track) => (
+											<div 
+												key={`${track.participant.identity}-${track.source}`}
+												className={`focus-thumbnail cursor-pointer ${
+													track.participant.isSpeaking ? 'speaking' : ''
+												} ${
+													pinnedParticipantId === track.participant.identity ? 'pinned' : ''
+												} hover:border-white/50 transition-all`}
+												onClick={() => handleThumbnailClick(track.participant.identity)}
+												title={`Click to focus on ${track.participant.name || track.participant.identity}`}
+											>
+												<ParticipantTile trackRef={track} />
+												{/* Pin indicator on thumbnail */}
+												{pinnedParticipantId === track.participant.identity && (
+													<div className="absolute top-1 right-1 bg-[#00DC6E] rounded-full p-0.5">
+														<Pin className="h-2.5 w-2.5 text-white" />
+													</div>
+												)}
+											</div>
+										))}
+									</div>
+								)}
+							</div>
+						) : (
+							<div className="grid-mode h-full w-full">
+								<GridLayout 
+									tracks={tracks} 
+									className="h-full w-full"
+								>
+									<ParticipantTile />
+								</GridLayout>
+							</div>
+						)
 					) : (
 						<div className="h-full w-full flex items-center justify-center">
 							<p className="text-white/50 text-sm font-sans">Waiting for participants...</p>
@@ -530,8 +799,30 @@ function VideoRoomContent({
 				</div>
 			</div>
 
-			{/* Controls Bar - Google Meet style, fixed at bottom - Always visible */}
-			<div className={`fixed bottom-0 left-0 right-0 h-16 md:h-20 bg-[#1f1f1f] border-t border-white/5 flex items-center justify-center gap-1.5 md:gap-3 px-2 md:px-4 z-50 ${showChat && !showParticipants ? 'md:right-80' : ''} ${showParticipants && !showChat ? 'md:right-64' : ''} ${showChat && showParticipants ? 'md:right-[22rem]' : ''}`} style={{ overflowX: 'hidden', overflowY: 'hidden' }}>
+			{/* Controls Bar - Google Meet style, fixed at bottom - Always visible including fullscreen */}
+			<div 
+				className={`fixed bottom-0 left-0 right-0 h-16 md:h-20 bg-[#1f1f1f]/95 backdrop-blur-sm border-t border-white/5 flex items-center justify-center gap-1.5 md:gap-3 px-2 md:px-4 ${showChat && !showParticipants ? 'md:right-80' : ''} ${showParticipants && !showChat ? 'md:right-64' : ''} ${showChat && showParticipants ? 'md:right-[22rem]' : ''}`} 
+				style={{ 
+					overflowX: 'hidden', 
+					overflowY: 'hidden', 
+					zIndex: 9999,  // Highest z-index to appear above everything including fullscreen
+					position: 'fixed',  // Ensure it stays fixed
+				}}
+			>
+				{/* Mobile Timer - Show timer on mobile in control bar */}
+				{timerEnabled && (
+					<div className="flex md:hidden items-center gap-1.5 px-2.5 py-1.5 bg-white/10 rounded-lg mr-2 flex-shrink-0">
+						<Clock className="h-3.5 w-3.5 text-white/90 flex-shrink-0" />
+						<span
+							className={`font-mono font-medium text-xs leading-none ${
+								minutesLeft <= 2 ? "text-[#ea4335]" : "text-white"
+							}`}
+						>
+							{formattedTime}
+						</span>
+					</div>
+				)}
+				
 				{/* Video Toggle */}
 				<Button
 					{...videoButtonProps}
@@ -590,6 +881,21 @@ function VideoRoomContent({
 					title={isScreenShareEnabled ? "Stop sharing" : "Share screen"}
 				>
 					{isScreenShareEnabled ? <MonitorOff className="h-5 w-5 md:h-6 md:w-6" /> : <MonitorUp className="h-5 w-5 md:h-6 md:w-6" />}
+				</Button>
+
+				{/* Fullscreen Toggle - Visible on all devices */}
+				<Button
+					onClick={toggleFullscreen}
+					variant="ghost"
+					size="lg"
+					className={`h-10 w-10 md:h-12 md:w-12 rounded-full transition-all p-0 flex-shrink-0 ${
+						isFullscreen 
+							? 'bg-white/20 text-white' 
+							: 'bg-white/10 hover:bg-white/20 text-white'
+					}`}
+					title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+				>
+					{isFullscreen ? <Minimize2 className="h-5 w-5 md:h-6 md:w-6" /> : <Maximize2 className="h-5 w-5 md:h-6 md:w-6" />}
 				</Button>
 
 				{/* Leave Button - Always visible */}
