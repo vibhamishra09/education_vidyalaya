@@ -3,8 +3,37 @@
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { SkillSearch } from "@/components/ui/skill-search";
+import { useUser } from "@clerk/clerk-react";
+import { SignInButton } from "@clerk/clerk-react";
 
 export function HeroSection() {
+  const { isSignedIn } = useUser();
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.webyalaya.com";
+
+  const startStudyRoomContent = (
+    <div className="flex flex-col items-center justify-center space-y-4 border-2 border-green-500 rounded-lg p-6 hover:border-green-600 transition-colors cursor-pointer group">
+      <div className="w-16 h-16 rounded-full bg-gradient-to-r from-green-500 to-blue-500 flex items-center justify-center group-hover:scale-110 transition-transform">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          className="h-8 w-8 text-white"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M12 4v16m8-8H4"
+          />
+        </svg>
+      </div>
+      <h3 className="text-xl font-semibold">Start Study Room</h3>
+      <p className="text-sm text-muted-foreground text-center font-tagline">
+        Create a room to teach and share knowledge
+      </p>
+    </div>
+  );
 
   return (
     <section className="relative py-20 lg:py-32 overflow-hidden">
@@ -51,31 +80,15 @@ export function HeroSection() {
             transition={{ duration: 0.6, delay: 0.4 }}
             className="max-w-md mx-auto"
           >
-            <Link
-              href="/create-study-room"
-              className="flex flex-col items-center justify-center space-y-4 border-2 border-green-500 rounded-lg p-6 hover:border-green-600 transition-colors cursor-pointer group"
-            >
-              <div className="w-16 h-16 rounded-full bg-gradient-to-r from-green-500 to-blue-500 flex items-center justify-center group-hover:scale-110 transition-transform">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-8 w-8 text-white"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M12 4v16m8-8H4"
-                  />
-                </svg>
-              </div>
-              <h3 className="text-xl font-semibold">Start Study Room</h3>
-              <p className="text-sm text-muted-foreground text-center font-tagline">
-                Create a room to teach and share knowledge
-              </p>
-            </Link>
+            {isSignedIn ? (
+              <Link href={`${appUrl}/create-study-room`}>
+                {startStudyRoomContent}
+              </Link>
+            ) : (
+              <SignInButton mode="modal" forceRedirectUrl={appUrl}>
+                {startStudyRoomContent}
+              </SignInButton>
+            )}
           </motion.div>
         </motion.div>
       </div>

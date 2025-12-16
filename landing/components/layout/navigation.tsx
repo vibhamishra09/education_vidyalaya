@@ -2,11 +2,57 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { usePathname, useSearchParams } from "next/navigation";
+import { Suspense, useMemo } from "react";
 import { Button } from "@/components/ui/button";
+import { SignInButton, SignUpButton } from "@clerk/clerk-react";
 
-const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.webyalaya.com";
+// Separate component for search params dependent functionality
+function AuthButtons({ pathname }: { pathname: string }) {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.webyalaya.com";
+  
+  // Redirect to app.webyalaya.com after successful authentication
+  const redirectUrl = appUrl;
+
+  return (
+    <div className="flex items-center gap-2">
+      <SignInButton mode="modal" forceRedirectUrl={redirectUrl}>
+        <Button variant="ghost" size="sm">
+          Sign In
+        </Button>
+      </SignInButton>
+      <SignUpButton mode="modal" forceRedirectUrl={redirectUrl}>
+        <Button variant="outline" size="sm">
+          Sign Up
+        </Button>
+      </SignUpButton>
+    </div>
+  );
+}
+
+// Fallback auth buttons without redirect URL
+function AuthButtonsFallback() {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.webyalaya.com";
+  
+  return (
+    <div className="flex items-center gap-2">
+      <SignInButton mode="modal" forceRedirectUrl={appUrl}>
+        <Button variant="ghost" size="sm">
+          Sign In
+        </Button>
+      </SignInButton>
+      <SignUpButton mode="modal" forceRedirectUrl={appUrl}>
+        <Button variant="outline" size="sm">
+          Sign Up
+        </Button>
+      </SignUpButton>
+    </div>
+  );
+}
 
 export function Navigation() {
+  const pathname = usePathname();
+
   return (
     <nav className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
@@ -26,26 +72,27 @@ export function Navigation() {
           <div className="hidden md:flex items-center gap-6">
             <Link
               href="/browse"
-              className="text-sm font-medium transition-all relative pb-1 text-muted-foreground hover:text-foreground hover:after:absolute hover:after:bottom-0 hover:after:left-0 hover:after:right-0 hover:after:h-0.5 hover:after:bg-primary/50 hover:after:rounded-full"
+              className={`text-sm font-medium transition-all relative pb-1 ${
+                pathname === '/browse'
+                  ? 'text-foreground after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-primary after:rounded-full'
+                  : 'text-muted-foreground hover:text-foreground hover:after:absolute hover:after:bottom-0 hover:after:left-0 hover:after:right-0 hover:after:h-0.5 hover:after:bg-primary/50 hover:after:rounded-full'
+              }`}
             >
               Browse
             </Link>
             <Link
               href="/how-it-works"
-              className="text-sm font-medium transition-all relative pb-1 text-muted-foreground hover:text-foreground hover:after:absolute hover:after:bottom-0 hover:after:left-0 hover:after:right-0 hover:after:h-0.5 hover:after:bg-primary/50 hover:after:rounded-full"
+              className={`text-sm font-medium transition-all relative pb-1 ${
+                pathname === '/how-it-works'
+                  ? 'text-foreground after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-primary after:rounded-full'
+                  : 'text-muted-foreground hover:text-foreground hover:after:absolute hover:after:bottom-0 hover:after:left-0 hover:after:right-0 hover:after:h-0.5 hover:after:bg-primary/50 hover:after:rounded-full'
+              }`}
             >
               How it works
             </Link>
-            <Link href={`${appUrl}/sign-in`}>
-              <Button variant="ghost" size="sm">
-                Sign In
-              </Button>
-            </Link>
-            <Link href={`${appUrl}/sign-up`}>
-              <Button variant="outline" size="sm">
-                Sign Up
-              </Button>
-            </Link>
+            <Suspense fallback={<AuthButtonsFallback />}>
+              <AuthButtons pathname={pathname} />
+            </Suspense>
           </div>
 
           {/* Mobile Menu Button */}
@@ -56,11 +103,9 @@ export function Navigation() {
             >
               Browse
             </Link>
-            <Link href={`${appUrl}/sign-in`}>
-              <Button variant="ghost" size="sm">
-                Sign In
-              </Button>
-            </Link>
+            <Suspense fallback={<AuthButtonsFallback />}>
+              <AuthButtons pathname={pathname} />
+            </Suspense>
           </div>
         </div>
       </div>

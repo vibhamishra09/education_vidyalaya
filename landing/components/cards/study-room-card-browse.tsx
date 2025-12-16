@@ -10,27 +10,78 @@ import { motion } from "framer-motion";
 import { StudyRoomCard, SessionStatus } from "@/types/api.types";
 import { getRelativeTimeString } from "@/lib/utils/date-time";
 import { ShareButton } from "@/components/share/share-button";
+import { useUser } from "@clerk/clerk-react";
+import { SignInButton } from "@clerk/clerk-react";
 
 interface StudyRoomCardBrowseProps {
   studyRoom: StudyRoomCard;
 }
 
 export function StudyRoomCardBrowse({ studyRoom }: StudyRoomCardBrowseProps) {
+  const { isSignedIn } = useUser();
   const isLive = studyRoom.sessionStatus === SessionStatus.ONGOING;
   const isUpcoming = studyRoom.sessionStatus === SessionStatus.UPCOMING;
   const isDone = studyRoom.sessionStatus === SessionStatus.DONE;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.webyalaya.com";
 
   // Get timezone-aware formatted time
   const formattedDateTime = getRelativeTimeString(studyRoom.date);
 
-  return (
-    <Link href={`/studyroom/${studyRoom.id}`}>
-      <motion.div
-        whileHover={{ scale: 1.02, y: -4 }}
-        transition={{ duration: 0.2 }}
-        className="h-full"
+  const handleJoinClick = (e: React.MouseEvent) => {
+    if (!isSignedIn) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  };
+
+  const JoinButton = () => {
+    const buttonContent = isLive ? (
+      <>
+        <Play className="h-4 w-4 mr-2" />
+        Join Live
+      </>
+    ) : isUpcoming ? (
+      "View Details"
+    ) : (
+      "View Summary"
+    );
+
+    if (!isSignedIn && (isLive || isUpcoming)) {
+      return (
+        <SignInButton mode="modal" forceRedirectUrl={appUrl}>
+          <Button
+            className="flex-1"
+            variant={isLive ? "default" : "outline"}
+            onClick={handleJoinClick}
+          >
+            {buttonContent}
+          </Button>
+        </SignInButton>
+      );
+    }
+
+    return (
+      <Button
+        className="flex-1"
+        variant={isLive ? "default" : "outline"}
       >
-        <Card className="h-full flex flex-col hover:shadow-lg transition-shadow duration-200 cursor-pointer">
+        {buttonContent}
+      </Button>
+    );
+  };
+
+  const handleCardClick = (e: React.MouseEvent) => {
+    if (!isSignedIn) {
+      e.preventDefault();
+      e.stopPropagation();
+      // Trigger sign-in modal by finding and clicking the hidden button
+      const signInButton = e.currentTarget.closest('.study-room-card-wrapper')?.querySelector('[data-sign-in-trigger]') as HTMLButtonElement;
+      signInButton?.click();
+    }
+  };
+
+  const cardContent = (
+    <Card className="h-full flex flex-col hover:shadow-lg transition-shadow duration-200 cursor-pointer">
           <CardHeader className="space-y-3">
             <div className="flex items-center justify-between">
               <Badge
@@ -119,7 +170,7 @@ export function StudyRoomCardBrowse({ studyRoom }: StudyRoomCardBrowseProps) {
               </div>
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
               <ShareButton
                 url={`${typeof window !== "undefined" ? window.location.origin : ""}/studyroom/${studyRoom.id}`}
                 title={studyRoom.title}
@@ -128,25 +179,33 @@ export function StudyRoomCardBrowse({ studyRoom }: StudyRoomCardBrowseProps) {
                 size="default"
                 className="flex-1"
               />
-              <Button
-                className="flex-1"
-                variant={isLive ? "default" : "outline"}
-              >
-                {isLive ? (
-                  <>
-                    <Play className="h-4 w-4 mr-2" />
-                    Join Live
-                  </>
-                ) : isUpcoming ? (
-                  "View Details"
-                ) : (
-                  "View Summary"
-                )}
-              </Button>
+              <JoinButton />
             </div>
           </CardContent>
-        </Card>
+    </Card>
+  );
+
+  return (
+    <div className="study-room-card-wrapper h-full">
+      {!isSignedIn && (
+        <SignInButton mode="modal" forceRedirectUrl={appUrl}>
+          <button data-sign-in-trigger className="hidden" aria-hidden="true" />
+        </SignInButton>
+      )}
+      <motion.div
+        whileHover={{ scale: 1.02, y: -4 }}
+        transition={{ duration: 0.2 }}
+        className="h-full"
+        onClick={handleCardClick}
+      >
+        {isSignedIn ? (
+          <Link href={`/studyroom/${studyRoom.id}`}>
+            {cardContent}
+          </Link>
+        ) : (
+          cardContent
+        )}
       </motion.div>
-    </Link>
+    </div>
   );
 }

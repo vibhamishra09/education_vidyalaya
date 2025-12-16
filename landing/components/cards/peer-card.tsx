@@ -1,3 +1,5 @@
+"use client";
+
 import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -6,13 +8,17 @@ import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Star, Users } from 'lucide-react';
 import { SocialLinksDisplay } from '@/components/ui/social-links-display';
 import type { BrowsePeer } from '@/types/api.types';
+import { useUser } from '@clerk/clerk-react';
+import { SignInButton } from '@clerk/clerk-react';
 
 interface PeerCardProps {
   peer: BrowsePeer;
 }
 
 export function PeerCardComponent({ peer }: PeerCardProps) {
+  const { isSignedIn } = useUser();
   const { name, avatar, bio, skills, rating, reviewCount, totalSessions, socialLinks } = peer;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.webyalaya.com";
 
   return (
     <Card className="h-full hover:shadow-lg transition-shadow">
@@ -72,11 +78,19 @@ export function PeerCardComponent({ peer }: PeerCardProps) {
       </CardContent>
 
       <CardFooter>
-        <Link href={`/profile/${peer.id}`} className="w-full">
-          <Button variant="outline" className="w-full">
-            View Profile
-          </Button>
-        </Link>
+        {isSignedIn ? (
+          <Link href={`/profile/${peer.id}`} className="w-full">
+            <Button variant="outline" className="w-full">
+              View Profile
+            </Button>
+          </Link>
+        ) : (
+          <SignInButton mode="modal" forceRedirectUrl={appUrl}>
+            <Button variant="outline" className="w-full">
+              View Profile
+            </Button>
+          </SignInButton>
+        )}
       </CardFooter>
     </Card>
   );

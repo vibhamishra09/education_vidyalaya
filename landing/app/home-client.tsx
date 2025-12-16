@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Navigation } from "@/components/layout/navigation";
 import { HeroSection } from "@/components/sections/hero";
@@ -9,72 +10,41 @@ import { DebateRoomCard } from "@/components/cards/debate-room-card";
 import { Footer } from "@/components/layout/footer";
 import { FadeIn } from "@/components/ui/fade-in";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { SessionStatus } from "@/types/api.types";
 import type { StudyRoomCard as StudyRoomCardType } from "@/types/api.types";
-
-// Mock study rooms data
-const mockStudyRooms: StudyRoomCardType[] = [
-  {
-    id: "1",
-    title: "Introduction to React Hooks",
-    description: "Learn the fundamentals of React Hooks and modern React development",
-    sessionStatus: SessionStatus.UPCOMING,
-    date: new Date(Date.now() + 86400000).toISOString(),
-    duration: 60,
-    maxParticipants: 20,
-    joiningFee: 10,
-    participantCount: 12,
-    createdBy: {
-      id: "user1",
-      name: "Sarah Johnson",
-      avatar: "",
-    },
-    skills: ["React", "JavaScript"],
-    hostAvgRating: 4.8,
-    hostReviewCount: 45,
-  },
-  {
-    id: "2",
-    title: "Advanced TypeScript Patterns",
-    description: "Deep dive into advanced TypeScript patterns and best practices",
-    sessionStatus: SessionStatus.UPCOMING,
-    date: new Date(Date.now() + 172800000).toISOString(),
-    duration: 90,
-    maxParticipants: 15,
-    joiningFee: 15,
-    participantCount: 8,
-    createdBy: {
-      id: "user2",
-      name: "Michael Chen",
-      avatar: "",
-    },
-    skills: ["TypeScript", "Programming"],
-    hostAvgRating: 4.9,
-    hostReviewCount: 67,
-  },
-  {
-    id: "3",
-    title: "Web Design Fundamentals",
-    description: "Master the basics of modern web design and UI/UX principles",
-    sessionStatus: SessionStatus.ONGOING,
-    date: new Date().toISOString(),
-    duration: 45,
-    maxParticipants: 25,
-    joiningFee: 5,
-    participantCount: 18,
-    createdBy: {
-      id: "user3",
-      name: "Emily Rodriguez",
-      avatar: "",
-    },
-    skills: ["Design", "UI/UX"],
-    hostAvgRating: 4.7,
-    hostReviewCount: 32,
-  },
-];
+import { studyRoomsApi } from "@/lib/api";
 
 export function HomeClient() {
-  const studyRooms = mockStudyRooms;
+  const [studyRooms, setStudyRooms] = useState<StudyRoomCardType[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch trending study rooms from API
+  useEffect(() => {
+    const fetchStudyRooms = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        // Fetch a limited number of study rooms for the home page
+        // Get both upcoming and ongoing rooms
+        const response = await studyRoomsApi.getStudyRooms({
+          limit: 6, // Show 6 study rooms on home page
+        });
+        
+        setStudyRooms(response.studyRooms || []);
+      } catch (err: any) {
+        console.error('Error fetching study rooms:', err);
+        setError(err.message || 'Failed to load study rooms');
+        setStudyRooms([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStudyRooms();
+  }, []);
 
   const debateRooms = [
     {
@@ -119,7 +89,23 @@ export function HomeClient() {
               </div>
             </FadeIn>
 
-            {studyRooms.length === 0 ? (
+            {loading ? (
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="space-y-4">
+                    <Skeleton className="h-48 w-full" />
+                    <Skeleton className="h-4 w-3/4" />
+                    <Skeleton className="h-4 w-1/2" />
+                  </div>
+                ))}
+              </div>
+            ) : error ? (
+              <div className="text-center py-12">
+                <p className="text-muted-foreground">
+                  {error}
+                </p>
+              </div>
+            ) : studyRooms.length === 0 ? (
               <div className="text-center py-12">
                 <p className="text-muted-foreground">
                   No trending study rooms are available right now. Check back soon!

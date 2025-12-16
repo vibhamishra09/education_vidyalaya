@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { ClerkProviderWrapper } from "@/components/providers/clerk-provider-wrapper";
+import { AuthRedirectHandler } from "@/components/auth/auth-redirect-handler";
 import { BottomNav } from "@/components/layout/bottom-nav";
 import { FloatingActionButtons } from "@/components/ui/floating-action-buttons";
 import { PushNotificationPrompt } from "@/components/notifications/push-notification-prompt";
@@ -205,6 +206,7 @@ export default function RootLayout({
           <link rel="dns-prefetch" href="https://api.dicebear.com" />
         </head>
         <body className={`${inter.variable} antialiased font-sans pb-16 md:pb-0`}>
+          <AuthRedirectHandler />
           {children}
           <BottomNav />
           <FloatingActionButtons />

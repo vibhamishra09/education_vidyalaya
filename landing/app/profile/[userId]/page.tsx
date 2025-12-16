@@ -7,7 +7,9 @@ import { ProfileClient } from "./profile-client";
 export function generateStaticParams() {
   // Return a placeholder to satisfy static export requirements
   // The actual profile data is fetched client-side based on the URL param
-  return [{ userId: 'placeholder' }];
+  return [
+    { userId: 'placeholder' }
+  ];
 }
 
 export default function PublicProfilePage({

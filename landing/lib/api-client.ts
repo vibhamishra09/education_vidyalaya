@@ -1,7 +1,7 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { ApiError } from '@/types/api.types';
 
-// Extend Window interface to include Clerk
+// Extend Window interface to include Clerk (from @clerk/clerk-react)
 declare global {
   interface Window {
     Clerk?: {

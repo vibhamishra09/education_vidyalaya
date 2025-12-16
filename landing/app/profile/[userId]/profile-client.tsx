@@ -18,16 +18,30 @@ import { MetricCard } from "@/components/cards/metric-card";
 import { User, ReviewCard, StudyRoomCard as StudyRoomCardType, SessionStatus } from "@/types/api.types";
 import { usersApi, reviewsApi, studyRoomsApi } from "@/lib/api";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useUser } from "@clerk/clerk-react";
+import { SignInButton } from "@clerk/clerk-react";
 
 export function ProfileClient({ userId }: { userId: string }) {
+  const { isSignedIn, isLoaded } = useUser();
   const [user, setUser] = useState<User | null>(null);
   const [userReviews, setUserReviews] = useState<ReviewCard[]>([]);
   const [upcomingRooms, setUpcomingRooms] = useState<StudyRoomCardType[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.webyalaya.com";
 
   // Fetch user data from API
   useEffect(() => {
+    // Only fetch if user is authenticated
+    if (!isLoaded) {
+      return;
+    }
+
+    if (!isSignedIn) {
+      setLoading(false);
+      return;
+    }
+
     const fetchUserData = async () => {
       try {
         setLoading(true);
@@ -65,7 +79,35 @@ export function ProfileClient({ userId }: { userId: string }) {
     if (userId) {
       fetchUserData();
     }
-  }, [userId]);
+  }, [userId, isSignedIn, isLoaded]);
+
+  // Show sign-in prompt if not authenticated
+  if (isLoaded && !isSignedIn) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <Navigation />
+        <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8 flex items-center justify-center">
+          <Card className="max-w-md w-full">
+            <CardContent className="pt-6 text-center">
+              <h2 className="text-2xl font-bold mb-4">Sign In Required</h2>
+              <p className="text-muted-foreground mb-6">
+                Please sign in to view peer profiles and study room details.
+              </p>
+              <div className="flex flex-col gap-3">
+                <SignInButton mode="modal" forceRedirectUrl={appUrl}>
+                  <Button className="w-full">Sign In</Button>
+                </SignInButton>
+                <Link href="/browse">
+                  <Button variant="outline" className="w-full">Back to Browse</Button>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
 
   if (loading) {
     return (
