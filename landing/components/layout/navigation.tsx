@@ -2,6 +2,9 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { Button } from "@/components/ui/button";
+
+const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.webyalaya.com";
 
 export function Navigation() {
   return (
@@ -33,6 +36,16 @@ export function Navigation() {
             >
               How it works
             </Link>
+            <Link href={`${appUrl}/sign-in`}>
+              <Button variant="ghost" size="sm">
+                Sign In
+              </Button>
+            </Link>
+            <Link href={`${appUrl}/sign-up`}>
+              <Button variant="outline" size="sm">
+                Sign Up
+              </Button>
+            </Link>
           </div>
 
           {/* Mobile Menu Button */}
@@ -42,6 +55,11 @@ export function Navigation() {
               className="text-sm font-medium text-muted-foreground hover:text-foreground"
             >
               Browse
+            </Link>
+            <Link href={`${appUrl}/sign-in`}>
+              <Button variant="ghost" size="sm">
+                Sign In
+              </Button>
             </Link>
           </div>
         </div>

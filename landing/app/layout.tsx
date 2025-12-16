@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
+import { ClerkProviderWrapper } from "@/components/providers/clerk-provider-wrapper";
 import { BottomNav } from "@/components/layout/bottom-nav";
 import { FloatingActionButtons } from "@/components/ui/floating-action-buttons";
 import { PushNotificationPrompt } from "@/components/notifications/push-notification-prompt";
@@ -180,36 +181,38 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <head>
-        {/* PWA Meta Tags */}
-        <meta name="application-name" content="Webyalaya" />
-        <meta name="mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="Webyalaya" />
-        <meta name="msapplication-TileColor" content="#16a34a" />
-        <meta name="msapplication-tap-highlight" content="no" />
-        
-        {/* Explicit favicon to override defaults / cache issues */}
-        <link rel="icon" href="/webyalaya-main-logo.svg?v=2" />
-        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-        
-        {/* Preconnect for performance */}
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        
-        {/* DNS Prefetch for external APIs */}
-        <link rel="dns-prefetch" href="https://api.dicebear.com" />
-      </head>
-      <body className={`${inter.variable} antialiased font-sans pb-16 md:pb-0`}>
-        {children}
-        <BottomNav />
-        <FloatingActionButtons />
-        <PushNotificationPrompt />
-        <PushNotificationListener />
-        <ServiceWorkerRegistration />
-      </body>
-    </html>
+    <ClerkProviderWrapper>
+      <html lang="en" suppressHydrationWarning>
+        <head>
+          {/* PWA Meta Tags */}
+          <meta name="application-name" content="Webyalaya" />
+          <meta name="mobile-web-app-capable" content="yes" />
+          <meta name="apple-mobile-web-app-capable" content="yes" />
+          <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+          <meta name="apple-mobile-web-app-title" content="Webyalaya" />
+          <meta name="msapplication-TileColor" content="#16a34a" />
+          <meta name="msapplication-tap-highlight" content="no" />
+          
+          {/* Explicit favicon to override defaults / cache issues */}
+          <link rel="icon" href="/webyalaya-main-logo.svg?v=2" />
+          <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+          
+          {/* Preconnect for performance */}
+          <link rel="preconnect" href="https://fonts.googleapis.com" />
+          <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+          
+          {/* DNS Prefetch for external APIs */}
+          <link rel="dns-prefetch" href="https://api.dicebear.com" />
+        </head>
+        <body className={`${inter.variable} antialiased font-sans pb-16 md:pb-0`}>
+          {children}
+          <BottomNav />
+          <FloatingActionButtons />
+          <PushNotificationPrompt />
+          <PushNotificationListener />
+          <ServiceWorkerRegistration />
+        </body>
+      </html>
+    </ClerkProviderWrapper>
   );
 }
