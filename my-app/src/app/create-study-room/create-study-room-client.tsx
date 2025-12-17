@@ -114,7 +114,7 @@ export function CreateStudyRoomClient() {
       time: formData.time,
       duration: parseInt(formData.duration),
       maxParticipants: parseInt(formData.maxParticipants),
-      joiningFee: parseFloat(formData.joiningFee) / 100, // Convert mAYA input to AYA for storage
+      joiningFee: parseFloat(formData.joiningFee), // AYA value - no conversion needed
       gmeetLink: formData.gmeetLink || undefined,
       timezone: userTimezone,
     };

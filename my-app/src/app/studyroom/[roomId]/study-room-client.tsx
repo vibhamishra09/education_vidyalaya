@@ -25,7 +25,7 @@ import Link from "next/link";
 import { SessionStatus } from "@/types";
 import { ReviewsSection } from "@/components/reviews/reviews-section";
 import { ChatWidget } from "@/components/chat/ChatWidget";
-import { formatMaya } from "@/lib/utils/coin-format";
+import { formatCoins } from "@/lib/utils/coin-format";
 import { ShareButton } from "@/components/share/share-button";
 
 interface StudyRoomClientProps {
@@ -97,7 +97,7 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
       if (error && typeof error === 'object' && 'response' in error) {
         const apiError = error as { response: { data: { code: string; message: string } } };
         if (apiError.response?.data?.code === 'INSUFFICIENT_COINS') {
-          showError("Insufficient mAYA", apiError.response.data.message);
+          showError("Insufficient AYA", apiError.response.data.message);
         } else if (apiError.response?.data?.code === 'ROOM_FULL') {
           showError("Room Full", apiError.response.data.message);
         } else {
@@ -235,7 +235,7 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
                     ) : (
                       <>
                         <Coins className="h-4 w-4 mr-2" />
-                        Join Room ({formatMaya(room.joiningFee)} mAYA tokens)
+                        Join Room ({formatCoins(room.joiningFee)} AYA tokens)
                       </>
                     )}
                   </Button>
@@ -365,8 +365,10 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
               <CardHeader>
                 <CardTitle>Chat</CardTitle>
               </CardHeader>
-              <CardContent>
-                <ChatWidget channelId={room.chatChannelId} />
+              <CardContent className="p-0">
+                <div className="h-[500px]">
+                  <ChatWidget channelId={room.chatChannelId} />
+                </div>
               </CardContent>
             </Card>
           )}

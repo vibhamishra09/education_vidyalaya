@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { WalletChart } from "@/components/stats/wallet-chart";
-import { formatMaya } from "@/lib/utils/coin-format";
+import { formatCoins } from "@/lib/utils/coin-format";
 import { useTransactionHistory } from "@/hooks/use-transactions";
 import { PaymentStatus } from "@/types/api.types";
 
@@ -22,9 +22,9 @@ export const WalletTab = memo(function WalletTab({ coins, hourlyRate, isLoading 
 
   const transactions = transactionsData?.transactions || [];
 
-  // Calculate earnings stats
+  // Calculate earnings stats (include both payments received and refunds received)
   const totalEarned = transactions
-    .filter(t => t.type === 'PAYMENT_RECEIVED')
+    .filter(t => t.type === 'PAYMENT_RECEIVED' || t.type === 'REFUND_RECEIVED')
     .reduce((sum, t) => sum + t.amount, 0);
 
   return (
@@ -39,7 +39,7 @@ export const WalletTab = memo(function WalletTab({ coins, hourlyRate, isLoading 
                 {isLoading ? (
                   <Skeleton className="h-8 w-24" />
                 ) : (
-                  <p className="text-2xl font-bold">{formatMaya(coins)} <span className="text-sm">m</span>AYA</p>
+                  <p className="text-2xl font-bold">{formatCoins(coins)} AYA</p>
                 )}
               </div>
               <div className="p-3 bg-yellow-100 rounded-full">
@@ -58,7 +58,7 @@ export const WalletTab = memo(function WalletTab({ coins, hourlyRate, isLoading 
                   <Skeleton className="h-8 w-24" />
                 ) : (
                   <p className="text-2xl font-bold text-green-600">
-                    +{formatMaya(totalEarned)} <span className="text-sm">m</span>AYA
+                    +{formatCoins(totalEarned)} AYA
                   </p>
                 )}
               </div>
@@ -78,7 +78,7 @@ export const WalletTab = memo(function WalletTab({ coins, hourlyRate, isLoading 
                   <Skeleton className="h-8 w-24" />
                 ) : (
                   <p className="text-2xl font-bold">
-                    {hourlyRate ? <>{formatMaya(hourlyRate)} <span className="text-sm">m</span>AYA</> : 'Not set'}
+                    {hourlyRate ? <>{formatCoins(hourlyRate)} AYA</> : 'Not set'}
                   </p>
                 )}
               </div>
@@ -172,7 +172,7 @@ export const WalletTab = memo(function WalletTab({ coins, hourlyRate, isLoading 
                       }`}
                     >
                       {transaction.type === 'PAYMENT_MADE' ? '-' : '+'}
-                      {formatMaya(transaction.amount)} <span className="text-xs">m</span>AYA
+                      {formatCoins(transaction.amount)} AYA
                     </p>
                     <Badge
                       variant="outline"

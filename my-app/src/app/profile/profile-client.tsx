@@ -21,7 +21,7 @@ import { Edit, Star, Coins, Loader2, Users, LogOut } from "lucide-react";
 import { SocialLinksDisplay } from "@/components/ui/social-links-display";
 import { useProfileData } from "@/hooks/use-profile-data";
 import { useTabPersistence } from "@/hooks/use-local-storage";
-import { formatMaya } from "@/lib/utils/coin-format";
+import { formatCoins } from "@/lib/utils/coin-format";
 import {
   Select,
   SelectContent,
@@ -190,7 +190,7 @@ function ProfileContent() {
                       <div className="flex items-center justify-center md:justify-start">
                         <Coins className="h-5 w-5 text-yellow-600" />
                         <span className="ml-1 font-medium">
-                          {formatMaya(currentUser.coins)} <span className="text-xs">m</span>AYA
+                          {formatCoins(currentUser.coins)} AYA
                         </span>
                       </div>
 
@@ -198,7 +198,7 @@ function ProfileContent() {
                         <div className="flex items-center justify-center md:justify-start">
                           <Coins className="h-5 w-5 text-green-600" />
                           <span className="ml-1 font-medium">
-                            {formatMaya(currentUser.hourlyRate)} <span className="text-xs">m</span>AYA/hr
+                            {formatCoins(currentUser.hourlyRate)} AYA/hr
                           </span>
                         </div>
                       )}

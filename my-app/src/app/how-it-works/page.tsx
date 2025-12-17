@@ -9,19 +9,19 @@ import { CheckCircle2, Sparkles } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "How It Works",
-  description: "Learn how Webyalaya works. Create study rooms, send peer requests, understand mAYA coins, and start your collaborative learning journey in minutes.",
+  description: "Learn how Webyalaya works. Create study rooms, send peer requests, understand AYA coins, and start your collaborative learning journey in minutes.",
   keywords: [
     "how webyalaya works",
     "create study room",
     "peer request",
-    "mAYA coins explained",
+    "AYA coins explained",
     "peer learning guide",
     "online tutoring tutorial",
     "study room tutorial",
   ],
   openGraph: {
     title: "How It Works | Webyalaya",
-    description: "A simple guide to creating study rooms, sending peer requests, and using mAYA coins on Webyalaya.",
+    description: "A simple guide to creating study rooms, sending peer requests, and using AYA coins on Webyalaya.",
     url: "/how-it-works",
     type: "article",
     images: [
@@ -67,10 +67,10 @@ const jsonLd = {
     },
     {
       "@type": "Question",
-      "name": "What are mAYA coins?",
+      "name": "What are AYA coins?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "mAYA coins are the virtual currency on Webyalaya. Earn coins by hosting sessions, completing streaks, or finishing challenges. Spend coins to join premium rooms, send highlighted peer requests, or unlock add-ons.",
+        "text": "AYA coins are the virtual currency on Webyalaya. Earn coins by hosting sessions, completing streaks, or finishing challenges. Spend coins to join premium rooms, send highlighted peer requests, or unlock add-ons.",
       },
     },
   ],
@@ -104,7 +104,7 @@ const howItWorksSections = [
     },
   },
   {
-    title: "mAYA coins explained",
+    title: "AYA coins explained",
     description: "Earn, spend, and track everything from one wallet.",
     steps: [
       "Earn coins by hosting sessions, completing streaks, or finishing challenges.",
@@ -140,7 +140,7 @@ export default function HowItWorksPage() {
                 <h1 className="text-4xl font-semibold mb-4">How it works</h1>
                 <p className="text-lg text-muted-foreground font-tagline">
                   A simple playbook for starting a study room, sending peer requests, and keeping
-                  mAYA coin transfers clear and transparent.
+                  AYA coin transfers clear and transparent.
                 </p>
               </div>
             </div>

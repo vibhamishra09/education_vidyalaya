@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { dashboardApi, WalletActivityDataPoint } from "@/lib/api/dashboard.api";
 import { setAuthToken } from "@/lib/api-client";
-import { formatMaya } from "@/lib/utils/coin-format";
+import { formatCoins } from "@/lib/utils/coin-format";
 import { useState, useEffect } from "react";
 import { TrendingUp, TrendingDown, Wallet, ArrowUpRight, ArrowDownRight, Minus } from "lucide-react";
 
@@ -115,7 +115,7 @@ export function WalletChart({ className }: WalletChartProps) {
                 Earned
               </span>
               <span className="font-semibold text-emerald-600">
-                +{formatMaya(data.earned)} <span className="text-[10px]">m</span>
+                +{formatCoins(data.earned)} AYA
               </span>
             </div>
             <div className="flex items-center justify-between gap-6">
@@ -125,14 +125,14 @@ export function WalletChart({ className }: WalletChartProps) {
                 Spent
               </span>
               <span className="font-semibold text-rose-600">
-                -{formatMaya(data.spent)} <span className="text-[10px]">m</span>
+                -{formatCoins(data.spent)} AYA
               </span>
             </div>
             <div className="border-t border-border/50 pt-2 mt-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Net</span>
                 <span className={`font-bold ${data.net >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                  {data.net >= 0 ? "+" : ""}{formatMaya(data.net)} <span className="text-[10px]">m</span>AYA
+                  {data.net >= 0 ? "+" : ""}{formatCoins(data.net)} AYA
                 </span>
               </div>
             </div>
@@ -172,7 +172,7 @@ export function WalletChart({ className }: WalletChartProps) {
               Wallet Activity
             </CardTitle>
             <p className="text-sm text-muted-foreground mt-1">
-              Your mAYA tokens flow over the last 6 months
+              Your AYA tokens flow over the last 6 months
             </p>
           </div>
         </div>
@@ -185,7 +185,7 @@ export function WalletChart({ className }: WalletChartProps) {
               <span className="text-xs text-muted-foreground">Total Earned</span>
             </div>
             <p className="text-xl font-bold text-emerald-600 mt-1">
-              +{formatMaya(stats.totalEarned)} <span className="text-xs">m</span>
+              +{formatCoins(stats.totalEarned)} AYA
             </p>
           </div>
           <div className="bg-gradient-to-br from-rose-500/10 to-rose-500/5 rounded-lg p-3 border border-rose-500/20">
@@ -194,7 +194,7 @@ export function WalletChart({ className }: WalletChartProps) {
               <span className="text-xs text-muted-foreground">Total Spent</span>
             </div>
             <p className="text-xl font-bold text-rose-600 mt-1">
-              -{formatMaya(stats.totalSpent)} <span className="text-xs">m</span>
+              -{formatCoins(stats.totalSpent)} AYA
             </p>
           </div>
           <div className={`bg-gradient-to-br ${stats.totalNet >= 0 ? "from-blue-500/10 to-blue-500/5 border-blue-500/20" : "from-orange-500/10 to-orange-500/5 border-orange-500/20"} rounded-lg p-3 border`}>
@@ -203,7 +203,7 @@ export function WalletChart({ className }: WalletChartProps) {
               <span className="text-xs text-muted-foreground">Net Balance</span>
             </div>
             <p className={`text-xl font-bold mt-1 ${stats.totalNet >= 0 ? "text-blue-600" : "text-orange-600"}`}>
-              {stats.totalNet >= 0 ? "+" : ""}{formatMaya(stats.totalNet)} <span className="text-xs">m</span>
+              {stats.totalNet >= 0 ? "+" : ""}{formatCoins(stats.totalNet)} AYA
             </p>
           </div>
           <div className="bg-gradient-to-br from-slate-500/10 to-slate-500/5 rounded-lg p-3 border border-slate-500/20">
@@ -271,7 +271,7 @@ export function WalletChart({ className }: WalletChartProps) {
                 tickLine={false}
                 axisLine={false}
                 tick={{ fill: "#6b7280" }}
-                tickFormatter={(value) => formatMaya(value)}
+                tickFormatter={(value) => formatCoins(value)}
                 tickMargin={8}
               />
               <Tooltip content={<CustomTooltip />} />

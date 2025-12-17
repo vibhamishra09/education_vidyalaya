@@ -20,7 +20,7 @@ import { ImprovedAvailabilityCalendar } from "@/components/availability/improved
 import { useFormPersistence } from "@/hooks/use-local-storage";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { formatMaya } from "@/lib/utils/coin-format";
+import { formatCoins } from "@/lib/utils/coin-format";
 
 interface SessionFormData {
   skills: string[];
@@ -287,7 +287,7 @@ export default function RequestSessionPage({
         } else if (apiError.response?.data?.code === 'TIME_SLOT_UNAVAILABLE') {
           setError(apiError.response.data.message || 'The selected time slot is not available.');
         } else if (apiError.response?.data?.code === 'INSUFFICIENT_FUNDS') {
-          setError('You do not have enough mAYA tokens to book this session. Please add funds to your wallet.');
+          setError('You do not have enough AYA tokens to book this session. Please add funds to your wallet.');
         } else {
           setError(apiError.response?.data?.message || 'Failed to send session request');
         }
@@ -630,7 +630,7 @@ export default function RequestSessionPage({
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Rate</span>
                     <span className="font-medium">
-                      {peer?.hourlyRate ? <>{formatMaya(costPerHour)} <span className="text-[10px]">m</span>AYA/hour</> : 'Not set'}
+                      {peer?.hourlyRate ? <>{formatCoins(costPerHour)} AYA/hour</> : 'Not set'}
                     </span>
                   </div>
                   <div className="border-t pt-2 mt-2">
@@ -639,7 +639,7 @@ export default function RequestSessionPage({
                       <div className="flex items-center gap-1">
                         <Coins className="h-4 w-4 text-yellow-600" />
                         <span className="font-semibold">
-                          {peer?.hourlyRate ? <>{formatMaya(calculatedCost)} <span className="text-xs">m</span>AYA</> : 'N/A'}
+                          {peer?.hourlyRate ? <>{formatCoins(calculatedCost)} AYA</> : 'N/A'}
                         </span>
                       </div>
                     </div>
@@ -653,7 +653,7 @@ export default function RequestSessionPage({
                     </span>
                     <div className="flex items-center gap-1">
                       <Coins className="h-4 w-4 text-yellow-600" />
-                      <span className="font-medium">{formatMaya(typeof currentUser.coins === 'string' ? parseFloat(currentUser.coins) : currentUser.coins)} <span className="text-xs">m</span>AYA</span>
+                      <span className="font-medium">{formatCoins(typeof currentUser.coins === 'string' ? parseFloat(currentUser.coins) : currentUser.coins)} AYA</span>
                     </div>
                   </div>
 
