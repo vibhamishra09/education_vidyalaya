@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { LiveKitRoom, useParticipants, useRoomContext, useTrackToggle, useTracks, GridLayout, ParticipantTile, RoomAudioRenderer, useSpeakingParticipants, VideoTrack, TrackToggle, useLocalParticipant, isTrackReference } from '@livekit/components-react'
-import { Track, RoomOptions, VideoPresets, TrackPublication } from 'livekit-client'
+import { LiveKitRoom, useParticipants, useRoomContext, useTracks, RoomAudioRenderer, useSpeakingParticipants, VideoTrack, useLocalParticipant, isTrackReference } from '@livekit/components-react'
+import { Track, RoomOptions, VideoPresets } from 'livekit-client'
 import '@livekit/components-styles'
 import { ChatWidget } from '@/components/chat/ChatWidget'
 import { Button } from '@/components/ui/button'
@@ -208,8 +208,8 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 				socket.on('transcript-error', (error) => {
 					console.error('❌ [Transcripts] Server error:', error)
 				})
-			} catch (err) {
-				console.error('❌ [Transcripts] Failed to connect socket:', err)
+			} catch (_err) {
+				console.error('❌ [Transcripts] Failed to connect socket:', _err)
 			}
 		}
 		
@@ -341,7 +341,6 @@ function VideoRoomContent({
 }) {
 	const room = useRoomContext()
 	const params = useParams<{ room: string }>()
-	const participants = useParticipants()
 	
 	// Get local participant state directly - most reliable source of truth
 	const { localParticipant, isCameraEnabled, isMicrophoneEnabled, isScreenShareEnabled } = useLocalParticipant()
@@ -353,8 +352,6 @@ function VideoRoomContent({
 	const [pinnedParticipantId, setPinnedParticipantId] = useState<string | null>(null)
 	
 	const [isAudioEnabled, setIsAudioEnabled] = useState(true)
-	
-	const videoContainerRef = useRef<HTMLDivElement>(null)
 
 	// Get all camera tracks using useTracks - the standard way
 	const cameraTracks = useTracks(
@@ -455,7 +452,7 @@ function VideoRoomContent({
 
 	// Separate focused track from other tracks
 	// Screen share gets highest priority in focus view
-	const { focusedTrack, otherTracks, isScreenShareFocused } = useMemo(() => {
+	const { focusedTrack, isScreenShareFocused } = useMemo(() => {
 		if (layoutMode === 'grid') {
 			return { focusedTrack: null, otherTracks: cameraTracks, isScreenShareFocused: false }
 		}
@@ -493,7 +490,7 @@ function VideoRoomContent({
 		}
 		
 		return { focusedTrack: focused || null, otherTracks: others, isScreenShareFocused: false }
-	}, [sortedCameraTracks, focusedParticipant, layoutMode, activeScreenShare])
+	}, [sortedCameraTracks, focusedParticipant, layoutMode, activeScreenShare, cameraTracks])
 
 	const toggleAudio = () => {
 		// Toggle audio output (mute/unmute all remote audio)
@@ -1155,9 +1152,9 @@ function VideoRoomContent({
 													</div>
 												</div>
 												{/* Video layer on top - ONLY render when there's actual video track */}
-												{(isScreenShareFocused || (isTrackReference(focusedTrack) && focusedTrack.publication?.track)) && (
+												{isTrackReference(focusedTrack) && (isScreenShareFocused || focusedTrack.publication?.track) && (
 													<div className="absolute inset-0 z-[2]">
-														<VideoTrack trackRef={focusedTrack as any} className="w-full h-full object-contain" />
+														<VideoTrack trackRef={focusedTrack} className="w-full h-full object-contain" />
 													</div>
 												)}
 												{/* Participant name overlay at bottom */}
@@ -1362,16 +1359,17 @@ function VideoRoomContent({
 							
 							const newState = !participant.isCameraEnabled
 							await participant.setCameraEnabled(newState)
-						} catch (err: any) {
+						} catch (_err) {
 							// Show user-friendly error messages
-							if (err?.name === 'NotReadableError' || err?.message?.includes('Device in use')) {
+							const error = _err as Error & { name?: string }
+							if (error?.name === 'NotReadableError' || error?.message?.includes('Device in use')) {
 								alert('Camera is being used by another application. Please close other apps using your camera and try again.')
-							} else if (err?.name === 'NotAllowedError' || err?.message?.includes('Permission denied')) {
+							} else if (error?.name === 'NotAllowedError' || error?.message?.includes('Permission denied')) {
 								alert('Camera access was denied. Please allow camera permissions in your browser settings.')
-							} else if (err?.name === 'NotFoundError') {
+							} else if (error?.name === 'NotFoundError') {
 								alert('No camera found. Please connect a camera and try again.')
 							} else {
-								alert(`Could not access camera: ${err?.message || 'Unknown error'}`)
+								alert(`Could not access camera: ${error?.message || 'Unknown error'}`)
 							}
 						}
 					}}
@@ -1396,7 +1394,7 @@ function VideoRoomContent({
 							
 							const newState = !participant.isMicrophoneEnabled
 							await participant.setMicrophoneEnabled(newState)
-						} catch (err) {
+						} catch (_err) {
 							// Mic toggle failed silently
 						}
 					}}
@@ -1433,7 +1431,7 @@ function VideoRoomContent({
 						try {
 							const newState = !isScreenShareEnabled
 							await localParticipant?.setScreenShareEnabled(newState)
-						} catch (err) {
+						} catch (_err) {
 							// Screen share toggle failed silently
 						}
 					}}
