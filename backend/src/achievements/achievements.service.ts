@@ -14,16 +14,40 @@ export class AchievementsService {
    * @returns Categorized achievements (unlocked, in-progress, locked)
    */
   async getUserAchievements(userId: string) {
+    console.log('[AchievementsService] Getting achievements for userId:', userId);
+    
+    // userId is actually Clerk ID, convert to database ID
+    const user = await this.prisma.user.findUnique({
+      where: { clerkId: userId },
+      select: { id: true, name: true },
+    });
+
+    if (!user) {
+      this.logger.warn(`User not found for clerkId: ${userId}`);
+      throw new Error('User not found');
+    }
+
+    const dbUserId = user.id;
+    console.log('[AchievementsService] Converted Clerk ID to database ID:', { clerkId: userId, dbUserId, userName: user.name });
+    
     // Get all achievements
     const allAchievements = await this.prisma.achievement.findMany({
       orderBy: [{ category: 'asc' }, { rarity: 'asc' }],
     });
+    console.log('[AchievementsService] Total achievements in DB:', allAchievements.length);
 
     // Get user's achievement progress
     const userAchievements = await this.prisma.userAchievement.findMany({
-      where: { userId },
+      where: { userId: dbUserId },
       include: { achievement: true },
     });
+    console.log('[AchievementsService] User achievement records:', userAchievements.length);
+    console.log('[AchievementsService] Sample user achievements:', userAchievements.slice(0, 3).map(ua => ({
+      achievementId: ua.achievementId,
+      title: ua.achievement.title,
+      progress: ua.progress,
+      unlockedAt: ua.unlockedAt,
+    })));
 
     // Create a map for quick lookup
     const userAchievementMap = new Map(

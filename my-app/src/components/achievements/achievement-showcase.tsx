@@ -6,6 +6,7 @@ import { AchievementProgress } from "./achievement-progress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useMemo, useState } from "react";
 import {
@@ -80,8 +81,23 @@ export function AchievementShowcase({
 }: AchievementShowcaseProps) {
   const [activeTab, setActiveTab] = useState<"all" | "unlocked" | "progress" | "locked">("all");
   const [activeCategory, setActiveCategory] = useState<CategoryFilter>("all");
+  const [showAll, setShowAll] = useState(false);
 
-  const unlocked = useMemo(() => achievements.filter((a) => a.unlockedAt), [achievements]);
+  const unlocked = useMemo(() => {
+    const result = achievements.filter((a) => a.unlockedAt);
+    console.log('[AchievementShowcase] Filtering unlocked:', {
+      totalAchievements: achievements.length,
+      unlockedCount: result.length,
+      sampleAchievements: achievements.slice(0, 3).map(a => ({
+        id: a.id,
+        title: a.title,
+        unlockedAt: a.unlockedAt,
+        hasUnlockedAt: !!a.unlockedAt,
+      })),
+    });
+    return result;
+  }, [achievements]);
+  
   const inProgress = useMemo(
     () => achievements.filter((a) => !a.unlockedAt && a.progress !== undefined && a.progress > 0),
     [achievements]
@@ -130,6 +146,27 @@ export function AchievementShowcase({
     activeCategory === "all"
       ? statusFilteredAchievements
       : statusFilteredAchievements.filter((achievement) => achievement.category === activeCategory);
+
+  // Sort to prioritize unlocked, then in-progress, then locked
+  const sortedAchievements = useMemo(() => {
+    return [...filteredAchievements].sort((a, b) => {
+      // Unlocked first
+      if (a.unlockedAt && !b.unlockedAt) return -1;
+      if (!a.unlockedAt && b.unlockedAt) return 1;
+      
+      // Then in-progress
+      const aInProgress = !a.unlockedAt && a.progress && a.progress > 0;
+      const bInProgress = !b.unlockedAt && b.progress && b.progress > 0;
+      if (aInProgress && !bInProgress) return -1;
+      if (!aInProgress && bInProgress) return 1;
+      
+      return 0;
+    });
+  }, [filteredAchievements]);
+
+  // Show top 5 by default (prioritizing completed), or all if showAll is true
+  const displayedAchievements = showAll ? sortedAchievements : sortedAchievements.slice(0, 5);
+  const hasMore = sortedAchievements.length > 5;
 
   return (
     <Card>
@@ -272,20 +309,66 @@ export function AchievementShowcase({
             <TabsContent>
               {showProgress ? (
                 <div className="space-y-4">
-                  {filteredAchievements.map((achievement) => (
+                  {displayedAchievements.map((achievement) => (
                     <AchievementProgress key={achievement.id} achievement={achievement} />
                   ))}
+                  {hasMore && !showAll && (
+                    <div className="flex justify-center pt-4">
+                      <Button
+                        variant="outline"
+                        onClick={() => setShowAll(true)}
+                        className="w-full sm:w-auto"
+                      >
+                        View All {sortedAchievements.length} Achievements
+                      </Button>
+                    </div>
+                  )}
+                  {showAll && hasMore && (
+                    <div className="flex justify-center pt-4">
+                      <Button
+                        variant="outline"
+                        onClick={() => setShowAll(false)}
+                        className="w-full sm:w-auto"
+                      >
+                        Show Less
+                      </Button>
+                    </div>
+                  )}
                 </div>
               ) : (
-                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-4">
-                  {filteredAchievements.map((achievement) => (
-                    <div key={achievement.id} className="flex justify-center">
-                      <AchievementBadge achievement={achievement} />
+                <div className="space-y-4">
+                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-4">
+                    {displayedAchievements.map((achievement) => (
+                      <div key={achievement.id} className="flex justify-center">
+                        <AchievementBadge achievement={achievement} />
+                      </div>
+                    ))}
+                  </div>
+                  {hasMore && !showAll && (
+                    <div className="flex justify-center pt-4">
+                      <Button
+                        variant="outline"
+                        onClick={() => setShowAll(true)}
+                        className="w-full sm:w-auto"
+                      >
+                        View All {sortedAchievements.length} Achievements
+                      </Button>
                     </div>
-                  ))}
+                  )}
+                  {showAll && hasMore && (
+                    <div className="flex justify-center pt-4">
+                      <Button
+                        variant="outline"
+                        onClick={() => setShowAll(false)}
+                        className="w-full sm:w-auto"
+                      >
+                        Show Less
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
-              {filteredAchievements.length === 0 && (
+              {sortedAchievements.length === 0 && (
                 <div className="text-center py-12 text-muted-foreground">
                   <Trophy className="h-12 w-12 mx-auto mb-4 opacity-50" />
                   <p className="font-medium mb-1">No achievements yet</p>

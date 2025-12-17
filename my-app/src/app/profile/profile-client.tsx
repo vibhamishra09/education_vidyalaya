@@ -366,7 +366,7 @@ function ProfileContent() {
 
           {/* Sessions Tab */}
           {activeTab === "sessions" && <TabsContent>
-            <SessionsTab userId={currentUser.id} isLoading={loading} />
+            <SessionsTab publicStats={currentUser?.publicStats} isLoading={loading} />
           </TabsContent>}
 
           {/* Wallet Tab */}

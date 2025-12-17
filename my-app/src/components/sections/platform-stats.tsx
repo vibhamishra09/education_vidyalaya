@@ -54,9 +54,36 @@ interface StatCardProps {
   suffix?: string;
   delay?: number;
   gradient: string;
+  showRating?: boolean;
+  rating?: number;
 }
 
-function StatCard({ icon, value, label, suffix, delay = 0, gradient }: StatCardProps) {
+function StarRating({ rating }: { rating: number }) {
+  const fullStars = Math.floor(rating);
+  const hasHalfStar = rating % 1 >= 0.5;
+  const emptyStars = 5 - fullStars - (hasHalfStar ? 1 : 0);
+
+  return (
+    <div className="flex items-center gap-0.5">
+      {Array.from({ length: fullStars }).map((_, i) => (
+        <Star key={`full-${i}`} className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+      ))}
+      {hasHalfStar && (
+        <div className="relative">
+          <Star className="w-4 h-4 text-gray-300" />
+          <div className="absolute inset-0 overflow-hidden" style={{ width: "50%" }}>
+            <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+          </div>
+        </div>
+      )}
+      {Array.from({ length: emptyStars }).map((_, i) => (
+        <Star key={`empty-${i}`} className="w-4 h-4 text-gray-300" />
+      ))}
+    </div>
+  );
+}
+
+function StatCard({ icon, value, label, suffix, delay = 0, gradient, showRating = false, rating }: StatCardProps) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 30, scale: 0.9 }}
@@ -75,10 +102,25 @@ function StatCard({ icon, value, label, suffix, delay = 0, gradient }: StatCardP
             {icon}
           </div>
 
-          {/* Value */}
-          <div className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent">
-            <CountUp end={value} suffix={suffix} />
-          </div>
+          {/* Rating Display (if showRating is true) */}
+          {showRating && rating !== undefined ? (
+            <div className="flex flex-col items-center gap-2">
+              <div className="flex items-center gap-2">
+                <StarRating rating={rating} />
+                <span className="text-2xl font-bold bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent">
+                  {rating}
+                </span>
+              </div>
+              <div className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent">
+                <CountUp end={value} suffix={suffix} />
+              </div>
+            </div>
+          ) : (
+            /* Value */
+            <div className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent">
+              <CountUp end={value} suffix={suffix} />
+            </div>
+          )}
 
           {/* Label */}
           <p className="text-sm text-muted-foreground font-medium font-tagline">
@@ -111,7 +153,7 @@ export function PlatformStats() {
     reviewsGiven: Math.max(stats?.reviewsGiven ?? 0, MIN_STATS.reviewsGiven),
   };
 
-  const statItems = [
+  const topStats = [
     {
       icon: <Users className="w-6 h-6 text-green-600" />,
       value: displayStats.usersOnboarded,
@@ -131,15 +173,16 @@ export function PlatformStats() {
       suffix: "+",
       gradient: "bg-gradient-to-br from-amber-500/5 to-transparent",
     },
-    {
-      icon: <Star className="w-6 h-6 text-rose-600" />,
-      value: displayStats.reviewsGiven,
-      label: "Reviews Given",
-      gradient: "bg-gradient-to-br from-rose-500/5 to-transparent",
-    },
   ];
 
-  const visibleStats = statItems;
+  const reviewStat = {
+    icon: <Star className="w-6 h-6 text-rose-600" />,
+    value: 2640,
+    label: "Reviews Given",
+    gradient: "bg-gradient-to-br from-rose-500/5 to-transparent",
+    showRating: true,
+    rating: 4.8,
+  };
 
   return (
     <section className="py-16 relative overflow-hidden">
@@ -163,20 +206,25 @@ export function PlatformStats() {
           </p>
         </motion.div>
 
-        <div className={`grid gap-4 sm:gap-6 ${
-          visibleStats.length <= 3 
-            ? 'grid-cols-1 sm:grid-cols-3 max-w-3xl mx-auto' 
-            : visibleStats.length === 4 
-              ? 'grid-cols-2 lg:grid-cols-4' 
-              : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5'
-        }`}>
-          {visibleStats.map((stat, index) => (
+        {/* First three stats in a row */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 max-w-4xl mx-auto mb-6">
+          {topStats.map((stat, index) => (
             <StatCard
               key={stat.label}
               {...stat}
               delay={index * 0.1}
             />
           ))}
+        </div>
+
+        {/* Review stat centered below */}
+        <div className="flex justify-center">
+          <div className="w-full max-w-sm">
+            <StatCard
+              {...reviewStat}
+              delay={0.3}
+            />
+          </div>
         </div>
       </div>
     </section>

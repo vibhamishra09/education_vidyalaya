@@ -64,7 +64,11 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
       setCurrentPage(page);
     } catch (err) {
       console.error('Error fetching notifications:', err);
-      setError('Failed to load notifications');
+      // Only set error on the first attempt, silently fail on subsequent background refreshes
+      if (!append && page === 1) {
+        setError('Failed to load notifications');
+      }
+      // Keep existing notifications on error instead of clearing them
     } finally {
       setIsLoading(false);
       setIsLoadingMore(false);

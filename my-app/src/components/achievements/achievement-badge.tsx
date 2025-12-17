@@ -147,20 +147,58 @@ export function AchievementBadge({
       </div>
 
       {/* Tooltip on Hover */}
-      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-        <div className="bg-gray-900 text-white text-xs rounded-lg py-2 px-3 max-w-xs whitespace-normal shadow-xl">
-          <p className="font-semibold mb-1">{achievement.title}</p>
-          <p className="text-gray-300 mb-2">{achievement.description}</p>
-          {showProgress && hasProgress && (
-            <p className="text-gray-400 text-[10px]">
-              Progress: {achievement.progress}/{achievement.maxProgress}
-            </p>
-          )}
-          {achievement.coins && (
-            <p className="text-yellow-400 text-[10px] mt-1">
-              Reward: {formatMaya(achievement.coins)} <span className="text-[8px]">m</span>AYA
-            </p>
-          )}
+      <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-3 opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none z-50">
+        <div className="relative bg-popover text-popover-foreground text-sm rounded-xl py-3 px-4 min-w-[180px] max-w-[240px] shadow-lg border border-border">
+          {/* Arrow */}
+          <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-4 h-4 bg-popover border-b border-r border-border rotate-45" />
+          
+          {/* Content */}
+          <div className="relative">
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="text-lg">{achievement.icon}</span>
+              <p className="font-semibold text-foreground leading-tight">{achievement.title}</p>
+            </div>
+            <p className="text-muted-foreground text-xs leading-relaxed mb-2">{achievement.description}</p>
+            
+            {showProgress && hasProgress && (
+              <div className="mb-2">
+                <div className="flex justify-between text-xs mb-1">
+                  <span className="text-muted-foreground">Progress</span>
+                  <span className="font-medium text-foreground">{achievement.progress}/{achievement.maxProgress}</span>
+                </div>
+                <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                  <div 
+                    className={cn(
+                      "h-full rounded-full transition-all",
+                      achievement.rarity === 'legendary' && "bg-yellow-500",
+                      achievement.rarity === 'epic' && "bg-purple-500",
+                      achievement.rarity === 'rare' && "bg-blue-500",
+                      achievement.rarity === 'common' && "bg-gray-500"
+                    )}
+                    style={{ width: `${progressPercentage}%` }}
+                  />
+                </div>
+              </div>
+            )}
+            
+            {achievement.coins && (
+              <div className="flex items-center gap-1.5 pt-2 border-t border-border">
+                <span className="text-yellow-500 text-xs">✨</span>
+                <span className="text-xs font-medium text-yellow-600 dark:text-yellow-400">
+                  +{formatMaya(achievement.coins)} mAYA
+                </span>
+              </div>
+            )}
+            
+            {isUnlocked && achievement.unlockedAt && (
+              <div className="flex items-center gap-1.5 pt-2 border-t border-border mt-2">
+                <Check className="h-3 w-3 text-green-500" />
+                <span className="text-xs text-muted-foreground">
+                  Unlocked {new Date(achievement.unlockedAt).toLocaleDateString()}
+                </span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
