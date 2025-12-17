@@ -10,10 +10,7 @@ import { Button } from "@/components/ui/button";
 import { dashboardApi, SessionActivityDataPoint } from "@/lib/api/dashboard.api";
 import { setAuthToken } from "@/lib/api-client";
 import { useState, useEffect } from "react";
-import { TrendingUp, TrendingDown, BookOpen, GraduationCap, Users, Minus } from "lucide-react";
-
-// Import types from recharts
-import type { TooltipProps } from "recharts";
+import { TrendingUp, TrendingDown, BookOpen, GraduationCap, Minus } from "lucide-react";
 
 interface SessionsChartProps {
   className?: string;

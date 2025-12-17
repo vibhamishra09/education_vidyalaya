@@ -6,6 +6,7 @@ import { useUser } from "@clerk/nextjs";
 import { Navigation } from "@/components/layout/navigation";
 import { HeroSection } from "@/components/sections/hero";
 import { PlatformStats } from "@/components/sections/platform-stats";
+import { TestimonialsSlider } from "@/components/sections/testimonials-slider";
 import { StudyRoomCard } from "@/components/cards/study-room-card";
 import { DebateRoomCard } from "@/components/cards/debate-room-card";
 import { Footer } from "@/components/layout/footer";
@@ -235,6 +236,9 @@ export function HomeClient() {
 
         {/* Platform Stats Section */}
         <PlatformStats />
+
+        {/* Testimonials Slider Section */}
+        <TestimonialsSlider />
       </main>
 
       <Footer />

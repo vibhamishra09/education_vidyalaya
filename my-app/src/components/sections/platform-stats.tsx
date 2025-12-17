@@ -3,7 +3,7 @@
 import { motion, useInView } from "framer-motion";
 import { useRef, useEffect, useState } from "react";
 import { usePlatformStats } from "@/hooks/use-platform-stats";
-import { Users, BookOpen, Clock, Star, GraduationCap } from "lucide-react";
+import { Users, BookOpen, Clock, Star } from "lucide-react";
 
 interface CountUpProps {
   end: number;
