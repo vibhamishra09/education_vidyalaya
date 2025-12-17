@@ -1,38 +1,51 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { useUser } from "@clerk/nextjs";
+import { useState, useEffect } from "react";
+import Link from "next/link";
 import { Navigation } from "@/components/layout/navigation";
 import { HeroSection } from "@/components/sections/hero";
 import { PlatformStats } from "@/components/sections/platform-stats";
+import { TestimonialsSlider } from "@/components/sections/testimonials-slider";
 import { StudyRoomCard } from "@/components/cards/study-room-card";
 import { DebateRoomCard } from "@/components/cards/debate-room-card";
 import { Footer } from "@/components/layout/footer";
 import { FadeIn } from "@/components/ui/fade-in";
 import { Button } from "@/components/ui/button";
-import { useStudyRooms, useJoinStudyRoom } from "@/hooks/use-study-rooms";
-import { useRequireAuth } from "@/hooks/use-require-auth";
-import { useToast } from "@/contexts/toast-context";
+import { Skeleton } from "@/components/ui/skeleton";
 import { SessionStatus } from "@/types/api.types";
 import type { StudyRoomCard as StudyRoomCardType } from "@/types/api.types";
-import { Skeleton } from "@/components/ui/skeleton";
+import { studyRoomsApi } from "@/lib/api";
 
 export function HomeClient() {
-  const { isLoaded } = useUser();
-  const router = useRouter();
-  const requireAuth = useRequireAuth();
-  const { showSuccess, showError } = useToast();
-  const joinStudyRoom = useJoinStudyRoom();
-  const [joiningRoomId, setJoiningRoomId] = useState<string | null>(null);
+  const [studyRooms, setStudyRooms] = useState<StudyRoomCardType[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const { data: studyRoomsData, isLoading: studyRoomsLoading, error: studyRoomsError } = useStudyRooms({
-    limit: 6,
-    status: SessionStatus.UPCOMING,
-    trending: true,
-  });
+  // Fetch trending study rooms from API
+  useEffect(() => {
+    const fetchStudyRooms = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        // Fetch a limited number of study rooms for the home page
+        // Get both upcoming and ongoing rooms
+        const response = await studyRoomsApi.getStudyRooms({
+          limit: 6, // Show 6 study rooms on home page
+        });
+        
+        setStudyRooms(response.studyRooms || []);
+      } catch (err: any) {
+        console.error('Error fetching study rooms:', err);
+        setError(err.message || 'Failed to load study rooms');
+        setStudyRooms([]);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const studyRooms = studyRoomsData?.studyRooms ?? [];
+    fetchStudyRooms();
+  }, []);
 
   const debateRooms = [
     {
@@ -49,54 +62,12 @@ export function HomeClient() {
     },
   ];
 
-  const handleViewAll = () => {
-    router.push("/browse");
-  };
+  // For static build, use Link component instead of router
 
   const handleJoinRoom = (room: StudyRoomCardType) => {
-    requireAuth(async () => {
-      try {
-        setJoiningRoomId(room.id);
-        await joinStudyRoom.mutateAsync(room.id);
-        showSuccess("You're in!", `You joined "${room.title}".`);
-      } catch (error: unknown) {
-        console.error("Error joining study room from landing:", error);
-        if (error && typeof error === "object" && "response" in error) {
-          const apiError = error as { response: { data?: { code?: string; message?: string } } };
-          const errorCode = apiError.response?.data?.code;
-          const errorMessage = apiError.response?.data?.message;
-
-          if (errorCode === "INSUFFICIENT_COINS") {
-            showError("Not enough mAYA", errorMessage ?? "You do not have enough mAYA to join this study room.");
-          } else if (errorCode === "ROOM_FULL") {
-            showError("Room is full", errorMessage ?? "This study room has reached maximum capacity.");
-          } else {
-            showError("Failed to join", "Failed to join study room. Please try again.");
-          }
-        } else {
-          showError("Failed to join", "Failed to join study room. Please try again.");
-        }
-      } finally {
-        setJoiningRoomId(null);
-      }
-    });
+    console.log("Joining room:", room);
+    // For landing page, just log the action
   };
-
-  // Show loading state while checking authentication
-  if (!isLoaded) {
-    return (
-      <div className="min-h-screen flex flex-col">
-        <Navigation />
-        <main className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto mb-4"></div>
-            <p className="text-muted-foreground">Loading...</p>
-          </div>
-        </main>
-        <Footer />
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -111,48 +82,29 @@ export function HomeClient() {
             <FadeIn>
               <div className="flex items-center justify-between mb-8">
                 <h2 className="text-3xl font-bold">Trending Study Rooms</h2>
-                <Button variant="ghost" onClick={handleViewAll}>
-                  View All
-                </Button>
+                <Link href="/browse">
+                  <Button variant="ghost">
+                    View All
+                  </Button>
+                </Link>
               </div>
             </FadeIn>
 
-            {studyRoomsLoading ? (
+            {loading ? (
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {Array.from({ length: 6 }).map((_, index) => (
-                  <FadeIn key={index} delay={index * 0.1}>
-                    <div className="h-full" data-testid="study-room-skeleton">
-                      <div className="border rounded-lg p-6 space-y-4">
-                        <div className="flex items-center justify-between">
-                          <Skeleton className="h-6 w-16" />
-                          <Skeleton className="h-6 w-20" />
-                        </div>
-                        <div className="space-y-2">
-                          <Skeleton className="h-6 w-3/4" />
-                          <Skeleton className="h-4 w-full" />
-                          <Skeleton className="h-4 w-2/3" />
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <Skeleton className="h-4 w-20" />
-                          <Skeleton className="h-6 w-24" />
-                        </div>
-                        <Skeleton className="h-10 w-full" />
-                      </div>
-                    </div>
-                  </FadeIn>
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="space-y-4">
+                    <Skeleton className="h-48 w-full" />
+                    <Skeleton className="h-4 w-3/4" />
+                    <Skeleton className="h-4 w-1/2" />
+                  </div>
                 ))}
               </div>
-            ) : studyRoomsError ? (
+            ) : error ? (
               <div className="text-center py-12">
-                <p className="text-muted-foreground mb-4">
-                  Failed to load study rooms. Please try again later.
+                <p className="text-muted-foreground">
+                  {error}
                 </p>
-                <Button 
-                  variant="outline" 
-                  onClick={() => window.location.reload()}
-                >
-                  Retry
-                </Button>
               </div>
             ) : studyRooms.length === 0 ? (
               <div className="text-center py-12">
@@ -162,10 +114,9 @@ export function HomeClient() {
               </div>
             ) : (
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {studyRooms.map((room, index) => {
+                {studyRooms.map((room: StudyRoomCardType, index: number) => {
                   const isLive = room.sessionStatus === SessionStatus.ONGOING;
                   const isFull = (room.participantCount || 0) >= room.maxParticipants;
-                  const joinLoading = joinStudyRoom.isPending && joiningRoomId === room.id;
 
                   return (
                     <FadeIn key={room.id} delay={index * 0.1}>
@@ -197,7 +148,7 @@ export function HomeClient() {
                           isFull ? "secondary" : isLive ? "default" : "outline"
                         }
                         actionDisabled={isFull}
-                        actionLoading={joinLoading}
+                        actionLoading={false}
                         onAction={
                           isFull ? undefined : () => handleJoinRoom(room)
                         }
@@ -235,6 +186,9 @@ export function HomeClient() {
 
         {/* Platform Stats Section */}
         <PlatformStats />
+
+        {/* Testimonials Slider Section */}
+        <TestimonialsSlider />
       </main>
 
       <Footer />
