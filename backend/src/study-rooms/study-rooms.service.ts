@@ -968,12 +968,8 @@ export class StudyRoomsService {
       'teacher',
       0,
     );
-    console.log('✅ [completeStudyRoom] Creator streak updated successfully');
 
     // Check achievements for creator
-    console.log(
-      '🏆 [completeStudyRoom] Checking session achievements for creator',
-    );
     await this.achievementsService.checkSessionAchievements(
       studyRoom.createdById,
       'teacher',
@@ -983,27 +979,14 @@ export class StudyRoomsService {
     const creatorStreak = await this.streaksService.getUserStreak(
       studyRoom.createdById,
     );
-    console.log('📊 [completeStudyRoom] Creator streak info:', {
-      userId: studyRoom.createdById,
-      currentStreak: creatorStreak.currentStreak,
-      longestStreak: creatorStreak.longestStreak,
-      lastActivityDate: creatorStreak.lastActivityDate,
-    });
     await this.achievementsService.checkStreakAchievements(
       studyRoom.createdById,
       creatorStreak.currentStreak,
     );
 
     // Update streak for all participants (learners)
-    console.log(
-      `🔄 [completeStudyRoom] Starting streak updates for ${participants.length} participant(s)...`,
-    );
     for (let i = 0; i < participants.length; i++) {
       const participant = participants[i];
-      console.log(
-        `🔥 [completeStudyRoom] Updating streak for participant ${i + 1}/${participants.length}:`,
-        participant.userId,
-      );
 
       await this.streaksService.updateUserActivity(
         participant.userId,
@@ -1011,9 +994,6 @@ export class StudyRoomsService {
         studyRoom.duration,
         'learner',
         0,
-      );
-      console.log(
-        `✅ [completeStudyRoom] Participant ${i + 1} streak updated successfully`,
       );
 
       // Check achievements for participant
@@ -1026,20 +1006,11 @@ export class StudyRoomsService {
       const participantStreak = await this.streaksService.getUserStreak(
         participant.userId,
       );
-      console.log(`📊 [completeStudyRoom] Participant ${i + 1} streak info:`, {
-        userId: participant.userId,
-        currentStreak: participantStreak.currentStreak,
-        longestStreak: participantStreak.longestStreak,
-      });
       await this.achievementsService.checkStreakAchievements(
         participant.userId,
         participantStreak.currentStreak,
       );
     }
-
-    console.log(
-      '🎉 [completeStudyRoom] All streak updates completed successfully!',
-    );
 
     // Generate AI summary from transcripts
     let summary: string | null = null;

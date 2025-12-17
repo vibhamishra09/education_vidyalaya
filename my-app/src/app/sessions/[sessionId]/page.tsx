@@ -327,8 +327,10 @@ export default function PeerSessionPage({
               <CardHeader>
                 <CardTitle>Chat</CardTitle>
               </CardHeader>
-              <CardContent>
-                <ChatWidget channelId={session.chatChannelId} />
+              <CardContent className="p-0">
+                <div className="h-[500px]">
+                  <ChatWidget channelId={session.chatChannelId} />
+                </div>
               </CardContent>
             </Card>
           )}

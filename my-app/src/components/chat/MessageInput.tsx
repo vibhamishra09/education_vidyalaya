@@ -15,13 +15,13 @@ export function MessageInput({ onSend }: { onSend: (text: string) => void }) {
 					setText('')
 				}
 			}}
-			className="flex gap-2 p-2 md:p-3 bg-[#2a2a2a] md:bg-card/80 backdrop-blur-sm"
+			className="flex gap-2 p-2 md:p-3 bg-[#2a2a2a] backdrop-blur-sm"
 		>
 			<input
 				value={text}
 				onChange={(e) => setText(e.target.value)}
 				placeholder="Type a message..."
-				className="flex-1 bg-[#1f1f1f] md:bg-input/50 border border-white/10 md:border-input rounded-full px-4 py-2.5 text-sm text-white md:text-foreground placeholder:text-white/40 md:placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
+				className="flex-1 bg-[#1f1f1f] border border-white/10 rounded-full px-4 py-2.5 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
 				autoComplete="off"
 			/>
 			<Button

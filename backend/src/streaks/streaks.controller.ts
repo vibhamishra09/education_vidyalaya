@@ -46,12 +46,7 @@ export class StreaksController {
       };
     }
 
-    console.log('✅ [StreaksController.getCurrentStreak] User found:', {
-      id: user.id,
-      name: user.name,
-    });
     const result = await this.streaksService.getUserStreak(user.id);
-    console.log('📊 [StreaksController.getCurrentStreak] Returning:', result);
     return result;
   }
 

@@ -200,32 +200,8 @@ export function ChatWidget({ channelId, className = '' }: ChatWidgetProps) {
 				<MessageList messages={messages} />
 			</div>
 			{/* Input area - always at bottom */}
-			<div className="p-2 md:p-3 bg-[#2a2a2a] border-t border-white/10">
-				<form
-					onSubmit={(e) => {
-						e.preventDefault()
-						const input = e.currentTarget.elements.namedItem('message') as HTMLInputElement
-						const t = input.value.trim()
-						if (t) {
-							onSend(t)
-							input.value = ''
-						}
-					}}
-					className="flex gap-2"
-				>
-					<input
-						name="message"
-						placeholder="Type a message..."
-						className="flex-1 bg-[#1f1f1f] border border-white/10 rounded-full px-4 py-2.5 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-primary/50"
-						autoComplete="off"
-					/>
-					<button
-						type="submit"
-						className="h-10 w-10 bg-primary hover:bg-primary/90 text-white rounded-full flex items-center justify-center flex-shrink-0"
-					>
-						<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
-					</button>
-				</form>
+			<div className="border-t border-white/10 flex-shrink-0">
+				<MessageInput onSend={onSend} />
 			</div>
 		</div>
 	)

@@ -1499,13 +1499,13 @@ function VideoRoomContent({
 						onClick={() => setShowChat(false)}
 					/>
 					{/* Chat Panel - Mobile: Bottom sheet style, Desktop: Sidebar */}
-					<div className="fixed md:absolute right-0 md:top-0 bottom-0 left-0 md:left-auto w-full md:w-80 h-[65vh] md:h-full bg-[#1f1f1f] border-t md:border-t-0 md:border-l border-white/10 z-50 md:z-10 rounded-t-2xl md:rounded-none shadow-2xl md:shadow-none flex flex-col">
+					<div className="fixed md:absolute right-0 md:top-0 bottom-16 md:bottom-0 left-0 md:left-auto w-full md:w-80 h-[55vh] md:h-full bg-[#1f1f1f] border-t md:border-t-0 md:border-l border-white/10 z-50 md:z-10 rounded-t-2xl md:rounded-none shadow-2xl md:shadow-none flex flex-col">
 						{/* Drag handle for mobile */}
 						<div className="md:hidden flex justify-center py-2">
 							<div className="w-10 h-1 bg-white/30 rounded-full" />
 						</div>
 						{/* Header */}
-						<div className="h-10 md:h-14 bg-[#1f1f1f] border-b border-white/5 flex items-center justify-between px-4">
+						<div className="h-10 md:h-14 bg-[#1f1f1f] border-b border-white/5 flex items-center justify-between px-4 flex-shrink-0">
 							<h3 className="font-medium text-sm md:text-base text-white font-sans">Chat</h3>
 							<Button
 								variant="ghost"
@@ -1518,7 +1518,7 @@ function VideoRoomContent({
 						</div>
 						{/* Chat content - uses all remaining space */}
 						{channelId ? (
-							<ChatWidget channelId={channelId} className="flex-1 min-h-0" />
+							<ChatWidget channelId={channelId} className="flex-1 min-h-0 overflow-hidden" />
 						) : (
 							<div className="flex-1 flex items-center justify-center">
 								<p className="text-white/50 text-sm px-4 text-center font-sans">

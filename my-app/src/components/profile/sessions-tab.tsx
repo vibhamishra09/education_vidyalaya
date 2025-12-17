@@ -30,17 +30,13 @@ interface SessionsTabProps {
 }
 
 export const SessionsTab = memo(function SessionsTab({ publicStats, isLoading = false }: SessionsTabProps) {
-  // Calculate stats from publicStats
-  const stats = useMemo(() => {
-    if (!publicStats) return null;
-    const totalSessions = (publicStats.sessionsTaught || 0) + (publicStats.sessionsAttendedAsLearner || 0);
-    return {
-      totalSessions,
-      hoursCompleted: 0, // This would need to be added to publicStats
-      averageRating: publicStats.avgRating || 0,
-      completionRate: publicStats.acceptanceRate ? Math.round(publicStats.acceptanceRate * 100) : 0,
-    };
-  }, [publicStats]);
+  const { showSuccess, showError } = useToast();
+  const queryClient = useQueryClient();
+  const { getToken } = useAuth();
+  const [processingRequests, setProcessingRequests] = useState<Set<string>>(new Set());
+  const [currentPage, setCurrentPage] = useState(1);
+  const sessionsPerPage = 10;
+
   const {
     data: dashboardData,
     isLoading: dashboardLoading,
@@ -48,11 +44,33 @@ export const SessionsTab = memo(function SessionsTab({ publicStats, isLoading = 
   } = useDashboard({
     includeRequests: true,
     includeSessions: true,
+    page: currentPage,
+    limit: sessionsPerPage,
   });
-  const { showSuccess, showError } = useToast();
-  const queryClient = useQueryClient();
-  const { getToken } = useAuth();
-  const [processingRequests, setProcessingRequests] = useState<Set<string>>(new Set());
+  
+  // Calculate stats from publicStats and dashboardData
+  const stats = useMemo(() => {
+    if (!publicStats) return null;
+    const totalSessions = (publicStats.sessionsTaught || 0) + (publicStats.sessionsAttendedAsLearner || 0);
+    
+    // Calculate hours completed from past sessions and study rooms
+    const pastSessions = dashboardData?.pastSessions || [];
+    const pastStudyRooms = dashboardData?.pastStudyRooms || [];
+    const totalMinutes = [...pastSessions, ...pastStudyRooms].reduce((sum, session) => sum + (session.duration || 0), 0);
+    const hoursCompleted = Math.round(totalMinutes / 60);
+    
+    // Calculate completion rate: (acceptedSessions / totalSessionRequests) * 100
+    const completionRate = publicStats.totalSessionRequests > 0 
+      ? Math.round((publicStats.acceptedSessions / publicStats.totalSessionRequests) * 100) 
+      : 0;
+    
+    return {
+      totalSessions,
+      hoursCompleted,
+      averageRating: publicStats.avgRating || 0,
+      completionRate,
+    };
+  }, [publicStats, dashboardData?.pastSessions, dashboardData?.pastStudyRooms]);
 
   const isDataLoading = isLoading;
   const pendingRequests = dashboardData?.pendingRequests || [];
@@ -128,14 +146,30 @@ export const SessionsTab = memo(function SessionsTab({ publicStats, isLoading = 
   const pastList = useMemo(() => {
     const pastSessions = dashboardData?.pastSessions ?? [];
     const pastStudyRooms = dashboardData?.pastStudyRooms ?? [];
+    console.log('📊 [Sessions] Past peer sessions:', pastSessions.length);
+    console.log('📊 [Sessions] Past study rooms:', pastStudyRooms.length);
     const combined = [
       ...pastSessions.map(formatPeerSession),
       ...pastStudyRooms.map(formatStudyRoom),
     ];
+    console.log('📊 [Sessions] Combined past sessions:', combined.length);
     return combined.sort(
       (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
     );
   }, [dashboardData?.pastSessions, dashboardData?.pastStudyRooms]);
+
+  // Use backend pagination data
+  const totalPastSessions = 
+    (dashboardData?.sessionsPagination?.pastSessions?.total || 0) + 
+    (dashboardData?.sessionsPagination?.pastStudyRooms?.total || 0);
+  const totalPages = Math.ceil(totalPastSessions / sessionsPerPage);
+  
+  console.log('📄 [Pagination] Current page:', currentPage);
+  console.log('📄 [Pagination] Total past sessions:', totalPastSessions);
+  console.log('📄 [Pagination] Past sessions total:', dashboardData?.sessionsPagination?.pastSessions?.total || 0);
+  console.log('📄 [Pagination] Past study rooms total:', dashboardData?.sessionsPagination?.pastStudyRooms?.total || 0);
+  console.log('📄 [Pagination] Total pages:', totalPages);
+  console.log('📄 [Pagination] Sessions on this page:', pastList.length);
 
   const handleRequestAction = async (
     requestId: string,
@@ -332,11 +366,51 @@ export const SessionsTab = memo(function SessionsTab({ publicStats, isLoading = 
               Unable to load sessions. Please refresh the page.
             </p>
           ) : (
-            <SessionList
-              upcomingSessions={upcomingList}
-              ongoingSessions={ongoingList}
-              pastSessions={pastList}
-            />
+            <>
+              <SessionList
+                upcomingSessions={upcomingList}
+                ongoingSessions={ongoingList}
+                pastSessions={pastList}
+              />
+              
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between mt-6 pt-4 border-t">
+                  <div className="text-sm text-muted-foreground">
+                    Showing {((currentPage - 1) * sessionsPerPage) + 1} to {Math.min(currentPage * sessionsPerPage, totalPastSessions)} of {totalPastSessions} past sessions
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                      className="px-3 py-1 text-sm border rounded-md hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Previous
+                    </button>
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                        <button
+                          key={page}
+                          onClick={() => setCurrentPage(page)}
+                          className={`px-3 py-1 text-sm border rounded-md hover:bg-muted ${
+                            currentPage === page ? 'bg-primary text-primary-foreground hover:bg-primary/90' : ''
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                      disabled={currentPage === totalPages}
+                      className="px-3 py-1 text-sm border rounded-md hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>

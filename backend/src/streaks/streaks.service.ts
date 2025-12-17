@@ -21,14 +21,6 @@ export class StreaksService {
     role: 'learner' | 'teacher',
     coinsEarned: number = 0,
   ) {
-    console.log('🔥 [StreaksService.updateUserActivity] Called with:', {
-      userId,
-      sessionDate: sessionDate.toISOString(),
-      duration,
-      role,
-      coinsEarned,
-    });
-
     // Get user's timezone
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -44,10 +36,6 @@ export class StreaksService {
     }
 
     const timezone = user?.timezone || 'UTC';
-    console.log('✅ [StreaksService.updateUserActivity] User found:', {
-      name: user.name,
-      timezone,
-    });
 
     // Normalize session date to midnight in user's timezone
     const normalizedDate = DateTime.fromJSDate(sessionDate)
@@ -136,13 +124,6 @@ export class StreaksService {
       user?.longestStreak || 0,
     );
 
-    console.log('💾 [StreaksService.updateUserStreak] Updating user record:', {
-      name: user?.name,
-      currentStreak: streak.currentStreak,
-      longestStreak,
-      lastActivityDate: streak.lastActivityDate,
-    });
-
     // Update user's streak data
     await this.prisma.user.update({
       where: { id: userId },
@@ -152,10 +133,6 @@ export class StreaksService {
         lastActivityDate: streak.lastActivityDate,
       },
     });
-
-    console.log(
-      '✅ [StreaksService.updateUserStreak] User streak updated in database',
-    );
 
     return {
       currentStreak: streak.currentStreak,
@@ -338,13 +315,6 @@ export class StreaksService {
         lastActivityDate: null,
       };
     }
-
-    console.log('✅ [StreaksService.getUserStreak] Found user:', {
-      name: user.name,
-      currentStreak: user.currentStreak,
-      longestStreak: user.longestStreak,
-      lastActivityDate: user.lastActivityDate,
-    });
 
     return {
       currentStreak: user.currentStreak,

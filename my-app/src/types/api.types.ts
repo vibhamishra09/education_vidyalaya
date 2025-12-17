@@ -499,6 +499,12 @@ export interface DashboardData {
   pastSessions?: PastSession[];
   upcomingStudyRooms?: UpcomingStudyRoom[];
   pastStudyRooms?: PastStudyRoom[];
+  sessionsPagination?: {
+    upcomingSessions: Pagination;
+    pastSessions: Pagination;
+    upcomingStudyRooms: Pagination;
+    pastStudyRooms: Pagination;
+  };
   pendingReviews?: number;
   notifications?: Notification[];
   streak?: StreakData;
@@ -605,6 +611,8 @@ export interface DashboardQuery {
   includeNotifications?: boolean;
   includeStreaks?: boolean;
   includeAchievements?: boolean;
+  page?: number;
+  limit?: number;
   [key: string]: unknown;
 }
 

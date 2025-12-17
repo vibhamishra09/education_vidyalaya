@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { formatMaya } from "@/lib/utils/coin-format";
+import { formatCoins } from "@/lib/utils/coin-format";
 import { useTransactionHistory } from "@/hooks/use-transactions";
 import { PaymentStatus } from "@/types/api.types";
 
@@ -50,7 +50,7 @@ export function CoinDropdown({ coins = 0, isLoading = false }: CoinDropdownProps
       >
         <Coins className="h-4 w-4 text-yellow-600" />
         <span className="text-sm font-medium">
-          {isLoading ? '...' : formatMaya(displayCoins)} <span className="text-xs">m</span>AYA
+          {isLoading ? '...' : formatCoins(displayCoins)} AYA
         </span>
       </div>
 
@@ -75,7 +75,7 @@ export function CoinDropdown({ coins = 0, isLoading = false }: CoinDropdownProps
               <Card className="shadow-lg">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-lg">
-                    <span><span className="text-sm">m</span>AYA Balance</span>
+                    <span>AYA Balance</span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -84,7 +84,7 @@ export function CoinDropdown({ coins = 0, isLoading = false }: CoinDropdownProps
                     <div className="flex items-center justify-center gap-2">
                       <Coins className="h-6 w-6 text-yellow-600" />
                       <span className="text-3xl font-bold">
-                        {formatMaya(displayCoins)} <span className="text-xl">m</span>AYA
+                        {formatCoins(displayCoins)} AYA
                       </span>
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5">
@@ -145,7 +145,7 @@ export function CoinDropdown({ coins = 0, isLoading = false }: CoinDropdownProps
                                   : 'text-green-600'
                               }`}>
                                 {transaction.type === 'PAYMENT_MADE' ? '-' : '+'}
-                                {formatMaya(transaction.amount)} <span className="text-[10px]">m</span>AYA
+                                {formatCoins(transaction.amount)} AYA
                               </p>
                               <Badge
                                 variant="outline"
