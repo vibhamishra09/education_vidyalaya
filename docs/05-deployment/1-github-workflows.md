@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-This document describes the CI/CD workflows configured for automated deployment of the WebYalaya application.
+This document describes the CI/CD workflows configured for automated deployment of the Webyalaya application.
 
 ## Overview
 
