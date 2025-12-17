@@ -81,14 +81,14 @@ export function Navigation() {
               Browse
             </Link>
             <Link
-              href="/how-it-works"
+              href="/blog"
               className={`text-sm font-medium transition-all relative pb-1 ${
-                pathname === '/how-it-works'
+                pathname === '/blog'
                   ? 'text-foreground after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-primary after:rounded-full'
                   : 'text-muted-foreground hover:text-foreground hover:after:absolute hover:after:bottom-0 hover:after:left-0 hover:after:right-0 hover:after:h-0.5 hover:after:bg-primary/50 hover:after:rounded-full'
               }`}
             >
-              How it works
+              Webya Updates
             </Link>
             <Suspense fallback={<AuthButtonsFallback />}>
               <AuthButtons pathname={pathname} />

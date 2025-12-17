@@ -44,15 +44,35 @@ export function Footer() {
             ))}
           </div>
           
-          <Link
-            href="https://www.humitra.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 text-muted-foreground hover:text-green-600 transition-colors duration-200 text-sm font-medium font-tagline"
-          >
-            <Briefcase className="w-4 h-4" />
-            Careers
-          </Link>
+          <div className="flex items-center gap-4 flex-wrap justify-center">
+            <Link
+              href="/how-it-works"
+              className="text-muted-foreground hover:text-green-600 transition-colors duration-200 text-sm font-medium font-tagline"
+            >
+              How it works
+            </Link>
+            <Link
+              href="https://www.humitra.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 text-muted-foreground hover:text-green-600 transition-colors duration-200 text-sm font-medium font-tagline"
+            >
+              <Briefcase className="w-4 h-4" />
+              Careers
+            </Link>
+            <Link
+              href="/terms-of-use"
+              className="text-muted-foreground hover:text-green-600 transition-colors duration-200 text-sm font-medium font-tagline"
+            >
+              Terms of Use
+            </Link>
+            <Link
+              href="/privacy-policy"
+              className="text-muted-foreground hover:text-green-600 transition-colors duration-200 text-sm font-medium font-tagline"
+            >
+              Privacy Policy
+            </Link>
+          </div>
         </div>
 
         <p className="text-xs text-muted-foreground text-center mt-4 font-tagline">

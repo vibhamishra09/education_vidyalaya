@@ -159,7 +159,7 @@ export function PlatformStats() {
     reviewsGiven: Math.max(stats?.reviewsGiven ?? 0, MIN_STATS.reviewsGiven),
   };
 
-  const topStats = [
+  const allStats = [
     {
       icon: <Users className="w-6 h-6 text-green-600" />,
       value: displayStats.usersOnboarded,
@@ -179,16 +179,15 @@ export function PlatformStats() {
       suffix: "+",
       gradient: "bg-gradient-to-br from-amber-500/5 to-transparent",
     },
+    {
+      icon: <Star className="w-6 h-6 text-rose-600" />,
+      value: 2640,
+      label: "Reviews Given",
+      gradient: "bg-gradient-to-br from-rose-500/5 to-transparent",
+      showRating: true,
+      rating: 4.8,
+    },
   ];
-
-  const reviewStat = {
-    icon: <Star className="w-6 h-6 text-rose-600" />,
-    value: 2640,
-    label: "Reviews Given",
-    gradient: "bg-gradient-to-br from-rose-500/5 to-transparent",
-    showRating: true,
-    rating: 4.8,
-  };
 
   return (
     <section className="py-16 relative overflow-hidden">
@@ -212,25 +211,15 @@ export function PlatformStats() {
           </p>
         </motion.div>
 
-        {/* First three stats in a row */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 max-w-4xl mx-auto mb-6">
-          {topStats.map((stat, index) => (
+        {/* All four stats in a row */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 max-w-6xl mx-auto">
+          {allStats.map((stat, index) => (
             <StatCard
               key={stat.label}
               {...stat}
               delay={index * 0.1}
             />
           ))}
-        </div>
-
-        {/* Review stat centered below */}
-        <div className="flex justify-center">
-          <div className="w-full max-w-sm">
-            <StatCard
-              {...reviewStat}
-              delay={0.3}
-            />
-          </div>
         </div>
       </div>
     </section>
