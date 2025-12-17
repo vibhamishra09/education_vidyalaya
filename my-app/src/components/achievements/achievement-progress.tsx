@@ -4,7 +4,7 @@ import { Achievement } from "@/types/achievements.types";
 import { Progress } from "@/components/ui/progress";
 import { AchievementBadge } from "./achievement-badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { formatMaya } from "@/lib/utils/coin-format";
+import { formatCoins } from "@/lib/utils/coin-format";
 
 interface AchievementProgressProps {
   achievement: Achievement;
@@ -42,10 +42,10 @@ export function AchievementProgress({
               {achievement.coins && (
                 <div className="inline-flex items-center gap-1 bg-yellow-100 dark:bg-yellow-900/30 px-2 py-1 rounded-full flex-shrink-0 text-nowrap">
                   <span className="text-yellow-600 dark:text-yellow-400 text-[11px] font-semibold leading-none">
-                    +{formatMaya(achievement.coins)}
+                    +{formatCoins(achievement.coins)}
                   </span>
                   <span className="text-[9px] text-yellow-600/70 dark:text-yellow-400/70 leading-none">
-                    <span className="text-[7px] align-top">m</span>AYA
+                    AYA
                   </span>
                 </div>
               )}

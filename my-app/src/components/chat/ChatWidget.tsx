@@ -182,25 +182,25 @@ export function ChatWidget({ channelId, className = '' }: ChatWidgetProps) {
 		socketRef.current.emit('message:send', { channelId, content: text })
 	}
 
-	const isFullHeight = className.includes('h-full')
-
 	return (
-		<div className={`flex flex-col ${className} bg-background/50`} style={isFullHeight ? { height: '100%' } : { height: '500px' }}>
+		<div className={`flex flex-col ${className}`}>
 			{error && (
-				<div className="p-3 bg-destructive/20 border border-destructive/40 rounded-lg text-destructive-foreground text-sm mx-3 mt-3 flex-shrink-0 backdrop-blur-sm">
-					<p className="font-semibold mb-1">Connection Error</p>
+				<div className="p-2 md:p-3 bg-red-900/50 border border-red-500/40 rounded-lg text-red-200 text-xs md:text-sm mx-2 md:mx-3 mt-2 md:mt-3">
+					<p className="font-semibold mb-0.5 md:mb-1">Connection Error</p>
 					<p className="text-xs opacity-90">{error}</p>
 				</div>
 			)}
 			{isConnecting && (
-				<div className="p-3 bg-primary/20 border border-primary/40 rounded-lg text-foreground text-sm mx-3 mt-3 flex-shrink-0 backdrop-blur-sm">
+				<div className="p-2 md:p-3 bg-blue-900/50 border border-blue-500/40 rounded-lg text-blue-200 text-xs md:text-sm mx-2 md:mx-3 mt-2 md:mt-3">
 					Connecting to chat...
 				</div>
 			)}
-			<div className="flex-1 overflow-hidden flex flex-col min-h-0">
+			{/* Messages area - scrollable */}
+			<div className="flex-1 overflow-y-auto min-h-0">
 				<MessageList messages={messages} />
 			</div>
-			<div className="flex-shrink-0">
+			{/* Input area - always at bottom */}
+			<div className="border-t border-white/10 flex-shrink-0">
 				<MessageInput onSend={onSend} />
 			</div>
 		</div>

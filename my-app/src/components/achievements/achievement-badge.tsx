@@ -3,7 +3,7 @@
 import { Achievement, AchievementRarity } from "@/types/achievements.types";
 import { cn } from "@/lib/utils";
 import { Lock, Check } from "lucide-react";
-import { formatMaya } from "@/lib/utils/coin-format";
+import { formatCoins } from "@/lib/utils/coin-format";
 
 interface AchievementBadgeProps {
   achievement: Achievement;
@@ -185,7 +185,7 @@ export function AchievementBadge({
               <div className="flex items-center gap-1.5 pt-2 border-t border-border">
                 <span className="text-yellow-500 text-xs">✨</span>
                 <span className="text-xs font-medium text-yellow-600 dark:text-yellow-400">
-                  +{formatMaya(achievement.coins)} mAYA
+                  +{formatCoins(achievement.coins)} AYA
                 </span>
               </div>
             )}

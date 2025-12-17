@@ -2,7 +2,7 @@
 
 import { Achievement, AchievementRarity } from "@/types/achievements.types";
 import { cn } from "@/lib/utils";
-import { formatMaya } from "@/lib/utils/coin-format";
+import { formatCoins } from "@/lib/utils/coin-format";
 import { X, Sparkles, Trophy, Star, Crown, Medal } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -181,7 +181,7 @@ export function AchievementUnlockPopup({ achievement, onClose }: AchievementUnlo
                 <div className="flex items-center justify-center gap-2">
                   <span className="text-2xl">🪙</span>
                   <span className="text-xl font-bold text-yellow-600 dark:text-yellow-400">
-                    +{formatMaya(achievement.coins)} mAYA
+                    +{formatCoins(achievement.coins)} AYA
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">Reward added to your wallet</p>

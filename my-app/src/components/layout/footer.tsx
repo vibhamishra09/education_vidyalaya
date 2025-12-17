@@ -3,6 +3,9 @@ import Link from "next/link";
 import { Linkedin, Twitter, Facebook, Instagram, Youtube, Briefcase } from "lucide-react";
 
 export function Footer() {
+  // Landing site URL for Terms and Privacy Policy
+  const landingSiteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://webyalaya.com";
+  
   const socialLinks = [
     { icon: Linkedin, label: "LinkedIn", url: "https://www.linkedin.com/company/webyalaya/?viewAsMember=true" },
     { icon: Twitter, label: "Twitter", url: "https://www.humitra.com" },
@@ -44,15 +47,39 @@ export function Footer() {
             ))}
           </div>
           
-          <Link
-            href="https://www.humitra.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 text-muted-foreground hover:text-green-600 transition-colors duration-200 text-sm font-medium font-tagline"
-          >
-            <Briefcase className="w-4 h-4" />
-            Careers
-          </Link>
+          <div className="flex items-center gap-4 flex-wrap justify-center">
+            <Link
+              href="/how-it-works"
+              className="text-muted-foreground hover:text-green-600 transition-colors duration-200 text-sm font-medium font-tagline"
+            >
+              How it works
+            </Link>
+            <Link
+              href="https://www.humitra.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 text-muted-foreground hover:text-green-600 transition-colors duration-200 text-sm font-medium font-tagline"
+            >
+              <Briefcase className="w-4 h-4" />
+              Careers
+            </Link>
+            <Link
+              href={`${landingSiteUrl}/terms-of-use`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-muted-foreground hover:text-green-600 transition-colors duration-200 text-sm font-medium font-tagline"
+            >
+              Terms of Use
+            </Link>
+            <Link
+              href={`${landingSiteUrl}/privacy-policy`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-muted-foreground hover:text-green-600 transition-colors duration-200 text-sm font-medium font-tagline"
+            >
+              Privacy Policy
+            </Link>
+          </div>
         </div>
 
         <p className="text-xs text-muted-foreground text-center mt-4 font-tagline">

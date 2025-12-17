@@ -13,19 +13,7 @@ export class AchievementsController {
    */
   @Get()
   async getUserAchievements(@CurrentUser('id') userId: string) {
-    console.log('[AchievementsController] Getting achievements for user:', userId);
     const result = await this.achievementsService.getUserAchievements(userId);
-    console.log('[AchievementsController] Result:', {
-      totalUnlocked: result.totalUnlocked,
-      unlockedCount: result.unlocked.length,
-      inProgressCount: result.inProgress.length,
-      lockedCount: result.locked.length,
-      sampleUnlocked: result.unlocked[0] ? {
-        id: result.unlocked[0].id,
-        title: result.unlocked[0].title,
-        unlockedAt: result.unlocked[0].unlockedAt,
-      } : 'none',
-    });
     return result;
   }
 

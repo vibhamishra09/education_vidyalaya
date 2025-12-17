@@ -95,7 +95,7 @@ export function OnboardingClient() {
       formData.append('bio', bio);
       formData.append('location', location);
       formData.append('school', school);
-      formData.append('hourlyRate', (hourlyRate / 100).toString()); // Convert mAYA input to AYA for storage
+      formData.append('hourlyRate', hourlyRate.toString()); // AYA value - no conversion needed
       formData.append('skillsIHave', JSON.stringify(skillsIHave));
       formData.append('skillsIWant', JSON.stringify(skillsIWant));
 
@@ -280,7 +280,7 @@ export function OnboardingClient() {
                       />
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Set your hourly rate in mAYA tokens for teaching sessions. You can change this later in your profile.
+                      Set your hourly rate in AYA tokens for teaching sessions. You can change this later in your profile.
                     </p>
                   </div>
 
@@ -293,7 +293,7 @@ export function OnboardingClient() {
                       <div>
                         <p className="font-semibold">Welcome Bonus!</p>
                         <p className="text-sm text-muted-foreground">
-                          You&apos;ll receive 1000 <span className="text-xs">m</span>AYA to start your learning journey
+                          You&apos;ll receive 1000 AYA to start your learning journey
                         </p>
                       </div>
                     </div>

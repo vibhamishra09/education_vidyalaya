@@ -35,6 +35,8 @@ export function DashboardClient() {
   const queryClient = useQueryClient();
   const { showSuccess, showError } = useToast();
   const [processingRequests, setProcessingRequests] = useState<Set<string>>(new Set());
+  const [currentPage, setCurrentPage] = useState(1);
+  const sessionsPerPage = 10;
   
   // Use tab persistence hook for localStorage sync
   const [activeRequestTab, setActiveRequestTab] = useTabPersistence<RequestTab>(
@@ -51,6 +53,8 @@ export function DashboardClient() {
     includeNotifications: true,
     includeStreaks: true,
     includeAchievements: true,
+    page: currentPage,
+    limit: sessionsPerPage,
   });
 
   // Fetch current user data
@@ -275,15 +279,6 @@ export function DashboardClient() {
             <CardHeader className="space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <CardTitle>Session Requests</CardTitle>
-                {(
-                  activeRequestTab === 'received'
-                    ? pendingRequests.length
-                    : sentRequests.length
-                ) > 2 && (
-                  <Button variant="ghost" size="sm">
-                    View All
-                  </Button>
-                )}
               </div>
               <Tabs>
                 <TabsList className="w-full sm:w-auto">
@@ -502,6 +497,53 @@ export function DashboardClient() {
               ]}
               isLoading={dashboardLoading}
             />
+            
+            {/* Pagination Controls */}
+            {(() => {
+              const totalPastSessions = 
+                (dashboardData?.sessionsPagination?.pastSessions?.total || 0) + 
+                (dashboardData?.sessionsPagination?.pastStudyRooms?.total || 0);
+              const totalPages = Math.ceil(totalPastSessions / sessionsPerPage);
+              
+              if (totalPages <= 1) return null;
+              
+              return (
+                <div className="flex items-center justify-between mt-6 pt-4 border-t">
+                  <div className="text-sm text-muted-foreground">
+                    Showing {((currentPage - 1) * sessionsPerPage) + 1} to {Math.min(currentPage * sessionsPerPage, totalPastSessions)} of {totalPastSessions} past sessions
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                      className="px-3 py-1 text-sm border rounded-md hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Previous
+                    </button>
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                        <button
+                          key={page}
+                          onClick={() => setCurrentPage(page)}
+                          className={`px-3 py-1 text-sm border rounded-md hover:bg-muted ${
+                            currentPage === page ? 'bg-primary text-primary-foreground hover:bg-primary/90' : ''
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                      disabled={currentPage === totalPages}
+                      className="px-3 py-1 text-sm border rounded-md hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
           </CardContent>
         </Card>
 
