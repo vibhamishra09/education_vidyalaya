@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotifType } from '@prisma/client';
 import { PushNotificationService } from './push-notification.service';
+import { EmailService } from './email.service';
 import { redisClient } from '../redis/redis.provider';
 
 @Injectable()
@@ -9,6 +10,7 @@ export class NotificationsService {
   constructor(
     private prisma: PrismaService,
     private pushNotificationService: PushNotificationService,
+    private emailService: EmailService,
   ) {}
 
   // Redis client available for caching, deduplication, etc.
@@ -198,6 +200,26 @@ export class NotificationsService {
 
       console.log(
         '✅ [NotificationsService] Push notification triggered successfully',
+      );
+    }
+
+    // Send email notification for high priority (URGENT) notifications
+    if (type === NotifType.URGENT) {
+      console.log('📧 [NotificationsService] Sending email for URGENT notification:', {
+        userId,
+        message,
+        notificationId: notification.id,
+      });
+
+      const emailSubject = options?.pushTitle || 'High Priority Notification - Webyalaya';
+      await this.emailService.sendEmailNotification(
+        userId,
+        emailSubject,
+        message,
+      );
+
+      console.log(
+        '✅ [NotificationsService] Email notification sent successfully',
       );
     }
 
