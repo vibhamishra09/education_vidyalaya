@@ -4,6 +4,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { NotificationsController } from './notifications.controller';
 import { NotificationsService } from './notifications.service';
 import { PushNotificationService } from './push-notification.service';
+import { EmailService } from './email.service';
 import { NotificationSchedulerService } from './notification-scheduler.service';
 import { TranscriptsModule } from '../transcripts/transcripts.module';
 import { StreaksModule } from '../streaks/streaks.module';
@@ -19,8 +20,9 @@ import { StreaksModule } from '../streaks/streaks.module';
   providers: [
     NotificationsService,
     PushNotificationService,
+    EmailService,
     NotificationSchedulerService,
   ],
-  exports: [NotificationsService, PushNotificationService],
+  exports: [NotificationsService, PushNotificationService, EmailService],
 })
 export class NotificationsModule {}

@@ -1,6 +1,6 @@
 # Environment Variables Configuration
 
-This document describes all environment variables required for deploying the WebYalaya application across different environments (Dev, Test, Production).
+This document describes all environment variables required for deploying the Webyalaya application across different environments (Dev, Test, Production).
 
 ## Overview
 
@@ -65,6 +65,13 @@ The backend runs as a Docker container on AWS ECS. Environment variables are con
 | `VAPID_SUBJECT` | VAPID subject (email or URL) | `mailto:admin@webyalaya.com` | ⚠️ Optional |
 
 **Note:** Push notifications will not work if VAPID keys are not configured.
+
+#### Email Notifications (Resend)
+| Variable | Description | Example | Required |
+|----------|-------------|---------|----------|
+| `RESEND_API_KEY` | Resend API key for sending emails | `re_...` | ⚠️ Optional |
+
+**Note:** Email notifications for high priority (URGENT) notifications will not work if `RESEND_API_KEY` is not configured. Emails are sent from `notify@noreply.webyalaya.com`.
 
 #### Application Configuration
 | Variable | Description | Example | Required |
@@ -305,6 +312,7 @@ TODO: verify if this should be https or wss.
 - [ ] `FRONTEND_URLS` - Allowed CORS origins (optional)
 - [ ] `VAPID_PUBLIC_KEY` - Push notification public key (optional)
 - [ ] `VAPID_PRIVATE_KEY` - Push notification private key (optional)
+- [ ] `RESEND_API_KEY` - Resend API key for email notifications (optional)
 - [ ] `PORT` - Application port (optional, defaults to 3001)
 
 ### Frontend Checklist

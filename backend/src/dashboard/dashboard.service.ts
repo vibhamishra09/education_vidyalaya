@@ -41,7 +41,7 @@ export class DashboardService {
     // userId is actually clerkId, so we need to find the user by clerkId first
     const user = await this.prisma.user.findUnique({
       where: { clerkId: userId },
-      select: { id: true },
+      select: { id: true, clerkId: true },
     });
 
     if (!user) {
@@ -51,12 +51,35 @@ export class DashboardService {
     const data: any = {};
 
     if (includeMetrics) {
-      const [completedSessions, totalEarnings, receivedReviews] =
-        await Promise.all([
+      const [
+        completedPeerSessions,
+        completedStudyRoomsAsHost,
+        studyRoomsAsParticipant,
+        totalEarnings,
+        receivedReviews,
+      ] = await Promise.all([
+          // Peer sessions (as learner or teacher)
           this.prisma.peerSession.count({
             where: {
               OR: [{ requestedById: user.id }, { requestedToId: user.id }],
               sessionStatus: SessionStatus.DONE,
+            },
+          }),
+          // Study rooms created by user (as host)
+          this.prisma.studyRoom.count({
+            where: {
+              createdById: user.id,
+              sessionStatus: SessionStatus.DONE,
+            },
+          }),
+          // Study rooms user participated in (as learner)
+          this.prisma.studyRoomParticipant.count({
+            where: {
+              userId: user.id,
+              studyRoom: {
+                sessionStatus: SessionStatus.DONE,
+                createdById: { not: user.id },
+              },
             },
           }),
           this.prisma.payment.aggregate({
@@ -67,6 +90,9 @@ export class DashboardService {
             where: { revieweeId: user.id },
           }),
         ]);
+
+      // Total completed sessions = peer sessions + study rooms (as host) + study rooms (as participant)
+      const completedSessions = completedPeerSessions + completedStudyRoomsAsHost + studyRoomsAsParticipant;
 
       const avgRating =
         receivedReviews.length > 0
@@ -372,7 +398,7 @@ export class DashboardService {
 
     if (includeAchievements) {
       const achievements = await this.achievementsService.getUserAchievements(
-        user.id,
+        user.clerkId,
       );
       data.achievements = {
         unlocked: achievements.unlocked.slice(0, 5), // Latest 5 unlocked
@@ -478,7 +504,7 @@ export class DashboardService {
       }
     }
 
-    // Count study room participations
+    // Count study room participations as taught/learned
     for (const room of studyRoomParticipations) {
       const dateStr = new Date(room.date).toLocaleDateString('en-US', {
         month: 'short',
@@ -486,7 +512,13 @@ export class DashboardService {
       });
       const dayData = activityMap.get(dateStr);
       if (dayData) {
-        dayData.studyRooms++;
+        // Count study rooms as taught (creator) or learned (participant)
+        if (room.createdById === user.id) {
+          dayData.taught++;
+        } else {
+          dayData.learned++;
+        }
+        dayData.studyRooms++; // Keep for backwards compatibility
       }
     }
 

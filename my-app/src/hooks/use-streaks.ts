@@ -12,7 +12,7 @@ export const streakKeys = {
 
 // Get current streak
 export function useCurrentStreak() {
-  const { getToken, isLoaded } = useAuth();
+  const { getToken, isLoaded, isSignedIn } = useAuth();
 
   return useQuery({
     queryKey: streakKeys.current(),
@@ -28,14 +28,16 @@ export function useCurrentStreak() {
       console.log('✅ [useCurrentStreak] Received:', result);
       return result;
     },
-    enabled: isLoaded,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    enabled: isLoaded && isSignedIn,
+    staleTime: 30 * 1000, // 30 seconds - shorter to show updates faster
+    refetchOnWindowFocus: true, // Refetch when user returns to tab
+    refetchOnMount: true, // Always refetch on mount
   });
 }
 
 // Get streak history for calendar
 export function useStreakHistory(days: number = 14) {
-  const { getToken, isLoaded } = useAuth();
+  const { getToken, isLoaded, isSignedIn } = useAuth();
 
   return useQuery({
     queryKey: streakKeys.history(days),
@@ -51,7 +53,9 @@ export function useStreakHistory(days: number = 14) {
       console.log('✅ [useStreakHistory] Received:', result);
       return result;
     },
-    enabled: isLoaded,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    enabled: isLoaded && isSignedIn,
+    staleTime: 30 * 1000, // 30 seconds - shorter to show updates faster
+    refetchOnWindowFocus: true, // Refetch when user returns to tab
+    refetchOnMount: true, // Always refetch on mount
   });
 }

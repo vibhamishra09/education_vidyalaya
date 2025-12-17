@@ -18,22 +18,30 @@ export function useNotifications(
   type?: string,
   viewed?: boolean
 ) {
-  const { getToken, isLoaded } = useAuth();
+  const { getToken, isLoaded, isSignedIn } = useAuth();
 
   return useQuery({
     queryKey: notificationKeys.list(page, limit, type, viewed),
     queryFn: async () => {
-      // Ensure token is set before making the request
-      if (isLoaded) {
-        const token = await getToken();
-        if (token) {
-          setAuthToken(token);
-        }
+      // Ensure user is signed in
+      if (!isSignedIn) {
+        throw new Error('User not signed in');
       }
+
+      // Ensure token is set before making the request
+      const token = await getToken();
+      if (!token) {
+        throw new Error('Failed to get authentication token');
+      }
+      
+      setAuthToken(token);
       return notificationsApi.getNotifications(page, limit, type, viewed);
     },
-    enabled: isLoaded, // Wait for Clerk to be loaded
+    enabled: isLoaded && isSignedIn, // Wait for Clerk to be loaded and user signed in
     refetchInterval: 30000, // Refetch every 30 seconds
+    retry: 2, // Retry failed requests twice
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000), // Exponential backoff
+    staleTime: 10000, // Consider data stale after 10 seconds
   });
 }
 
