@@ -43,9 +43,9 @@ Your NestJS backend now has **production-grade monitoring** with automatic endpo
 ```yaml
 - GF_SMTP_ENABLED=true
 - GF_SMTP_HOST=smtp.gmail.com:587
-- GF_SMTP_USER=debanshughosh685@gmail.com
+- GF_SMTP_USER=_your_gmail_username_@
 - GF_SMTP_PASSWORD=your_google_app_password_here  # ⚠️ REPLACE THIS
-- GF_SMTP_FROM_ADDRESS=debanshughosh685@gmail.com
+- GF_SMTP_FROM_ADDRESS=_your_email_address_
 - GF_SMTP_FROM_NAME=Webyalaya Monitoring
 ```
 
