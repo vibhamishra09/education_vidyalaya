@@ -11,6 +11,7 @@ import { StreaksService } from '../streaks/streaks.service';
 import { AchievementsService } from '../achievements/achievements.service';
 import { TranscriptsService } from '../transcripts/transcripts.service';
 import { CreateStudyRoomDto, UpdateStudyRoomDto } from './dto/study-room.dto';
+import { SessionFeedbackDto } from '../common/dto/session-feedback.dto';
 import {
   Prisma,
   SessionStatus,
@@ -1068,5 +1069,94 @@ export class StudyRoomsService {
     const isHost = studyRoom.createdById === user.id;
 
     return { isHost };
+  }
+
+  async saveSessionFeedback(
+    studyRoomId: string,
+    userId: string,
+    feedbackDto: SessionFeedbackDto,
+  ) {
+    // userId is actually clerkId, so we need to find the user by clerkId first
+    const user = await this.prisma.user.findUnique({
+      where: { clerkId: userId },
+      select: { id: true, name: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const studyRoom = await this.prisma.studyRoom.findUnique({
+      where: { id: studyRoomId },
+      select: { 
+        id: true, 
+        createdById: true,
+        learners: {
+          select: { userId: true },
+        },
+      },
+    });
+
+    if (!studyRoom) {
+      throw new NotFoundException('Study room not found');
+    }
+
+    // Check if user is either the host or a participant
+    const isHost = studyRoom.createdById === user.id;
+    const isParticipant = studyRoom.learners.some((l) => l.userId === user.id);
+
+    if (!isHost && !isParticipant) {
+      throw new ForbiddenException(
+        'You are not authorized to submit feedback for this study room',
+      );
+    }
+
+    // Check if user has already submitted feedback for this session
+    const existingFeedback = await this.prisma.sessionFeedback.findFirst({
+      where: {
+        userId: user.id,
+        studyRoomId: studyRoomId,
+      },
+    });
+
+    // Store all answers as JSON (cast to Prisma's InputJsonValue type)
+    const answersJson = (feedbackDto.answers || {}) as unknown as Prisma.InputJsonValue;
+
+    if (existingFeedback) {
+      // Update existing feedback
+      await this.prisma.sessionFeedback.update({
+        where: { id: existingFeedback.id },
+        data: {
+          isHost: feedbackDto.isHost,
+          answers: answersJson,
+        },
+      });
+
+      console.log(
+        '✅ [saveSessionFeedback] Feedback updated for study room:',
+        studyRoomId,
+      );
+    } else {
+      // Create new feedback entry
+      await this.prisma.sessionFeedback.create({
+        data: {
+          userId: user.id,
+          studyRoomId: studyRoomId,
+          isHost: feedbackDto.isHost,
+          answers: answersJson,
+        },
+      });
+
+      console.log(
+        '✅ [saveSessionFeedback] Feedback created for study room:',
+        studyRoomId,
+      );
+    }
+
+    return {
+      success: true,
+      message: 'Feedback submitted successfully',
+      studyRoomId,
+    };
   }
 }

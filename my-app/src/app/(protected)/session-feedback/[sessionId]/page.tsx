@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useCallback, use } from "react";
+import { useRouter, useSearchParams, useParams } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -9,9 +9,10 @@ import {
   CheckCircle2,  
   Loader2, 
   Star,
-  X,
   Sparkles,
   PartyPopper,
+  ArrowRight,
+  MessageSquareHeart,
 } from "lucide-react";
 import { SessionFeedbackForm } from "@/components/feedback/session-feedback-form";
 import { ReviewForm } from "@/components/forms/review-form";
@@ -24,27 +25,20 @@ import { toast } from "sonner";
 // Participant: review -> feedback -> complete
 // Host: feedback -> complete
 
-type DialogStep = "review" | "feedback" | "complete";
+type PageStep = "review" | "feedback" | "complete";
 
-interface SessionEndedDialogProps {
-  open: boolean;
-  sessionId: string;
-  sessionType?: "studyRoom" | "peerSession";
-  isHost?: boolean;
-  onClose?: () => void;
-}
-
-export function SessionEndedDialog({
-  open,
-  sessionId,
-  sessionType = "peerSession",
-  isHost = false,
-  onClose,
-}: SessionEndedDialogProps) {
+export default function SessionFeedbackPage() {
   const router = useRouter();
+  const params = useParams();
+  const searchParams = useSearchParams();
   const { getToken } = useAuth();
+  
+  const sessionId = params.sessionId as string;
+  const sessionType = (searchParams.get("type") as "studyRoom" | "peerSession") || "peerSession";
+  const isHost = searchParams.get("isHost") === "true";
+  
   // For participant: start with review, for host: start with feedback
-  const [step, setStep] = useState<DialogStep>(isHost ? "feedback" : "review");
+  const [step, setStep] = useState<PageStep>(isHost ? "feedback" : "review");
   const [loading, setLoading] = useState(false);
 
   const handleBackToDashboard = useCallback(() => {
@@ -113,21 +107,10 @@ export function SessionEndedDialog({
     }, 2000);
   }, [router]);
 
-  if (!open) return null;
-
   // Render review step
   const renderReview = () => (
-    <Card className="w-full max-w-lg border-0 shadow-2xl bg-background/95 backdrop-blur animate-in zoom-in-95 duration-300">
-      <CardHeader className="relative bg-gradient-to-r from-yellow-500/10 via-orange-500/10 to-transparent pb-4">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="absolute right-4 top-4 text-muted-foreground hover:text-foreground"
-          onClick={handleBackToDashboard}
-        >
-          <X className="h-5 w-5" />
-        </Button>
-        
+    <Card className="w-full max-w-lg border-0 shadow-2xl bg-card animate-in fade-in-0 slide-in-from-bottom-4 duration-500">
+      <CardHeader className="relative bg-gradient-to-r from-yellow-500/10 via-orange-500/10 to-transparent pb-4 rounded-t-xl">
         <div className="flex items-center gap-4">
           <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-yellow-500 to-orange-500 flex items-center justify-center shadow-lg">
             <Star className="h-7 w-7 text-white" />
@@ -155,13 +138,21 @@ export function SessionEndedDialog({
           onCancel={handleReviewSkip}
         />
         
-        <div className="mt-4 flex justify-end">
+        <div className="mt-6 pt-4 border-t flex items-center justify-between">
+          <Button 
+            variant="ghost" 
+            onClick={handleBackToDashboard}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            Exit to Dashboard
+          </Button>
           <Button 
             variant="ghost" 
             onClick={handleReviewSkip}
-            className="text-muted-foreground hover:text-foreground"
+            className="text-muted-foreground hover:text-foreground gap-1"
           >
             Skip for now
+            <ArrowRight className="h-4 w-4" />
           </Button>
         </div>
       </CardContent>
@@ -170,7 +161,7 @@ export function SessionEndedDialog({
 
   // Render feedback step
   const renderFeedback = () => (
-    <div className="w-full max-w-2xl animate-in zoom-in-95 duration-300">
+    <div className="w-full max-w-2xl animate-in fade-in-0 slide-in-from-bottom-4 duration-500">
       <SessionFeedbackForm
         sessionId={sessionId}
         sessionType={sessionType}
@@ -185,29 +176,28 @@ export function SessionEndedDialog({
 
   // Render completion step
   const renderComplete = () => (
-    <Card className="w-full max-w-md border-0 shadow-2xl bg-background/95 backdrop-blur animate-in zoom-in-95 duration-300">
+    <Card className="w-full max-w-md border-0 shadow-2xl bg-card animate-in fade-in-0 zoom-in-95 duration-500">
       <CardContent className="pt-10 pb-8">
         <div className="text-center space-y-6">
-          <div className="relative mx-auto w-20 h-20">
-            <div className="absolute inset-0 rounded-full bg-gradient-to-br from-green-400 to-emerald-500 animate-pulse" />
-            <div className="absolute inset-1 rounded-full bg-background flex items-center justify-center">
-              <div className="h-16 w-16 rounded-full bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center">
-                <PartyPopper className="h-8 w-8 text-white" />
-              </div>
+          <div className="relative mx-auto w-24 h-24">
+            <div className="absolute inset-0 rounded-full bg-gradient-to-br from-green-400 to-emerald-500 animate-pulse opacity-50" />
+            <div className="absolute inset-2 rounded-full bg-background" />
+            <div className="absolute inset-4 rounded-full bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center">
+              <PartyPopper className="h-8 w-8 text-white" />
             </div>
           </div>
           
-          <div className="space-y-2">
-            <h2 className="text-2xl font-bold flex items-center justify-center gap-2">
+          <div className="space-y-3">
+            <h2 className="text-3xl font-bold flex items-center justify-center gap-2">
               Thank You!
-              <CheckCircle2 className="h-6 w-6 text-green-500" />
+              <CheckCircle2 className="h-7 w-7 text-green-500" />
             </h2>
-            <p className="text-muted-foreground">
+            <p className="text-muted-foreground text-lg">
               Your feedback helps us build a better learning platform for everyone.
             </p>
           </div>
 
-          <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded-full py-2 px-4 mx-auto w-fit">
+          <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded-full py-3 px-5 mx-auto w-fit">
             <Loader2 className="h-4 w-4 animate-spin" />
             Redirecting to dashboard...
           </div>
@@ -230,15 +220,41 @@ export function SessionEndedDialog({
     }
   };
 
-  // Full screen overlay with blurred background effect
   return (
-    <div className="fixed inset-0 z-50">
-      {/* Dark blurred overlay */}
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-md" />
-      
-      {/* Content container */}
-      <div className="relative z-10 flex items-center justify-center min-h-screen p-4 overflow-y-auto">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 relative overflow-hidden">
+      {/* Animated background elements */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-primary/20 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-blue-500/20 rounded-full blur-3xl animate-pulse delay-1000" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl" />
+      </div>
+
+      {/* Grid pattern overlay */}
+      <div 
+        className="absolute inset-0 opacity-5"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+        }}
+      />
+
+      {/* Header with branding */}
+      <div className="relative z-10 py-6 px-8">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center">
+            <MessageSquareHeart className="h-5 w-5 text-primary-foreground" />
+          </div>
+          <span className="text-xl font-bold text-white">Webyalaya</span>
+        </div>
+      </div>
+
+      {/* Main content */}
+      <div className="relative z-10 flex items-center justify-center min-h-[calc(100vh-100px)] px-4 pb-8">
         {renderContent()}
+      </div>
+
+      {/* Footer text */}
+      <div className="relative z-10 text-center pb-6 text-sm text-slate-400">
+        Your responses are confidential and help us improve the platform
       </div>
     </div>
   );
