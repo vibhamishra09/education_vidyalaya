@@ -54,6 +54,10 @@ model User {
   achievements          UserAchievement[]
   dailyActivities       DailyActivity[]
   sessionFeedbacks      SessionFeedback[]
+  // Debate Room relations
+  debateRoomsHosted     DebateRoom[]           @relation("DebateRoomHost")
+  debateParticipations  DebateParticipant[]    @relation("DebateParticipant")
+  debateModeratorRoles  DebateModerator[]      @relation("DebateModerator")
 }
 
 model StudyRoom {
@@ -393,4 +397,202 @@ model SessionFeedback {
   @@index([userId])
   @@index([studyRoomId])
   @@index([peerSessionId])
+}
+
+// ==================== DEBATE ROOM FEATURE ====================
+
+// Debate Room - main entity for debate sessions
+model DebateRoom {
+  id                  String              @id @default(cuid())
+  topic               String              // The motion/topic to debate (e.g., "AI is good for humanity")
+  description         String?             @db.Text
+  status              DebateStatus        @default(WAITING)
+  maxParticipants     Int                 @default(6) // Max per team (total = maxParticipants * 2)
+  turnDurationSeconds Int                 @default(120) // Default 2 minutes per turn
+  prepTimeSeconds     Int                 @default(30) // Prep time before debate starts
+  turnOrder           TurnOrderType       @default(FIFO) // FIFO or RANDOM
+  startTime           DateTime?           // When debate actually starts (after prep)
+  endTime             DateTime?           // When debate ends
+  currentTurnIndex    Int                 @default(0) // Current position in turn queue
+  currentSpeakerId    String?             // Current speaker's user ID
+  turnStartedAt       DateTime?           // When current turn started
+  
+  // Host/Moderator info
+  hostId              String              // Creator and head moderator
+  
+  // LiveKit room name for video
+  livekitRoomName     String?
+  
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  
+  // Relations
+  host                User                @relation("DebateRoomHost", fields: [hostId], references: [id])
+  teams               DebateTeam[]
+  participants        DebateParticipant[]
+  moderators          DebateModerator[]
+  transcripts         DebateTranscript[]
+  reports             DebateReport[]
+  turnQueue           DebateTurnQueue[]
+  
+  @@index([hostId])
+  @@index([status])
+}
+
+// Debate Status Enum
+enum DebateStatus {
+  WAITING     // Lobby phase - users joining
+  PREP        // Prep time countdown (30s default)
+  LIVE        // Debate in progress
+  ENDED       // All turns completed, awaiting results
+  PROCESSED   // AI evaluation complete
+  CANCELLED   // Debate was cancelled
+}
+
+// Turn Order Type
+enum TurnOrderType {
+  FIFO    // First In First Out - by join time
+  RANDOM  // Random order
+}
+
+// Debate Team - FOR and AGAINST teams
+model DebateTeam {
+  id           String              @id @default(cuid())
+  debateRoomId String
+  side         DebateSide          // FOR or AGAINST
+  totalScore   Float?              // Aggregate score after evaluation
+  isWinner     Boolean             @default(false)
+  
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  
+  // Relations
+  debateRoom   DebateRoom          @relation(fields: [debateRoomId], references: [id], onDelete: Cascade)
+  participants DebateParticipant[]
+  
+  @@unique([debateRoomId, side])
+  @@index([debateRoomId])
+}
+
+// Debate Side Enum
+enum DebateSide {
+  FOR
+  AGAINST
+}
+
+// Debate Participant - users in debate (not moderators)
+model DebateParticipant {
+  id              String              @id @default(cuid())
+  debateRoomId    String
+  teamId          String
+  userId          String
+  status          ParticipantStatus   @default(ACTIVE)
+  joinedAt        DateTime            @default(now())
+  turnCompleted   Boolean             @default(false) // Has this user completed their turn?
+  disconnectedAt  DateTime?           // When user disconnected (if applicable)
+  
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  
+  // Relations
+  debateRoom      DebateRoom          @relation(fields: [debateRoomId], references: [id], onDelete: Cascade)
+  team            DebateTeam          @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user            User                @relation("DebateParticipant", fields: [userId], references: [id])
+  transcripts     DebateTranscript[]
+  report          DebateReport?
+  turnQueueEntry  DebateTurnQueue?
+  
+  @@unique([debateRoomId, userId])
+  @@index([debateRoomId])
+  @@index([teamId])
+  @@index([userId])
+}
+
+// Participant Status
+enum ParticipantStatus {
+  ACTIVE      // Normal active participant
+  DISCONNECTED // Temporarily disconnected
+  BANNED      // Kicked/banned by moderator
+  LEFT        // Voluntarily left
+}
+
+// Debate Moderator - up to 3 moderators per room
+model DebateModerator {
+  id           String     @id @default(cuid())
+  debateRoomId String
+  userId       String
+  isHost       Boolean    @default(false) // True for the original creator
+  
+  createdAt    DateTime   @default(now())
+  
+  // Relations
+  debateRoom   DebateRoom @relation(fields: [debateRoomId], references: [id], onDelete: Cascade)
+  user         User       @relation("DebateModerator", fields: [userId], references: [id])
+  
+  @@unique([debateRoomId, userId])
+  @@index([debateRoomId])
+  @@index([userId])
+}
+
+// Debate Turn Queue - determines speaking order
+model DebateTurnQueue {
+  id              String            @id @default(cuid())
+  debateRoomId    String
+  participantId   String            @unique // Each participant has one queue entry
+  turnOrder       Int               // 0-indexed position in queue
+  completed       Boolean           @default(false)
+  skipped         Boolean           @default(false) // True if banned/disconnected
+  startedAt       DateTime?
+  endedAt         DateTime?
+  
+  // Relations
+  debateRoom      DebateRoom        @relation(fields: [debateRoomId], references: [id], onDelete: Cascade)
+  participant     DebateParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  
+  @@index([debateRoomId, turnOrder])
+}
+
+// Debate Transcript - stores speech-to-text chunks during debate
+model DebateTranscript {
+  id              String            @id @default(cuid())
+  debateRoomId    String
+  participantId   String
+  turnNumber      Int               // Which turn this belongs to
+  text            String            @db.Text
+  timestamp       DateTime          @default(now())
+  
+  // Relations
+  debateRoom      DebateRoom        @relation(fields: [debateRoomId], references: [id], onDelete: Cascade)
+  participant     DebateParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  
+  @@index([debateRoomId])
+  @@index([participantId])
+  @@index([debateRoomId, turnNumber])
+}
+
+// Debate Report - AI-generated evaluation for each participant
+model DebateReport {
+  id              String            @id @default(cuid())
+  debateRoomId    String
+  participantId   String            @unique // One report per participant
+  
+  // Scoring (0-10 scale)
+  ideaScore       Float             // Quality of arguments/ideas
+  clarityScore    Float             // Clarity of expression
+  rebuttalScore   Float             // Quality of rebuttals/counter-arguments
+  overallScore    Float             // Weighted overall score
+  
+  // Feedback
+  strengths       Json              // Array of strength points
+  weaknesses      Json              // Array of weakness points
+  suggestions     Json              // Array of improvement suggestions
+  summary         String?           @db.Text // Brief summary of performance
+  
+  createdAt       DateTime          @default(now())
+  
+  // Relations
+  debateRoom      DebateRoom        @relation(fields: [debateRoomId], references: [id], onDelete: Cascade)
+  participant     DebateParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  
+  @@index([debateRoomId])
 }

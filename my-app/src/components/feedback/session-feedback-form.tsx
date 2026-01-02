@@ -109,11 +109,7 @@ const PAID_FEATURE_OPTIONS: PaidFeatureOption[] = [
 ];
 
 export function SessionFeedbackForm({
-  sessionId,
-  sessionType,
-  isHost,
   onComplete,
-  onSkip,
   loading = false,
   onBackToDashboard,
 }: SessionFeedbackFormProps) {
@@ -587,7 +583,7 @@ export function SessionFeedbackForm({
               <Sparkles className="h-5 w-5 text-yellow-500" />
             </div>
             <p className="text-muted-foreground mt-1">
-              Your feedback directly shapes our platform's future
+              Your feedback directly shapes our platform&apos;s future
             </p>
           </div>
         </div>

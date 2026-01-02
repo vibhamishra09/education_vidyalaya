@@ -23,6 +23,7 @@ import { StreaksModule } from './streaks/streaks.module';
 import { AchievementsModule } from './achievements/achievements.module';
 import { TranscriptsModule } from './transcripts/transcripts.module';
 import { DebugModule } from './debug/debug.module';
+import { DebateRoomsModule } from './debate-rooms/debate-rooms.module';
 import { LoggingInterceptor } from './logging.interceptor';
 
 @Module({
@@ -54,6 +55,7 @@ import { LoggingInterceptor } from './logging.interceptor';
     AchievementsModule,
     TranscriptsModule,
     DebugModule,
+    DebateRoomsModule,
   ],
   controllers: [AppController],
   providers: [
