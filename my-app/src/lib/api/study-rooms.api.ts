@@ -5,6 +5,7 @@ import {
   CreateStudyRoomDto,
   UpdateStudyRoomDto,
   StudyRoomFilters,
+  SessionFeedbackSubmission,
 } from '@/types/api.types';
 import { cleanQueryParams } from '../utils/api-utils';
 
@@ -44,6 +45,26 @@ export const studyRoomsApi = {
   // Join study room
   joinStudyRoom: async (studyRoomId: string): Promise<{ success: boolean; message: string }> => {
     const response = await apiClient.post(`/api/study-rooms/${studyRoomId}/join`);
+    return response.data;
+  },
+
+  // Submit session feedback
+  submitSessionFeedback: async (
+    studyRoomId: string,
+    feedback: SessionFeedbackSubmission
+  ): Promise<{ success: boolean; message: string; studyRoomId: string }> => {
+    const response = await apiClient.post(
+      `/api/study-rooms/${studyRoomId}/feedback`,
+      feedback
+    );
+    return response.data;
+  },
+
+  // Check if user is host
+  checkIsHost: async (studyRoomId: string): Promise<{ isHost: boolean }> => {
+    const response = await apiClient.get<{ isHost: boolean }>(
+      `/api/study-rooms/${studyRoomId}/is-host`
+    );
     return response.data;
   },
 };

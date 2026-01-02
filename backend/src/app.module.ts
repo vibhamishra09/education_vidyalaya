@@ -1,5 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { PrometheusModule } from '@willsoto/nestjs-prometheus';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { makeHistogramProvider } from '@willsoto/nestjs-prometheus';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
@@ -19,11 +22,19 @@ import { AvailabilityModule } from './availability/availability.module';
 import { StreaksModule } from './streaks/streaks.module';
 import { AchievementsModule } from './achievements/achievements.module';
 import { TranscriptsModule } from './transcripts/transcripts.module';
+import { DebugModule } from './debug/debug.module';
+import { LoggingInterceptor } from './logging.interceptor';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+    }),
+    PrometheusModule.register({
+      path: '/metrics',
+      defaultMetrics: {
+        enabled: true,
+      },
     }),
     PrismaModule,
     UsersModule,
@@ -42,8 +53,23 @@ import { TranscriptsModule } from './transcripts/transcripts.module';
     StreaksModule,
     AchievementsModule,
     TranscriptsModule,
+    DebugModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    // Register the HTTP request duration histogram
+    makeHistogramProvider({
+      name: 'http_request_duration_seconds',
+      help: 'Duration of HTTP requests in seconds',
+      labelNames: ['method', 'route', 'status_code'],
+      buckets: [0.001, 0.01, 0.05, 0.1, 0.5, 1, 2, 5, 10], // Response time buckets in seconds
+    }),
+    // Register the interceptor globally
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: LoggingInterceptor,
+    },
+  ],
 })
 export class AppModule {}

@@ -14,6 +14,7 @@ import { OptionalClerkAuthGuard } from '../common/guards/optional-clerk-auth.gua
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { CreateStudyRoomDto, UpdateStudyRoomDto } from './dto/study-room.dto';
 import { StudyRoomQueryDto } from './dto/study-room-query.dto';
+import { SessionFeedbackDto } from '../common/dto/session-feedback.dto';
 
 @Controller('api/study-rooms')
 export class StudyRoomsController {
@@ -102,5 +103,23 @@ export class StudyRoomsController {
     @CurrentUser() userId: string,
   ) {
     return this.studyRoomsService.checkIsHost(studyRoomId, userId);
+  }
+
+  @Post(':studyRoomId/feedback')
+  @UseGuards(ClerkAuthGuard)
+  async submitSessionFeedback(
+    @Param('studyRoomId') studyRoomId: string,
+    @CurrentUser() userId: string,
+    @Body() feedbackDto: SessionFeedbackDto,
+  ) {
+    console.log(
+      '📝 [StudyRoomsController.submitSessionFeedback] Endpoint called:',
+      { studyRoomId, userId, isHost: feedbackDto.isHost },
+    );
+    return this.studyRoomsService.saveSessionFeedback(
+      studyRoomId,
+      userId,
+      feedbackDto,
+    );
   }
 }
