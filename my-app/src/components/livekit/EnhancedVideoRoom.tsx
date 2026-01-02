@@ -1387,7 +1387,7 @@ function VideoRoomContent({
 							
 							const newState = !participant.isMicrophoneEnabled
 							await participant.setMicrophoneEnabled(newState)
-						} catch (_err) {
+						} catch {
 							// Mic toggle failed silently
 						}
 					}}
@@ -1424,7 +1424,7 @@ function VideoRoomContent({
 						try {
 							const newState = !isScreenShareEnabled
 							await localParticipant?.setScreenShareEnabled(newState)
-						} catch (_err) {
+						} catch {
 							// Screen share toggle failed silently
 						}
 					}}

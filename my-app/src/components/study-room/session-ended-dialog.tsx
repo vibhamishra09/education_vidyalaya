@@ -39,7 +39,7 @@ export function SessionEndedDialog({
   sessionId,
   sessionType = "peerSession",
   isHost = false,
-  onClose,
+  onClose: _onClose,
 }: SessionEndedDialogProps) {
   const router = useRouter();
   const { getToken } = useAuth();

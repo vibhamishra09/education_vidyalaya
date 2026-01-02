@@ -194,6 +194,7 @@ export async function GET(
               }}
             >
               {room?.createdBy?.avatar ? (
+                // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={room.createdBy.avatar}
                   width={56}
