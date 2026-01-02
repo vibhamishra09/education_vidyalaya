@@ -53,6 +53,7 @@ model User {
   blockedSlots          BlockedTimeSlot[]
   achievements          UserAchievement[]
   dailyActivities       DailyActivity[]
+  sessionFeedbacks      SessionFeedback[]
 }
 
 model StudyRoom {
@@ -77,6 +78,7 @@ model StudyRoom {
   createdBy       User                   @relation("UserOwnsStudyRooms", fields: [createdById], references: [id])
   learners        StudyRoomParticipant[]
   skills          StudyRoomSkill[]
+  feedbacks       SessionFeedback[]
 }
 
 model PeerSession {
@@ -100,6 +102,7 @@ model PeerSession {
   requestedTo   User               @relation("RequestedTo", fields: [requestedToId], references: [id])
   skills        PeerSessionSkill[]
   reviews       Review[]           @relation("PeerSessionReviews")
+  feedbacks     SessionFeedback[]
 }
 
 model Metrics {
@@ -365,4 +368,29 @@ enum AchievementRarity {
   RARE
   EPIC
   LEGENDARY
+}
+
+// Session Feedback - stores detailed feedback from users after sessions
+model SessionFeedback {
+  id            String       @id @default(cuid())
+  userId        String
+  studyRoomId   String?
+  peerSessionId String?
+  isHost        Boolean      @default(false)
+  
+  // All questions and answers stored as JSON
+  // Contains all 29 questions with their answers
+  answers       Json         
+  
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  
+  // Relations
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  studyRoom     StudyRoom?   @relation(fields: [studyRoomId], references: [id], onDelete: SetNull)
+  peerSession   PeerSession? @relation(fields: [peerSessionId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([studyRoomId])
+  @@index([peerSessionId])
 }

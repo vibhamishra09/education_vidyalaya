@@ -10,7 +10,6 @@ import { useParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { useSessionTimer } from '@/hooks/use-session-timer'
 import { SessionEndWarningDialog } from '@/components/study-room/session-end-warning-dialog'
-import { SessionEndedDialog } from '@/components/study-room/session-ended-dialog'
 import { useToast } from '@/contexts/toast-context'
 import { useAuth, useUser } from '@clerk/nextjs'
 import { useQueryClient } from '@tanstack/react-query'
@@ -41,7 +40,6 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 	const [showParticipants, setShowParticipants] = useState(false)
 	const [isFullscreen, setIsFullscreen] = useState(false)
 	const [showWarning, setShowWarning] = useState(false)
-	const [showEnded, setShowEnded] = useState(false)
 	const router = useRouter()
 	const { showSuccess } = useToast()
 	const { getToken } = useAuth()
@@ -119,13 +117,17 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 				console.error('Error completing session:', error)
 			}
 			
-			// Host: Redirect directly to dashboard (no review)
-			console.log('🏠 Host session ended, redirecting to dashboard')
-			router.push('/dashboard')
+			// Host: Redirect to feedback page
+			console.log('🏠 Host session ended, redirecting to feedback page')
+			router.push(`/session-feedback/${sessionData?.id}?type=${sessionData?.sessionType}&isHost=true`)
 		} else {
-			// Participant: Show review dialog
-			console.log('👤 Participant session ended, showing review dialog')
-			setShowEnded(true)
+			// Participant: Redirect to feedback page (starts with review)
+			console.log('👤 Participant session ended, redirecting to feedback page')
+			if (sessionData?.id) {
+				router.push(`/session-feedback/${sessionData.id}?type=${sessionData.sessionType}&isHost=false`)
+			} else {
+				router.push('/dashboard')
+			}
 		}
 	}, [sessionData?.id, sessionData?.sessionType, isHost, getToken, queryClient, router])
 
@@ -292,18 +294,9 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 		{/* Warning Dialog - Shows at 5 minutes (Only for host) */}
 		{timerEnabled && isHost && (
 			<SessionEndWarningDialog
-					open={showWarning && !showEnded}
+					open={showWarning}
 					minutesRemaining={5}
 					onClose={() => setShowWarning(false)}
-				/>
-			)}
-
-			{/* Session Ended Dialog - Only for participants (not host) */}
-			{timerEnabled && sessionData?.id && !isHost && (
-				<SessionEndedDialog
-					open={showEnded}
-					sessionId={sessionData.id}
-					sessionType={sessionData.sessionType}
 				/>
 			)}
 		</div>
@@ -1394,7 +1387,7 @@ function VideoRoomContent({
 							
 							const newState = !participant.isMicrophoneEnabled
 							await participant.setMicrophoneEnabled(newState)
-						} catch (_err) {
+						} catch {
 							// Mic toggle failed silently
 						}
 					}}
@@ -1431,7 +1424,7 @@ function VideoRoomContent({
 						try {
 							const newState = !isScreenShareEnabled
 							await localParticipant?.setScreenShareEnabled(newState)
-						} catch (_err) {
+						} catch {
 							// Screen share toggle failed silently
 						}
 					}}

@@ -16,6 +16,7 @@ import {
   RequestSessionDto,
   UpdateSessionStatusDto,
 } from './dto/peer-session.dto';
+import { SessionFeedbackDto } from '../common/dto/session-feedback.dto';
 import { SessionStatus } from '@prisma/client';
 
 @Controller('api/peer-sessions')
@@ -123,5 +124,23 @@ export class PeerSessionsController {
     @CurrentUser() userId: string,
   ) {
     return this.peerSessionsService.checkIsHost(peerSessionId, userId);
+  }
+
+  @Post(':peerSessionId/feedback')
+  @UseGuards(ClerkAuthGuard)
+  async submitSessionFeedback(
+    @Param('peerSessionId') peerSessionId: string,
+    @CurrentUser() userId: string,
+    @Body() feedbackDto: SessionFeedbackDto,
+  ) {
+    console.log(
+      '📝 [PeerSessionsController.submitSessionFeedback] Endpoint called:',
+      { peerSessionId, userId, isHost: feedbackDto.isHost },
+    );
+    return this.peerSessionsService.saveSessionFeedback(
+      peerSessionId,
+      userId,
+      feedbackDto,
+    );
   }
 }

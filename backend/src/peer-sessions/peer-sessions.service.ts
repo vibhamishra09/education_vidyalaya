@@ -10,7 +10,8 @@ import {
   RequestSessionDto,
   UpdateSessionStatusDto,
 } from './dto/peer-session.dto';
-import { SessionStatus, PaymentStatus, NotifType } from '@prisma/client';
+import { SessionFeedbackDto } from '../common/dto/session-feedback.dto';
+import { SessionStatus, PaymentStatus, NotifType, Prisma } from '@prisma/client';
 import {
   normalizeGoogleMeetLink,
   isValidGoogleMeetLink,
@@ -637,5 +638,92 @@ export class PeerSessionsService {
     const isHost = peerSession.requestedToId === user.id;
 
     return { isHost };
+  }
+
+  async saveSessionFeedback(
+    peerSessionId: string,
+    userId: string,
+    feedbackDto: SessionFeedbackDto,
+  ) {
+    // userId is actually clerkId, so we need to find the user by clerkId first
+    const user = await this.prisma.user.findUnique({
+      where: { clerkId: userId },
+      select: { id: true, name: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const peerSession = await this.prisma.peerSession.findUnique({
+      where: { id: peerSessionId },
+      select: {
+        id: true,
+        requestedById: true,
+        requestedToId: true,
+      },
+    });
+
+    if (!peerSession) {
+      throw new NotFoundException('Peer session not found');
+    }
+
+    // Check if user is either the requester or the requested tutor
+    const isRequester = peerSession.requestedById === user.id;
+    const isTutor = peerSession.requestedToId === user.id;
+
+    if (!isRequester && !isTutor) {
+      throw new ForbiddenException(
+        'You are not authorized to submit feedback for this peer session',
+      );
+    }
+
+    // Check if user has already submitted feedback for this session
+    const existingFeedback = await this.prisma.sessionFeedback.findFirst({
+      where: {
+        userId: user.id,
+        peerSessionId: peerSessionId,
+      },
+    });
+
+    // Store all answers as JSON (cast to Prisma's InputJsonValue type)
+    const answersJson = (feedbackDto.answers || {}) as unknown as Prisma.InputJsonValue;
+
+    if (existingFeedback) {
+      // Update existing feedback
+      await this.prisma.sessionFeedback.update({
+        where: { id: existingFeedback.id },
+        data: {
+          isHost: feedbackDto.isHost,
+          answers: answersJson,
+        },
+      });
+
+      console.log(
+        '✅ [saveSessionFeedback] Feedback updated for peer session:',
+        peerSessionId,
+      );
+    } else {
+      // Create new feedback entry
+      await this.prisma.sessionFeedback.create({
+        data: {
+          userId: user.id,
+          peerSessionId: peerSessionId,
+          isHost: feedbackDto.isHost,
+          answers: answersJson,
+        },
+      });
+
+      console.log(
+        '✅ [saveSessionFeedback] Feedback created for peer session:',
+        peerSessionId,
+      );
+    }
+
+    return {
+      success: true,
+      message: 'Feedback submitted successfully',
+      peerSessionId,
+    };
   }
 }

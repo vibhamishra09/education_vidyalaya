@@ -4,6 +4,7 @@ import {
   PeerSession,
   RequestSessionDto,
   UpdateSessionStatusDto,
+  SessionFeedbackSubmission,
 } from '@/types/api.types';
 import { cleanQueryParams } from '../utils/api-utils';
 import type { AvailableSlotsResponse } from './availability.api';
@@ -116,6 +117,26 @@ export const peerSessionsApi = {
     const response = await apiClient.get(`/api/availability/slots/${userId}`, {
       params,
     });
+    return response.data;
+  },
+
+  // Submit session feedback
+  submitSessionFeedback: async (
+    peerSessionId: string,
+    feedback: SessionFeedbackSubmission
+  ): Promise<{ success: boolean; message: string; peerSessionId: string }> => {
+    const response = await apiClient.post(
+      `/api/peer-sessions/${peerSessionId}/feedback`,
+      feedback
+    );
+    return response.data;
+  },
+
+  // Check if user is host
+  checkIsHost: async (peerSessionId: string): Promise<{ isHost: boolean }> => {
+    const response = await apiClient.get<{ isHost: boolean }>(
+      `/api/peer-sessions/${peerSessionId}/is-host`
+    );
     return response.data;
   },
 };
