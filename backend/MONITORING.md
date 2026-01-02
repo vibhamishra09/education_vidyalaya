@@ -339,6 +339,6 @@ For issues or questions:
 2. View container logs: `docker-compose -f docker-compose.monitoring.yml logs`
 3. Verify metrics manually: `curl http://localhost:3001/metrics`
 
-----
+-----
 
 **Happy Monitoring! 📊✨**
