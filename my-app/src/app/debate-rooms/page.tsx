@@ -75,6 +75,8 @@ export default function DebateRoomsPage() {
   const [newTurnDuration, setNewTurnDuration] = useState(120);
   const [newPrepTime, setNewPrepTime] = useState(30);
   const [newTurnOrder, setNewTurnOrder] = useState<TurnOrderType>(TurnOrderType.FIFO);
+  const [newDate, setNewDate] = useState('');
+  const [newTime, setNewTime] = useState('');
 
   const createDebateRoom = useCreateDebateRoom();
 
@@ -84,6 +86,14 @@ export default function DebateRoomsPage() {
       return;
     }
 
+    if (!newDate || !newTime) {
+      showError('Validation Error', 'Date and time are required');
+      return;
+    }
+
+    // Combine date and time into ISO string
+    const scheduledAt = `${newDate}T${newTime}:00`;
+
     try {
       const room = await createDebateRoom.mutateAsync({
         topic: newTopic.trim(),
@@ -92,6 +102,7 @@ export default function DebateRoomsPage() {
         turnDurationSeconds: newTurnDuration,
         prepTimeSeconds: newPrepTime,
         turnOrder: newTurnOrder,
+        scheduledAt,
       });
 
       showSuccess('Debate Room Created', 'Your debate room has been created!');
@@ -110,6 +121,8 @@ export default function DebateRoomsPage() {
     setNewTurnDuration(120);
     setNewPrepTime(30);
     setNewTurnOrder(TurnOrderType.FIFO);
+    setNewDate('');
+    setNewTime('');
   };
 
   return (
@@ -139,7 +152,7 @@ export default function DebateRoomsPage() {
                 Create Debate
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[500px]">
+            <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Create Debate Room</DialogTitle>
                 <DialogDescription>
@@ -171,52 +184,92 @@ export default function DebateRoomsPage() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>Max per Team</Label>
-                    <Select
-                      value={String(newMaxParticipants)}
-                      onValueChange={(v) => setNewMaxParticipants(Number(v))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {[1, 2, 3, 4, 5, 6].map((n) => (
-                          <SelectItem key={n} value={String(n)}>
-                            {n} {n === 1 ? 'person' : 'people'}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Label htmlFor="date">Date *</Label>
+                    <Input
+                      id="date"
+                      type="date"
+                      value={newDate}
+                      onChange={(e) => setNewDate(e.target.value)}
+                      min={new Date().toISOString().split('T')[0]}
+                      required
+                    />
                   </div>
 
                   <div className="space-y-2">
-                    <Label>Turn Duration</Label>
-                    <Select
-                      value={String(newTurnDuration)}
-                      onValueChange={(v) => setNewTurnDuration(Number(v))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="60">1 minute</SelectItem>
-                        <SelectItem value="90">1.5 minutes</SelectItem>
-                        <SelectItem value="120">2 minutes</SelectItem>
-                        <SelectItem value="180">3 minutes</SelectItem>
-                        <SelectItem value="300">5 minutes</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Label htmlFor="time">Time *</Label>
+                    <Input
+                      id="time"
+                      type="time"
+                      value={newTime}
+                      onChange={(e) => setNewTime(e.target.value)}
+                      required
+                    />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>Prep Time</Label>
+                    <Label htmlFor="duration">Duration (minutes) *</Label>
+                    <Input
+                      id="duration"
+                      type="number"
+                      min="1"
+                      max="240"
+                      step="1"
+                      value={String(newTurnDuration / 60)}
+                      onChange={(e) => setNewTurnDuration(Number(e.target.value) * 60)}
+                      required
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      {[15, 30, 45, 60].map((mins) => (
+                        <Button
+                          key={mins}
+                          type="button"
+                          variant={newTurnDuration === mins * 60 ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setNewTurnDuration(mins * 60)}
+                          className="text-xs"
+                        >
+                          {mins} min
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="maxParticipants">Max per Team *</Label>
+                    <Input
+                      id="maxParticipants"
+                      type="number"
+                      min="1"
+                      max="6"
+                      value={newMaxParticipants}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        if (value === "") {
+                          setNewMaxParticipants(1);
+                        } else {
+                          const numValue = parseInt(value, 10);
+                          const clampedValue = Math.min(6, Math.max(1, numValue));
+                          setNewMaxParticipants(clampedValue);
+                        }
+                      }}
+                      required
+                    />
+                    <p className="text-sm text-muted-foreground">
+                      Between 1 and 6 participants per team
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="prepTime">Prep Time *</Label>
                     <Select
                       value={String(newPrepTime)}
                       onValueChange={(v) => setNewPrepTime(Number(v))}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger id="prepTime">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -229,12 +282,12 @@ export default function DebateRoomsPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label>Turn Order</Label>
+                    <Label htmlFor="turnOrder">Turn Order *</Label>
                     <Select
                       value={newTurnOrder}
                       onValueChange={(v) => setNewTurnOrder(v as TurnOrderType)}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger id="turnOrder">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -259,7 +312,7 @@ export default function DebateRoomsPage() {
                 </Button>
                 <Button
                   onClick={handleCreate}
-                  disabled={createDebateRoom.isPending || !newTopic.trim()}
+                  disabled={createDebateRoom.isPending || !newTopic.trim() || !newDate || !newTime}
                 >
                   {createDebateRoom.isPending ? (
                     <>

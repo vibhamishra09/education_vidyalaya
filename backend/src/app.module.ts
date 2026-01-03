@@ -24,6 +24,7 @@ import { AchievementsModule } from './achievements/achievements.module';
 import { TranscriptsModule } from './transcripts/transcripts.module';
 import { DebugModule } from './debug/debug.module';
 import { DebateRoomsModule } from './debate-rooms/debate-rooms.module';
+import { DebateChatModule } from './debate-chat/debate-chat.module';
 import { LoggingInterceptor } from './logging.interceptor';
 
 @Module({
@@ -56,6 +57,7 @@ import { LoggingInterceptor } from './logging.interceptor';
     TranscriptsModule,
     DebugModule,
     DebateRoomsModule,
+    DebateChatModule,
   ],
   controllers: [AppController],
   providers: [

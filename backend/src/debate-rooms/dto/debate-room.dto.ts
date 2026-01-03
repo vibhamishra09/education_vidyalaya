@@ -7,6 +7,7 @@ import {
   Max,
   IsArray,
   IsBoolean,
+  IsDateString,
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 
@@ -61,6 +62,10 @@ export class CreateDebateRoomDto {
   @IsOptional()
   @IsEnum(TurnOrderTypeDto)
   turnOrder?: TurnOrderTypeDto = TurnOrderTypeDto.FIFO;
+
+  @IsOptional()
+  @IsDateString()
+  scheduledAt?: string; // ISO 8601 date string
 }
 
 export class UpdateDebateRoomDto {
@@ -184,6 +189,7 @@ export class DebateRoomResponse {
   currentTurnIndex: number;
   currentSpeakerId?: string | null;
   turnStartedAt?: Date | null;
+  scheduledAt?: Date | null;
   startTime?: Date | null;
   endTime?: Date | null;
   host: {

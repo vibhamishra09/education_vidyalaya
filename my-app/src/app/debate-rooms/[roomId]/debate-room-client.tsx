@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { useUser } from '@clerk/nextjs';
+import { useUser, useAuth } from '@clerk/nextjs';
 import { Navigation } from '@/components/layout/navigation';
 import { Footer } from '@/components/layout/footer';
 import { Button } from '@/components/ui/button';
@@ -31,6 +31,8 @@ import {
   Swords,
   Crown,
   Shield,
+  Calendar,
+  AlertCircle,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useToast } from '@/contexts/toast-context';
@@ -69,6 +71,7 @@ interface DebateRoomClientProps {
 export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
   const router = useRouter();
   const { user } = useUser();
+  const { getToken } = useAuth();
   const { showSuccess, showError } = useToast();
 
   // State
@@ -86,6 +89,21 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
     roomId,
     room?.status === DebateStatus.ENDED || room?.status === DebateStatus.PROCESSED
   );
+
+  // Debug logging for LiveKit data
+  useEffect(() => {
+    if (livekitData) {
+      console.log('[DebateRoomClient] LiveKit data received:', {
+        hasToken: !!livekitData.token,
+        tokenLength: livekitData.token?.length || 0,
+        tokenPreview: livekitData.token ? `${livekitData.token.substring(0, 50)}...` : 'MISSING',
+        serverUrl: livekitData.serverUrl || 'MISSING',
+        serverUrlType: typeof livekitData.serverUrl,
+      });
+    } else {
+      console.log('[DebateRoomClient] LiveKit data is null or undefined');
+    }
+  }, [livekitData]);
 
   // Mutations
   const joinDebateRoom = useJoinDebateRoom();
@@ -255,6 +273,7 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
         onSendTeamChat={sendTeamChat}
         onAdvanceTurn={advanceTurn}
         onEndDebate={endDebate}
+        getToken={getToken}
       />
     );
   }
@@ -273,8 +292,25 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
     (sum, team) => sum + team.participants.length,
     0
   );
-  const minParticipants = 2; // At least 1 per team
-  const canStart = totalParticipants >= minParticipants;
+  
+  // Check if both teams have at least 1 participant
+  const forTeam = room.teams.find(t => t.side === DebateSide.FOR);
+  const againstTeam = room.teams.find(t => t.side === DebateSide.AGAINST);
+  const forCount = forTeam?.participants.length || 0;
+  const againstCount = againstTeam?.participants.length || 0;
+  const bothTeamsHaveParticipants = forCount >= 1 && againstCount >= 1;
+  
+  // Check if scheduled time has passed
+  const scheduledTime = room.scheduledAt ? new Date(room.scheduledAt) : null;
+  const now = new Date();
+  const isScheduledTimePassed = scheduledTime ? now > scheduledTime : false;
+  const canJoin = !isScheduledTimePassed && room.status === DebateStatus.WAITING;
+  
+  // Can start only if both teams have participants
+  const canStart = bothTeamsHaveParticipants;
+  
+  // Check if user is the only moderator
+  const isOnlyModerator = isModerator && room.moderators.length === 1;
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -400,76 +436,110 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
             )}
 
             {/* Join Options (for non-participants in WAITING status) */}
-            {room.status === DebateStatus.WAITING && !isParticipant && !isModerator && (
+            {room.status === DebateStatus.WAITING && !isParticipant && (
               <Card>
                 <CardHeader>
-                  <CardTitle>Join this Debate</CardTitle>
+                  <CardTitle>
+                    {isModerator ? 'Join as Participant' : 'Join this Debate'}
+                  </CardTitle>
                   <CardDescription>
-                    Choose a team to join or let us assign you automatically
+                    {isScheduledTimePassed ? (
+                      <span className="text-red-500">
+                        The scheduled time has passed. Joining is no longer available.
+                      </span>
+                    ) : isOnlyModerator ? (
+                      <span className="text-amber-500">
+                        You are the only moderator. At least one moderator must remain.
+                      </span>
+                    ) : isModerator ? (
+                      'As a moderator, you can join a team to participate'
+                    ) : (
+                      'Choose a team to join or let us assign you automatically'
+                    )}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <Button
-                      variant="outline"
-                      className="h-20 border-green-500/30 hover:bg-green-500/10"
-                      onClick={() => handleJoin(DebateSide.FOR)}
-                      disabled={joinDebateRoom.isPending}
-                    >
-                      <div className="text-center">
-                        <div className="flex items-center justify-center gap-2 mb-1">
-                          <div className="w-3 h-3 rounded-full bg-green-500" />
-                          <span className="font-bold text-green-600">FOR</span>
-                        </div>
-                        <span className="text-xs text-muted-foreground">
-                          Support the topic
-                        </span>
+                  {/* Show join buttons only if joining is allowed */}
+                  {canJoin && !isOnlyModerator && (
+                    <>
+                      <div className="grid grid-cols-2 gap-4">
+                        <Button
+                          variant="outline"
+                          className="h-20 border-green-500/30 hover:bg-green-500/10"
+                          onClick={() => handleJoin(DebateSide.FOR)}
+                          disabled={joinDebateRoom.isPending}
+                        >
+                          <div className="text-center">
+                            <div className="flex items-center justify-center gap-2 mb-1">
+                              <div className="w-3 h-3 rounded-full bg-green-500" />
+                              <span className="font-bold text-green-600">FOR</span>
+                            </div>
+                            <span className="text-xs text-muted-foreground">
+                              Support the topic
+                            </span>
+                          </div>
+                        </Button>
+
+                        <Button
+                          variant="outline"
+                          className="h-20 border-red-500/30 hover:bg-red-500/10"
+                          onClick={() => handleJoin(DebateSide.AGAINST)}
+                          disabled={joinDebateRoom.isPending}
+                        >
+                          <div className="text-center">
+                            <div className="flex items-center justify-center gap-2 mb-1">
+                              <div className="w-3 h-3 rounded-full bg-red-500" />
+                              <span className="font-bold text-red-600">AGAINST</span>
+                            </div>
+                            <span className="text-xs text-muted-foreground">
+                              Oppose the topic
+                            </span>
+                          </div>
+                        </Button>
                       </div>
-                    </Button>
 
-                    <Button
-                      variant="outline"
-                      className="h-20 border-red-500/30 hover:bg-red-500/10"
-                      onClick={() => handleJoin(DebateSide.AGAINST)}
-                      disabled={joinDebateRoom.isPending}
-                    >
-                      <div className="text-center">
-                        <div className="flex items-center justify-center gap-2 mb-1">
-                          <div className="w-3 h-3 rounded-full bg-red-500" />
-                          <span className="font-bold text-red-600">AGAINST</span>
+                      <div className="relative">
+                        <div className="absolute inset-0 flex items-center">
+                          <span className="w-full border-t" />
                         </div>
-                        <span className="text-xs text-muted-foreground">
-                          Oppose the topic
-                        </span>
+                        <div className="relative flex justify-center text-xs uppercase">
+                          <span className="bg-background px-2 text-muted-foreground">
+                            or
+                          </span>
+                        </div>
                       </div>
-                    </Button>
-                  </div>
 
-                  <div className="relative">
-                    <div className="absolute inset-0 flex items-center">
-                      <span className="w-full border-t" />
-                    </div>
-                    <div className="relative flex justify-center text-xs uppercase">
-                      <span className="bg-background px-2 text-muted-foreground">
-                        or
-                      </span>
-                    </div>
-                  </div>
+                      <Button
+                        onClick={() => handleJoin()}
+                        disabled={joinDebateRoom.isPending}
+                        className="w-full"
+                      >
+                        {joinDebateRoom.isPending ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Joining...
+                          </>
+                        ) : (
+                          <>
+                            {isModerator && <Shield className="h-4 w-4 mr-2" />}
+                            {isModerator ? 'Join as Participant' : 'Auto-assign me to a team'}
+                          </>
+                        )}
+                      </Button>
+                    </>
+                  )}
 
-                  <Button
-                    onClick={() => handleJoin()}
-                    disabled={joinDebateRoom.isPending}
-                    className="w-full"
-                  >
-                    {joinDebateRoom.isPending ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Joining...
-                      </>
-                    ) : (
-                      'Auto-assign me to a team'
-                    )}
-                  </Button>
+                  {/* Show warning when joining is not allowed */}
+                  {(isScheduledTimePassed || isOnlyModerator) && (
+                    <div className="text-center py-4">
+                      <AlertCircle className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                      <p className="text-sm text-muted-foreground">
+                        {isScheduledTimePassed 
+                          ? 'Joining is closed after the scheduled time'
+                          : 'You cannot join as participant while being the only moderator'}
+                      </p>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             )}
@@ -514,8 +584,32 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
                 <CardTitle className="text-sm">Actions</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
-                {/* Host actions */}
-                {isHost && room.status === DebateStatus.WAITING && (
+                {/* Scheduled time warning */}
+                {scheduledTime && room.status === DebateStatus.WAITING && (
+                  <div className={cn(
+                    "p-2 rounded-md text-xs mb-2",
+                    isScheduledTimePassed 
+                      ? "bg-red-500/10 text-red-600 border border-red-500/20" 
+                      : "bg-blue-500/10 text-blue-600 border border-blue-500/20"
+                  )}>
+                    <div className="flex items-center gap-1 mb-1">
+                      <Calendar className="h-3 w-3" />
+                      <span className="font-medium">
+                        {isScheduledTimePassed ? 'Scheduled time passed' : 'Scheduled for:'}
+                      </span>
+                    </div>
+                    <span>{scheduledTime.toLocaleString()}</span>
+                    {isScheduledTimePassed && (
+                      <p className="mt-1 text-red-500">
+                        <AlertCircle className="h-3 w-3 inline mr-1" />
+                        Joining is no longer available
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Host/Moderator actions */}
+                {isModerator && room.status === DebateStatus.WAITING && (
                   <>
                     <Button
                       className="w-full"
@@ -536,18 +630,24 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
                     </Button>
                     {!canStart && (
                       <p className="text-xs text-muted-foreground text-center">
-                        Need at least {minParticipants} participants
+                        Need at least 1 participant per team
+                        {forCount === 0 && ' (FOR team empty)'}
+                        {againstCount === 0 && ' (AGAINST team empty)'}
                       </p>
                     )}
-                    <Button
-                      variant="destructive"
-                      className="w-full"
-                      onClick={() => setShowCancelDialog(true)}
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Cancel Debate
-                    </Button>
                   </>
+                )}
+
+                {/* Cancel/Delete button for host */}
+                {isHost && room.status === DebateStatus.WAITING && (
+                  <Button
+                    variant="destructive"
+                    className="w-full"
+                    onClick={() => setShowCancelDialog(true)}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Cancel Debate
+                  </Button>
                 )}
 
                 {/* Participant actions */}
@@ -560,6 +660,13 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
                     <LogOut className="h-4 w-4 mr-2" />
                     Leave Debate
                   </Button>
+                )}
+
+                {/* No actions message */}
+                {!isModerator && !isParticipant && room.status === DebateStatus.WAITING && (
+                  <p className="text-xs text-muted-foreground text-center py-2">
+                    Join the debate to see actions
+                  </p>
                 )}
 
                 {/* Back to results */}
@@ -606,6 +713,12 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
                 <CardTitle className="text-sm">Room Settings</CardTitle>
               </CardHeader>
               <CardContent className="text-sm space-y-2 text-muted-foreground">
+                {room.scheduledAt && (
+                  <div className="flex justify-between">
+                    <span>Scheduled</span>
+                    <span>{new Date(room.scheduledAt).toLocaleString()}</span>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <span>Turn Duration</span>
                   <span>{room.turnDurationSeconds}s</span>

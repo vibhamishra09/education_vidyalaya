@@ -88,6 +88,7 @@ export class DebateRoomsService {
         turnDurationSeconds: dto.turnDurationSeconds || 120,
         prepTimeSeconds: dto.prepTimeSeconds || 30,
         turnOrder: (dto.turnOrder as TurnOrderType) || TurnOrderType.FIFO,
+        scheduledAt: dto.scheduledAt ? new Date(dto.scheduledAt) : null,
         hostId: user.id,
         livekitRoomName,
         teams: {
@@ -223,6 +224,11 @@ export class DebateRoomsService {
       throw new BadRequestException('Cannot join a debate that has already started');
     }
 
+    // Check if scheduled time has passed
+    if (debateRoom.scheduledAt && new Date() > debateRoom.scheduledAt) {
+      throw new BadRequestException('Cannot join after the scheduled time has passed');
+    }
+
     // Check if user is already a participant
     const existingParticipant = debateRoom.participants.find(
       (p) => p.userId === user.id,
@@ -231,10 +237,10 @@ export class DebateRoomsService {
       throw new BadRequestException('You are already in this debate');
     }
 
-    // Check if user is a moderator
+    // Check if user is a moderator and is the only one
     const isModerator = debateRoom.moderators.some((m) => m.userId === user.id);
-    if (isModerator) {
-      throw new BadRequestException('Moderators cannot join as participants');
+    if (isModerator && debateRoom.moderators.length === 1) {
+      throw new BadRequestException('You are the only moderator and cannot join as a participant. At least one moderator must remain.');
     }
 
     // Get team counts
@@ -1205,14 +1211,16 @@ export class DebateRoomsService {
 
     const token = await this.livekitService.createToken({
       roomName: debateRoom.livekitRoomName || roomId,
-      identity: user.id,
+      identity: user.clerkId, // Use clerkId for consistency with frontend
       name: user.name,
       metadata: JSON.stringify({
         isModerator: isMod,
         debateRoomId: roomId,
+        userId: user.id, // Include database ID in metadata for reference
       }),
-      publish: isMod, // Only moderators can publish during waiting phase
-      subscribe: true,
+      publish: true, // Allow all participants to publish video/audio
+      subscribe: true, // Allow subscribing to other tracks
+      publishData: true, // Allow publishing chat messages
     });
 
     return token;
@@ -1275,6 +1283,7 @@ export class DebateRoomsService {
       host: {
         select: {
           id: true,
+          clerkId: true,
           name: true,
           avatar: true,
         },
@@ -1286,6 +1295,7 @@ export class DebateRoomsService {
               user: {
                 select: {
                   id: true,
+                  clerkId: true,
                   name: true,
                   avatar: true,
                 },
@@ -1299,6 +1309,7 @@ export class DebateRoomsService {
           user: {
             select: {
               id: true,
+              clerkId: true,
               name: true,
               avatar: true,
             },
@@ -1324,6 +1335,7 @@ export class DebateRoomsService {
       currentTurnIndex: debateRoom.currentTurnIndex,
       currentSpeakerId: debateRoom.currentSpeakerId,
       turnStartedAt: debateRoom.turnStartedAt,
+      scheduledAt: debateRoom.scheduledAt,
       startTime: debateRoom.startTime,
       endTime: debateRoom.endTime,
       host: debateRoom.host,

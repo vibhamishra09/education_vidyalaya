@@ -10,6 +10,7 @@ export class LivekitService {
     metadata?: string;
     publish?: boolean;
     subscribe?: boolean;
+    publishData?: boolean;
     ttl?: string;
   }) {
     const key = process.env.LIVEKIT_API_KEY!;
@@ -20,6 +21,7 @@ export class LivekitService {
       room: params.roomName,
       canPublish: params.publish ?? true,
       canSubscribe: params.subscribe ?? true,
+      canPublishData: params.publishData ?? true, // Enable data channel for chat
     };
     const at = new AccessToken(key, secret, {
       identity: params.identity,

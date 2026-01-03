@@ -35,6 +35,7 @@ export interface CreateDebateRoomDto {
   turnDurationSeconds?: number;
   prepTimeSeconds?: number;
   turnOrder?: TurnOrderType;
+  scheduledAt?: string; // ISO 8601 date string
 }
 
 export interface UpdateDebateRoomDto {
@@ -65,6 +66,7 @@ export interface DebateParticipant {
   turnCompleted: boolean;
   user: {
     id: string;
+    clerkId: string;
     name: string;
     avatar?: string | null;
   };
@@ -83,6 +85,7 @@ export interface DebateModerator {
   isHost: boolean;
   user: {
     id: string;
+    clerkId: string;
     name: string;
     avatar?: string | null;
   };
@@ -100,10 +103,12 @@ export interface DebateRoom {
   currentTurnIndex: number;
   currentSpeakerId?: string | null;
   turnStartedAt?: string | null;
+  scheduledAt?: string | null;
   startTime?: string | null;
   endTime?: string | null;
   host: {
     id: string;
+    clerkId: string;
     name: string;
     avatar?: string | null;
   };
@@ -249,22 +254,22 @@ export type DebateUserRole = 'host' | 'moderator' | 'participant' | 'spectator' 
 // Computed helper to get user's role in debate
 export function getUserDebateRole(
   debateRoom: DebateRoom,
-  userId: string
+  userId: string // This is the Clerk userId
 ): DebateUserRole {
-  // Check if host
-  if (debateRoom.host.id === userId) {
+  // Check if host (compare with clerkId)
+  if (debateRoom.host.clerkId === userId) {
     return 'host';
   }
 
-  // Check if moderator
-  const moderator = debateRoom.moderators.find(m => m.user.id === userId);
+  // Check if moderator (compare with clerkId)
+  const moderator = debateRoom.moderators.find(m => m.user.clerkId === userId);
   if (moderator) {
     return moderator.isHost ? 'host' : 'moderator';
   }
 
-  // Check if participant
+  // Check if participant (compare with clerkId)
   for (const team of debateRoom.teams) {
-    if (team.participants.some(p => p.user.id === userId)) {
+    if (team.participants.some(p => p.user.clerkId === userId)) {
       return 'participant';
     }
   }
@@ -275,10 +280,10 @@ export function getUserDebateRole(
 // Get user's team side
 export function getUserTeamSide(
   debateRoom: DebateRoom,
-  userId: string
+  userId: string // This is the Clerk userId
 ): DebateSide | null {
   for (const team of debateRoom.teams) {
-    if (team.participants.some(p => p.user.id === userId)) {
+    if (team.participants.some(p => p.user.clerkId === userId)) {
       return team.side;
     }
   }

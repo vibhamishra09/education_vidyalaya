@@ -168,7 +168,23 @@ export class DebateRoomsController {
     @CurrentUser() userId: string,
   ) {
     const token = await this.debateRoomsService.getLivekitToken(roomId, userId);
-    return { token };
+    const serverUrl = process.env.LIVEKIT_URL || process.env.LIVEKIT_SERVER_URL || process.env.LIVEKIT_WS_URL;
+    
+    // Get debate room to fetch livekitRoomName
+    const debateRoom = await this.debateRoomsService.getDebateRoom(roomId);
+    const roomName = debateRoom.livekitRoomName || roomId;
+    
+    // console.log('[DebateRooms] Token endpoint called for room:', roomId);
+    // console.log('[DebateRooms] User:', userId);
+    // console.log('[DebateRooms] Token generated:', token ? `${token.substring(0, 50)}...` : 'MISSING');
+    // console.log('[DebateRooms] Server URL:', serverUrl || 'MISSING');
+    // console.log('[DebateRooms] Room Name:', roomName);
+    
+    return { 
+      token,
+      serverUrl: serverUrl,
+      roomName,
+    };
   }
 
   /**

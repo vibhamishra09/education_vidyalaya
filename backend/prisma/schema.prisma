@@ -58,6 +58,7 @@ model User {
   debateRoomsHosted     DebateRoom[]           @relation("DebateRoomHost")
   debateParticipations  DebateParticipant[]    @relation("DebateParticipant")
   debateModeratorRoles  DebateModerator[]      @relation("DebateModerator")
+  debateChatMessages    DebateChatMessage[]    @relation("DebateChatMessages")
 }
 
 model StudyRoom {
@@ -411,6 +412,7 @@ model DebateRoom {
   turnDurationSeconds Int                 @default(120) // Default 2 minutes per turn
   prepTimeSeconds     Int                 @default(30) // Prep time before debate starts
   turnOrder           TurnOrderType       @default(FIFO) // FIFO or RANDOM
+  scheduledAt         DateTime?           // Scheduled start time for the debate
   startTime           DateTime?           // When debate actually starts (after prep)
   endTime             DateTime?           // When debate ends
   currentTurnIndex    Int                 @default(0) // Current position in turn queue
@@ -434,6 +436,7 @@ model DebateRoom {
   transcripts         DebateTranscript[]
   reports             DebateReport[]
   turnQueue           DebateTurnQueue[]
+  chatMessages        DebateChatMessage[]
   
   @@index([hostId])
   @@index([status])
@@ -532,6 +535,35 @@ model DebateModerator {
   @@unique([debateRoomId, userId])
   @@index([debateRoomId])
   @@index([userId])
+}
+
+// Debate Chat Message - stores all chat messages with visibility rules
+model DebateChatMessage {
+  id           String          @id @default(cuid())
+  debateRoomId String
+  senderId     String
+  content      String          @db.Text
+  side         DebateSide?     // FOR, AGAINST, or null for moderator/global messages
+  visibility   MessageVisibility @default(ALL) // Who can see this message
+  
+  createdAt    DateTime        @default(now())
+  
+  // Relations
+  debateRoom   DebateRoom      @relation(fields: [debateRoomId], references: [id], onDelete: Cascade)
+  sender       User            @relation("DebateChatMessages", fields: [senderId], references: [id])
+  
+  @@index([debateRoomId])
+  @@index([senderId])
+  @@index([debateRoomId, createdAt])
+}
+
+// Message Visibility Enum
+enum MessageVisibility {
+  ALL              // Everyone can see
+  MODERATOR        // From moderators to all participants (broadcast)
+  MODERATOR_ONLY   // Private messages between moderators only
+  TEAM_FOR         // Only Team FOR + moderators can see
+  TEAM_AGAINST     // Only Team AGAINST + moderators can see
 }
 
 // Debate Turn Queue - determines speaking order
