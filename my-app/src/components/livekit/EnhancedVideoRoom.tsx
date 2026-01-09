@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { LiveKitRoom, useParticipants, useRoomContext, useTracks, RoomAudioRenderer, useSpeakingParticipants, VideoTrack, useLocalParticipant, isTrackReference } from '@livekit/components-react'
 import { Track, RoomOptions, VideoPresets, LocalVideoTrack } from 'livekit-client'
 import '@livekit/components-styles'
-import { BackgroundBlur, VirtualBackground, BackgroundOptions } from '@livekit/track-processors'
+import { BackgroundProcessor, BackgroundBlur, VirtualBackground, BackgroundOptions } from '@livekit/track-processors'
 import { ChatWidget } from '@/components/chat/ChatWidget'
 import { Button } from '@/components/ui/button'
 import { MessageSquare, X, Users, Maximize2, Minimize2, Video, VideoOff, Mic, MicOff, Volume2, VolumeX, Clock, MonitorUp, MonitorOff, Grid2X2, Presentation, Pin, PinOff, User, PictureInPicture2, Camera, CameraOff, Sparkles } from 'lucide-react'
@@ -350,7 +350,50 @@ function VideoRoomContent({
 	// Background effects state
 	const [backgroundMode, setBackgroundMode] = useState<'none' | 'blur' | 'virtual'>('none')
 	const [showBackgroundMenu, setShowBackgroundMenu] = useState(false)
-	const processorRef = useRef<ReturnType<typeof BackgroundBlur> | ReturnType<typeof VirtualBackground> | null>(null)
+	const [blurAmount, setBlurAmount] = useState(10)
+	const [selectedVirtualBg, setSelectedVirtualBg] = useState(0)
+	const processorRef = useRef<ReturnType<typeof BackgroundProcessor> | null>(null)
+	const blurDebounceRef = useRef<NodeJS.Timeout | null>(null)
+	
+	// Professional Unsplash backgrounds
+	const virtualBackgrounds = [
+		{
+			id: 0,
+			name: 'Modern Office',
+			url: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=1920&h=1080&fit=crop&q=80',
+			thumbnail: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=200&h=150&fit=crop&q=80'
+		},
+		{
+			id: 1,
+			name: 'Minimalist Workspace',
+			url: 'https://images.unsplash.com/photo-1497366811353-6870744d04b2?w=1920&h=1080&fit=crop&q=80',
+			thumbnail: 'https://images.unsplash.com/photo-1497366811353-6870744d04b2?w=200&h=150&fit=crop&q=80'
+		},
+		{
+			id: 2,
+			name: 'Cozy Library',
+			url: 'https://images.unsplash.com/photo-1507842217343-583bb7270b66?w=1920&h=1080&fit=crop&q=80',
+			thumbnail: 'https://images.unsplash.com/photo-1507842217343-583bb7270b66?w=200&h=150&fit=crop&q=80'
+		},
+		{
+			id: 3,
+			name: 'Conference Room',
+			url: 'https://images.unsplash.com/photo-1497366754035-f200968a6e72?w=1920&h=1080&fit=crop&q=80',
+			thumbnail: 'https://images.unsplash.com/photo-497366754035-f200968a6e72?w=200&h=150&fit=crop&q=80'
+		},
+		{
+			id: 4,
+			name: 'Bookshelf',
+			url: 'https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?w=1920&h=1080&fit=crop&q=80',
+			thumbnail: 'https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?w=200&h=150&fit=crop&q=80'
+		},
+		{
+			id: 5,
+			name: 'City View',
+			url: 'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=1920&h=1080&fit=crop&q=80',
+			thumbnail: 'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=200&h=150&fit=crop&q=80'
+		}
+	]
 
 	// Get all camera tracks using useTracks - the standard way
 	const cameraTracks = useTracks(
@@ -491,9 +534,10 @@ function VideoRoomContent({
 		setLayoutMode('focus')
 	}, [])
 	
-	// Apply background effect to local video track
-	const applyBackgroundEffect = useCallback(async (mode: 'none' | 'blur' | 'virtual') => {
-		console.log('🎨 Applying background effect:', mode)
+	// Apply background effect to local video track using the newer BackgroundProcessor API
+	// This provides smoother transitions and better segmentation quality
+	const applyBackgroundEffect = useCallback(async (mode: 'none' | 'blur' | 'virtual', intensity?: number) => {
+		console.log('🎨 Applying background effect:', mode, intensity ? `with intensity ${intensity}` : '')
 		
 		try {
 			// Check if camera is enabled
@@ -517,29 +561,60 @@ function VideoRoomContent({
 				return
 			}
 			
-			// Remove existing processor
-			if (processorRef.current) {
-				console.log('🧹 Removing existing processor')
-				await localVideoTrack.stopProcessor()
-				processorRef.current = null
-			}
+			const blurRadius = intensity ?? blurAmount
 			
-			// Apply new processor
-			if (mode === 'blur') {
-				console.log('🌫️ Applying blur effect...')
-				const blur = BackgroundBlur(10) // blur strength 0-20
-				await localVideoTrack.setProcessor(blur)
-				processorRef.current = blur
-				console.log('✅ Background blur applied successfully')
-			} else if (mode === 'virtual') {
-				console.log('🖼️ Applying virtual background...')
-				// Virtual background with a professional Unsplash image
-				const virtualBg = VirtualBackground('https://images.unsplash.com/photo-1497366216548-37526070297c?w=1920&h=1080&fit=crop&q=80')
-				await localVideoTrack.setProcessor(virtualBg)
-				processorRef.current = virtualBg
-				console.log('✅ Virtual background applied successfully')
-			} else {
-				console.log('✅ Background effect removed')
+			// If processor already exists, use switchTo for smooth transitions (avoids visual artifacts)
+			if (processorRef.current) {
+				console.log('🔄 Using switchTo for smooth transition...')
+				if (mode === 'blur') {
+					await processorRef.current.switchTo({ mode: 'background-blur', blurRadius })
+					if (intensity !== undefined) setBlurAmount(intensity)
+					console.log('✅ Switched to background blur')
+				} else if (mode === 'virtual') {
+					const selectedBg = virtualBackgrounds[selectedVirtualBg]
+					await processorRef.current.switchTo({ 
+						mode: 'virtual-background', 
+						imagePath: selectedBg.url
+					})
+					console.log('✅ Switched to virtual background:', selectedBg.name)
+				} else {
+					// Mode is 'none' - remove processor
+					console.log('🧹 Removing processor...')
+					await localVideoTrack.stopProcessor()
+					processorRef.current = null
+					console.log('✅ Background effect removed')
+				}
+			} else if (mode !== 'none') {
+				// Create new processor with optimized segmentation settings
+				console.log('🆕 Creating new BackgroundProcessor with optimized settings...')
+				
+				// Use the newer BackgroundProcessor API for better quality
+				// Create processor based on specific mode for proper TypeScript narrowing
+				let processor: ReturnType<typeof BackgroundProcessor>
+				
+				if (mode === 'blur') {
+					processor = BackgroundProcessor({
+						mode: 'background-blur',
+						blurRadius: blurRadius,
+						segmenterOptions: { delegate: 'GPU' }
+					})
+				} else {
+					const selectedBg = virtualBackgrounds[selectedVirtualBg]
+					processor = BackgroundProcessor({
+						mode: 'virtual-background',
+						imagePath: selectedBg.url,
+						segmenterOptions: { delegate: 'GPU' }
+					})
+				}
+				
+				await localVideoTrack.setProcessor(processor)
+				processorRef.current = processor
+				
+				if (mode === 'blur' && intensity !== undefined) {
+					setBlurAmount(intensity)
+				}
+				
+				console.log('✅ BackgroundProcessor applied successfully')
 			}
 			
 			setBackgroundMode(mode)
@@ -549,7 +624,46 @@ function VideoRoomContent({
 			const error = err as Error
 			alert(`Failed to apply background effect: ${error.message}\n\nTip: Make sure you have good lighting and your browser supports this feature.`)
 		}
-	}, [localParticipant])
+	}, [localParticipant, blurAmount, virtualBackgrounds, selectedVirtualBg])
+	
+	// Debounced blur radius update - only updates the blur radius without recreating processor
+	const updateBlurRadius = useCallback(async (newRadius: number) => {
+		if (!processorRef.current || backgroundMode !== 'blur') return
+		
+		try {
+			console.log(`🎚️ Updating blur radius to ${newRadius}...`)
+			// Use switchTo for smooth radius update without recreating the processor
+			await processorRef.current.switchTo({ mode: 'background-blur', blurRadius: newRadius })
+			console.log('✅ Blur radius updated smoothly')
+		} catch (err) {
+			console.error('❌ Failed to update blur radius:', err)
+		}
+	}, [backgroundMode])
+	
+	// Debounced handler for slider changes - updates UI immediately, processor after delay
+	const handleBlurSliderChange = useCallback((newValue: number) => {
+		// Update UI immediately for smooth slider feel
+		setBlurAmount(newValue)
+		
+		// Clear any pending debounce timer
+		if (blurDebounceRef.current) {
+			clearTimeout(blurDebounceRef.current)
+		}
+		
+		// Debounce the heavy processor update (100ms delay)
+		blurDebounceRef.current = setTimeout(() => {
+			updateBlurRadius(newValue)
+		}, 100)
+	}, [updateBlurRadius])
+	
+	// Cleanup debounce timer on unmount
+	useEffect(() => {
+		return () => {
+			if (blurDebounceRef.current) {
+				clearTimeout(blurDebounceRef.current)
+			}
+		}
+	}, [])
 	
 	// Cleanup processor on unmount
 	useEffect(() => {
@@ -1845,12 +1959,14 @@ function VideoRoomContent({
 							</div>
 						</button>
 						
+<div className="mb-2">
 						<button
 							onClick={() => {
-								applyBackgroundEffect('blur')
-								setShowBackgroundMenu(false)
+								if (backgroundMode !== 'blur') {
+									applyBackgroundEffect('blur')
+								}
 							}}
-							className={`w-full px-4 py-4 rounded-xl text-left text-sm transition-all flex items-center gap-3 mb-2 ${
+							className={`w-full px-4 py-4 rounded-xl text-left text-sm transition-all flex items-center gap-3 ${
 								backgroundMode === 'blur' 
 									? 'bg-[#00DC6E]/10 border-2 border-[#00DC6E] text-[#00DC6E] font-medium shadow-lg shadow-[#00DC6E]/20' 
 									: 'bg-white/5 hover:bg-white/10 text-white border-2 border-transparent'
@@ -1865,10 +1981,39 @@ function VideoRoomContent({
 							</div>
 						</button>
 						
+						{/* Blur Intensity Slider - Only shown when blur is active */}
+						{backgroundMode === 'blur' && (
+							<div className="px-4 py-3 bg-white/5 rounded-xl mt-2">
+								<div className="flex items-center justify-between mb-2">
+									<label className="text-xs font-medium text-white/80">Blur Intensity</label>
+									<span className="text-xs font-mono text-[#00DC6E]">{blurAmount}</span>
+								</div>
+								<input
+									type="range"
+									min="1"
+									max="20"
+									step="1"
+									value={blurAmount}
+									onChange={(e) => handleBlurSliderChange(parseInt(e.target.value))}
+									className="w-full h-2 bg-white/20 rounded-lg appearance-none cursor-pointer slider-green"
+									style={{
+										background: `linear-gradient(to right, #00DC6E 0%, #00DC6E ${((blurAmount - 1) / 19) * 100}%, rgba(255,255,255,0.2) ${((blurAmount - 1) / 19) * 100}%, rgba(255,255,255,0.2) 100%)`
+									}}
+								/>
+								<div className="flex justify-between text-xs text-white/40 mt-1">
+									<span>Subtle</span>
+									<span>Strong</span>
+								</div>
+							</div>
+						)}
+					</div>
+					
+					<div className="mb-2">
 						<button
 							onClick={() => {
-								applyBackgroundEffect('virtual')
-								setShowBackgroundMenu(false)
+								if (backgroundMode !== 'virtual') {
+									applyBackgroundEffect('virtual')
+								}
 							}}
 							className={`w-full px-4 py-4 rounded-xl text-left text-sm transition-all flex items-center gap-3 ${
 								backgroundMode === 'virtual' 
@@ -1884,6 +2029,48 @@ function VideoRoomContent({
 								<div className="text-xs text-white/60 mt-0.5">Replace with custom image</div>
 							</div>
 						</button>
+						
+						{/* Virtual Background Options - Only shown when virtual is active */}
+						{backgroundMode === 'virtual' && (
+							<div className="px-4 py-3 bg-white/5 rounded-xl mt-2">
+								<div className="mb-2">
+									<label className="text-xs font-medium text-white/80">Choose Background</label>
+								</div>
+								<div className="grid grid-cols-3 gap-2">
+									{virtualBackgrounds.map((bg) => (
+										<button
+											key={bg.id}
+											onClick={() => {
+												setSelectedVirtualBg(bg.id)
+												applyBackgroundEffect('virtual')
+											}}
+											className={`relative rounded-lg overflow-hidden transition-all ${
+												selectedVirtualBg === bg.id
+													? 'ring-2 ring-[#00DC6E] ring-offset-2 ring-offset-[#2d2d2d]'
+													: 'opacity-60 hover:opacity-100'
+											}`}
+										>
+											<img
+												src={bg.thumbnail}
+												alt={bg.name}
+												className="w-full h-16 object-cover"
+											/>
+											<div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent px-1 py-0.5">
+												<p className="text-xs text-white font-medium truncate">{bg.name}</p>
+											</div>
+											{selectedVirtualBg === bg.id && (
+												<div className="absolute top-1 right-1 bg-[#00DC6E] rounded-full p-0.5">
+													<svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+														<path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+													</svg>
+												</div>
+											)}
+										</button>
+									))}
+								</div>
+							</div>
+						)}
+					</div>
 					</div>
 					
 					{/* Footer note */}
