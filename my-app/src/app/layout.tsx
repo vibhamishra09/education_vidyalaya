@@ -64,11 +64,8 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 5,
   userScalable: true,
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#16a34a" },
-    { media: "(prefers-color-scheme: dark)", color: "#15803d" },
-  ],
-  colorScheme: "light dark",
+  themeColor: "#16a34a",
+  colorScheme: "light",
 };
 
 export const metadata: Metadata = {
@@ -240,7 +237,9 @@ export default function RootLayout({
           {/* DNS Prefetch for external APIs */}
           <link rel="dns-prefetch" href="https://api.dicebear.com" />
         </head>
-        <body className={`${inter.variable} ${harabara.variable} ${gotham.variable} antialiased font-sans pb-16 md:pb-0`}>
+        <body
+          className={`${inter.variable} ${harabara.variable} ${gotham.variable} relative min-h-screen bg-background text-foreground antialiased font-sans pb-16 md:pb-0 before:fixed before:inset-0 before:-z-10 before:bg-[radial-gradient(120%_80%_at_50%_0%,_var(--tw-gradient-stops))] before:from-primary/18 before:via-primary/6 before:to-background after:fixed after:inset-0 after:-z-10 after:bg-[radial-gradient(80%_60%_at_10%_10%,_var(--tw-gradient-stops))] after:from-primary/10 after:via-background after:to-background`}
+        >
           <QueryProvider>
             <NotificationProvider>
               <ToastProvider>

@@ -125,12 +125,12 @@ export default function HowItWorksPage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <div className="min-h-screen flex flex-col bg-muted/30">
+      <div className="min-h-screen flex flex-col">
         <Suspense fallback={null}>
           <Navigation />
         </Suspense>
         <main className="flex-1">
-          <section className="bg-background border-b">
+          <section className="bg-background/70 backdrop-blur-sm border-b border-black/5">
             <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-16">
               <div className="max-w-2xl">
                 <p className="inline-flex items-center gap-2 text-sm font-medium text-primary mb-4">

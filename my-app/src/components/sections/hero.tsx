@@ -4,87 +4,122 @@ import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { useRequireAuth } from "@/hooks/use-require-auth";
 import { SkillSearch } from "@/components/ui/skill-search";
+import { Plus, ArrowRight, Users, Zap, Trophy } from "lucide-react";
 
 export function HeroSection() {
   const requireAuth = useRequireAuth();
   const router = useRouter();
 
   return (
-    <section className="relative py-20 lg:py-32 overflow-hidden">
-      {/* Background gradient */}
-      <div className="absolute inset-0 bg-gradient-to-b from-green-50/50 via-background to-background dark:from-green-950/20" />
+    <section className="relative min-h-[70vh] flex items-center justify-center py-12 sm:py-16 overflow-hidden">
+      {/* 1. Refined Background Elements */}
+      <div className="fixed top-0 left-0 right-0 bottom-0 -z-10 overflow-hidden pointer-events-none">
+        {/* Main Gradient Mesh - Extended with softer boundaries */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full bg-[radial-gradient(ellipse_at_50%_-20%,rgba(34,197,94,0.12)_0%,rgba(34,197,94,0.08)_25%,rgba(59,130,246,0.06)_50%,rgba(59,130,246,0.03)_70%,transparent_85%)]" />
+        
+        {/* Animated Blobs for depth */}
+        <motion.div 
+          animate={{ scale: [1, 1.1, 1], x: [0, 20, 0] }}
+          transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+          className="absolute top-20 left-[10%] w-72 h-72 bg-green-200/20 dark:bg-green-900/10 blur-[100px] rounded-full" 
+        />
+        <motion.div 
+          animate={{ scale: [1, 1.2, 1], x: [0, -30, 0] }}
+          transition={{ duration: 10, repeat: Infinity, ease: "easeInOut", delay: 1 }}
+          className="absolute bottom-20 right-[10%] w-96 h-96 bg-blue-200/20 dark:bg-blue-900/10 blur-[100px] rounded-full" 
+        />
+      </div>
 
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          className="max-w-4xl mx-auto text-center space-y-8"
-        >
-          {/* Heading */}
-          <div className="space-y-4">
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight">
+      <div className="container mx-auto px-4 relative z-10">
+        <div className="max-w-5xl mx-auto text-center">
+          
+          {/* 2. Modern Badge */}
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-green-500/10 border border-green-500/20 text-green-700 dark:text-green-400 text-xs font-semibold mb-5"
+          >
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+            </span>
+            Join 2,000+ students learning today
+          </motion.div>
+
+          {/* 3. Typography Upgrade */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="space-y-4"
+          >
+            <h1 className="text-5xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight text-slate-900 dark:text-white">
               Peer-to-Peer Learning{" "}
-              <span className="bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-green-500 via-emerald-500 to-blue-600 bg-clip-text text-transparent">
                 Community
               </span>
             </h1>
-            <p className="text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto font-tagline">
-              Connect, learn, and grow together. Share knowledge, join study
-              rooms, and engage in meaningful debates with peers worldwide.
+            
+            <p className="text-lg sm:text-xl text-slate-600 dark:text-slate-400 max-w-2xl mx-auto leading-relaxed">
+              The world's first decentralized learning hub. Join study rooms, 
+              host sessions, and turn your knowledge into community value.
             </p>
-          </div>
-
-          {/* Search Section */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.2 }}
-            className="max-w-2xl mx-auto"
-          >
-            <SkillSearch
-              placeholder="What do you want to learn today?"
-            />
           </motion.div>
 
-          {/* Start Study Room Section */}
+          {/* 4. Functional Search Bar */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.4 }}
-            className="max-w-md mx-auto"
+            transition={{ duration: 0.5, delay: 0.2 }}
+            className="max-w-2xl mx-auto mt-6 relative group"
           >
-            <div
-              className="flex flex-col items-center justify-center space-y-4 border-2 border-green-500 rounded-lg p-6 hover:border-green-600 transition-colors cursor-pointer group"
-              onClick={() =>
-                requireAuth(() => {
-                  router.push("/create-study-room");
-                })
-              }
-            >
-              <div className="w-16 h-16 rounded-full bg-gradient-to-r from-green-500 to-blue-500 flex items-center justify-center group-hover:scale-110 transition-transform">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-8 w-8 text-white"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M12 4v16m8-8H4"
-                  />
-                </svg>
-              </div>
-              <h3 className="text-xl font-semibold">Start Study Room</h3>
-              <p className="text-sm text-muted-foreground text-center font-tagline">
-                Create a room to teach and share knowledge
-              </p>
+            <div className="absolute -inset-1 bg-gradient-to-r from-green-500 to-blue-500 rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-1000"></div>
+            <div className="relative">
+              <SkillSearch placeholder="Search skills, topics, or peers..." />
             </div>
           </motion.div>
-        </motion.div>
+
+          {/* 5. Clean Action Card */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.4 }}
+            className="mt-8 max-w-2xl mx-auto"
+          >
+            <div 
+              onClick={() => requireAuth(() => router.push("/create-study-room"))}
+              className="group cursor-pointer relative p-[1px] rounded-2xl overflow-hidden transition-all hover:shadow-[0_0_30px_-10px_rgba(34,197,94,0.3)]"
+            >
+              {/* Border Gradient */}
+              <div className="absolute inset-0 bg-gradient-to-r from-slate-200 to-slate-200 dark:from-slate-800 dark:to-slate-800 group-hover:from-green-500 group-hover:to-blue-500 transition-all duration-500" />
+              
+              <div className="relative bg-white dark:bg-slate-950 p-6 rounded-[15px] flex flex-col md:flex-row items-center gap-6">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-white shadow-lg shadow-green-500/20">
+                  <Plus className="w-6 h-6" />
+                </div>
+                
+                <div className="flex-1 text-center md:text-left">
+                  <h3 className="text-lg font-bold flex items-center justify-center md:justify-start gap-2">
+                    Create a Study Room 
+                    <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+                  </h3>
+                  <div className="flex flex-wrap justify-center md:justify-start gap-4 mt-2">
+                    <span className="flex items-center gap-1 text-xs text-slate-500 font-medium">
+                      <Users className="w-3 h-3 text-blue-500" /> Multi-peer
+                    </span>
+                    <span className="flex items-center gap-1 text-xs text-slate-500 font-medium">
+                      <Zap className="w-3 h-3 text-yellow-500" /> Live Interaction
+                    </span>
+                    <span className="flex items-center gap-1 text-xs text-slate-500 font-medium">
+                      <Trophy className="w-3 h-3 text-green-500" /> Reward Points
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+
+        </div>
       </div>
     </section>
   );
