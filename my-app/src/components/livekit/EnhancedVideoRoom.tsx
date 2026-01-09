@@ -1,11 +1,12 @@
 'use client'
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { LiveKitRoom, useParticipants, useRoomContext, useTracks, RoomAudioRenderer, useSpeakingParticipants, VideoTrack, useLocalParticipant, isTrackReference } from '@livekit/components-react'
-import { Track, RoomOptions, VideoPresets } from 'livekit-client'
+import { Track, RoomOptions, VideoPresets, LocalVideoTrack } from 'livekit-client'
 import '@livekit/components-styles'
+import { BackgroundBlur, VirtualBackground, BackgroundOptions } from '@livekit/track-processors'
 import { ChatWidget } from '@/components/chat/ChatWidget'
 import { Button } from '@/components/ui/button'
-import { MessageSquare, X, Users, Maximize2, Minimize2, Video, VideoOff, Mic, MicOff, Volume2, VolumeX, Clock, MonitorUp, MonitorOff, Grid2X2, Presentation, Pin, PinOff, User, PictureInPicture2 } from 'lucide-react'
+import { MessageSquare, X, Users, Maximize2, Minimize2, Video, VideoOff, Mic, MicOff, Volume2, VolumeX, Clock, MonitorUp, MonitorOff, Grid2X2, Presentation, Pin, PinOff, User, PictureInPicture2, Camera, CameraOff, Sparkles } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { useSessionTimer } from '@/hooks/use-session-timer'
@@ -345,6 +346,11 @@ function VideoRoomContent({
 	const [pinnedParticipantId, setPinnedParticipantId] = useState<string | null>(null)
 	
 	const [isAudioEnabled, setIsAudioEnabled] = useState(true)
+	
+	// Background effects state
+	const [backgroundMode, setBackgroundMode] = useState<'none' | 'blur' | 'virtual'>('none')
+	const [showBackgroundMenu, setShowBackgroundMenu] = useState(false)
+	const processorRef = useRef<ReturnType<typeof BackgroundBlur> | ReturnType<typeof VirtualBackground> | null>(null)
 
 	// Get all camera tracks using useTracks - the standard way
 	const cameraTracks = useTracks(
@@ -357,10 +363,66 @@ function VideoRoomContent({
 		[{ source: Track.Source.ScreenShare, withPlaceholder: false }]
 	)
 	
-
+	// Debounced speaking detection - only switch focus after sustained speaking (1.5 seconds)
+	const [debouncedSpeakerId, setDebouncedSpeakerId] = useState<string | null>(null)
+	const speakingTimerRef = useRef<NodeJS.Timeout | null>(null)
+	const lastSpeakerRef = useRef<string | null>(null)
 	
 	// Find the focused participant (screenShare > pinned > speaking > host)
 	const speakingParticipants = useSpeakingParticipants()
+	
+	// Debounce the speaking detection - require 1.5 seconds of continuous speaking
+	useEffect(() => {
+		const currentSpeaker = speakingParticipants.length > 0 ? speakingParticipants[0]?.identity : null
+		
+		// If no one is speaking, clear timer but keep last speaker for a bit
+		if (!currentSpeaker) {
+			if (speakingTimerRef.current) {
+				clearTimeout(speakingTimerRef.current)
+				speakingTimerRef.current = null
+			}
+			return
+		}
+		
+		// If same person keeps speaking, don't reset
+		if (currentSpeaker === lastSpeakerRef.current) {
+			return
+		}
+		
+		// New speaker detected - start debounce timer
+		if (speakingTimerRef.current) {
+			clearTimeout(speakingTimerRef.current)
+		}
+		
+		speakingTimerRef.current = setTimeout(() => {
+			// Only update if still speaking after 1.5 seconds
+			if (speakingParticipants.some(p => p.identity === currentSpeaker)) {
+				lastSpeakerRef.current = currentSpeaker
+				setDebouncedSpeakerId(currentSpeaker)
+			}
+		}, 1500) // 1.5 second debounce
+		
+		return () => {
+			if (speakingTimerRef.current) {
+				clearTimeout(speakingTimerRef.current)
+			}
+		}
+	}, [speakingParticipants])
+	
+	// Auto-switch to presenter view when someone shares screen (only once)
+	const hasAutoSwitchedRef = useRef(false)
+	useEffect(() => {
+		if (screenShareTracks.length > 0) {
+			// Auto-switch to focus mode when screen share starts (only if we haven't auto-switched yet)
+			if (layoutMode === 'grid' && !hasAutoSwitchedRef.current) {
+				setLayoutMode('focus')
+				hasAutoSwitchedRef.current = true
+			}
+		} else {
+			// Reset when screen share ends
+			hasAutoSwitchedRef.current = false
+		}
+	}, [screenShareTracks.length, layoutMode])
 	
 	// Check if anyone is screen sharing (highest priority)
 	const activeScreenShare = screenShareTracks.length > 0 ? screenShareTracks[0] : null
@@ -380,9 +442,15 @@ function VideoRoomContent({
 			if (pinned) return pinned
 		}
 		
-		// Priority 3: Speaking participant
-		if (speakingParticipants.length > 0 && !activeScreenShare) {
-			return speakingParticipants[0]
+		// Priority 3: Debounced speaking participant (requires sustained speaking)
+		if (debouncedSpeakerId && !activeScreenShare) {
+			if (room?.localParticipant?.identity === debouncedSpeakerId) {
+				return room.localParticipant
+			}
+			const speaker = Array.from(room?.remoteParticipants.values() || []).find(
+				p => p.identity === debouncedSpeakerId
+			)
+			if (speaker) return speaker
 		}
 		
 		// Priority 4: Host or first remote
@@ -394,7 +462,7 @@ function VideoRoomContent({
 			return remotes[0] || room.localParticipant
 		}
 		return null
-	}, [speakingParticipants, room, isHost, pinnedParticipantId, activeScreenShare])
+	}, [debouncedSpeakerId, room, isHost, pinnedParticipantId, activeScreenShare])
 	
 	// Handle clicking on a thumbnail to focus/pin that participant
 	const handleThumbnailClick = useCallback((participantId: string) => {
@@ -422,6 +490,78 @@ function VideoRoomContent({
 		setPinnedParticipantId(participantId)
 		setLayoutMode('focus')
 	}, [])
+	
+	// Apply background effect to local video track
+	const applyBackgroundEffect = useCallback(async (mode: 'none' | 'blur' | 'virtual') => {
+		console.log('🎨 Applying background effect:', mode)
+		
+		try {
+			// Check if camera is enabled
+			if (!localParticipant?.isCameraEnabled) {
+				console.warn('⚠️ Camera is not enabled')
+				alert('Please turn on your camera first to use background effects')
+				return
+			}
+			
+			// Get local video track
+			const videoPublication = Array.from(localParticipant.videoTrackPublications.values()).find(
+				pub => pub.source === Track.Source.Camera
+			)
+			const localVideoTrack = videoPublication?.track as LocalVideoTrack | undefined
+			
+			console.log('📹 Video track found:', !!localVideoTrack)
+			
+			if (!localVideoTrack) {
+				console.error('❌ No local video track found')
+				alert('Could not find video track. Please ensure your camera is working.')
+				return
+			}
+			
+			// Remove existing processor
+			if (processorRef.current) {
+				console.log('🧹 Removing existing processor')
+				await localVideoTrack.stopProcessor()
+				processorRef.current = null
+			}
+			
+			// Apply new processor
+			if (mode === 'blur') {
+				console.log('🌫️ Applying blur effect...')
+				const blur = BackgroundBlur(10) // blur strength 0-20
+				await localVideoTrack.setProcessor(blur)
+				processorRef.current = blur
+				console.log('✅ Background blur applied successfully')
+			} else if (mode === 'virtual') {
+				console.log('🖼️ Applying virtual background...')
+				// Virtual background with a professional Unsplash image
+				const virtualBg = VirtualBackground('https://images.unsplash.com/photo-1497366216548-37526070297c?w=1920&h=1080&fit=crop&q=80')
+				await localVideoTrack.setProcessor(virtualBg)
+				processorRef.current = virtualBg
+				console.log('✅ Virtual background applied successfully')
+			} else {
+				console.log('✅ Background effect removed')
+			}
+			
+			setBackgroundMode(mode)
+			console.log('✅ Background mode set to:', mode)
+		} catch (err) {
+			console.error('❌ Failed to apply background effect:', err)
+			const error = err as Error
+			alert(`Failed to apply background effect: ${error.message}\n\nTip: Make sure you have good lighting and your browser supports this feature.`)
+		}
+	}, [localParticipant])
+	
+	// Cleanup processor on unmount
+	useEffect(() => {
+		return () => {
+			if (processorRef.current) {
+				const localVideoTrack = localParticipant?.videoTrackPublications.values().next().value?.track as LocalVideoTrack | undefined
+				if (localVideoTrack) {
+					localVideoTrack.stopProcessor().catch(console.error)
+				}
+			}
+		}
+	}, [localParticipant])
 	
 	// Sort camera tracks: local participant first, then speaking, then others
 	const sortedCameraTracks = useMemo(() => {
@@ -597,7 +737,8 @@ function VideoRoomContent({
 	}, [])
 
 	return (
-		<div className="flex-1 flex relative bg-[#202124] overflow-hidden" style={{ overflow: 'hidden', height: '100%', width: '100%' }}>
+		<>
+			<div className="flex-1 flex relative bg-[#202124] overflow-hidden" style={{ overflow: 'hidden', height: '100%', width: '100%' }}>
 			{/* Main Video Area */}
 			<div className={`flex-1 flex flex-col transition-all duration-300 ease-in-out overflow-hidden ${showChat && !showParticipants ? 'md:mr-80' : ''} ${showParticipants && !showChat ? 'md:mr-64' : ''} ${showChat && showParticipants ? 'md:mr-[22rem]' : ''}`}>
 				{/* Top Bar - Google Meet style */}
@@ -1048,51 +1189,96 @@ function VideoRoomContent({
 						min-width: 90px;
 					}
 					
-					/* Custom Grid Layout */
+					/* Custom Grid Layout - Fixed to prevent overlapping */
 					.custom-grid {
 						display: grid;
-						grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-						gap: 8px;
+						gap: 12px;
 						height: 100%;
 						width: 100%;
-						padding: 4px;
+						padding: 12px;
 						align-content: center;
+						justify-content: center;
+						overflow: hidden;
+					}
+					
+					/* 1 participant - centered large */
+					.custom-grid[data-count="1"] {
+						grid-template-columns: minmax(0, 800px);
+						grid-template-rows: minmax(0, 1fr);
+					}
+					
+					/* 2 participants - side by side */
+					.custom-grid[data-count="2"] {
+						grid-template-columns: repeat(2, minmax(0, 1fr));
+						grid-template-rows: minmax(0, 1fr);
+						max-height: 60%;
+					}
+					
+					/* 3-4 participants - 2x2 grid */
+					.custom-grid[data-count="3"],
+					.custom-grid[data-count="4"] {
+						grid-template-columns: repeat(2, minmax(0, 1fr));
+						grid-template-rows: repeat(2, minmax(0, 1fr));
+					}
+					
+					/* 5-6 participants - 3x2 grid */
+					.custom-grid[data-count="5"],
+					.custom-grid[data-count="6"] {
+						grid-template-columns: repeat(3, minmax(0, 1fr));
+						grid-template-rows: repeat(2, minmax(0, 1fr));
+					}
+					
+					/* 7+ participants - 3x3 or more */
+					.custom-grid[data-count="7"],
+					.custom-grid[data-count="8"],
+					.custom-grid[data-count="9"] {
+						grid-template-columns: repeat(3, minmax(0, 1fr));
+						grid-template-rows: repeat(3, minmax(0, 1fr));
+					}
+					
+					/* Fallback for many participants */
+					.custom-grid {
+						grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+						grid-auto-rows: minmax(150px, 1fr);
 					}
 					
 					@media (max-width: 768px) {
 						.custom-grid {
-							grid-template-columns: 1fr 1fr;
-							grid-auto-rows: minmax(auto, 1fr);
-							gap: 6px;
+							gap: 8px;
 							padding: 8px;
-							align-content: start;
+						}
+						
+						.custom-grid[data-count="1"] {
+							grid-template-columns: 1fr;
+						}
+						
+						.custom-grid[data-count="2"],
+						.custom-grid[data-count="3"],
+						.custom-grid[data-count="4"] {
+							grid-template-columns: repeat(2, minmax(0, 1fr));
+							grid-template-rows: repeat(2, minmax(0, 1fr));
+						}
+						
+						.custom-grid[data-count="5"],
+						.custom-grid[data-count="6"] {
+							grid-template-columns: repeat(2, minmax(0, 1fr));
+							grid-template-rows: repeat(3, minmax(0, 1fr));
 						}
 					}
 					
-					/* 2 participants - equal split */
-					.custom-grid:has(> :nth-child(2):last-child) {
-						grid-template-columns: repeat(2, 1fr);
-					}
-					
-					/* 3-4 participants - 2x2 grid */
-					.custom-grid:has(> :nth-child(3):last-child),
-					.custom-grid:has(> :nth-child(4):last-child) {
-						grid-template-columns: repeat(2, 1fr);
-					}
-					
-					/* Mobile: Stack vertically for 2 participants for better visibility */
 					@media (max-width: 480px) {
-						.custom-grid:has(> :nth-child(2):last-child) {
+						.custom-grid[data-count="2"] {
 							grid-template-columns: 1fr;
-							grid-template-rows: 1fr 1fr;
-							gap: 8px;
+							grid-template-rows: repeat(2, minmax(0, 1fr));
 						}
 					}
 					
 					.custom-grid-tile {
 						position: relative;
 						width: 100%;
-						aspect-ratio: 16 / 9;
+						height: 100%;
+						min-height: 0;
+						min-width: 0;
 						border-radius: 12px;
 						overflow: hidden;
 						background: #2d2d2d;
@@ -1100,15 +1286,7 @@ function VideoRoomContent({
 					
 					@media (max-width: 768px) {
 						.custom-grid-tile {
-							aspect-ratio: 4 / 3;
 							border-radius: 8px;
-							min-height: 0;
-						}
-					}
-					
-					@media (max-width: 480px) {
-						.custom-grid-tile {
-							aspect-ratio: 16 / 9;
 						}
 					}
 					
@@ -1167,6 +1345,20 @@ function VideoRoomContent({
 														</span>
 													)}
 												</div>
+												
+												{/* Audio/Video status icons in top-right corner (like Zoom) */}
+												<div className="absolute top-3 right-3 flex items-center gap-2 z-20">
+													{!focusedTrack.participant.isMicrophoneEnabled && (
+														<div className="bg-black/70 px-2 py-1 rounded flex items-center gap-1" title="Muted">
+															<MicOff className="h-4 w-4 text-red-500" />
+														</div>
+													)}
+													{!focusedTrack.participant.isCameraEnabled && !isScreenShareFocused && (
+														<div className="bg-black/70 px-2 py-1 rounded flex items-center gap-1" title="Camera off">
+															<VideoOff className="h-4 w-4 text-red-500" />
+														</div>
+													)}
+												</div>
 										
 										{/* Pin/Unpin button overlay - only show when not screen sharing */}
 										{!isScreenShareFocused && (
@@ -1216,6 +1408,7 @@ function VideoRoomContent({
 								{sortedCameraTracks.map((track) => {
 									const isActive = focusedTrack?.participant?.identity === track.participant.identity && !isScreenShareFocused
 									const isLocal = track.participant.isLocal
+									const isMuted = !track.participant.isMicrophoneEnabled
 									return (
 										<div 
 											key={`thumb-${track.participant.identity}`}
@@ -1236,6 +1429,12 @@ function VideoRoomContent({
 											{isTrackReference(track) && track.publication?.track && (
 												<div className="absolute inset-0 z-[2]">
 													<VideoTrack trackRef={track} className="w-full h-full object-cover" />
+												</div>
+											)}
+											{/* Mute indicator icon (top right) */}
+											{isMuted && (
+												<div className="absolute top-1 right-1 bg-black/70 px-1.5 py-1 rounded flex items-center z-20" title="Muted">
+													<MicOff className="h-3 w-3 text-red-500" />
 												</div>
 											)}
 											{/* Name label with pin indicator text */}
@@ -1267,10 +1466,12 @@ function VideoRoomContent({
 					) : (
 						<div className="grid-mode h-full w-full p-2">
 							{/* Custom Grid layout with pin buttons */}
-							<div className="custom-grid">
+							<div className="custom-grid" data-count={Math.min(sortedCameraTracks.length, 9)}>
 								{sortedCameraTracks.map((track) => {
 									const isLocal = track.participant.isLocal
 									const hasVideo = isTrackReference(track) && track.publication?.track
+									const isMuted = !track.participant.isMicrophoneEnabled
+									const isVideoOff = !track.participant.isCameraEnabled
 									return (
 										<div 
 											key={`grid-${track.participant.identity}`}
@@ -1303,12 +1504,30 @@ function VideoRoomContent({
 											{track.participant.isSpeaking && (
 												<div className="absolute top-2 left-2 w-3 h-3 rounded-full bg-[#00DC6E] animate-pulse z-20" />
 											)}
-											{/* You label for local participant */}
-											{isLocal && (
-												<div className="absolute bottom-10 left-2 bg-[#008CD2] text-white text-xs px-2 py-0.5 rounded-full z-20">
-													You
+											{/* Bottom bar with name and audio/video status (like Zoom) */}
+											<div className="absolute bottom-0 left-0 right-0 flex items-center justify-between px-3 py-2 bg-gradient-to-t from-black/80 to-transparent z-20">
+												<span className="text-white text-sm font-medium truncate max-w-[70%]">
+													{isLocal ? 'You' : (track.participant.name || track.participant.identity)}
+												</span>
+												<div className="flex items-center gap-1.5">
+													{/* Mic status icon */}
+													{isMuted ? (
+														<div className="w-6 h-6 rounded-full bg-red-500/90 flex items-center justify-center" title="Muted">
+															<MicOff className="h-3.5 w-3.5 text-white" />
+														</div>
+													) : (
+														<div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center" title="Unmuted">
+															<Mic className="h-3.5 w-3.5 text-white" />
+														</div>
+													)}
+													{/* Video status icon */}
+													{isVideoOff && (
+														<div className="w-6 h-6 rounded-full bg-red-500/90 flex items-center justify-center" title="Camera off">
+															<VideoOff className="h-3.5 w-3.5 text-white" />
+														</div>
+													)}
 												</div>
-											)}
+											</div>
 										</div>
 									)
 								})}
@@ -1377,6 +1596,29 @@ function VideoRoomContent({
 				>
 					{(room?.localParticipant?.isCameraEnabled ?? isCameraEnabled) ? <Video className="h-5 w-5 md:h-6 md:w-6" /> : <VideoOff className="h-5 w-5 md:h-6 md:w-6" />}
 				</Button>
+
+				{/* Background Effects Button - Always visible */}
+				<div className="relative">
+					<Button
+						onClick={() => {
+							if (!(room?.localParticipant?.isCameraEnabled ?? isCameraEnabled)) {
+								alert('Please turn on your camera first to use background effects')
+								return
+							}
+							setShowBackgroundMenu(!showBackgroundMenu)
+						}}
+						variant="ghost"
+						size="lg"
+						className={`h-10 w-10 md:h-12 md:w-12 rounded-full transition-all p-0 flex-shrink-0 ${
+							backgroundMode !== 'none'
+								? 'bg-[#00DC6E] hover:bg-[#00b058] text-white' 
+								: 'bg-white/10 hover:bg-white/20 text-white'
+						}`}
+						title="Background effects (Blur/Virtual BG)"
+					>
+						<Sparkles className="h-5 w-5 md:h-6 md:w-6" />
+					</Button>
+				</div>
 
 				{/* Mic Toggle */}
 				<Button
@@ -1553,6 +1795,107 @@ function VideoRoomContent({
 				</>
 			)}
 		</div>
+
+		{/* Background Effects Popup - At root level, outside all containers */}
+		{showBackgroundMenu && (
+			<div className="fixed inset-0 flex items-center justify-center p-4" style={{ zIndex: 9999999 }}>
+				{/* Dark backdrop overlay */}
+				<div 
+					className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+					onClick={() => setShowBackgroundMenu(false)}
+				/>
+				
+				{/* Popup card */}
+				<div className="relative bg-[#2d2d2d] rounded-2xl shadow-2xl border border-white/20 w-full max-w-sm animate-in zoom-in-95 duration-200">
+					{/* Header */}
+					<div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
+						<div className="flex items-center gap-3">
+							<div className="h-10 w-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+								<Sparkles className="h-5 w-5 text-white" />
+							</div>
+							<h3 className="text-lg font-semibold text-white">Background Effects</h3>
+						</div>
+						<button
+							onClick={() => setShowBackgroundMenu(false)}
+							className="h-8 w-8 rounded-lg hover:bg-white/10 transition-colors flex items-center justify-center text-white/60 hover:text-white"
+						>
+							<X className="h-5 w-5" />
+						</button>
+					</div>
+					
+					{/* Options */}
+					<div className="p-3">
+						<button
+							onClick={() => {
+								applyBackgroundEffect('none')
+								setShowBackgroundMenu(false)
+							}}
+							className={`w-full px-4 py-4 rounded-xl text-left text-sm transition-all flex items-center gap-3 mb-2 ${
+								backgroundMode === 'none' 
+									? 'bg-[#00DC6E]/10 border-2 border-[#00DC6E] text-[#00DC6E] font-medium shadow-lg shadow-[#00DC6E]/20' 
+									: 'bg-white/5 hover:bg-white/10 text-white border-2 border-transparent'
+							}`}
+						>
+							<div className={`w-3 h-3 rounded-full ${
+								backgroundMode === 'none' ? 'bg-[#00DC6E]' : 'border-2 border-white/30'
+							}`} />
+							<div>
+								<div className="font-medium">None</div>
+								<div className="text-xs text-white/60 mt-0.5">Show original background</div>
+							</div>
+						</button>
+						
+						<button
+							onClick={() => {
+								applyBackgroundEffect('blur')
+								setShowBackgroundMenu(false)
+							}}
+							className={`w-full px-4 py-4 rounded-xl text-left text-sm transition-all flex items-center gap-3 mb-2 ${
+								backgroundMode === 'blur' 
+									? 'bg-[#00DC6E]/10 border-2 border-[#00DC6E] text-[#00DC6E] font-medium shadow-lg shadow-[#00DC6E]/20' 
+									: 'bg-white/5 hover:bg-white/10 text-white border-2 border-transparent'
+							}`}
+						>
+							<div className={`w-3 h-3 rounded-full ${
+								backgroundMode === 'blur' ? 'bg-[#00DC6E]' : 'border-2 border-white/30'
+							}`} />
+							<div>
+								<div className="font-medium">Blur Background</div>
+								<div className="text-xs text-white/60 mt-0.5">Blur everything behind you</div>
+							</div>
+						</button>
+						
+						<button
+							onClick={() => {
+								applyBackgroundEffect('virtual')
+								setShowBackgroundMenu(false)
+							}}
+							className={`w-full px-4 py-4 rounded-xl text-left text-sm transition-all flex items-center gap-3 ${
+								backgroundMode === 'virtual' 
+									? 'bg-[#00DC6E]/10 border-2 border-[#00DC6E] text-[#00DC6E] font-medium shadow-lg shadow-[#00DC6E]/20' 
+									: 'bg-white/5 hover:bg-white/10 text-white border-2 border-transparent'
+							}`}
+						>
+							<div className={`w-3 h-3 rounded-full ${
+								backgroundMode === 'virtual' ? 'bg-[#00DC6E]' : 'border-2 border-white/30'
+							}`} />
+							<div>
+								<div className="font-medium">Virtual Background</div>
+								<div className="text-xs text-white/60 mt-0.5">Replace with custom image</div>
+							</div>
+						</button>
+					</div>
+					
+					{/* Footer note */}
+					<div className="px-6 py-3 bg-white/5 rounded-b-2xl">
+						<p className="text-xs text-white/50 text-center">
+							💡 Effects work best in well-lit environments
+						</p>
+					</div>
+				</div>
+			</div>
+		)}
+		</>
 	)
 }
 
