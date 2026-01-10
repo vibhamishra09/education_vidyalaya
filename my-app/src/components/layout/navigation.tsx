@@ -74,7 +74,7 @@ export function Navigation() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   useEffect(() => {
-    const onScroll = () => setIsScrolled(window.scrollY > 8);
+    const onScroll = () => setIsScrolled(window.scrollY > 10);
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
@@ -106,24 +106,27 @@ export function Navigation() {
       ];
 
   return (
-    <header className="sticky top-0 z-50 w-full">
-      <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-3 sm:py-4">
+    <header className="sticky top-0 z-50 w-full pointer-events-none">
+      <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-3 sm:py-5">
         <div
           className={cn(
-            "rounded-xl bg-background/40 backdrop-blur-md ring-1 ring-white/20 border border-white/10 shadow-md transition-all duration-300 supports-[backdrop-filter]:bg-background/35",
-            isScrolled && "bg-background/70 shadow-lg supports-[backdrop-filter]:bg-background/60 ring-1 ring-white/30 border-white/20"
+            "pointer-events-auto relative rounded-2xl border border-white/10 transition-all duration-500 will-change-transform",
+            "bg-background/60 backdrop-blur-xl shadow-lg",
+            isScrolled 
+              ? "bg-background/80 shadow-xl border-white/15 translate-y-0" 
+              : "bg-background/50 shadow-md translate-y-1"
           )}
         >
-          <div className="flex h-12 items-center justify-between px-4 sm:h-14 sm:px-5">
+          <div className="flex h-14 items-center justify-between px-4 sm:px-6">
             {/* Left: logo + links */}
             <div className="flex items-center gap-6">
-              <Link href="/" className="flex items-center gap-2 relative group">
+              <Link href="/" className="flex items-center gap-2 relative group shrink-0">
                 <Image
                   src="/webyalaya-main-logo.svg"
                   alt="Webyalaya"
-                  width={128}
-                  height={128}
-                  className="object-contain px-1 transition-all duration-300 group-hover:scale-105 opacity-90 group-hover:opacity-100"
+                  width={140}
+                  height={140}
+                  className="object-contain w-auto h-8 transition-all duration-300 group-hover:scale-105 opacity-95 group-hover:opacity-100"
                 />
               </Link>
 
@@ -135,13 +138,15 @@ export function Navigation() {
                       key={link.href}
                       href={link.href}
                       className={cn(
-                        "rounded-lg px-3.5 py-2 text-sm font-medium transition-all duration-200",
-                        "text-muted-foreground hover:text-foreground hover:bg-white/10",
-                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-                        isActive && "text-foreground bg-white/15 font-semibold"
+                        "relative rounded-full px-4 py-2 text-sm font-medium transition-all duration-300",
+                        "text-muted-foreground hover:text-foreground",
+                        isActive && "text-foreground font-semibold"
                       )}
                     >
                       {link.label}
+                      {isActive && (
+                        <span className="absolute inset-0 rounded-full bg-white/10 -z-10 animate-fade-in" />
+                      )}
                     </Link>
                   );
                 })}
@@ -153,6 +158,7 @@ export function Navigation() {
               {isSignedIn ? (
                 <>
                   <CoinDropdown coins={userCoins} isLoading={isUserLoading} />
+                  <div className="w-px h-6 bg-white/10 mx-1" />
                   <NotificationDropdown />
                   <UserDropdown user={user} signOut={signOut} />
                 </>
@@ -164,25 +170,21 @@ export function Navigation() {
             </div>
 
             {/* Mobile: utilities + menu toggle */}
-            <div className="md:hidden flex items-center gap-2">
-              {isSignedIn ? (
+            <div className="md:hidden flex items-center gap-3">
+              {isSignedIn && (
                 <>
-                  <div className="min-w-[110px]">
-                    <CoinDropdown coins={userCoins} isLoading={isUserLoading} />
-                  </div>
+                  <CoinDropdown coins={userCoins} isLoading={isUserLoading} />
                   <NotificationDropdown />
                 </>
-              ) : null}
+              )}
 
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/10 transition-all duration-200"
-                aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
-                aria-expanded={isMobileMenuOpen}
-                aria-controls="mobile-nav"
+                className="rounded-full h-10 w-10 text-muted-foreground hover:text-foreground hover:bg-white/10"
                 onClick={() => setIsMobileMenuOpen((v) => !v)}
+                aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
               >
                 {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
               </Button>
@@ -190,9 +192,9 @@ export function Navigation() {
           </div>
 
           {/* Mobile panel */}
-          {isMobileMenuOpen ? (
-            <div id="mobile-nav" className="md:hidden border-t border-white/10 px-4 pb-4 pt-3">
-              <nav className="flex flex-col gap-1" aria-label="Mobile">
+          {isMobileMenuOpen && (
+            <div id="mobile-nav" className="md:hidden border-t border-white/10 px-4 pb-5 pt-2 animate-in slide-in-from-top-2 fade-in-20">
+              <nav className="flex flex-col gap-2 mt-2" aria-label="Mobile">
                 {links.map((link) => {
                   const isActive = pathname === link.href;
                   return (
@@ -200,9 +202,9 @@ export function Navigation() {
                       key={link.href}
                       href={link.href}
                       className={cn(
-                        "rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200",
-                        "text-muted-foreground hover:text-foreground hover:bg-white/10",
-                        isActive && "text-foreground bg-white/15 font-semibold"
+                        "rounded-xl px-4 py-3 text-sm font-medium transition-colors",
+                        "hover:bg-white/5 text-muted-foreground hover:text-foreground",
+                        isActive && "bg-white/10 text-foreground font-semibold"
                       )}
                       onClick={() => setIsMobileMenuOpen(false)}
                     >
@@ -212,27 +214,27 @@ export function Navigation() {
                 })}
               </nav>
 
-              {isSignedIn ? (
-                <div className="mt-4 flex items-center justify-end">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="text-muted-foreground hover:text-foreground"
-                    onClick={() => void signOut()}
-                  >
-                    Sign out
-                  </Button>
-                </div>
-              ) : (
-                <div className="mt-4">
+              <div className="mt-6 flex items-center justify-end border-t border-white/5 pt-4">
+                {isSignedIn ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                      onClick={() => void signOut()}
+                    >
+                      Sign out
+                    </Button>
+                ) : (
                   <Suspense fallback={<AuthButtonsFallback />}>
-                    <AuthButtons pathname={pathname} />
+                    <div className="w-full flex justify-end">
+                       <AuthButtons pathname={pathname} />
+                    </div>
                   </Suspense>
-                </div>
-              )}
+                )}
+              </div>
             </div>
-          ) : null}
+          )}
         </div>
       </div>
     </header>

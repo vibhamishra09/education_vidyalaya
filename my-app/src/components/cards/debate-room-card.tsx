@@ -3,7 +3,7 @@
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Eye, UserPlus, Play, Users, Swords } from "lucide-react";
+import { Play, Users, UserPlus } from "lucide-react";
 import { motion } from "framer-motion";
 import { useRequireAuth } from "@/hooks/use-require-auth";
 import { cn } from "@/lib/utils";
@@ -31,21 +31,24 @@ export function DebateRoomCard({
     switch (s) {
       case "in_progress":
         return {
-          label: "Live Now",
+          label: "LIVE",
           dotColor: "bg-red-500",
-          badgeStyle: "border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-400",
+          badgeStyle:
+            "bg-red-100/50 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800",
         };
       case "completed":
         return {
-          label: "Ended",
-          dotColor: "bg-gray-500",
-          badgeStyle: "border-border bg-secondary text-muted-foreground",
+          label: "ENDED",
+          dotColor: "bg-muted-foreground",
+          badgeStyle:
+            "bg-secondary text-muted-foreground border-border dark:bg-secondary/50",
         };
       default:
         return {
-          label: "Registration",
-          dotColor: "bg-green-500",
-          badgeStyle: "border-green-500/20 bg-green-500/10 text-green-700 dark:text-green-400",
+          label: "OPEN",
+          dotColor: "bg-emerald-500",
+          badgeStyle:
+            "bg-emerald-100/50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800",
         };
     }
   };
@@ -58,94 +61,96 @@ export function DebateRoomCard({
       transition={{ type: "spring", stiffness: 300, damping: 25 }}
       className="h-full"
     >
-      <Card className="group relative flex h-full flex-col overflow-hidden border-border/60 bg-card p-5 transition-all duration-300 hover:border-primary/20 hover:shadow-lg">
+      <Card className="group relative flex h-full flex-col overflow-hidden border-border bg-card p-3 transition-all duration-300 hover:border-emerald-200 hover:shadow-lg rounded-xl dark:hover:border-emerald-800">
         
         {/* Header: Status & Watchers */}
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-2 flex items-start justify-between">
           <Badge
             variant="outline"
-            className={cn("gap-1.5 px-2.5 py-1 text-xs font-medium", statusVis.badgeStyle)}
+            className={cn(
+              "gap-1.5 px-2 py-1 text-xs font-bold tracking-wider rounded-md shadow-sm", // Increased text-[11px] -> text-xs
+              statusVis.badgeStyle
+            )}
           >
             <span className={cn("relative flex h-2 w-2")}>
               {status === "in_progress" && (
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75"></span>
               )}
-              <span className={cn("relative inline-flex h-2 w-2 rounded-full", statusVis.dotColor)}></span>
+              <span
+                className={cn(
+                  "relative inline-flex h-2 w-2 rounded-full",
+                  statusVis.dotColor
+                )}
+              ></span>
             </span>
             {statusVis.label}
           </Badge>
 
-          <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+          {/* Watchers Badge */}
+          <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md border border-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900">
             <Users className="h-3.5 w-3.5" />
             <span>{watchers}</span>
           </div>
         </div>
 
         {/* Title */}
-        <div className="mb-6 flex-1">
-          <h3 className="line-clamp-2 text-lg font-bold leading-tight tracking-tight text-foreground group-hover:text-primary transition-colors">
+        <div className="mb-2 flex-grow">
+          {/* Increased text-sm -> text-base for standard readability */}
+          <h3 className="line-clamp-2 text-base font-bold leading-snug tracking-tight text-foreground group-hover:text-emerald-600 transition-colors duration-300 dark:group-hover:text-emerald-400">
             {title}
           </h3>
         </div>
 
-        {/* Debate Grid (The Core Visual) */}
-        <div className="mb-5 grid grid-cols-[1fr_auto_1fr] gap-2 items-stretch">
+        {/* Debate Grid */}
+        <div className="mb-2 flex flex-col gap-2">
           
-          {/* Proposition (Blue) */}
-          <ParticipantSlot 
-            side="for" 
-            name={participants.for} 
+          {/* Proposition */}
+          <ParticipantSlot
+            side="for"
+            name={participants.for}
             isFilled={!!participants.for}
           />
 
           {/* VS Divider */}
-          <div className="flex flex-col items-center justify-center gap-1 py-1">
-            <div className="h-full w-px bg-border/50"></div>
-            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-[10px] font-bold text-muted-foreground">
-              VS
+          <div className="relative flex items-center justify-center -my-1.5 z-10">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t border-border/60" />
             </div>
-            <div className="h-full w-px bg-border/50"></div>
+            <div className="relative bg-card px-2">
+              <div className="flex items-center justify-center h-5 w-5 rounded-full bg-emerald-50 border border-emerald-100 text-[9px] font-bold text-emerald-600 shadow-sm dark:bg-emerald-950/40 dark:border-emerald-900 dark:text-emerald-300">
+                VS
+              </div>
+            </div>
           </div>
 
-          {/* Opposition (Red) */}
-          <ParticipantSlot 
-            side="against" 
-            name={participants.against} 
+          {/* Opposition */}
+          <ParticipantSlot
+            side="against"
+            name={participants.against}
             isFilled={!!participants.against}
           />
         </div>
 
         {/* Footer Actions */}
-        <div className="mt-auto">
+        <div className="mt-auto pt-1">
           {status === "open" ? (
-            <div className="grid grid-cols-2 gap-3">
-              <Button
-                size="sm"
-                className="w-full text-xs font-semibold"
-                onClick={() => requireAuth(() => console.log("Join"))}
-              >
-                <Swords className="mr-2 h-3.5 w-3.5" />
-                Join
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full text-xs font-semibold hover:bg-muted"
-                onClick={() => requireAuth(() => console.log("Observe"))}
-              >
-                <Eye className="mr-2 h-3.5 w-3.5" />
-                Observe
-              </Button>
-            </div>
+            <Button
+              className="w-full rounded-lg font-semibold shadow-sm h-9 text-sm" // Increased h-8 -> h-9, text-xs -> text-sm
+              size="sm"
+              variant="default"
+              onClick={() => requireAuth(() => console.log("Join"))}
+            >
+              Join Debate
+            </Button>
           ) : (
             <Button
-              variant={status === "in_progress" ? "default" : "secondary"}
-              className="w-full"
+              className="w-full rounded-lg font-semibold shadow-sm h-9 text-sm" // Increased h-8 -> h-9, text-xs -> text-sm
               size="sm"
+              variant={status === "in_progress" ? "destructive" : "secondary"}
               onClick={() => requireAuth(() => console.log("Watch"))}
             >
-              <Play className="mr-2 h-4 w-4" />
-              {status === "in_progress" ? "Watch Live Debate" : "View Recording"}
+              <Play className="mr-1.5 h-3.5 w-3.5" />
+              {status === "in_progress" ? "Watch Live" : "Replay"}
             </Button>
           )}
         </div>
@@ -154,40 +159,87 @@ export function DebateRoomCard({
   );
 }
 
-// Sub-component for the participant slots to keep main code clean
-function ParticipantSlot({ side, name, isFilled }: { side: "for" | "against", name: string | null, isFilled: boolean }) {
+// Participant Slot
+function ParticipantSlot({
+  side,
+  name,
+  isFilled,
+}: {
+  side: "for" | "against";
+  name: string | null;
+  isFilled: boolean;
+}) {
   const isFor = side === "for";
-  
-  // Dynamic styles based on side
-  const colors = isFor 
-    ? { bg: "bg-blue-50 dark:bg-blue-950/20", border: "border-blue-100 dark:border-blue-900/30", text: "text-blue-700 dark:text-blue-300", label: "PROPOSITION" }
-    : { bg: "bg-orange-50 dark:bg-orange-950/20", border: "border-orange-100 dark:border-orange-900/30", text: "text-orange-700 dark:text-orange-300", label: "OPPOSITION" };
 
-  if (isFilled) {
-    return (
-      <div className={cn(
-        "flex flex-col justify-center rounded-lg border p-3 transition-colors",
-        colors.bg, colors.border
-      )}>
-        <span className={cn("mb-1 text-[10px] font-bold tracking-wider opacity-70", colors.text)}>
-          {colors.label}
-        </span>
-        <span className="line-clamp-1 text-sm font-semibold text-foreground">
-          {name}
-        </span>
-      </div>
-    );
-  }
+  const theme = isFor
+    ? {
+        bg: "bg-blue-50/50 dark:bg-blue-950/20",
+        border: "border-blue-200 dark:border-blue-800",
+        text: "text-blue-700 dark:text-blue-300",
+        avatar:
+          "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200",
+        label: "PRO",
+      }
+    : {
+        bg: "bg-orange-50/50 dark:bg-orange-950/20",
+        border: "border-orange-200 dark:border-orange-800",
+        text: "text-orange-700 dark:text-orange-300",
+        avatar:
+          "bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-200",
+        label: "CON",
+      };
 
-  // Empty State
   return (
-    <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border bg-muted/20 p-3 text-center transition-colors hover:bg-muted/40">
-      <span className="mb-1 text-[10px] font-medium text-muted-foreground/60">
-        {colors.label}
-      </span>
-      <span className="text-xs font-medium text-muted-foreground">
-        Open Slot
-      </span>
+    <div
+      className={cn(
+        "relative flex items-center gap-2 rounded-lg border px-2.5 py-1.5 transition-all duration-300 w-full",
+        isFilled
+          ? cn("border-opacity-100 shadow-sm", theme.bg, theme.border)
+          : "border-dashed border-border bg-muted/20"
+      )}
+    >
+      <div className="shrink-0">
+        {isFilled ? (
+          <div
+            className={cn(
+              "h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold ring-1 ring-background", // Increased h-7 -> h-8
+              theme.avatar
+            )}
+          >
+            {name?.charAt(0).toUpperCase()}
+          </div>
+        ) : (
+          <div className="h-8 w-8 rounded-full border border-dashed border-muted-foreground/40 flex items-center justify-center bg-background/50">
+             {/* Increased h-7 -> h-8 */}
+            <UserPlus className="h-4 w-4 text-muted-foreground/50" />
+          </div>
+        )}
+      </div>
+
+      <div className="flex-1 min-w-0 flex flex-col justify-center">
+        <div className="flex items-center justify-between">
+          <span
+            className={cn(
+              "text-[10px] font-extrabold uppercase tracking-wider opacity-70", // Increased text-[9px] -> text-[10px]
+              theme.text
+            )}
+          >
+            {theme.label}
+          </span>
+        </div>
+
+        {isFilled ? (
+          <span className="truncate text-sm font-semibold text-foreground">
+             {/* Increased text-xs -> text-sm */}
+            {name}
+          </span>
+        ) : (
+          <span className="text-sm font-medium text-muted-foreground/70 italic">
+             {/* Increased text-xs -> text-sm */}
+            Spot Open
+          </span>
+        )}
+      </div>
     </div>
   );
 }

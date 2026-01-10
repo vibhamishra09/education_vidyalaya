@@ -38,15 +38,6 @@ export function Footer() {
             aria-label="Footer"
             className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground"
           >
-            <Link className="hover:text-foreground transition-colors" href="/browse">
-              Browse
-            </Link>
-            <Link className="hover:text-foreground transition-colors" href="/how-it-works">
-              How it works
-            </Link>
-            <Link className="hover:text-foreground transition-colors" href="/dashboard">
-              Dashboard
-            </Link>
             <Link
               className="hover:text-foreground transition-colors"
               href={`${landingSiteUrl}/careers`}

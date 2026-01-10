@@ -228,7 +228,7 @@ export function HomeClient() {
               </div>
             </FadeIn>
 
-            <div className="grid gap-4 sm:grid-cols-2 sm:gap-5 max-w-5xl">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 sm:gap-5">
               {debateRooms.map((room, index) => (
                 <FadeIn key={room.title} delay={index * 0.1}>
                   <DebateRoomCard {...room} />
