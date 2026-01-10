@@ -135,7 +135,7 @@ export function DebateRoomCard({
         <div className="mt-auto pt-1">
           {status === "open" ? (
             <Button
-              className="w-full rounded-lg font-semibold shadow-sm h-9 text-sm" // Increased h-8 -> h-9, text-xs -> text-sm
+              className="w-full rounded-lg font-semibold shadow-sm h-9 text-sm bg-green-100 text-green-800 hover:bg-green-200 border border-green-300" // Increased h-8 -> h-9, text-xs -> text-sm
               size="sm"
               variant="default"
               onClick={() => requireAuth(() => console.log("Join"))}
@@ -144,9 +144,14 @@ export function DebateRoomCard({
             </Button>
           ) : (
             <Button
-              className="w-full rounded-lg font-semibold shadow-sm h-9 text-sm" // Increased h-8 -> h-9, text-xs -> text-sm
+              className={cn(
+                "w-full rounded-lg font-semibold shadow-sm h-9 text-sm",
+                status === "in_progress" 
+                  ? "bg-red-100 text-red-700 hover:bg-red-200 border border-red-300" 
+                  : ""
+              )}
               size="sm"
-              variant={status === "in_progress" ? "destructive" : "secondary"}
+              variant={status === "in_progress" ? "default" : "secondary"}
               onClick={() => requireAuth(() => console.log("Watch"))}
             >
               <Play className="mr-1.5 h-3.5 w-3.5" />

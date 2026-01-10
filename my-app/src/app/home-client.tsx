@@ -152,6 +152,7 @@ export function HomeClient() {
                   <Button 
                     variant="default"
                     onClick={() => window.location.reload()}
+                    className="bg-green-100 text-green-800 hover:bg-green-200 border border-green-300 shadow-none"
                   >
                     Retry
                   </Button>
