@@ -44,7 +44,7 @@ export function HeroSection() {
             </h1>
             
             <p className="text-lg sm:text-xl text-slate-600 dark:text-slate-400 max-w-2xl mx-auto leading-relaxed">
-              The world's first decentralized learning hub. Join study rooms, 
+              The world&apos;s first decentralized learning hub. Join study rooms, 
               host sessions, and turn your knowledge into community value.
             </p>
           </motion.div>
