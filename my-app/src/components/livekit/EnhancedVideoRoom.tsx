@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react'
 import { LiveKitRoom, useParticipants, useRoomContext, useTracks, RoomAudioRenderer, useSpeakingParticipants, VideoTrack, useLocalParticipant, isTrackReference } from '@livekit/components-react'
 import { Track, RoomOptions, VideoPresets, LocalVideoTrack } from 'livekit-client'
 import '@livekit/components-styles'
@@ -20,6 +20,45 @@ import { achievementKeys } from '@/hooks/use-achievements'
 import { io, Socket } from 'socket.io-client'
 import { useSpeechRecognition } from '@/hooks/use-speech-recognition'
 
+// Stable virtual backgrounds constant to avoid re-creating array each render
+const VIRTUAL_BACKGROUNDS = [
+	{
+		id: 0,
+		name: 'Modern Office',
+		url: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=1920&h=1080&fit=crop&q=80',
+		thumbnail: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=200&h=150&fit=crop&q=80'
+	},
+	{
+		id: 1,
+		name: 'Minimalist Workspace',
+		url: 'https://images.unsplash.com/photo-1497366811353-6870744d04b2?w=1920&h=1080&fit=crop&q=80',
+		thumbnail: 'https://images.unsplash.com/photo-1497366811353-6870744d04b2?w=200&h=150&fit=crop&q=80'
+	},
+	{
+		id: 2,
+		name: 'Cozy Library',
+		url: 'https://images.unsplash.com/photo-1507842217343-583bb7270b66?w=1920&h=1080&fit=crop&q=80',
+		thumbnail: 'https://images.unsplash.com/photo-1507842217343-583bb7270b66?w=200&h=150&fit=crop&q=80'
+	},
+	{
+		id: 3,
+		name: 'Conference Room',
+		url: 'https://images.unsplash.com/photo-1497366754035-f200968a6e72?w=1920&h=1080&fit=crop&q=80',
+		thumbnail: 'https://images.unsplash.com/photo-497366754035-f200968a6e72?w=200&h=150&fit=crop&q=80'
+	},
+	{
+		id: 4,
+		name: 'Bookshelf',
+		url: 'https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?w=1920&h=1080&fit=crop&q=80',
+		thumbnail: 'https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?w=200&h=150&fit=crop&q=80'
+	},
+	{
+		id: 5,
+		name: 'City View',
+		url: 'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=1920&h=1080&fit=crop&q=80',
+		thumbnail: 'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=200&h=150&fit=crop&q=80'
+	}
+]
 interface SessionData {
 	id: string;
 	date: string;
@@ -246,9 +285,26 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 		}
 	}, [isListening, speechError])
 
-	const handleLeave = () => {
+	const handleLeave = useCallback(() => {
 		router.back()
-	}
+	}, [router])
+
+	// Memoize LiveKit room options to avoid passing a new object every render
+	const roomOptions = useMemo(() => ({
+		videoCaptureDefaults: {
+			resolution: VideoPresets.h720,
+		},
+		audioCaptureDefaults: {
+			echoCancellation: true,
+			noiseSuppression: true,
+			autoGainControl: true,
+		},
+		adaptiveStream: true,
+		dynacast: true,
+		publishDefaults: {
+			videoSimulcastLayers: [VideoPresets.h180, VideoPresets.h360],
+		},
+	} as RoomOptions), [])
 
 	return (
 		<div className="h-screen w-screen flex flex-col bg-[#202124] overflow-hidden" style={{ overflow: 'hidden', position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}>
@@ -259,21 +315,7 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 				serverUrl={serverUrl}
 				connect={true}
 				className="flex-1 flex flex-col overflow-hidden"
-				options={{
-					videoCaptureDefaults: {
-						resolution: VideoPresets.h720,
-					},
-					audioCaptureDefaults: {
-						echoCancellation: true,
-						noiseSuppression: true,
-						autoGainControl: true,
-					},
-					adaptiveStream: true,
-					dynacast: true,
-					publishDefaults: {
-						videoSimulcastLayers: [VideoPresets.h180, VideoPresets.h360],
-					},
-				} as RoomOptions}
+				options={roomOptions}
 			>
 				<VideoRoomContent
 					showChat={showChat}
@@ -304,7 +346,8 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 	)
 }
 
-function VideoRoomContent({
+// Memoized to prevent re-renders from parent component state changes
+const VideoRoomContent = memo(function VideoRoomContent({
 	showChat,
 	setShowChat,
 	showParticipants,
@@ -347,53 +390,31 @@ function VideoRoomContent({
 	
 	const [isAudioEnabled, setIsAudioEnabled] = useState(true)
 	
-	// Background effects state
+	// Background effects state - use refs for values that don't need to trigger re-renders
 	const [backgroundMode, setBackgroundMode] = useState<'none' | 'blur' | 'virtual'>('none')
 	const [showBackgroundMenu, setShowBackgroundMenu] = useState(false)
 	const [blurAmount, setBlurAmount] = useState(10)
 	const [selectedVirtualBg, setSelectedVirtualBg] = useState(0)
 	const processorRef = useRef<ReturnType<typeof BackgroundProcessor> | null>(null)
 	const blurDebounceRef = useRef<NodeJS.Timeout | null>(null)
+	// Store current values in refs to avoid stale closures without adding deps
+	const blurAmountRef = useRef(blurAmount)
+	const selectedVirtualBgRef = useRef(selectedVirtualBg)
+	const backgroundModeRef = useRef(backgroundMode)
+	// CRITICAL: Store localParticipant in ref to avoid callback recreation on every audio level update
+	const localParticipantRef = useRef(localParticipant)
+	// Prevent concurrent effect applications
+	const isApplyingEffectRef = useRef(false)
 	
-	// Professional Unsplash backgrounds
-	const virtualBackgrounds = [
-		{
-			id: 0,
-			name: 'Modern Office',
-			url: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=1920&h=1080&fit=crop&q=80',
-			thumbnail: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=200&h=150&fit=crop&q=80'
-		},
-		{
-			id: 1,
-			name: 'Minimalist Workspace',
-			url: 'https://images.unsplash.com/photo-1497366811353-6870744d04b2?w=1920&h=1080&fit=crop&q=80',
-			thumbnail: 'https://images.unsplash.com/photo-1497366811353-6870744d04b2?w=200&h=150&fit=crop&q=80'
-		},
-		{
-			id: 2,
-			name: 'Cozy Library',
-			url: 'https://images.unsplash.com/photo-1507842217343-583bb7270b66?w=1920&h=1080&fit=crop&q=80',
-			thumbnail: 'https://images.unsplash.com/photo-1507842217343-583bb7270b66?w=200&h=150&fit=crop&q=80'
-		},
-		{
-			id: 3,
-			name: 'Conference Room',
-			url: 'https://images.unsplash.com/photo-1497366754035-f200968a6e72?w=1920&h=1080&fit=crop&q=80',
-			thumbnail: 'https://images.unsplash.com/photo-497366754035-f200968a6e72?w=200&h=150&fit=crop&q=80'
-		},
-		{
-			id: 4,
-			name: 'Bookshelf',
-			url: 'https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?w=1920&h=1080&fit=crop&q=80',
-			thumbnail: 'https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?w=200&h=150&fit=crop&q=80'
-		},
-		{
-			id: 5,
-			name: 'City View',
-			url: 'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=1920&h=1080&fit=crop&q=80',
-			thumbnail: 'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=200&h=150&fit=crop&q=80'
-		}
-	]
+	// Keep refs in sync with state
+	useEffect(() => { blurAmountRef.current = blurAmount }, [blurAmount])
+	useEffect(() => { selectedVirtualBgRef.current = selectedVirtualBg }, [selectedVirtualBg])
+	useEffect(() => { backgroundModeRef.current = backgroundMode }, [backgroundMode])
+	// CRITICAL: Keep localParticipant ref in sync
+	useEffect(() => { localParticipantRef.current = localParticipant }, [localParticipant])
+	
+	// Use memoized virtual backgrounds (moved outside with stable ref below)
+	// Access via `VIRTUAL_BACKGROUNDS` constant defined below to avoid re-creating this array each render
 
 	// Get all camera tracks using useTracks - the standard way
 	const cameraTracks = useTracks(
@@ -536,19 +557,30 @@ function VideoRoomContent({
 	
 	// Apply background effect to local video track using the newer BackgroundProcessor API
 	// This provides smoother transitions and better segmentation quality
+	// CRITICAL FIX: Empty dependency array - all values accessed via refs to prevent flickering
 	const applyBackgroundEffect = useCallback(async (mode: 'none' | 'blur' | 'virtual', intensity?: number) => {
+		// Prevent concurrent applications which cause flickering
+		if (isApplyingEffectRef.current) {
+			console.log('⏳ Effect application already in progress, skipping...')
+			return
+		}
+		
+		isApplyingEffectRef.current = true
 		console.log('🎨 Applying background effect:', mode, intensity ? `with intensity ${intensity}` : '')
 		
 		try {
+			// CRITICAL: Access localParticipant from ref, not from closure
+			const participant = localParticipantRef.current
+			
 			// Check if camera is enabled
-			if (!localParticipant?.isCameraEnabled) {
+			if (!participant?.isCameraEnabled) {
 				console.warn('⚠️ Camera is not enabled')
 				alert('Please turn on your camera first to use background effects')
 				return
 			}
 			
 			// Get local video track
-			const videoPublication = Array.from(localParticipant.videoTrackPublications.values()).find(
+			const videoPublication = Array.from(participant.videoTrackPublications.values()).find(
 				pub => pub.source === Track.Source.Camera
 			)
 			const localVideoTrack = videoPublication?.track as LocalVideoTrack | undefined
@@ -561,17 +593,20 @@ function VideoRoomContent({
 				return
 			}
 			
-			const blurRadius = intensity ?? blurAmount
+			// Use refs for current values to avoid stale closures
+			const blurRadius = intensity ?? blurAmountRef.current
+			const currentSelectedBg = selectedVirtualBgRef.current
 			
-			// If processor already exists, use switchTo for smooth transitions (avoids visual artifacts)
+			// OPTIMIZATION: If processor already exists, use switchTo for smooth transitions
+			// This avoids destroying and recreating the processor which causes flickering
 			if (processorRef.current) {
-				console.log('🔄 Using switchTo for smooth transition...')
+				console.log('🔄 Processor exists, using switchTo for smooth transition...')
 				if (mode === 'blur') {
 					await processorRef.current.switchTo({ mode: 'background-blur', blurRadius })
 					if (intensity !== undefined) setBlurAmount(intensity)
 					console.log('✅ Switched to background blur')
 				} else if (mode === 'virtual') {
-					const selectedBg = virtualBackgrounds[selectedVirtualBg]
+					const selectedBg = VIRTUAL_BACKGROUNDS[currentSelectedBg]
 					await processorRef.current.switchTo({ 
 						mode: 'virtual-background', 
 						imagePath: selectedBg.url
@@ -585,11 +620,9 @@ function VideoRoomContent({
 					console.log('✅ Background effect removed')
 				}
 			} else if (mode !== 'none') {
-				// Create new processor with optimized segmentation settings
-				console.log('🆕 Creating new BackgroundProcessor with optimized settings...')
+				// Only create new processor if one doesn't exist
+				console.log('🆕 No existing processor, creating new BackgroundProcessor...')
 				
-				// Use the newer BackgroundProcessor API for better quality
-				// Create processor based on specific mode for proper TypeScript narrowing
 				let processor: ReturnType<typeof BackgroundProcessor>
 				
 				if (mode === 'blur') {
@@ -599,7 +632,7 @@ function VideoRoomContent({
 						segmenterOptions: { delegate: 'GPU' }
 					})
 				} else {
-					const selectedBg = virtualBackgrounds[selectedVirtualBg]
+					const selectedBg = VIRTUAL_BACKGROUNDS[currentSelectedBg]
 					processor = BackgroundProcessor({
 						mode: 'virtual-background',
 						imagePath: selectedBg.url,
@@ -623,12 +656,17 @@ function VideoRoomContent({
 			console.error('❌ Failed to apply background effect:', err)
 			const error = err as Error
 			alert(`Failed to apply background effect: ${error.message}\n\nTip: Make sure you have good lighting and your browser supports this feature.`)
+		} finally {
+			isApplyingEffectRef.current = false
 		}
-	}, [localParticipant, blurAmount, virtualBackgrounds, selectedVirtualBg])
+	// CRITICAL: Empty dependency array - all values accessed via refs
+	// This prevents the callback from being recreated on every render/state change
+	}, [])
 	
 	// Debounced blur radius update - only updates the blur radius without recreating processor
+	// STABILIZED: Uses ref for backgroundMode check
 	const updateBlurRadius = useCallback(async (newRadius: number) => {
-		if (!processorRef.current || backgroundMode !== 'blur') return
+		if (!processorRef.current || backgroundModeRef.current !== 'blur') return
 		
 		try {
 			console.log(`🎚️ Updating blur radius to ${newRadius}...`)
@@ -638,9 +676,10 @@ function VideoRoomContent({
 		} catch (err) {
 			console.error('❌ Failed to update blur radius:', err)
 		}
-	}, [backgroundMode])
+	}, [])
 	
 	// Debounced handler for slider changes - updates UI immediately, processor after delay
+	// STABILIZED: No dependencies since updateBlurRadius is now stable
 	const handleBlurSliderChange = useCallback((newValue: number) => {
 		// Update UI immediately for smooth slider feel
 		setBlurAmount(newValue)
@@ -650,10 +689,10 @@ function VideoRoomContent({
 			clearTimeout(blurDebounceRef.current)
 		}
 		
-		// Debounce the heavy processor update (100ms delay)
+		// Debounce the heavy processor update (150ms delay for smoother experience)
 		blurDebounceRef.current = setTimeout(() => {
 			updateBlurRadius(newValue)
-		}, 100)
+		}, 150)
 	}, [updateBlurRadius])
 	
 	// Cleanup debounce timer on unmount
@@ -980,6 +1019,11 @@ function VideoRoomContent({
 						background-color: transparent !important;
 						filter: none !important;
 						mix-blend-mode: normal !important;
+						/* CRITICAL: Hardware acceleration to prevent flickering during processor switching */
+						transform: translate3d(0, 0, 0);
+						backface-visibility: hidden;
+						-webkit-backface-visibility: hidden;
+						will-change: transform;
 					}
 					
 					/* CRITICAL: Make ALL LiveKit tile backgrounds transparent */
@@ -2037,7 +2081,7 @@ function VideoRoomContent({
 									<label className="text-xs font-medium text-white/80">Choose Background</label>
 								</div>
 								<div className="grid grid-cols-3 gap-2">
-									{virtualBackgrounds.map((bg) => (
+									{VIRTUAL_BACKGROUNDS.map((bg: { id: number; name: string; url: string; thumbnail: string }) => (
 										<button
 											key={bg.id}
 											onClick={() => {
@@ -2084,7 +2128,7 @@ function VideoRoomContent({
 		)}
 		</>
 	)
-}
+})
 
 function ParticipantList() {
 	const participants = useParticipants()
