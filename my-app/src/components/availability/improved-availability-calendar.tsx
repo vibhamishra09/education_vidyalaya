@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Popover,
@@ -180,58 +179,60 @@ export function ImprovedAvailabilityCalendar({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 max-w-sm mx-auto">
       <Card>
-        <CardHeader>
+        <CardHeader className="p-3 pb-2">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Calendar className="h-5 w-5" />
-              Select Date & Duration
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Calendar className="h-4 w-4" />
+              Select Date
             </CardTitle>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
               <Button
                 variant="outline"
-                size="sm"
+                size="icon"
+                className="h-7 w-7"
                 onClick={handlePreviousMonth}
               >
-                <ChevronLeft className="h-4 w-4" />
+                <ChevronLeft className="h-3 w-3" />
               </Button>
-              <span className="text-sm font-medium min-w-[140px] text-center">
+              <span className="text-xs font-medium min-w-[100px] text-center">
                 {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
               </span>
               <Button
                 variant="outline"
-                size="sm"
+                size="icon"
+                className="h-7 w-7"
                 onClick={handleNextMonth}
               >
-                <ChevronRight className="h-4 w-4" />
+                <ChevronRight className="h-3 w-3" />
               </Button>
             </div>
           </div>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
-            <Info className="h-4 w-4" />
-            <span>Hover over a date to see available time slots</span>
+          <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-1">
+            <Info className="h-3 w-3" />
+            <span>Hover to see slots</span>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-3 pt-0">
           {loadingSummary ? (
             <div className="space-y-2">
               <Skeleton className="h-8 w-full" />
-              <Skeleton className="h-64 w-full" />
+              <Skeleton className="h-48 w-full" />
             </div>
           ) : (
             <>
               {/* Day names */}
-              <div className="grid grid-cols-7 gap-1 mb-2">
+              <div className="grid grid-cols-7 gap-0.5 mb-1">
                 {dayNames.map((day) => (
-                  <div key={day} className="text-center text-xs font-medium text-muted-foreground py-2">
+                  <div key={day} className="text-center text-[10px] font-medium text-muted-foreground py-1">
                     {day}
                   </div>
                 ))}
               </div>
 
               {/* Calendar days */}
-              <div className="grid grid-cols-7 gap-1">
+              <div className="grid grid-cols-7 gap-0.5">
                 {days.map((date, index) => {
                   if (!date) {
                     return <div key={`empty-${index}`} className="aspect-square" />;
@@ -269,30 +270,30 @@ export function ImprovedAvailabilityCalendar({
                           disabled={isPast}
                           onMouseEnter={() => !isPast && handleDateHover(date)}
                           className={cn(
-                            "relative aspect-square p-2 rounded-md text-sm font-medium transition-colors",
+                            "relative aspect-square p-0 rounded-md text-xs font-medium transition-colors flex flex-col items-center justify-center",
                             isPast
                               ? "text-muted-foreground/30 cursor-not-allowed"
                               : "hover:bg-accent cursor-pointer",
                             isSelected && "bg-primary text-primary-foreground hover:bg-primary/90",
-                            isToday && !isSelected && "border-2 border-primary"
+                            isToday && !isSelected && "border border-primary"
                           )}
                         >
                           <div className="flex flex-col items-center justify-center h-full">
                             <span>{date.getDate()}</span>
                             {!isPast && daySummary && (
-                              <div className="flex gap-0.5 mt-1">
-                                {daySummary.hasSlots['15'] && <div className="w-1 h-1 rounded-full bg-green-500" />}
-                                {daySummary.hasSlots['30'] && <div className="w-1 h-1 rounded-full bg-blue-500" />}
-                                {daySummary.hasSlots['60'] && <div className="w-1 h-1 rounded-full bg-purple-500" />}
-                                {daySummary.hasSlots['120'] && <div className="w-1 h-1 rounded-full bg-orange-500" />}
-                                {!hasAnySlots && <div className="w-1 h-1 rounded-full bg-red-500" />}
+                              <div className="flex gap-0.5 mt-0.5">
+                                {daySummary.hasSlots['15'] && <div className="w-0.5 h-0.5 rounded-full bg-green-500" />}
+                                {daySummary.hasSlots['30'] && <div className="w-0.5 h-0.5 rounded-full bg-blue-500" />}
+                                {daySummary.hasSlots['60'] && <div className="w-0.5 h-0.5 rounded-full bg-purple-500" />}
+                                {daySummary.hasSlots['120'] && <div className="w-0.5 h-0.5 rounded-full bg-orange-500" />}
+                                {!hasAnySlots && <div className="w-0.5 h-0.5 rounded-full bg-red-500" />}
                               </div>
                             )}
                           </div>
                         </button>
                       </PopoverTrigger>
                       {!isPast && (
-                        <PopoverContent className="w-80 p-0" align="start" side="right">
+                        <PopoverContent className="w-72 p-0" align="start" side="right">
                           <div className="p-4">
                             <h3 className="font-semibold mb-2">
                               {date.toLocaleDateString('en-US', {
@@ -301,12 +302,16 @@ export function ImprovedAvailabilityCalendar({
                                 day: 'numeric',
                               })}
                             </h3>
-                            <Tabs>
-                              <TabsList className="grid w-full grid-cols-4">
+                            <div className="w-full">
+                              <div className="grid w-full grid-cols-4 h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground">
                                 {DURATION_OPTIONS.map((opt) => (
-                                  <TabsTrigger
+                                  <button
+                                    type="button"
                                     key={opt.value}
-                                    active={selectedDurationTab === opt.value}
+                                    className={cn(
+                                      "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+                                      selectedDurationTab === opt.value ? "bg-background text-foreground shadow-sm" : "hover:bg-background/50 hover:text-foreground"
+                                    )}
                                     onClick={() => {
                                       setSelectedDurationTab(opt.value);
                                       if (hoveredDate) {
@@ -315,10 +320,10 @@ export function ImprovedAvailabilityCalendar({
                                     }}
                                   >
                                     {opt.label}
-                                  </TabsTrigger>
+                                  </button>
                                 ))}
-                              </TabsList>
-                              <TabsContent className="mt-3">
+                              </div>
+                              <div className="mt-3">
                                 {loadingDetailed ? (
                                     <div className="space-y-2">
                                       {Array.from({ length: 6 }).map((_, i) => (
@@ -378,8 +383,8 @@ export function ImprovedAvailabilityCalendar({
                                       </div>
                                     </div>
                                   )}
-                                </TabsContent>
-                            </Tabs>
+                              </div>
+                            </div>
                           </div>
                         </PopoverContent>
                       )}
@@ -389,24 +394,24 @@ export function ImprovedAvailabilityCalendar({
               </div>
 
               {/* Legend */}
-              <div className="mt-4 p-3 bg-muted/30 rounded-lg">
-                <p className="text-xs font-medium mb-2">Duration indicators:</p>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-green-500" />
-                    <span>15 min slots available</span>
+              <div className="mt-2 p-2 bg-muted/30 rounded-lg">
+                <p className="text-[10px] font-medium mb-1">Duration indicators:</p>
+                <div className="grid grid-cols-2 gap-1 text-[10px]">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                    <span>15m avail</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-blue-500" />
-                    <span>30 min slots available</span>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                    <span>30m avail</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-purple-500" />
-                    <span>1 hour slots available</span>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+                    <span>1h avail</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-orange-500" />
-                    <span>2 hour slots available</span>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-1.5 h-1.5 rounded-full bg-orange-500" />
+                    <span>2h avail</span>
                   </div>
                 </div>
               </div>

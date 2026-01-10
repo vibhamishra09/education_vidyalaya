@@ -21,7 +21,7 @@ export function SkillsAndSuggestions({
 }: SkillsAndSuggestionsProps) {
   if (isLoading) {
     return (
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-1 gap-4 sm:gap-6">
         <Card>
           <CardHeader>
             <Skeleton className="h-6 w-32" />
@@ -46,7 +46,7 @@ export function SkillsAndSuggestions({
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-1 gap-4 sm:gap-6">
       {/* Your Skills */}
       <Card>
         <CardHeader>

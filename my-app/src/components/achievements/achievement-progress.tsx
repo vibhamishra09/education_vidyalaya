@@ -22,61 +22,48 @@ export function AchievementProgress({
   const isUnlocked = !!achievement.unlockedAt;
 
   return (
-    <Card className={isUnlocked ? "border-primary/50" : ""}>
-      <CardContent className="pt-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+    <Card className={`overflow-hidden transition-all hover:shadow-sm ${isUnlocked ? "border-primary/40 bg-primary/5" : "border-border/60"}`}>
+      <CardContent className="p-3">
+        <div className="flex items-start gap-3">
           {/* Badge */}
-          <AchievementBadge achievement={achievement} size="md" showProgress={false} />
+          <div className="flex-shrink-0 scale-90 -ml-1">
+             <AchievementBadge achievement={achievement} size="sm" showProgress={false} />
+          </div>
 
           {/* Details */}
-          <div className="flex-1 min-w-0">
-            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between mb-2">
-              <div className="min-w-0 flex-1">
-                <h4 className="font-semibold text-sm break-words">{achievement.title}</h4>
+          <div className="flex-1 min-w-0 py-0.5">
+            <div className="flex items-start justify-between gap-2 mb-1">
+              <div className="min-w-0">
+                <h4 className="font-semibold text-sm leading-tight truncate pr-2">{achievement.title}</h4>
                 {showDetails && achievement.description && (
-                  <p className="text-xs text-muted-foreground mt-0.5 break-words">
+                  <p className="text-[11px] text-muted-foreground leading-tight line-clamp-1 mt-0.5">
                     {achievement.description}
                   </p>
                 )}
               </div>
               {achievement.coins && (
-                <div className="inline-flex items-center gap-1 bg-yellow-100 dark:bg-yellow-900/30 px-2 py-1 rounded-full flex-shrink-0 text-nowrap">
-                  <span className="text-yellow-600 dark:text-yellow-400 text-[11px] font-semibold leading-none">
+                <div className="inline-flex items-center gap-1 bg-yellow-100 dark:bg-yellow-900/30 px-1.5 py-0.5 rounded-full flex-shrink-0">
+                  <span className="text-yellow-600 dark:text-yellow-400 text-[10px] font-bold leading-none">
                     +{formatCoins(achievement.coins)}
-                  </span>
-                  <span className="text-[9px] text-yellow-600/70 dark:text-yellow-400/70 leading-none">
-                    AYA
                   </span>
                 </div>
               )}
             </div>
 
             {/* Progress Bar */}
-            {hasProgress && (
-              <div className="space-y-1">
-                <Progress value={progressPercentage} className="h-2" />
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">
-                    {achievement.progress} / {achievement.maxProgress}
-                  </span>
-                  <span className="text-xs font-medium text-primary">
-                    {Math.round(progressPercentage)}%
-                  </span>
+            {hasProgress ? (
+              <div className="space-y-1 mt-1.5">
+                <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-0.5">
+                  <span>{achievement.progress}/{achievement.maxProgress}</span>
+                  <span className={isUnlocked ? "text-primary font-medium" : ""}>{Math.round(progressPercentage)}%</span>
                 </div>
+                <Progress value={progressPercentage} className="h-1.5 w-full" />
               </div>
-            )}
-
-            {/* Unlocked Date */}
-            {isUnlocked && achievement.unlockedAt && (
-              <p className="text-xs text-muted-foreground mt-2">
-                Unlocked{' '}
-                {new Date(achievement.unlockedAt).toLocaleDateString('en-US', {
-                  month: 'short',
-                  day: 'numeric',
-                  year: 'numeric',
-                })}
-              </p>
-            )}
+            ) : isUnlocked && achievement.unlockedAt ? (
+                <p className="text-[10px] text-primary/80 font-medium mt-1">
+                 Unlocked {new Date(achievement.unlockedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                </p>
+            ) : null}
           </div>
         </div>
       </CardContent>

@@ -13,6 +13,7 @@ import { PushNotificationPrompt } from "@/components/notifications/push-notifica
 import { PushNotificationListener } from "@/components/notifications/push-notification-listener";
 import { HiddenSignInButton } from "@/components/auth/hidden-sign-in-button";
 import { ServiceWorkerRegistration } from "@/components/pwa/service-worker-registration";
+import { BackgroundGradient } from "@/components/ui/background-gradient";
 import "./globals.css";
 
 const inter = Inter({
@@ -64,11 +65,8 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 5,
   userScalable: true,
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#16a34a" },
-    { media: "(prefers-color-scheme: dark)", color: "#15803d" },
-  ],
-  colorScheme: "light dark",
+  themeColor: "#16a34a",
+  colorScheme: "light",
 };
 
 export const metadata: Metadata = {
@@ -240,7 +238,10 @@ export default function RootLayout({
           {/* DNS Prefetch for external APIs */}
           <link rel="dns-prefetch" href="https://api.dicebear.com" />
         </head>
-        <body className={`${inter.variable} ${harabara.variable} ${gotham.variable} antialiased font-sans pb-16 md:pb-0`}>
+        <body
+          className={`${inter.variable} ${harabara.variable} ${gotham.variable} relative min-h-screen bg-background text-foreground antialiased font-sans pb-16 md:pb-0`}
+        >
+          <BackgroundGradient />
           <QueryProvider>
             <NotificationProvider>
               <ToastProvider>

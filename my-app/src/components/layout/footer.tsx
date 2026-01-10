@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Linkedin, Twitter, Facebook, Instagram, Youtube, Briefcase } from "lucide-react";
+import { Facebook, Instagram, Linkedin, Twitter, Youtube } from "lucide-react";
 
 export function Footer() {
   // Landing site URL for Terms and Privacy Policy
@@ -15,76 +15,72 @@ export function Footer() {
   ];
 
   return (
-    <footer className="border-t bg-background">
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex flex-col items-center gap-4">
-          <div className="flex items-center gap-2">
-            <Image
-              src="/webyalaya-main-logo.svg"
-              alt="Webyalaya logo"
-              width={128}
-              height={128}
-              className="object-contain px-1"
-              priority={false}
-            />
+    <footer className="mt-6 border-t border-black/5 bg-background/60">
+      <div className="mx-auto w-full max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <Link href="/" className="inline-flex items-center">
+              <Image
+                src="/webyalaya-main-logo.svg"
+                alt="Webyalaya logo"
+                width={96}
+                height={96}
+                className="object-contain"
+                priority={false}
+              />
+            </Link>
+            <p className="hidden md:block max-w-xs text-xs leading-snug text-muted-foreground">
+              A trusted peer-to-peer learning experience with enterprise-grade polish.
+            </p>
           </div>
-        </div>
-        
-        {/* Social Media Links and Career Link */}
-        <div className="flex flex-col items-center gap-4 mt-6">
-          <div className="flex items-center gap-4 flex-wrap justify-center">
+
+          <nav
+            aria-label="Footer"
+            className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground"
+          >
+            <Link
+              className="hover:text-foreground transition-colors"
+              href={`${landingSiteUrl}/careers`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Careers
+            </Link>
+            <Link
+              className="hover:text-foreground transition-colors"
+              href={`${landingSiteUrl}/terms-of-use`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Terms of Use
+            </Link>
+            <Link
+              className="hover:text-foreground transition-colors"
+              href={`${landingSiteUrl}/privacy-policy`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Privacy Policy
+            </Link>
+            <span className="hidden sm:inline text-muted-foreground/60">•</span>
+            <span className="whitespace-nowrap">© {new Date().getFullYear()} Humitra Pvt Ltd. All rights reserved.</span>
+          </nav>
+
+          <div className="flex items-center gap-1">
             {socialLinks.map(({ icon: Icon, label, url }) => (
               <Link
                 key={label}
                 href={url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-muted-foreground hover:text-green-600 transition-colors duration-200"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-foreground hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                 aria-label={label}
               >
-                <Icon className="w-5 h-5" />
+                <Icon className="h-4 w-4" />
               </Link>
             ))}
           </div>
-          
-          <div className="flex items-center gap-4 flex-wrap justify-center">
-            <Link
-              href="/how-it-works"
-              className="text-muted-foreground hover:text-green-600 transition-colors duration-200 text-sm font-medium font-tagline"
-            >
-              How it works
-            </Link>
-            <Link
-              href="https://www.humitra.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 text-muted-foreground hover:text-green-600 transition-colors duration-200 text-sm font-medium font-tagline"
-            >
-              <Briefcase className="w-4 h-4" />
-              Careers
-            </Link>
-            <Link
-              href={`${landingSiteUrl}/terms-of-use`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-muted-foreground hover:text-green-600 transition-colors duration-200 text-sm font-medium font-tagline"
-            >
-              Terms of Use
-            </Link>
-            <Link
-              href={`${landingSiteUrl}/privacy-policy`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-muted-foreground hover:text-green-600 transition-colors duration-200 text-sm font-medium font-tagline"
-            >
-              Privacy Policy
-            </Link>
-          </div>
         </div>
-
-        <p className="text-xs text-muted-foreground text-center mt-4 font-tagline">
-          © {new Date().getFullYear()} Humitra Pvt Ltd. All rights reserved.
-        </p>
       </div>
     </footer>
   );

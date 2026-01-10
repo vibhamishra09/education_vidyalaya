@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Plus } from "lucide-react";
 import { useDashboard } from "@/hooks/use-dashboard";
 import { useCurrentUser } from "@/hooks/use-users";
 import { peerSessionsApi, studyRoomsApi } from "@/lib/api";
@@ -26,6 +26,7 @@ import { useState, useMemo } from "react";
 import { useToast } from "@/contexts/toast-context";
 import { useTabPersistence } from "@/hooks/use-local-storage";
 import Link from "next/link";
+import { cn } from "@/lib/utils";
 
 const REQUEST_TABS = ["received", "sent"] as const;
 type RequestTab = typeof REQUEST_TABS[number];
@@ -61,7 +62,33 @@ export function DashboardClient() {
   const { data: currentUserData, isLoading: userLoading } = useCurrentUser();
 
   const currentUser = currentUserData?.user;
-  const metrics = dashboardData?.metrics || [];
+  
+  // Create default/fallback metrics if actual metrics are missing
+  const defaultMetrics = [
+    {
+       name: "Sessions Completed",
+       value: "0",
+       icon: "check-circle",
+       description: "Total sessions"
+    },
+    {
+       name: "Total Earnings",
+       value: "0",
+       icon: "coins",
+       description: "Coins earned"
+    },
+    {
+       name: "Average Rating",
+       value: "0.0",
+       icon: "star",
+       description: "Out of 5 stars"
+    }
+  ];
+
+  const metrics = (dashboardData?.metrics && dashboardData.metrics.length > 0) 
+    ? dashboardData.metrics 
+    : defaultMetrics;
+
   const pendingRequests = dashboardData?.pendingRequests || [];
   const sentRequests = dashboardData?.sentRequests || [];
   const upcomingSessions = useMemo(() => dashboardData?.upcomingSessions || [], [dashboardData?.upcomingSessions]);
@@ -215,219 +242,142 @@ export function DashboardClient() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-muted/5">
       <Navigation />
 
-      <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
-        {/* Header */}
-        <div className="mb-4 sm:mb-6">
-          {userLoading ? (
-            <div className="space-y-2">
-              <Skeleton className="h-8 sm:h-10 w-full max-w-xs" />
-              <Skeleton className="h-4 w-full max-w-sm" />
-            </div>
-          ) : (
-            <>
-              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-2">
-                Welcome back, {currentUser?.name || "User"}!
-              </h1>
-              <p className="text-sm sm:text-base text-muted-foreground font-tagline">
-                Here&apos;s what&apos;s happening with your learning journey
-              </p>
-            </>
-          )}
-        </div>
-
-        {/* Quick Actions */}
-        <div className="mb-4 sm:mb-6">
-          <QuickActions />
-        </div>
-
-        {/* Metrics */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
-          {dashboardLoading ? (
-            Array.from({ length: 3 }).map((_, index) => (
-              <div key={index} className="border rounded-lg p-6 space-y-4">
-                <Skeleton className="h-4 w-24" />
-                <Skeleton className="h-8 w-16" />
-                <Skeleton className="h-3 w-32" />
+      <main className="flex-1 container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header Section */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
+          <div>
+            {userLoading ? (
+              <div className="space-y-2">
+                <Skeleton className="h-8 w-64" />
+                <Skeleton className="h-4 w-48" />
               </div>
-            ))
-          ) : dashboardError ? (
-            <div className="col-span-full text-center py-8">
-              <p className="text-muted-foreground mb-4">
-                Failed to load dashboard data. Please try again later.
-              </p>
-              <Button
-                variant="outline"
-                onClick={() => window.location.reload()}
-              >
-                Retry
-              </Button>
-            </div>
-          ) : (
-            metrics.map((metric) => (
-              <MetricCardComponent key={metric.name} metric={metric} />
-            ))
-          )}
-        </div>
-
-        {/* Session Requests and Pending Reviews - Side by Side */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-6">
-          {/* Pending Session Requests */}
-          <Card>
-            <CardHeader className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <CardTitle>Session Requests</CardTitle>
-              </div>
-              <Tabs>
-                <TabsList className="w-full sm:w-auto">
-                  <TabsTrigger
-                    active={activeRequestTab === 'received'}
-                    onClick={() => setActiveRequestTab('received')}
-                  >
-                    Received ({pendingRequests.length})
-                  </TabsTrigger>
-                  <TabsTrigger
-                    active={activeRequestTab === 'sent'}
-                    onClick={() => setActiveRequestTab('sent')}
-                  >
-                    Sent ({sentRequests.length})
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
-            </CardHeader>
-            <CardContent>
-              {(
-                activeRequestTab === 'received'
-                  ? pendingRequests
-                  : sentRequests
-              ).length === 0 ? (
-                <div className="text-muted-foreground text-sm">
-                  {activeRequestTab === 'received'
-                    ? 'No received requests'
-                    : 'No sent requests yet'}
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {(activeRequestTab === 'received'
-                    ? pendingRequests
-                    : sentRequests
-                  ).map((request) => (
-                    <SessionRequestCard
-                      key={request.id}
-                      request={request}
-                      variant={activeRequestTab}
-                      onAccept={
-                        activeRequestTab === 'received'
-                          ? () => handleAcceptRequest(request.id)
-                          : undefined
-                      }
-                      onDecline={
-                        activeRequestTab === 'received'
-                          ? () => handleDeclineRequest(request.id)
-                          : undefined
-                      }
-                      isProcessing={
-                        activeRequestTab === 'received'
-                          ? processingRequests.has(request.id)
-                          : false
-                      }
-                    />
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Pending Reviews */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Pending Reviews</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <p className="text-muted-foreground">
-                  {pendingReviews > 0
-                    ? `You have ${pendingReviews} session${pendingReviews > 1 ? 's' : ''} waiting for your review`
-                    : "No pending reviews"
-                  }
+            ) : (
+              <>
+                <h1 className="text-3xl font-bold tracking-tight">
+                  Welcome back, {currentUser?.name || "Arghadeep"}
+                </h1>
+                <p className="text-muted-foreground mt-1">
+                  Ready to continue your learning journey?
                 </p>
-                {pendingReviews > 0 && (
-                  <Link href="/profile?tab=sessions">
-                    <Button variant="outline" size="sm">
-                      Review
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </Button>
-                  </Link>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Calendar and Streak Tracker - Side by Side */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-6">
-          {/* Enhanced Calendar Widget */}
-          <div id="calendar-section">
-            <EnhancedCalendarWidget sessions={[
-              ...upcomingSessions.map(s => ({
-                id: s.id,
-                title: s.title,
-                date: typeof s.date === 'string' ? s.date : s.date.toISOString(),
-                duration: s.duration,
-                type: (s.requestedBy?.id && currentUser?.id && s.requestedBy.id === currentUser.id) ? "teaching" as const : "learning" as const,
-                participantName: s.peer?.name,
-                sessionType: "peer" as const,
-              })),
-              ...upcomingStudyRooms.map(sr => ({
-                id: sr.id,
-                title: sr.title,
-                date: typeof sr.date === 'string' ? sr.date : sr.date.toISOString(),
-                duration: sr.duration,
-                type: (sr.createdBy?.id && currentUser?.id && sr.createdBy.id === currentUser.id) ? "teaching" as const : "learning" as const,
-                participantName: `Group (${sr.participantCount}/${sr.maxParticipants})`,
-                sessionType: "study-room" as const,
-              })),
-            ]} />
+              </>
+            )}
           </div>
-
-          {/* Streak Tracker */}
-          <StreakTrackerConnected />
+          
+          <div className="flex items-center gap-3">
+             <Link href="/create-study-room">
+                <Button className="gap-2 shadow-sm bg-sky-100 text-sky-700 hover:bg-sky-200 border border-sky-200">
+                   <Plus className="h-4 w-4" />
+                   Create Room
+                </Button>
+             </Link>
+          </div>
         </div>
 
-        {/* Skills and Study Room Suggestions */}
-        <div className="mb-6">
-          <SkillsAndSuggestions
-            userSkills={userSkills}
-            suggestedRooms={suggestedRooms}
-            isLoading={studyRoomsLoading || userLoading}
-          />
-        </div>
+        {/* Top Section: Metrics Row - REMOVED */}{/* Metrics moved to left column */}
 
-        {/* My Sessions - Full Width */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="text-xl sm:text-2xl">My Sessions</CardTitle>
-            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-              Manage all your learning and teaching sessions
-            </p>
-          </CardHeader>
-          <CardContent>
-            <SessionList
-              upcomingSessions={[
-                ...upcomingSessions
-                  .filter(s => {
-                    // Exclude sessions that are currently ongoing
-                    if (s.sessionStatus === 'ONGOING') {
-                      return false;
-                    }
-                    const now = new Date();
-                    const sessionStart = new Date(s.date);
-                    const sessionEnd = new Date(sessionStart.getTime() + s.duration * 60 * 1000);
-                    return !(now >= sessionStart && now <= sessionEnd);
-                  })
-                  .map(s => ({
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+          {/* Main Content Column */}
+          <div className="xl:col-span-2 space-y-8">
+
+             {/* Metrics - Now stacked vertically on mobile, horizontal on desktop, but contained in left column */}
+             <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row gap-4">
+                  {dashboardLoading ? (
+                    Array.from({ length: 3 }).map((_, index) => (
+                      <div key={index} className="flex-1">
+                        <Card>
+                          <CardContent className="pt-6">
+                            <div className="flex items-start justify-between">
+                              <div className="space-y-2">
+                                 <Skeleton className="h-4 w-24" />
+                                 <Skeleton className="h-8 w-16" />
+                              </div>
+                              <Skeleton className="h-10 w-10 rounded-xl" />
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+                    ))
+                  ) : (
+                    metrics.map((metric) => (
+                       <div key={metric.name} className="flex-1 min-w-0">
+                          <MetricCardComponent metric={metric} />
+                       </div>
+                    ))
+                  )}
+                </div>
+             </div>
+
+             {/* Achievements - Moved from right side */}
+             <div className="pt-2">
+                 <AchievementShowcaseConnected showProgress={true} />
+             </div>
+
+            {/* Sessions List */}
+            <div className="space-y-4">
+              <div className="pl-1">
+                <h3 className="font-semibold text-lg">Your Sessions</h3>
+                {/* <p className="text-sm text-muted-foreground">Upcoming and past learning activities</p> */}
+              </div>
+              <SessionList
+                currentPage={currentPage}
+                onPageChange={setCurrentPage}
+                upcomingSessions={[
+                  ...upcomingSessions
+                    .filter(s => {
+                      if (s.sessionStatus === 'ONGOING') return false;
+                      const now = new Date();
+                      const sessionStart = new Date(s.date);
+                      const sessionEnd = new Date(sessionStart.getTime() + s.duration * 60 * 1000);
+                      return !(now >= sessionStart && now <= sessionEnd);
+                    })
+                    .map(s => ({
+                      id: s.id,
+                      title: s.title,
+                      date: s.date,
+                      duration: s.duration,
+                      skills: s.skills,
+                      description: s.description,
+                      requestedBy: s.requestedBy,
+                      hostName: s.peer?.name,
+                    })),
+                  ...upcomingStudyRooms
+                    .filter(sr => {
+                      if (sr.sessionStatus === 'ONGOING') return false;
+                      const now = new Date();
+                      const roomStart = new Date(sr.date);
+                      const roomEnd = new Date(roomStart.getTime() + sr.duration * 60 * 1000);
+                      return !(now >= roomStart && now <= roomEnd);
+                    })
+                    .map(sr => ({
+                      id: sr.id,
+                      title: sr.title,
+                      date: sr.date,
+                      duration: sr.duration,
+                      skills: sr.skills,
+                      description: sr.description,
+                      hostName: sr.createdBy?.name,
+                      participantCount: sr.participantCount,
+                      maxParticipants: sr.maxParticipants,
+                    })),
+                ]}
+                ongoingSessions={ongoingSessions.map(session => ({
+                  id: session.id,
+                  title: session.title,
+                  date: session.date,
+                  duration: session.duration,
+                  skills: session.skills,
+                  description: session.description,
+                  hostName: 'peer' in session ? session.peer?.name : session.createdBy?.name,
+                  participantCount: 'participantCount' in session ? session.participantCount : undefined,
+                  maxParticipants: 'maxParticipants' in session ? session.maxParticipants : undefined,
+                  requestedBy: 'requestedBy' in session ? session.requestedBy : undefined,
+                }))}
+                pastSessions={[
+                  ...pastSessions.map(s => ({
                     id: s.id,
                     title: s.title,
                     date: s.date,
@@ -437,18 +387,7 @@ export function DashboardClient() {
                     requestedBy: s.requestedBy,
                     hostName: s.peer?.name,
                   })),
-                ...upcomingStudyRooms
-                  .filter(sr => {
-                    // Exclude rooms that are currently ongoing
-                    if (sr.sessionStatus === 'ONGOING') {
-                      return false;
-                    }
-                    const now = new Date();
-                    const roomStart = new Date(sr.date);
-                    const roomEnd = new Date(roomStart.getTime() + sr.duration * 60 * 1000);
-                    return !(now >= roomStart && now <= roomEnd);
-                  })
-                  .map(sr => ({
+                  ...pastStudyRooms.map(sr => ({
                     id: sr.id,
                     title: sr.title,
                     date: sr.date,
@@ -459,45 +398,11 @@ export function DashboardClient() {
                     participantCount: sr.participantCount,
                     maxParticipants: sr.maxParticipants,
                   })),
-              ]}
-              ongoingSessions={ongoingSessions.map(session => ({
-                id: session.id,
-                title: session.title,
-                date: session.date,
-                duration: session.duration,
-                skills: session.skills,
-                description: session.description,
-                hostName: 'peer' in session ? session.peer?.name : session.createdBy?.name,
-                participantCount: 'participantCount' in session ? session.participantCount : undefined,
-                maxParticipants: 'maxParticipants' in session ? session.maxParticipants : undefined,
-                requestedBy: 'requestedBy' in session ? session.requestedBy : undefined,
-              }))}
-              pastSessions={[
-                ...pastSessions.map(s => ({
-                  id: s.id,
-                  title: s.title,
-                  date: s.date,
-                  duration: s.duration,
-                  skills: s.skills,
-                  description: s.description,
-                  requestedBy: s.requestedBy,
-                  hostName: s.peer?.name,
-                })),
-                ...pastStudyRooms.map(sr => ({
-                  id: sr.id,
-                  title: sr.title,
-                  date: sr.date,
-                  duration: sr.duration,
-                  skills: sr.skills,
-                  description: sr.description,
-                  hostName: sr.createdBy?.name,
-                  participantCount: sr.participantCount,
-                  maxParticipants: sr.maxParticipants,
-                })),
-              ]}
-              isLoading={dashboardLoading}
-            />
-            
+                ]}
+                isLoading={dashboardLoading}
+              />
+            </div>
+          
             {/* Pagination Controls */}
             {(() => {
               const totalPastSessions = 
@@ -508,51 +413,157 @@ export function DashboardClient() {
               if (totalPages <= 1) return null;
               
               return (
-                <div className="flex items-center justify-between mt-6 pt-4 border-t">
+                <div className="flex items-center justify-between pt-2 px-1">
                   <div className="text-sm text-muted-foreground">
-                    Showing {((currentPage - 1) * sessionsPerPage) + 1} to {Math.min(currentPage * sessionsPerPage, totalPastSessions)} of {totalPastSessions} past sessions
+                    Page {currentPage} of {totalPages}
                   </div>
                   <div className="flex items-center gap-2">
-                    <button
+                    <Button
+                      variant="outline"
+                      size="sm"
                       onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                       disabled={currentPage === 1}
-                      className="px-3 py-1 text-sm border rounded-md hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Previous
-                    </button>
-                    <div className="flex items-center gap-1">
-                      {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                        <button
-                          key={page}
-                          onClick={() => setCurrentPage(page)}
-                          className={`px-3 py-1 text-sm border rounded-md hover:bg-muted ${
-                            currentPage === page ? 'bg-primary text-primary-foreground hover:bg-primary/90' : ''
-                          }`}
-                        >
-                          {page}
-                        </button>
-                      ))}
-                    </div>
-                    <button
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
                       onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                       disabled={currentPage === totalPages}
-                      className="px-3 py-1 text-sm border rounded-md hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Next
-                    </button>
+                    </Button>
                   </div>
                 </div>
               );
             })()}
-          </CardContent>
-        </Card>
 
-        {/* Sessions Activity Chart - Full Width */}
-        <SessionsChart />
+             {/* Charts */}
+             <div className="">
+                 <SessionsChart />
+             </div>
 
-        {/* Achievement Showcase - Full Width */}
-        <div className="mt-6 sm:mt-8">
-          <AchievementShowcaseConnected showProgress={false} />
+          </div>
+
+          {/* Sidebar Column */}
+          <div className="space-y-6">
+
+             {/* Streak Tracker - Moved from metrics row */}
+             <StreakTrackerConnected />
+
+             {/* Calendar Section - Moved from left side */}
+             <div id="calendar-section">
+               <EnhancedCalendarWidget sessions={[
+                ...upcomingSessions.map(s => ({
+                  id: s.id,
+                  title: s.title,
+                  date: typeof s.date === 'string' ? s.date : s.date.toISOString(),
+                  duration: s.duration,
+                  type: (s.requestedBy?.id && currentUser?.id && s.requestedBy.id === currentUser.id) ? "teaching" as const : "learning" as const,
+                  participantName: s.peer?.name,
+                  sessionType: "peer" as const,
+                })),
+                ...upcomingStudyRooms.map(sr => ({
+                  id: sr.id,
+                  title: sr.title,
+                  date: typeof sr.date === 'string' ? sr.date : sr.date.toISOString(),
+                  duration: sr.duration,
+                  type: (sr.createdBy?.id && currentUser?.id && sr.createdBy.id === currentUser.id) ? "teaching" as const : "learning" as const,
+                  participantName: `Group (${sr.participantCount}/${sr.maxParticipants})`,
+                  sessionType: "study-room" as const,
+                })),
+              ]} />
+            </div>
+            
+            {/* Requests Card */}
+            <Card className="shadow-sm border-border/60">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg">Requests</CardTitle>
+                  <div className="grid w-[160px] grid-cols-2 h-8 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground">
+                    <button
+                      type="button"
+                      className={cn(
+                        "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-xs font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+                        activeRequestTab === "received" ? "bg-background text-foreground shadow-sm" : "hover:bg-background/50 hover:text-foreground"
+                      )}
+                      onClick={() => setActiveRequestTab("received")}
+                    >
+                      In ({pendingRequests.length})
+                    </button>
+                    <button
+                      type="button"
+                      className={cn(
+                        "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-xs font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+                        activeRequestTab === "sent" ? "bg-background text-foreground shadow-sm" : "hover:bg-background/50 hover:text-foreground"
+                      )}
+                      onClick={() => setActiveRequestTab("sent")}
+                    >
+                      Out ({sentRequests.length})
+                    </button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="px-4">
+                  {(
+                    activeRequestTab === 'received' ? pendingRequests : sentRequests
+                  ).length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground text-sm border-2 border-dashed rounded-lg">
+                      {activeRequestTab === 'received' ? 'No incoming requests' : 'No sent requests'}
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {(activeRequestTab === 'received' ? pendingRequests : sentRequests).map((request) => (
+                        <SessionRequestCard
+                          key={request.id}
+                          request={request}
+                          variant={activeRequestTab}
+                          onAccept={activeRequestTab === 'received' ? () => handleAcceptRequest(request.id) : undefined}
+                          onDecline={activeRequestTab === 'received' ? () => handleDeclineRequest(request.id) : undefined}
+                          isProcessing={activeRequestTab === 'received' ? processingRequests.has(request.id) : false}
+                        />
+                      ))}
+                    </div>
+                  )}
+              </CardContent>
+            </Card>
+
+            {/* Pending Reviews */}
+            <Card className="shadow-sm border-border/60">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg">Pending Reviews</CardTitle>
+                  <Link href="/profile?tab=sessions">
+                    <Button size="sm" variant={pendingReviews > 0 ? "default" : "outline"} className="h-8 text-xs">
+                      {pendingReviews > 0 ? "Review" : "History"}
+                    </Button>
+                  </Link>
+                </div>
+              </CardHeader>
+              <CardContent className="px-4">
+                  {pendingReviews > 0 ? (
+                    <div className="flex flex-col gap-2">
+                       <p className="text-sm text-muted-foreground">
+                        You have <span className="font-semibold text-primary">{pendingReviews}</span> session{pendingReviews > 1 ? 's' : ''} waiting for your review.
+                       </p>
+                    </div>
+                  ) : (
+                    <div className="text-center py-6 text-muted-foreground text-sm border-2 border-dashed rounded-lg">
+                      No reviews pending
+                    </div>
+                  )}
+              </CardContent>
+            </Card>
+            
+            {/* Skills & Suggestion */}
+            <SkillsAndSuggestions
+              userSkills={userSkills}
+              suggestedRooms={suggestedRooms}
+              isLoading={studyRoomsLoading || userLoading}
+            />
+
+          </div>
         </div>
       </main>
 

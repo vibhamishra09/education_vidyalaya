@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Card, CardContent } from "@/components/ui/card";
 import { Star, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -30,7 +29,7 @@ const testimonials: Testimonial[] = [
     name: "Michael Rodriguez",
     avatar: "",
     role: "Mathematics Enthusiast",
-    rating: 5,
+    rating: 4,
     text: "I love how easy it is to find study partners and create study rooms. The platform makes collaborative learning fun and effective. Highly recommend to anyone looking to improve their understanding!",
   },
   {
@@ -62,21 +61,23 @@ const testimonials: Testimonial[] = [
     name: "James Anderson",
     avatar: "",
     role: "Engineering Student",
-    rating: 5,
+    rating: 4,
     text: "The study rooms feature is brilliant. I've connected with so many like-minded learners and the sessions are always productive. This platform has helped me excel in my courses!",
   },
 ];
 
-function StarRating({ rating }: { rating: number }) {
+function StarRating({ rating, inverted = false }: { rating: number, inverted?: boolean }) {
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex items-center gap-0.5">
       {Array.from({ length: 5 }).map((_, i) => (
         <Star
           key={i}
           className={`h-4 w-4 ${
             i < rating
               ? "fill-yellow-400 text-yellow-400"
-              : "text-gray-300"
+              : inverted 
+                ? "text-blue-300/50" 
+                : "text-gray-300"    
           }`}
         />
       ))}
@@ -84,17 +85,25 @@ function StarRating({ rating }: { rating: number }) {
   );
 }
 
+function getInitials(name: string) {
+  return name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("");
+}
+
 export function TestimonialsSlider() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isAutoPlaying, setIsAutoPlaying] = useState(true);
 
-  // Auto-play functionality
   useEffect(() => {
     if (!isAutoPlaying) return;
 
     const interval = setInterval(() => {
       setCurrentIndex((prev) => (prev + 1) % testimonials.length);
-    }, 5000); // Change testimonial every 5 seconds
+    }, 5000);
 
     return () => clearInterval(interval);
   }, [isAutoPlaying]);
@@ -117,22 +126,21 @@ export function TestimonialsSlider() {
   const currentTestimonial = testimonials[currentIndex];
 
   return (
-    <section className="py-16 relative overflow-hidden bg-muted/30">
-      {/* Background pattern */}
-      <div className="absolute inset-0 bg-gradient-to-b from-background via-muted/10 to-background" />
-
+    <section className="py-8 sm:py-10 relative overflow-hidden">
+      {/* Soft gradient background with extended fade */}
+      <div className="absolute inset-0 -z-10 bg-gradient-to-b from-background/0 via-primary/[0.02] to-background/0" />
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5 }}
-          className="text-center mb-12"
+          className="text-center mb-4 sm:mb-6"
         >
-          <h2 className="text-3xl sm:text-4xl font-bold mb-4">
+          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight leading-tight mb-2">
             What Our Community Says
           </h2>
-          <p className="text-muted-foreground max-w-2xl mx-auto font-tagline">
+          <p className="text-sm sm:text-base text-muted-foreground max-w-2xl mx-auto font-tagline">
             Real stories from learners who love using Webyalaya
           </p>
         </motion.div>
@@ -147,46 +155,62 @@ export function TestimonialsSlider() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -50 }}
                 transition={{ duration: 0.3 }}
+                className="pt-12 px-2 sm:px-4"
               >
-                <Card className="border-2">
-                  <CardContent className="pt-8 pb-8 px-6 sm:px-8">
-                    <div className="flex flex-col items-center text-center space-y-6">
-                      {/* Stars */}
-                      <StarRating rating={currentTestimonial.rating} />
-
-                      {/* Testimonial Text */}
-                      <p className="text-lg sm:text-xl text-foreground leading-relaxed max-w-3xl">
-                        &ldquo;{currentTestimonial.text}&rdquo;
-                      </p>
-
-                      {/* Author Info */}
-                      <div className="flex flex-col items-center gap-3">
-                        <Avatar className="h-16 w-16">
-                          <AvatarImage
-                            src={currentTestimonial.avatar}
-                            alt={currentTestimonial.name}
-                          />
-                          <AvatarFallback className="text-lg">
-                            {currentTestimonial.name
-                              .split(" ")
-                              .map((n) => n[0])
-                              .join("")}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <h4 className="font-semibold text-lg">
-                            {currentTestimonial.name}
-                          </h4>
-                          {currentTestimonial.role && (
-                            <p className="text-sm text-muted-foreground">
-                              {currentTestimonial.role}
-                            </p>
-                          )}
-                        </div>
+                <div className="relative rounded-[2rem] bg-card p-6 sm:p-10 shadow-lg ring-1 ring-black/5 min-h-[220px]">
+                  
+                  {/* HEADER AREA: Ribbon + Role side-by-side */}
+                  <div className="absolute -left-2 top-6 z-20 flex items-center gap-4">
+                    
+                    {/* The Blue Ribbon Wrapper */}
+                    <div className="relative">
+                      <div className="relative z-10 flex items-center gap-3 rounded-r-2xl rounded-tl-sm bg-[#2b6cb0] py-2.5 pl-6 pr-8 text-white shadow-md">
+                        <span className="text-xl font-bold tracking-tight">{currentTestimonial.name}</span>
+                        <div className="h-5 w-px bg-white/30" />
+                        <StarRating rating={currentTestimonial.rating} inverted={true} />
                       </div>
+                      {/* Darker Fold Tail - anchored to the ribbon wrapper */}
+                      <div className="absolute left-0 top-full h-3 w-2 bg-[#1a4971] rounded-bl-xl" />
                     </div>
-                  </CardContent>
-                </Card>
+
+                    {/* ROLE: Now placed to the right of the ribbon */}
+                    {currentTestimonial.role && (
+                      <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider hidden sm:block">
+                        {currentTestimonial.role}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Avatar Overlay */}
+                  <div className="absolute -right-2 -top-14 sm:-right-8 sm:-top-16 z-30">
+                    <Avatar className="h-32 w-32 ring-8 ring-background shadow-xl bg-muted">
+                      <AvatarImage
+                        src={currentTestimonial.avatar}
+                        alt={currentTestimonial.name}
+                        className="object-cover"
+                      />
+                      <AvatarFallback className="text-3xl font-bold text-muted-foreground">
+                        {getInitials(currentTestimonial.name)}
+                      </AvatarFallback>
+                    </Avatar>
+                  </div>
+
+                  {/* Main Content */}
+                  {/* Added mobile-only role display in case screen is too narrow for side-by-side */}
+                  <div className="relative mt-12 space-y-3">
+                    <div className="sm:hidden mb-2">
+                       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        {currentTestimonial.role}
+                      </p>
+                    </div>
+                    
+                    <blockquote className="text-base sm:text-lg text-foreground/80 leading-relaxed">
+                      &ldquo;{currentTestimonial.text}&rdquo;
+                    </blockquote>
+                    
+                    {/* Previous footer location removed for compactness */}
+                  </div>
+                </div>
               </motion.div>
             </AnimatePresence>
 
@@ -194,7 +218,7 @@ export function TestimonialsSlider() {
             <Button
               variant="outline"
               size="icon"
-              className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 sm:-translate-x-12 h-10 w-10 rounded-full shadow-lg hover:shadow-xl transition-shadow"
+              className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-3 sm:-translate-x-12 h-10 w-10 rounded-full shadow-md hover:shadow-lg transition-shadow bg-background/70 backdrop-blur"
               onClick={goToPrevious}
               aria-label="Previous testimonial"
             >
@@ -203,7 +227,7 @@ export function TestimonialsSlider() {
             <Button
               variant="outline"
               size="icon"
-              className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 sm:translate-x-12 h-10 w-10 rounded-full shadow-lg hover:shadow-xl transition-shadow"
+              className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-3 sm:translate-x-12 h-10 w-10 rounded-full shadow-md hover:shadow-lg transition-shadow bg-background/70 backdrop-blur"
               onClick={goToNext}
               aria-label="Next testimonial"
             >
@@ -212,7 +236,7 @@ export function TestimonialsSlider() {
           </div>
 
           {/* Dots Indicator */}
-          <div className="flex justify-center gap-2 mt-8">
+          <div className="flex justify-center gap-2 mt-6">
             {testimonials.map((_, index) => (
               <button
                 key={index}
