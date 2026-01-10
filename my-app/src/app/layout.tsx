@@ -13,6 +13,7 @@ import { PushNotificationPrompt } from "@/components/notifications/push-notifica
 import { PushNotificationListener } from "@/components/notifications/push-notification-listener";
 import { HiddenSignInButton } from "@/components/auth/hidden-sign-in-button";
 import { ServiceWorkerRegistration } from "@/components/pwa/service-worker-registration";
+import { BackgroundGradient } from "@/components/ui/background-gradient";
 import "./globals.css";
 
 const inter = Inter({
@@ -238,8 +239,9 @@ export default function RootLayout({
           <link rel="dns-prefetch" href="https://api.dicebear.com" />
         </head>
         <body
-          className={`${inter.variable} ${harabara.variable} ${gotham.variable} relative min-h-screen bg-background text-foreground antialiased font-sans pb-16 md:pb-0 before:fixed before:inset-0 before:-z-10 before:bg-[radial-gradient(120%_80%_at_50%_0%,_var(--tw-gradient-stops))] before:from-primary/18 before:via-primary/6 before:to-background after:fixed after:inset-0 after:-z-10 after:bg-[radial-gradient(80%_60%_at_10%_10%,_var(--tw-gradient-stops))] after:from-primary/10 after:via-background after:to-background`}
+          className={`${inter.variable} ${harabara.variable} ${gotham.variable} relative min-h-screen bg-background text-foreground antialiased font-sans pb-16 md:pb-0`}
         >
+          <BackgroundGradient />
           <QueryProvider>
             <NotificationProvider>
               <ToastProvider>

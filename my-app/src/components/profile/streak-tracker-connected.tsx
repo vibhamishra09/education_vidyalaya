@@ -31,8 +31,18 @@ export function StreakTrackerConnected() {
   }
 
   if (!streakData) {
-    console.warn('⚠️ [StreakTrackerConnected] No streak data available');
-    return null;
+    console.warn('⚠️ [StreakTrackerConnected] No streak data available - using fallback');
+    // Fallback data if API returns nothing
+    return (
+        <StreakTracker
+          currentStreak={0}
+          longestStreak={0}
+          streakDays={Array.from({ length: 14 }).map((_, i) => ({
+            date: new Date(Date.now() - (13 - i) * 86400000),
+            hasActivity: false
+          }))}
+        />
+    );
   }
 
   // Convert API data to component format

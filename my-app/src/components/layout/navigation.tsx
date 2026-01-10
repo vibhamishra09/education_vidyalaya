@@ -26,7 +26,7 @@ function AuthButtons({ pathname }: { pathname: string }) {
   return (
     <div className="flex items-center gap-2">
       <SignInButton mode="modal" forceRedirectUrl={redirectUrl}>
-        <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
+        <Button variant="default" size="sm" className="bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 shadow-none">
           Sign In
         </Button>
       </SignInButton>
@@ -34,7 +34,7 @@ function AuthButtons({ pathname }: { pathname: string }) {
         <Button
           variant="default"
           size="sm"
-          className="bg-primary text-primary-foreground hover:bg-primary/90"
+          className="bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 shadow-none"
         >
           Sign Up
         </Button>
@@ -48,7 +48,7 @@ function AuthButtonsFallback() {
   return (
     <div className="flex items-center gap-2">
       <SignInButton mode="modal">
-        <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
+        <Button variant="default" size="sm" className="bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 shadow-none">
           Sign In
         </Button>
       </SignInButton>
@@ -56,7 +56,7 @@ function AuthButtonsFallback() {
         <Button
           variant="default"
           size="sm"
-          className="bg-primary text-primary-foreground hover:bg-primary/90"
+          className="bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 shadow-none"
         >
           Sign Up
         </Button>
@@ -140,12 +140,12 @@ export function Navigation() {
                       className={cn(
                         "relative rounded-full px-4 py-2 text-sm font-medium transition-all duration-300",
                         "text-muted-foreground hover:text-foreground",
-                        isActive && "text-foreground font-semibold"
+                        isActive && "text-foreground font-semibold bg-gray-100/50 border border-gray-200"
                       )}
                     >
                       {link.label}
                       {isActive && (
-                        <span className="absolute inset-0 rounded-full bg-white/10 -z-10 animate-fade-in" />
+                        <span className="absolute inset-0 rounded-full bg-transparent -z-10" />
                       )}
                     </Link>
                   );

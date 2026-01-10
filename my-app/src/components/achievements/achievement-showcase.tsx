@@ -169,50 +169,40 @@ export function AchievementShowcase({
   const hasMore = sortedAchievements.length > 5;
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="h-full flex flex-col">
+      <CardHeader className="pb-3">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle className="text-lg flex items-center gap-2">
             <Trophy className="h-5 w-5 text-yellow-500" />
             Achievements
           </CardTitle>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground sm:text-sm">
-            <span>
-              <span className="font-semibold text-primary">{unlocked.length}</span> unlocked
-            </span>
-            <span>·</span>
-            <span>
-              <span className="font-semibold text-primary">{inProgress.length}</span> in progress
-            </span>
-            <span>·</span>
-            <span>{achievements.length} total</span>
+          <div className="flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
+             <span className="flex items-center gap-1"><Medal className="h-3 w-3" /> {unlocked.length}</span>
+             <span className="flex items-center gap-1"><Target className="h-3 w-3" /> {inProgress.length}</span>
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-6">
-        <div className="grid gap-3 md:grid-cols-3">
-          <div className="rounded-xl border bg-muted/40 p-4">
-            <p className="text-xs uppercase text-muted-foreground">Unlocked awards</p>
-            <p className="text-2xl font-semibold">{unlocked.length}</p>
-            <p className="text-xs text-muted-foreground">
-              {Math.round((unlocked.length / Math.max(achievements.length, 1)) * 100)}% complete
-            </p>
+      <CardContent className="space-y-4 flex-1 flex flex-col min-h-0 overflow-hidden">
+        {/* Compact Summary */}
+        <div className="grid grid-cols-3 gap-3 mb-2">
+          <div className="rounded-lg border bg-muted/40 p-3 text-center">
+            <p className="text-[10px] uppercase text-muted-foreground font-semibold tracking-wider">Unlocked</p>
+            <p className="text-2xl font-bold leading-none mt-1.5">{unlocked.length}</p>
           </div>
-          <div className="rounded-xl border bg-muted/40 p-4">
-            <p className="text-xs uppercase text-muted-foreground">Active goals</p>
-            <p className="text-2xl font-semibold">{inProgress.length}</p>
-            <p className="text-xs text-muted-foreground">Currently tracking progress</p>
+          <div className="rounded-lg border bg-muted/40 p-3 text-center">
+            <p className="text-[10px] uppercase text-muted-foreground font-semibold tracking-wider">Tracking</p>
+            <p className="text-2xl font-bold leading-none mt-1.5">{inProgress.length}</p>
           </div>
-          <div className="rounded-xl border bg-muted/40 p-4">
-            <p className="text-xs uppercase text-muted-foreground">Categories</p>
-            <p className="text-2xl font-semibold">
-              {categoryStats.filter((stat) => stat.total > 0).length} / {categoryOrder.length}
+          <div className="rounded-lg border bg-muted/40 p-3 text-center">
+            <p className="text-[10px] uppercase text-muted-foreground font-semibold tracking-wider">Categories</p>
+            <p className="text-2xl font-bold leading-none mt-1.5">
+              {categoryStats.filter((stat) => stat.total > 0).length}/{categoryOrder.length}
             </p>
-            <p className="text-xs text-muted-foreground">Areas with available awards</p>
           </div>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 xxl:grid-cols-3">
+        {/* Categories - Grid Layout */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
           {categoryStats.map((stat) => {
             const config = categoryConfig[stat.category];
             const Icon = config.icon;
@@ -225,230 +215,124 @@ export function AchievementShowcase({
                   setActiveCategory((prev) => (prev === stat.category ? "all" : stat.category))
                 }
                 className={cn(
-                  "rounded-xl border bg-card p-4 text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary h-full",
-                  activeCategory === stat.category && "border-primary shadow-lg"
+                  "flex flex-col rounded-xl border bg-card p-4 text-left transition-all hover:bg-muted/50 hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary h-auto min-h-[100px] justify-between",
+                  activeCategory === stat.category && "border-primary shadow-md bg-primary/5 ring-1 ring-primary/20"
                 )}
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <span className={cn("rounded-full p-2", config.badgeClass)}>
-                      <Icon className="h-4 w-4" />
-                    </span>
-                    <div>
-                      <p className="font-semibold">{config.label}</p>
-                      <p className="text-xs text-muted-foreground">{config.description}</p>
-                    </div>
-                  </div>
-                  <span className="text-sm font-medium text-muted-foreground">
-                    {stat.unlocked}/{stat.total || 0}
-                  </span>
+                <div className="flex items-start justify-between w-full mb-3">
+                   <div className={cn("rounded-lg p-2 shink-0", config.badgeClass)}>
+                      <Icon className="h-5 w-5" />
+                   </div>
+                   <div className="text-right">
+                     <span className="text-lg font-bold block leading-none">{stat.unlocked}<span className="text-muted-foreground/60 text-sm font-normal">/{stat.total}</span></span>
+                   </div>
                 </div>
-                <div className="mt-3 space-y-1.5">
-                  <Progress value={stat.completion} />
-                  <div className="flex flex-col gap-1 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-                    <span>{stat.completion}% complete</span>
-                    <span className="text-muted-foreground">
-                      {stat.inProgress} active ·{" "}
-                      {stat.total - stat.unlocked - stat.inProgress} locked
-                    </span>
-                  </div>
+                <div>
+                  <span className="text-sm font-semibold truncate block mb-2">{config.label}</span>
+                  <Progress value={stat.completion} className="h-2 w-full" />
                 </div>
               </button>
             );
           })}
         </div>
+        
+        <div className="flex-1 flex flex-col min-h-0">
+            {activeCategory !== "all" && (
+            <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2 text-sm mb-3">
+                <span className="flex items-center gap-2">
+                  <span className="text-muted-foreground">Filtering by:</span>
+                  <span className="font-semibold">{categoryConfig[activeCategory].label}</span>
+                </span>
+                <button
+                type="button"
+                onClick={() => setActiveCategory("all")}
+                className="font-medium text-primary hover:underline"
+                >
+                Clear Filter
+                </button>
+            </div>
+            )}
 
-        {activeCategory !== "all" && (
-          <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-3 py-2 text-sm">
-            <span>
-              Showing{" "}
-              <span className="font-semibold">{categoryConfig[activeCategory].label}</span> awards
-            </span>
-            <button
-              type="button"
-              onClick={() => setActiveCategory("all")}
-              className="text-xs font-semibold text-primary"
-            >
-              Clear filter
-            </button>
-          </div>
-        )}
-
-        <Tabs className="w-full">
-          <TabsList className="grid w-full grid-cols-4 mb-6">
-            <TabsTrigger
-              active={activeTab === "all"}
-              onClick={() => setActiveTab("all")}
-            >
-              All ({achievements.length})
-            </TabsTrigger>
-            <TabsTrigger
-              active={activeTab === "unlocked"}
-              onClick={() => setActiveTab("unlocked")}
-            >
-              <Trophy className="h-3 w-3 mr-1" />
-              {unlocked.length}
-            </TabsTrigger>
-            <TabsTrigger
-              active={activeTab === "progress"}
-              onClick={() => setActiveTab("progress")}
-            >
-              <Target className="h-3 w-3 mr-1" />
-              {inProgress.length}
-            </TabsTrigger>
-            <TabsTrigger
-              active={activeTab === "locked"}
-              onClick={() => setActiveTab("locked")}
-            >
-              <Lock className="h-3 w-3 mr-1" />
-              {locked.length}
-            </TabsTrigger>
-          </TabsList>
-
-          {activeTab === "all" && (
-            <TabsContent>
-              {showProgress ? (
-                <div className="space-y-4">
-                  {displayedAchievements.map((achievement) => (
-                    <AchievementProgress key={achievement.id} achievement={achievement} />
-                  ))}
-                  {hasMore && !showAll && (
-                    <div className="flex justify-center pt-4">
-                      <Button
-                        variant="outline"
-                        onClick={() => setShowAll(true)}
-                        className="w-full sm:w-auto"
-                      >
-                        View All {sortedAchievements.length} Achievements
-                      </Button>
-                    </div>
-                  )}
-                  {showAll && hasMore && (
-                    <div className="flex justify-center pt-4">
-                      <Button
-                        variant="outline"
-                        onClick={() => setShowAll(false)}
-                        className="w-full sm:w-auto"
-                      >
-                        Show Less
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-4">
-                    {displayedAchievements.map((achievement) => (
-                      <div key={achievement.id} className="flex justify-center">
-                        <AchievementBadge achievement={achievement} />
-                      </div>
-                    ))}
-                  </div>
-                  {hasMore && !showAll && (
-                    <div className="flex justify-center pt-4">
-                      <Button
-                        variant="outline"
-                        onClick={() => setShowAll(true)}
-                        className="w-full sm:w-auto"
-                      >
-                        View All {sortedAchievements.length} Achievements
-                      </Button>
-                    </div>
-                  )}
-                  {showAll && hasMore && (
-                    <div className="flex justify-center pt-4">
-                      <Button
-                        variant="outline"
-                        onClick={() => setShowAll(false)}
-                        className="w-full sm:w-auto"
-                      >
-                        Show Less
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              )}
-              {sortedAchievements.length === 0 && (
-                <div className="text-center py-12 text-muted-foreground">
-                  <Trophy className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p className="font-medium mb-1">No achievements yet</p>
-                  <p className="text-sm">Complete sessions to start earning achievements!</p>
-                </div>
-              )}
-            </TabsContent>
-          )}
-
-          {activeTab === "unlocked" && (
-            <TabsContent>
-              {showProgress ? (
-                <div className="space-y-4">
-                  {filteredAchievements.map((achievement) => (
-                    <AchievementProgress key={achievement.id} achievement={achievement} />
-                  ))}
-                </div>
-              ) : (
-                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-4">
-                  {filteredAchievements.map((achievement) => (
-                    <div key={achievement.id} className="flex justify-center">
-                      <AchievementBadge achievement={achievement} />
-                    </div>
-                  ))}
-                </div>
-              )}
-              {filteredAchievements.length === 0 && (
-                <div className="text-center py-12 text-muted-foreground">
-                  <Trophy className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p className="font-medium mb-1">No unlocked achievements</p>
-                  <p className="text-sm">Keep learning to unlock your first achievement!</p>
-                </div>
-              )}
-            </TabsContent>
-          )}
-
-          {activeTab === "progress" && (
-            <TabsContent>
-              <div className="space-y-4">
-                {filteredAchievements.map((achievement) => (
-                  <AchievementProgress key={achievement.id} achievement={achievement} />
-                ))}
+            <div className="flex-1 flex flex-col min-h-0">
+              <div className="grid w-full grid-cols-4 h-9 mb-3 bg-muted p-1 rounded-lg">
+                  <button
+                    onClick={() => setActiveTab("all")}
+                    className={cn(
+                      "inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                      activeTab === "all" ? "bg-background text-foreground shadow-sm" : "hover:bg-background/50 text-muted-foreground"
+                    )}
+                  >
+                    All <span className="ml-1.5 opacity-60 text-[10px]">{achievements.length}</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("unlocked")}
+                    className={cn(
+                      "inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                      activeTab === "unlocked" ? "bg-background text-foreground shadow-sm" : "hover:bg-background/50 text-muted-foreground"
+                    )}
+                  >
+                    Won <span className="ml-1.5 opacity-60 text-[10px]">{unlocked.length}</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("progress")}
+                    className={cn(
+                      "inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                      activeTab === "progress" ? "bg-background text-foreground shadow-sm" : "hover:bg-background/50 text-muted-foreground"
+                    )}
+                  >
+                    Active <span className="ml-1.5 opacity-60 text-[10px]">{inProgress.length}</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("locked")}
+                    className={cn(
+                      "inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                      activeTab === "locked" ? "bg-background text-foreground shadow-sm" : "hover:bg-background/50 text-muted-foreground"
+                    )}
+                  >
+                    Locked <span className="ml-1.5 opacity-60 text-[10px]">{locked.length}</span>
+                  </button>
               </div>
-              {filteredAchievements.length === 0 && (
-                <div className="text-center py-12 text-muted-foreground">
-                  <Target className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p className="font-medium mb-1">No achievements in progress</p>
-                  <p className="text-sm">Start working towards new achievements!</p>
-                </div>
-              )}
-            </TabsContent>
-          )}
+            
+              <div className="flex-1 overflow-y-auto pr-1 -mr-1 min-h-[300px] max-h-[500px]">
+                  <div className="space-y-3 pb-2">
+                       {/* Simplified List Rendering logic */}
+                      {(activeTab === "all" ? displayedAchievements : filteredAchievements).length === 0 ? (
+                          <div className="text-center py-12 text-muted-foreground">
+                              <p className="text-sm">No achievements found</p>
+                          </div>
+                      ) : (
+                          (activeTab === "all" ? displayedAchievements : filteredAchievements).map((achievement) => (
+                           <div key={achievement.id}>
+                               <AchievementProgress achievement={achievement} />
+                           </div>
+                          ))
+                      )}
+                      
+                     {activeTab === "all" && hasMore && !showAll && (
+                      <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setShowAll(true)}
+                          className="w-full text-xs h-9"
+                      >
+                          Show {sortedAchievements.length - displayedAchievements.length} more
+                      </Button>
+                     )}
+                     {activeTab === "all" && showAll && hasMore && (
+                      <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setShowAll(false)}
+                          className="w-full text-xs h-9"
+                      >
+                          Collapse
+                      </Button>
+                     )}
+                  </div>
+              </div>
+            </div>
+        </div>
 
-          {activeTab === "locked" && (
-            <TabsContent>
-              {showProgress ? (
-                <div className="space-y-4">
-                  {filteredAchievements.map((achievement) => (
-                    <AchievementProgress key={achievement.id} achievement={achievement} />
-                  ))}
-                </div>
-              ) : (
-                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-4">
-                  {filteredAchievements.map((achievement) => (
-                    <div key={achievement.id} className="flex justify-center">
-                      <AchievementBadge achievement={achievement} />
-                    </div>
-                  ))}
-                </div>
-              )}
-              {filteredAchievements.length === 0 && (
-                <div className="text-center py-12 text-muted-foreground">
-                  <Lock className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p className="font-medium mb-1">All achievements unlocked!</p>
-                  <p className="text-sm">Amazing work! 🎉</p>
-                </div>
-              )}
-            </TabsContent>
-          )}
-        </Tabs>
       </CardContent>
     </Card>
   );
