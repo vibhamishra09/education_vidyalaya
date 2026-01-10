@@ -211,7 +211,24 @@ function BrowsePageContent() {
                       <PeerCardComponent key={peer.id} peer={peer} />
                     ))
                   : recommendedRooms.slice(0, 4).map((room) => (
-                      <StudyRoomCardBrowse key={room.id} studyRoom={room} />
+                      <StudyRoomCardComponent 
+                        key={room.id}
+                        roomId={room.id}
+                        status={room.sessionStatus === 'ONGOING' ? 'live' : 'scheduled'}
+                        title={room.title}
+                        description={room.description}
+                        participants={{
+                          current: room.participantCount,
+                          max: room.maxParticipants
+                        }}
+                        host={{
+                          name: room.createdBy.name,
+                          avatar: room.createdBy.avatar
+                        }}
+                        category={typeof room.skills[0] === 'string' ? room.skills[0] : room.skills[0]?.name || "General"}
+                        actionLabel="Join Room"
+                        onAction={() => router.push(`/studyroom/${room.id}`)}
+                      />
                     ))
                 }
               </div>
@@ -398,14 +415,14 @@ function BrowsePageContent() {
                           title={room.title}
                           description={room.description}
                           participants={{
-                            current: room.participantsCount,
+                            current: room.participantCount,
                             max: room.maxParticipants
                           }}
                           host={{
-                            name: room.host.name,
-                            avatar: room.host.profileImage
+                            name: room.createdBy.name,
+                            avatar: room.createdBy.avatar
                           }}
-                          category={room.skills[0]?.name || "General"}
+                          category={typeof room.skills[0] === 'string' ? room.skills[0] : room.skills[0]?.name || "General"}
                           actionLabel="Join Room"
                           onAction={() => router.push(`/studyroom/${room.id}`)}
                         />

@@ -26,6 +26,7 @@ import { useState, useMemo } from "react";
 import { useToast } from "@/contexts/toast-context";
 import { useTabPersistence } from "@/hooks/use-local-storage";
 import Link from "next/link";
+import { cn } from "@/lib/utils";
 
 const REQUEST_TABS = ["received", "sent"] as const;
 type RequestTab = typeof REQUEST_TABS[number];
@@ -256,7 +257,7 @@ export function DashboardClient() {
             ) : (
               <>
                 <h1 className="text-3xl font-bold tracking-tight">
-                  Welcome back, {currentUser?.firstName || currentUser?.name || "Arghadeep"}
+                  Welcome back, {currentUser?.name || "Arghadeep"}
                 </h1>
                 <p className="text-muted-foreground mt-1">
                   Ready to continue your learning journey?
@@ -480,12 +481,28 @@ export function DashboardClient() {
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg">Requests</CardTitle>
-                  <Tabs value={activeRequestTab} onValueChange={(v) => setActiveRequestTab(v as RequestTab)} className="w-[160px]">
-                    <TabsList className="w-full grid grid-cols-2 h-8">
-                      <TabsTrigger value="received" className="text-xs">In ({pendingRequests.length})</TabsTrigger>
-                      <TabsTrigger value="sent" className="text-xs">Out ({sentRequests.length})</TabsTrigger>
-                    </TabsList>
-                  </Tabs>
+                  <div className="grid w-[160px] grid-cols-2 h-8 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground">
+                    <button
+                      type="button"
+                      className={cn(
+                        "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-xs font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+                        activeRequestTab === "received" ? "bg-background text-foreground shadow-sm" : "hover:bg-background/50 hover:text-foreground"
+                      )}
+                      onClick={() => setActiveRequestTab("received")}
+                    >
+                      In ({pendingRequests.length})
+                    </button>
+                    <button
+                      type="button"
+                      className={cn(
+                        "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-xs font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+                        activeRequestTab === "sent" ? "bg-background text-foreground shadow-sm" : "hover:bg-background/50 hover:text-foreground"
+                      )}
+                      onClick={() => setActiveRequestTab("sent")}
+                    >
+                      Out ({sentRequests.length})
+                    </button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="px-4">

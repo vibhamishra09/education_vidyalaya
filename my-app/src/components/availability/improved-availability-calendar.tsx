@@ -383,8 +383,8 @@ export function ImprovedAvailabilityCalendar({
                                       </div>
                                     </div>
                                   )}
-                                </TabsContent>
-                            </Tabs>
+                              </div>
+                            </div>
                           </div>
                         </PopoverContent>
                       )}

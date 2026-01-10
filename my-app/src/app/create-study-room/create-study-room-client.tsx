@@ -211,7 +211,7 @@ export function CreateStudyRoomClient() {
                       <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900/20 flex items-center justify-center text-blue-600 dark:text-blue-400">
                         <Layers className="h-4 w-4" />
                       </div>
-                      What's this room about?
+                      What&apos;s this room about?
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-5">
