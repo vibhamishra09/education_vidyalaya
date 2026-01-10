@@ -39,7 +39,7 @@ export function OfflineClient() {
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <button
             onClick={() => window.location.reload()}
-            className="inline-flex items-center justify-center px-6 py-3 rounded-lg bg-green-600 text-white font-medium hover:bg-green-700 transition-colors"
+            className="inline-flex items-center justify-center px-6 py-3 rounded-lg bg-green-100 text-green-800 border border-green-300 font-medium hover:bg-green-200 transition-colors"
           >
             <RefreshCw className="h-4 w-4 mr-2" />
             Try Again
