@@ -93,7 +93,8 @@ export function SkillSearch({
     setSearchTerm(skill);
     setShowSuggestions(false);
     setSelectedIndex(-1);
-    inputRef.current?.focus();
+    router.push(`/browse?search=${encodeURIComponent(skill)}`);
+    onSearch?.(skill);
   };
 
   const handleSearch = () => {
