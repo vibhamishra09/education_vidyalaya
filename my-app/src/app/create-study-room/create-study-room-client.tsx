@@ -129,7 +129,21 @@ export function CreateStudyRoomClient() {
       gmeetLink: formData.gmeetLink || undefined,
       timezone: userTimezone,
     };
-    
+
+    // Refresh time for instant rooms to avoid "past time" errors if user took too long
+    if (isInstantRoom) {
+      const now = new Date();
+      // Use local date components to match the local timezone
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, "0");
+      const day = String(now.getDate()).padStart(2, "0");
+      createData.date = `${year}-${month}-${day}`;
+      
+      const hours = String(now.getHours()).padStart(2, "0");
+      const minutes = String(now.getMinutes()).padStart(2, "0");
+      createData.time = `${hours}:${minutes}`;
+    }
+
     createStudyRoomMutation.mutate(createData, {
       onSuccess: (room) => {
         clearForm();
@@ -207,7 +221,7 @@ export function CreateStudyRoomClient() {
                          placeholder="Enter a catchy title..."
                          value={formData.title}
                          onChange={(e) => updateField("title", e.target.value)}
-                         className="h-auto py-4 px-4 text-2xl md:text-3xl font-bold border-none shadow-none focus-visible:ring-0 bg-transparent placeholder:text-muted-foreground/30 w-full"
+                         className="h-auto py-4 px-4 text-2xl md:text-3xl font-bold border-none shadow-none focus-visible:ring-0 bg-transparent text-foreground placeholder:text-muted-foreground/30 w-full"
                          required
                          autoFocus
                        />

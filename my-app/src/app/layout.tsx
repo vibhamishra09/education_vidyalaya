@@ -239,6 +239,7 @@ export default function RootLayout({
           <link rel="dns-prefetch" href="https://api.dicebear.com" />
         </head>
         <body
+          suppressHydrationWarning={true}
           className={`${inter.variable} ${harabara.variable} ${gotham.variable} relative min-h-screen bg-background text-foreground antialiased font-sans pb-16 md:pb-0`}
         >
           <BackgroundGradient />
