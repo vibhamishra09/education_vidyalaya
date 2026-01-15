@@ -58,13 +58,18 @@ function BrowsePageContent() {
   const { data: currentUserData } = useCurrentUser();
   const userWantSkills = currentUserData?.user?.wantSkills || [];
 
-  // Initialize search query from URL parameters (overrides localStorage)
+  // Initialize search query and active tab from URL parameters (overrides localStorage)
   useEffect(() => {
     const searchParam = searchParams.get("search");
     if (searchParam) {
       setSearchQuery(searchParam);
     }
-  }, [searchParams, setSearchQuery]);
+
+    const tabParam = searchParams.get("tab");
+    if (tabParam === "peers" || tabParam === "studyRooms") {
+      setActiveTab(tabParam);
+    }
+  }, [searchParams, setSearchQuery, setActiveTab]);
 
   // Reset pagination when filters change
   useEffect(() => {
@@ -151,25 +156,25 @@ function BrowsePageContent() {
   const showRecommendations = hasRecommendations && !searchQuery && selectedSkills.length === 0;
 
   return (
-    <div className="flex flex-col min-h-screen bg-muted/5 selection:bg-primary/10">
+    <div className="flex flex-col min-h-screen bg-muted/5 selection:bg-green-500/20">
       <Navigation />
 
-      <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
+      <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12 max-w-7xl">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-start justify-between mb-8 gap-4">
-          <div className="space-y-2">
+          <div className="space-y-3">
             <Link 
               href="/dashboard" 
-              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium text-muted-foreground bg-muted/50 hover:bg-muted hover:text-foreground transition-all group w-fit"
+              className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium text-muted-foreground bg-muted/40 hover:bg-green-500/10 hover:text-green-700 transition-all group w-fit border border-transparent hover:border-green-500/20"
             >
               <ArrowLeft className="h-3.5 w-3.5 group-hover:-translate-x-0.5 transition-transform" /> 
               Back to Dashboard
             </Link>
             <div className="space-y-1">
-              <h1 className="text-3xl font-extrabold tracking-tight lg:text-4xl bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70 pb-1">
-                Browse Community
+              <h1 className="text-3xl font-extrabold tracking-tight lg:text-4xl text-foreground">
+                 Browse Community
               </h1>
-              <p className="text-muted-foreground text-sm sm:text-base max-w-2xl">
+              <p className="text-muted-foreground text-sm sm:text-base max-w-2xl leading-relaxed">
                 Discover peers and study rooms to learn and grow together
               </p>
             </div>
@@ -178,15 +183,15 @@ function BrowsePageContent() {
 
         {/* Recommendations Section - Based on user's wantSkills */}
         {showRecommendations && (
-          <div className="mb-8">
+          <div className="mb-10 rounded-3xl bg-gradient-to-br from-green-50/50 to-emerald-50/20 border border-green-100/50 p-6 dark:from-green-950/10 dark:to-emerald-950/5 dark:border-green-900/20">
             <div className="flex items-center gap-2 mb-4">
-              <Sparkles className="h-5 w-5 text-purple-500" />
-              <h2 className="text-xl font-semibold">Recommended for You</h2>
-              <Badge variant="secondary" className="text-xs">
+              <Sparkles className="h-5 w-5 text-green-600 fill-green-100 dark:fill-green-900/20" />
+              <h2 className="text-lg font-bold text-foreground">Recommended for You</h2>
+              <Badge variant="outline" className="text-[10px] bg-white/50 border-green-200 text-green-700 dark:bg-transparent dark:border-green-800 dark:text-green-400">
                 Based on your interests
               </Badge>
             </div>
-            <p className="text-sm text-muted-foreground mb-4">
+            <p className="text-sm text-muted-foreground/80 mb-6">
               {activeTab === "peers" 
                 ? "Peers who can teach what you want to learn"
                 : "Study rooms matching your learning interests"}
@@ -196,8 +201,8 @@ function BrowsePageContent() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {Array.from({ length: 4 }).map((_, index) => (
                   <div key={index} className="h-full">
-                    <div className="border rounded-lg p-4 space-y-3">
-                      <Skeleton className="h-12 w-12 rounded-full" />
+                    <div className="border border-border/40 rounded-2xl p-4 space-y-3 bg-background/40 backdrop-blur-sm">
+                      <Skeleton className="h-10 w-10 rounded-full" />
                       <Skeleton className="h-4 w-3/4" />
                       <Skeleton className="h-3 w-full" />
                     </div>
@@ -234,41 +239,80 @@ function BrowsePageContent() {
               </div>
             )}
             
-            <div className="mt-4 border-b" />
           </div>
         )}
 
-        {/* Search Bar */}
-        <div className="mb-6">
-          <div className="relative w-full max-w-md">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-            <Input
-              type="text"
-              placeholder="Search by name or skill..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 w-full"
-            />
-          </div>
+        {/* Filters & Search Container */}
+        <div className="flex flex-col md:flex-row gap-4 mb-8 items-start md:items-center justify-between sticky top-0 z-30 bg-background/80 backdrop-blur-md py-4 -mx-4 px-4 border-b border-border/40">
+            {/* Search Bar */}
+            <div className="relative w-full md:max-w-md group">
+                <Search className="absolute left-3.5 top-1/2 transform -translate-y-1/2 text-muted-foreground/50 h-4 w-4 group-focus-within:text-green-600 transition-colors" />
+                <Input
+                type="text"
+                placeholder="Search by name or skill..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 h-11 w-full rounded-2xl border-muted bg-muted/20 focus-visible:ring-green-500/20 focus-visible:border-green-500/30 transition-all"
+                />
+            </div>
+            
+            {/* Tabs */}
+             <div className="grid grid-cols-2 h-12 items-center justify-center rounded-2xl bg-muted p-1 text-muted-foreground w-full md:w-auto border border-border/10">
+                <button
+                type="button"
+                className={cn(
+                    "inline-flex items-center justify-center whitespace-nowrap rounded-xl px-6 py-1.5 text-sm font-bold ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 gap-2",
+                    activeTab === "peers" 
+                    ? "bg-emerald-600 text-white shadow-md shadow-emerald-900/20" 
+                    : "hover:bg-background/60 hover:text-foreground"
+                )}
+                onClick={() => setActiveTab("peers")}
+                >
+                <span>Peers</span>
+                {(searchQuery || selectedSkills.length > 0) && peerCount > 0 && (
+                    <Badge variant="secondary" className={cn("text-[10px] h-5 px-1.5 min-w-5", activeTab === "peers" ? "bg-white/20 text-white" : "bg-emerald-100 text-emerald-700")}>
+                    {peerCount}
+                    </Badge>
+                )}
+                </button>
+                <button
+                type="button"
+                className={cn(
+                    "inline-flex items-center justify-center whitespace-nowrap rounded-xl px-6 py-1.5 text-sm font-bold ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 gap-2",
+                    activeTab === "studyRooms" 
+                    ? "bg-emerald-600 text-white shadow-md shadow-emerald-900/20" 
+                    : "hover:bg-background/60 hover:text-foreground"
+                )}
+                onClick={() => setActiveTab("studyRooms")}
+                >
+                <span>Study Rooms</span>
+                {(searchQuery || selectedSkills.length > 0) && studyRoomCount > 0 && (
+                    <Badge variant="secondary" className={cn("text-[10px] h-5 px-1.5 min-w-5", activeTab === "studyRooms" ? "bg-white/20 text-white" : "bg-emerald-100 text-emerald-700")}>
+                    {studyRoomCount}
+                    </Badge>
+                )}
+                </button>
+            </div>
         </div>
 
         {/* Skill Filters */}
-        <div className="mb-6">
+        <div className="mb-8">
           <div className="flex flex-wrap gap-2 mb-4">
             {skillsLoading ? (
               Array.from({ length: 6 }).map((_, index) => (
-                <Skeleton key={index} className="h-6 w-16" />
+                <Skeleton key={index} className="h-8 w-20 rounded-full" />
               ))
             ) : (
               skills.slice(0, 6).map((skill) => (
                 <Badge
                   key={skill.id}
-                  variant={
+                  variant="outline"
+                  className={cn(
+                    "cursor-pointer text-xs py-1.5 px-3 rounded-full hover:bg-green-50 hover:text-green-700 hover:border-green-200 transition-all",
                     selectedSkills.find((s) => s.id === skill.id)
-                      ? "default"
-                      : "outline"
-                  }
-                  className="cursor-pointer text-xs"
+                      ? "bg-green-500/10 text-green-700 border-green-500/20"
+                      : "bg-background text-muted-foreground border-border/50"
+                  )}
                   onClick={() => toggleSkill(skill)}
                 >
                   {skill.name}
@@ -278,64 +322,36 @@ function BrowsePageContent() {
           </div>
 
           {selectedSkills.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              <span className="text-xs sm:text-sm text-muted-foreground">
-                Active filters:
+            <div className="flex flex-wrap gap-2 items-center">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mr-2">
+                Active:
               </span>
               {selectedSkills.map((skill) => (
                 <Badge
                   key={skill.id}
-                  variant="secondary"
-                  className="cursor-pointer text-xs"
+                  className="cursor-pointer text-xs py-1 px-2.5 rounded-full bg-green-100 text-green-800 hover:bg-green-200 border-green-200 gap-1 pl-3"
                   onClick={() => removeSkill(skill.id)}
                 >
                   {skill.name}
-                  <X className="ml-1 h-3 w-3" />
+                  <X className="h-3 w-3" />
                 </Badge>
               ))}
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setSelectedSkills([])}
+                className="h-6 text-[10px] text-muted-foreground hover:text-destructive px-2 ml-1"
+              >
+                Clear all
+              </Button>
             </div>
           )}
         </div>
 
-        {/* Tabs */}
-        <div className="w-full">
-          <div className="grid w-full grid-cols-2 h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground">
-            <button
-              type="button"
-              className={cn(
-                "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm sm:text-base font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 flex items-center gap-2",
-                activeTab === "peers" ? "bg-background text-foreground shadow-sm" : "hover:bg-background/50 hover:text-foreground"
-              )}
-              onClick={() => setActiveTab("peers")}
-            >
-              <span>Peers</span>
-              {(searchQuery || selectedSkills.length > 0) && peerCount > 0 && (
-                <Badge variant="secondary" className="text-xs">
-                  {peerCount}
-                </Badge>
-              )}
-            </button>
-            <button
-              type="button"
-              className={cn(
-                "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm sm:text-base font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 flex items-center gap-2",
-                activeTab === "studyRooms" ? "bg-background text-foreground shadow-sm" : "hover:bg-background/50 hover:text-foreground"
-              )}
-              onClick={() => setActiveTab("studyRooms")}
-            >
-              <span>Study Rooms</span>
-              {(searchQuery || selectedSkills.length > 0) && studyRoomCount > 0 && (
-                <Badge variant="secondary" className="text-xs">
-                  {studyRoomCount}
-                </Badge>
-              )}
-            </button>
-          </div>
-
           <div className="mt-6">
             {browseLoading ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-                {Array.from({ length: 6 }).map((_, index) => (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {Array.from({ length: 8 }).map((_, index) => (
                   <div key={index} className="h-full">
                     <div className="border rounded-lg p-4 sm:p-6 space-y-4">
                       <div className="flex items-center justify-between">
@@ -373,7 +389,7 @@ function BrowsePageContent() {
               <>
                 {activeTab === "peers" && (
                   <>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                       {peers.map((peer) => (
                         <PeerCardComponent key={peer.id} peer={peer} />
                       ))}
@@ -406,7 +422,7 @@ function BrowsePageContent() {
 
                 {activeTab === "studyRooms" && (
                   <>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                       {studyRooms.map((room) => (
                         <StudyRoomCardComponent 
                           key={room.id}
@@ -456,7 +472,6 @@ function BrowsePageContent() {
               </>
             )}
           </div>
-        </div>
       </main>
 
       <Footer />

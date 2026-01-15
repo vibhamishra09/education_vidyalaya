@@ -17,9 +17,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { 
-  ArrowLeft, Users, Loader2, Coins, CheckCircle2, 
+  ArrowLeft, Users, Loader2, Coins, CheckCircle2, AlertCircle,
   RotateCcw, Sparkles, Calendar, Video, Layers, 
-  Banknote, 
+  Banknote, Plus,
   Clock 
 } from "lucide-react";
 import { CreateStudyRoomDto, StudyRoom } from "@/types/api.types";
@@ -51,7 +51,7 @@ const initialFormData: StudyRoomFormData = {
   time: "",
   duration: "60",
   maxParticipants: "5",
-  joiningFee: "10",
+  joiningFee: "0",
   gmeetLink: "",
 };
 
@@ -98,6 +98,22 @@ export function CreateStudyRoomClient() {
       setError('Please wait for authentication to load');
       return;
     }
+
+    if (!formData.title) {
+        setError('Please enter a room name');
+        return;
+    }
+
+    if (formData.skills.length === 0) {
+        setError('Please add at least one skill');
+        return;
+    }
+
+    if (!isInstantRoom && (!formData.date || !formData.time)) {
+        setError('Please select date and time');
+        return;
+    }
+
     setError(null);
     const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
@@ -378,7 +394,7 @@ export function CreateStudyRoomClient() {
                       <input
                         type="range"
                         min="2"
-                        max="20"
+                        max="10"
                         step="1"
                         value={formData.maxParticipants}
                         onChange={(e) => updateField("maxParticipants", e.target.value)}
@@ -417,7 +433,6 @@ export function CreateStudyRoomClient() {
                       <div className="flex justify-between text-xs text-muted-foreground mt-2 px-1">
                         <span>2</span>
                         <span>10</span>
-                        <span>20</span>
                       </div>
                     </div>
                   </div>
@@ -430,15 +445,43 @@ export function CreateStudyRoomClient() {
                         <Coins className="h-3 w-3" /> mAYA
                       </span>
                     </Label>
-                    <div className="relative group">
-                      <Banknote className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                      <Input
-                        type="number"
-                        min="0"
-                        value={formData.joiningFee}
-                        onChange={(e) => updateField("joiningFee", e.target.value)}
-                        className="pl-9 h-11 text-lg font-medium bg-background transition-all focus:ring-2 ring-primary/20"
-                      />
+                    <div className="relative group flex items-center gap-2">
+                       <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="h-11 w-11 rounded-lg border-input bg-background hover:bg-muted hover:text-foreground shrink-0"
+                          onClick={() => {
+                            const val = parseInt(formData.joiningFee) || 0;
+                            if (val > 0) updateField("joiningFee", (val - 5).toString());
+                          }}
+                        >
+                          <span className="text-xl font-bold leading-none mb-0.5">−</span>
+                        </Button>
+
+                      <div className="relative flex-1">
+                        <Banknote className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                        <Input
+                          type="number"
+                          min="0"
+                          value={formData.joiningFee}
+                          onChange={(e) => updateField("joiningFee", e.target.value)}
+                          className="pl-9 h-11 text-lg font-medium bg-background transition-all focus:ring-2 ring-primary/20 text-center"
+                        />
+                      </div>
+
+                       <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="h-11 w-11 rounded-lg border-input bg-background hover:bg-muted hover:text-foreground shrink-0"
+                          onClick={() => {
+                             const val = parseInt(formData.joiningFee) || 0;
+                             updateField("joiningFee", (val + 5).toString());
+                          }}
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
                     </div>
                     <p className="text-xs text-muted-foreground">
                       Set to 0 for a free session.
@@ -453,33 +496,41 @@ export function CreateStudyRoomClient() {
                    {/* Subtle faint blur bg instead of heavy gradient */}
                   <div className="absolute inset-0 bg-primary/5 opacity-50" />
                   
-                  <CardContent className="pt-8 pb-8 px-6 relative z-10 text-foreground">
-                    <div className="flex items-start justify-between mb-8">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
-                          <p className="text-muted-foreground text-[10px] font-bold tracking-widest uppercase">Projected Earnings</p>
+                  <CardContent className="pt-6 pb-6 px-5 relative z-10 text-foreground">
+                    <div className="flex items-center justify-between mb-6 p-3 rounded-xl bg-muted/40 border border-border/50">
+                        <div className="flex items-center gap-2.5">
+                          <div className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                          </div>
+                          <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Est. Earnings</span>
                         </div>
-                        <h3 className="text-4xl font-black flex items-baseline gap-1.5 tracking-tight text-foreground tabular-nums">
-                          {potentialEarnings} <span className="text-lg font-bold text-amber-500">mAYA</span>
-                        </h3>
-                      </div>
-                      <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-amber-100 to-amber-50 dark:from-amber-900/40 dark:to-amber-900/20 border border-amber-200/50 flex items-center justify-center shadow-inner">
-                        <Coins className="h-6 w-6 text-amber-600 dark:text-amber-400 drop-shadow-sm" />
-                      </div>
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-4xl font-black tracking-tight tabular-nums">{potentialEarnings}</span>
+                          <span className="text-lg font-bold text-amber-500">mAYA</span>
+                        </div>
                     </div>
 
                     <div className="space-y-4">
+                      {error && (
+                        <motion.div 
+                          initial={{ opacity: 0, height: 0, scale: 0.95 }}
+                          animate={{ opacity: 1, height: "auto", scale: 1 }}
+                          exit={{ opacity: 0, height: 0, scale: 0.95 }}
+                          className="flex items-center justify-center gap-2 text-sm font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border-2 border-red-100 dark:border-red-900/50 py-3 px-4 rounded-xl shadow-sm mb-2"
+                        >
+                           <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                          {error}
+                        </motion.div>
+                      )}
+
                       <Button
                         type="submit"
                         size="lg"
-                        className="w-full h-14 text-base font-bold shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all bg-gradient-to-r from-primary to-primary/90 hover:to-primary"
+                        className="w-full h-14 text-base font-bold shadow-sm hover:shadow-md transition-all rounded-lg bg-green-100 text-green-800 hover:bg-green-200 border border-green-300 dark:bg-green-900/40 dark:text-green-300 dark:border-green-800 dark:hover:bg-green-900/60"
                         disabled={
                           createStudyRoomMutation.isPending ||
-                          !isAuthLoaded ||
-                          !formData.title ||
-                          formData.skills.length === 0 ||
-                          (!isInstantRoom && (!formData.date || !formData.time))
+                          !isAuthLoaded
                         }
                       >
                         {createStudyRoomMutation.isPending ? (
@@ -495,15 +546,6 @@ export function CreateStudyRoomClient() {
                         )}
                       </Button>
                       
-                      {error && (
-                        <motion.div 
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          className="text-xs text-destructive text-center bg-destructive/10 border border-destructive/20 py-2.5 px-3 rounded-lg"
-                        >
-                          {error}
-                        </motion.div>
-                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -525,55 +567,67 @@ export function CreateStudyRoomClient() {
           router.push("/dashboard");
         }
       }}>
-        <DialogContent className="sm:max-w-md p-0 overflow-hidden border-0 shadow-2xl">
-          {/* Decorative Header */}
-          <div className="h-32 bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center relative overflow-hidden">
-            <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay"></div>
-            <div className="h-20 w-20 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center shadow-inner">
-               <CheckCircle2 className="h-10 w-10 text-white drop-shadow-md" />
+        <DialogContent className="sm:max-w-md p-0 overflow-hidden border border-border/40 shadow-2xl rounded-[24px] bg-background">
+          <div className="p-8 flex flex-col items-center text-center space-y-6">
+            
+            {/* Animated unique success Icon */}
+            <div className="relative">
+              <div className="h-16 w-16 rounded-full bg-green-500/10 flex items-center justify-center">
+                <CheckCircle2 className="h-8 w-8 text-green-600 dark:text-green-400" strokeWidth={2.5} />
+              </div>
+               <div className="absolute -bottom-1 -right-1 bg-background rounded-full p-1">
+                 <span className="relative flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                  </span>
+               </div>
             </div>
-          </div>
-          
-          <div className="p-6 md:p-8 space-y-6">
-            <div className="text-center space-y-2">
-              <DialogTitle className="text-2xl font-bold text-foreground">Room Created Successfully!</DialogTitle>
-              <DialogDescription className="text-base text-muted-foreground">
-                Your study session is ready. Share the link below to invite participants.
+
+            <div className="space-y-2">
+              <DialogTitle className="text-2xl font-bold tracking-tight">Room Launched!</DialogTitle>
+              <DialogDescription className="text-muted-foreground text-base max-w-[280px] mx-auto leading-relaxed">
+                 Your session is ready. Invite friends or wait for learners to join.
               </DialogDescription>
             </div>
             
             {createdRoom && (
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 p-2 pl-4 rounded-xl border bg-muted/40 hover:bg-muted/60 transition-colors">
-                  <span className="text-sm text-muted-foreground truncate flex-1 font-mono">
+              <div className="w-full space-y-4">
+                {/* Copy Link Section */}
+                <div className="group relative flex items-center gap-2 p-1 pl-4 rounded-xl border border-input bg-muted/30 hover:bg-muted/50 transition-colors">
+                  <span className="text-sm text-foreground/80 truncate flex-1 font-medium font-mono">
                     {`${typeof window !== "undefined" ? window.location.origin : ""}/studyroom/${createdRoom.id}`}
                   </span>
-                  <Button size="sm" variant="secondary" className="h-9 rounded-lg shadow-sm" onClick={() => {
-                     navigator.clipboard.writeText(`${window.location.origin}/studyroom/${createdRoom.id}`);
-                  }}>
+                  <Button 
+                    size="sm" 
+                    variant="ghost"
+                    className="h-9 w-16 text-xs font-semibold rounded-lg bg-background shadow-sm hover:shadow border border-border/50 text-foreground"
+                    onClick={() => {
+                       navigator.clipboard.writeText(`${window.location.origin}/studyroom/${createdRoom.id}`);
+                    }}
+                  >
                     Copy
                   </Button>
                 </div>
                 
-                <div className="grid grid-cols-2 gap-3">
+                {/* Action Buttons */}
+                <div className="grid grid-cols-2 gap-3 w-full">
                   <ShareButton
                     url={`${typeof window !== "undefined" ? window.location.origin : ""}/studyroom/${createdRoom.id}`}
                     title={createdRoom.title}
                     description={createdRoom.description || ""}
-                    className="w-full"
+                    className="w-full h-11 rounded-xl border-dashed border-2 hover:border-primary/50 hover:bg-primary/5"
                   />
                   <Button
                     onClick={() => router.push(`/studyroom/${createdRoom.id}`)}
-                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+                    className="w-full h-11 rounded-xl font-semibold shadow-sm hover:shadow-md transition-all bg-green-100 text-green-800 hover:bg-green-200 border border-green-300 dark:bg-green-900/40 dark:text-green-300 dark:border-green-800 dark:hover:bg-green-900/60"
                   >
                     Enter Room
                   </Button>
                 </div>
               </div>
             )}
-          </div>
-          <div className="bg-muted/20 p-4 flex justify-center border-t">
-             <Button variant="link" onClick={() => router.push("/dashboard")} className="text-muted-foreground hover:text-foreground text-xs h-auto p-0">
+            
+             <Button variant="ghost" onClick={() => router.push("/dashboard")} className="text-muted-foreground hover:text-foreground text-xs hover:bg-transparent pt-2">
                 Return to Dashboard
              </Button>
           </div>

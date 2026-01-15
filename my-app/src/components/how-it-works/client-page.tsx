@@ -24,7 +24,7 @@ const FEATURES = {
     ],
     image: "https://placehold.co/800x500/e0f2fe/0369a1?text=Study+Rooms+Demo",
     cta: "Browse Rooms",
-    href: "/browse"
+    href: "/browse?tab=studyRooms"
   },
   "peer-sessions": {
     label: "Peer Sessions",
@@ -38,7 +38,7 @@ const FEATURES = {
     ],
     image: "https://placehold.co/800x500/f0fdf4/15803d?text=Peer+Sessions+Demo",
     cta: "Find Peers",
-    href: "/browse"
+    href: "/browse?tab=peers"
   },
   "aya-coins": {
     label: "mAYA Coins",
@@ -52,7 +52,7 @@ const FEATURES = {
     ],
     image: "https://placehold.co/800x500/fff7ed/ea580c?text=mAYA+Coins+Demo",
     cta: "Check Wallet",
-    href: "/dashboard"
+    href: "/profile?tab=wallet"
   },
   "streaks": {
     label: "Streaks & Growth",

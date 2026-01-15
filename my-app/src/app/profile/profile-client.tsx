@@ -142,64 +142,65 @@ function ProfileContent() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-muted/5">
       <Navigation />
 
       <main className="flex-1 container mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-8 pb-20 md:pb-8">
         {/* Profile Header */}
-        <Card className="mb-8">
-          <CardContent className="pt-6">
-            <div className="flex flex-col lg:flex-row items-center lg:items-start gap-6 lg:gap-8">
-              <Avatar className="h-24 w-24 sm:h-32 sm:w-32">
-                <AvatarImage src={currentUser.avatar} alt={currentUser.name} />
-                <AvatarFallback className="text-2xl sm:text-4xl">
-                  {currentUser.name.charAt(0)}
-                </AvatarFallback>
-              </Avatar>
+        <Card className="mb-8 border-none shadow-sm bg-white">
+          <CardContent className="pt-8 pb-8">
+            <div className="flex flex-col lg:flex-row items-center lg:items-start gap-6 lg:gap-10">
+              <div className="relative group">
+                <div className="absolute inset-0 bg-gradient-to-tr from-emerald-500/20 to-sky-500/20 rounded-full blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                <Avatar className="h-28 w-28 sm:h-40 sm:w-40 border-4 border-background shadow-xl relative">
+                  <AvatarImage src={currentUser.avatar} alt={currentUser.name} className="object-cover" />
+                  <AvatarFallback className="text-3xl sm:text-5xl bg-emerald-100 text-emerald-700">
+                    {currentUser.name.charAt(0)}
+                  </AvatarFallback>
+                </Avatar>
+              </div>
 
                 <div className="flex-1 min-w-0 w-full">
                 <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 lg:gap-6">
                   <div className="flex-1 text-center lg:text-left">
                     <div className="flex items-center justify-center lg:justify-start gap-3 flex-wrap">
-                      <h1 className="text-2xl sm:text-3xl font-bold">{currentUser.name}</h1>
-                      <SocialLinksDisplay socialLinks={currentUser.socialLinks} size="lg" />
+                      <h1 className="text-3xl font-extrabold tracking-tight lg:text-4xl text-foreground bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/80">
+                        {currentUser.name}
+                      </h1>
+                      <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100/80 border-0">
+                         Student
+                      </Badge>
                     </div>
-                    <p className="text-muted-foreground mt-1 text-sm md:text-base">
-                      @{currentUser.username || currentUser.email.split('@')[0]}
-                    </p>
+                    
+                    <div className="mt-2 flex items-center justify-center lg:justify-start gap-2 text-muted-foreground my-2">
+                       <span className="text-base font-medium">@{currentUser.username || currentUser.email.split('@')[0]}</span>
+                       <SocialLinksDisplay socialLinks={currentUser.socialLinks} size="sm" />
+                    </div>
 
-                    <div className="flex flex-col md:flex-row md:flex-wrap md:items-center gap-3 md:gap-4 mt-3">
-                      <div className="flex items-center justify-center md:justify-start gap-1">
-                        <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
-                        <span className="font-medium">
-                          {avgRating.toFixed(1)}
-                        </span>
-                        <span className="text-sm text-muted-foreground">
-                          ({reviewCount} reviews)
-                        </span>
+                    <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3 md:gap-4 mt-4">
+                      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-50 border border-amber-100 text-amber-900 shadow-sm">
+                        <Star className="h-4 w-4 fill-amber-500 text-amber-500" />
+                        <span className="font-bold">{avgRating.toFixed(1)}</span>
+                        <span className="text-xs opacity-70">({reviewCount} reviews)</span>
                       </div>
 
-                      <div className="flex items-center justify-center md:justify-start gap-1 text-muted-foreground">
-                        <Users className="h-5 w-5" />
-                        <span className="font-medium text-foreground">
-                          {totalSessions}
-                        </span>
-                        <span className="text-sm">sessions</span>
+                      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-50 border border-slate-200 text-slate-700 shadow-sm">
+                        <Users className="h-4 w-4 text-slate-500" />
+                        <span className="font-bold">{totalSessions}</span>
+                        <span className="text-xs opacity-70">sessions</span>
                       </div>
 
-                      <div className="flex items-center justify-center md:justify-start">
-                        <Coins className="h-5 w-5 text-yellow-600" />
-                        <span className="ml-1 font-medium">
-                          {formatCoins(currentUser.coins)} AYA
-                        </span>
+                      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-700 shadow-sm">
+                        <Coins className="h-4 w-4 text-emerald-600" />
+                        <span className="font-bold">{formatCoins(currentUser.coins)}</span>
+                        <span className="text-xs opacity-70">AYA</span>
                       </div>
 
                       {currentUser.hourlyRate && (
-                        <div className="flex items-center justify-center md:justify-start">
-                          <Coins className="h-5 w-5 text-green-600" />
-                          <span className="ml-1 font-medium">
-                            {formatCoins(currentUser.hourlyRate)} AYA/hr
-                          </span>
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-sky-50 border border-sky-100 text-sky-700 shadow-sm">
+                          <Coins className="h-4 w-4 text-sky-600" />
+                          <span className="font-bold">{formatCoins(currentUser.hourlyRate)}</span>
+                          <span className="text-xs opacity-70">AYA/hr</span>
                         </div>
                       )}
 
@@ -207,7 +208,7 @@ function ProfileContent() {
                   </div>
 
                   <Button
-                    className="w-full md:w-auto"
+                    className="w-full md:w-auto bg-slate-900 hover:bg-slate-800 text-white shadow-lg shadow-slate-900/10 hover:shadow-slate-900/20 transition-all rounded-xl"
                     onClick={() => setIsEditModalOpen(true)}
                   >
                     <Edit className="h-4 w-4 mr-2" />
@@ -217,19 +218,21 @@ function ProfileContent() {
                 </div>
 
                 {currentUser.bio && (
-                  <p className="mt-4 text-muted-foreground text-center lg:text-left">{currentUser.bio}</p>
+                  <p className="mt-6 text-muted-foreground text-center lg:text-left leading-relaxed max-w-3xl border-l-2 border-emerald-500/20 pl-4">
+                    {currentUser.bio}
+                  </p>
                 )}
                 
                 {(currentUser.location || currentUser.school) && (
-                  <div className="mt-3 flex flex-wrap gap-4 text-sm text-muted-foreground justify-center lg:justify-start text-center lg:text-left">
+                  <div className="mt-5 flex flex-wrap gap-6 text-sm font-medium text-muted-foreground justify-center lg:justify-start text-center lg:text-left">
                     {currentUser.location && (
-                      <span className="flex items-center gap-1">
-                        📍 {currentUser.location}
+                      <span className="flex items-center gap-2">
+                         <span className="bg-slate-100 p-1 rounded-md">📍</span> {currentUser.location}
                       </span>
                     )}
                     {currentUser.school && (
-                      <span className="flex items-center gap-1">
-                        🎓 {currentUser.school}
+                      <span className="flex items-center gap-2">
+                        <span className="bg-slate-100 p-1 rounded-md">🎓</span> {currentUser.school}
                       </span>
                     )}
                   </div>
@@ -246,7 +249,7 @@ function ProfileContent() {
               value={activeTab}
               onValueChange={(value) => handleTabChange(value as TabKey)}
             >
-              <SelectTrigger className="w-full justify-between">
+              <SelectTrigger className="w-full justify-between bg-background/60 backdrop-blur-sm border-border/40 h-12 rounded-xl">
                 <SelectValue placeholder="Select section" />
               </SelectTrigger>
               <SelectContent>
@@ -259,13 +262,13 @@ function ProfileContent() {
             </Select>
           </div>
 
-          <TabsList className="hidden w-full grid-cols-4 gap-2 rounded-xl bg-muted/60 p-1 md:grid mb-6">
+          <TabsList className="hidden w-full grid-cols-4 gap-2 rounded-2xl bg-background/60 backdrop-blur-sm p-1.5 md:grid mb-8 border border-border/40 shadow-sm h-auto">
             {TAB_OPTIONS.map((tab) => (
               <TabsTrigger
                 key={tab.value}
                 active={activeTab === tab.value}
                 onClick={() => handleTabChange(tab.value)}
-                className="w-full rounded-lg px-3 py-2 text-sm font-semibold transition hover:bg-background/70"
+                className="w-full rounded-xl px-3 py-2.5 text-sm font-semibold transition-all data-[state=active]:bg-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-md hover:bg-white/50 data-[state=active]:hover:bg-emerald-700"
               >
                 {tab.label}
               </TabsTrigger>
@@ -278,13 +281,15 @@ function ProfileContent() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8 items-start">
                 {/* Skills & Interests */}
                 <div className="space-y-6">
-                  <Card>
+                  <Card className="border-none shadow-sm bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm overflow-hidden">
+                    <div className="h-1 w-full bg-gradient-to-r from-emerald-500 to-teal-500" />
                     <CardHeader>
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <CardTitle>I can teach</CardTitle>
+                        <CardTitle className="text-lg font-bold">I can teach</CardTitle>
                         <Button
-                          variant="outline"
+                          variant="ghost"
                           size="sm"
+                          className="text-muted-foreground hover:text-foreground hover:bg-black/5"
                           onClick={() => setIsEditModalOpen(true)}
                         >
                           <Edit className="h-4 w-4 mr-2" />
@@ -295,12 +300,13 @@ function ProfileContent() {
                     <CardContent>
                       <div className="flex flex-wrap gap-2">
                         {!currentUser.hasSkills || currentUser.hasSkills.length === 0 ? (
-                          <p className="text-muted-foreground text-sm">
-                            No skills added yet
-                          </p>
+                          <div className="w-full py-6 flex flex-col items-center justify-center text-center border-2 border-dashed border-muted rounded-xl bg-muted/30">
+                            <p className="text-muted-foreground text-sm mb-2">No skills added yet</p>
+                            <Button variant="link" size="sm" onClick={() => setIsEditModalOpen(true)} className="text-emerald-600 font-medium">Add Skills</Button>
+                          </div>
                         ) : (
                           currentUser.hasSkills.map((skillName, index) => (
-                            <Badge key={index} variant="default" className="text-xs">
+                            <Badge key={index} variant="secondary" className="px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-100 hover:bg-emerald-100/80">
                               {skillName}
                             </Badge>
                           ))
@@ -309,13 +315,15 @@ function ProfileContent() {
                     </CardContent>
                   </Card>
 
-                  <Card>
+                  <Card className="border-none shadow-sm bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm overflow-hidden">
+                    <div className="h-1 w-full bg-gradient-to-r from-sky-500 to-indigo-500" />
                     <CardHeader>
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <CardTitle>I want to learn</CardTitle>
+                        <CardTitle className="text-lg font-bold">I want to learn</CardTitle>
                         <Button
-                          variant="outline"
+                          variant="ghost"
                           size="sm"
+                          className="text-muted-foreground hover:text-foreground hover:bg-black/5"
                           onClick={() => setIsEditModalOpen(true)}
                         >
                           <Edit className="h-4 w-4 mr-2" />
@@ -326,12 +334,13 @@ function ProfileContent() {
                     <CardContent>
                       <div className="flex flex-wrap gap-2">
                         {!currentUser.wantSkills || currentUser.wantSkills.length === 0 ? (
-                          <p className="text-muted-foreground text-sm">
-                            No learning interests added yet
-                          </p>
+                           <div className="w-full py-6 flex flex-col items-center justify-center text-center border-2 border-dashed border-muted rounded-xl bg-muted/30">
+                             <p className="text-muted-foreground text-sm mb-2">No interests added yet</p>
+                             <Button variant="link" size="sm" onClick={() => setIsEditModalOpen(true)} className="text-sky-600 font-medium">Add Interests</Button>
+                           </div>
                         ) : (
                           currentUser.wantSkills.map((skillName, index) => (
-                            <Badge key={index} variant="secondary" className="text-xs">
+                            <Badge key={index} variant="secondary" className="px-3 py-1 bg-sky-50 text-sky-700 border border-sky-100 hover:bg-sky-100/80">
                               {skillName}
                             </Badge>
                           ))
@@ -341,21 +350,26 @@ function ProfileContent() {
                   </Card>
 
                   {/* Achievement Showcase */}
-                  <div className="rounded-2xl border bg-background/60 p-1 shadow-sm">
+                  <div className="rounded-2xl border-none shadow-md overflow-hidden bg-gradient-to-br from-indigo-50/50 via-purple-50/50 to-pink-50/50 dark:from-indigo-950/20 dark:via-purple-950/20 dark:to-pink-950/20">
                     <AchievementShowcaseConnected />
                   </div>
                 </div>
 
                 {/* Availability Settings */}
                 <div className="space-y-6">
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle>Availability</CardTitle>
+                  <Card className="border-none shadow-sm bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm overflow-hidden h-full">
+                    <CardHeader className="pb-4 border-b border-border/40">
+                      <CardTitle className="flex items-center gap-2">
+                        <div className="p-1.5 rounded-lg bg-orange-100 text-orange-600">
+                          <Users className="h-4 w-4" />
+                        </div>
+                        Availability
+                      </CardTitle>
                       <p className="text-sm text-muted-foreground">
-                        Keep your weekly slots current so learners know when to book you.
+                        Manage your weekly schedule for peer sessions.
                       </p>
                     </CardHeader>
-                    <CardContent className="pt-0">
+                    <CardContent className="pt-6">
                       <AvailabilitySettings userId={currentUser.id} isOwnProfile={true} />
                     </CardContent>
                   </Card>
@@ -382,45 +396,54 @@ function ProfileContent() {
           {activeTab === "reviews" && <TabsContent>
             <div className="space-y-6">
               {/* Beautiful Profile Stats Chart - Connected to Backend */}
-              <ProfileStatsChart
-                reviews={userReviews}
-                avgRating={avgRating}
-                sessionsTaught={sessionsTaught}
-                sessionsAttended={sessionsAttendedAsLearner}
-              />
+              <div className="rounded-2xl border-none shadow-sm bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm p-1">
+                 <ProfileStatsChart
+                  reviews={userReviews}
+                  avgRating={avgRating}
+                  sessionsTaught={sessionsTaught}
+                  sessionsAttended={sessionsAttendedAsLearner}
+                />
+              </div>
 
               {/* All Reviews */}
-              <Card>
+              <Card className="border-none shadow-sm bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Star className="h-5 w-5 text-amber-500" />
-                    All Reviews ({userReviews.length})
+                  <CardTitle className="flex items-center gap-2 text-xl font-bold">
+                    <div className="bg-amber-100 p-1.5 rounded-lg">
+                      <Star className="h-5 w-5 text-amber-600 fill-amber-600" />
+                    </div>
+                    All Reviews <span className="text-muted-foreground font-normal ml-1 text-base">({userReviews.length})</span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
                     {userReviews.length === 0 ? (
-                      <div className="text-center py-8 text-muted-foreground">
-                        <Star className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                        <p className="font-medium mb-1">No reviews yet</p>
-                        <p className="text-sm">Complete sessions to receive reviews</p>
+                      <div className="text-center py-12 text-muted-foreground bg-white/40 rounded-xl border border-dashed border-slate-200">
+                        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-100 mb-4">
+                           <Star className="h-8 w-8 text-slate-400" />
+                        </div>
+                        <p className="font-medium text-lg text-slate-900 mb-1">No reviews yet</p>
+                        <p className="text-sm">Complete sessions to receive reviews and build your reputation</p>
                       </div>
                     ) : (
-                      userReviews.map((review) => (
-                        <ReviewCardComponent
-                          key={review.id}
-                          review={{
-                            id: review.id,
-                            rating: review.rating,
-                            review: review.review,
-                            reviewer: {
-                              id: review.reviewer.id,
-                              name: review.reviewer.name,
-                              avatar: review.reviewer.avatar,
-                            },
-                          }}
-                        />
-                      ))
+                      <div className="grid gap-4">
+                        {userReviews.map((review) => (
+                          <div key={review.id} className="bg-white/80 p-4 rounded-xl shadow-sm border border-slate-100">
+                             <ReviewCardComponent
+                               review={{
+                                 id: review.id,
+                                 rating: review.rating,
+                                 review: review.review,
+                                 reviewer: {
+                                   id: review.reviewer.id,
+                                   name: review.reviewer.name,
+                                   avatar: review.reviewer.avatar,
+                                 },
+                               }}
+                             />
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
                 </CardContent>

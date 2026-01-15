@@ -263,6 +263,27 @@ export function SkillInput({
       {label && (
         <label className="text-sm font-medium">{label}</label>
       )}
+
+      {/* Selected tags */}
+      <div className="flex flex-wrap gap-2 mb-2">
+        {selectedSkills.map((skill) => (
+          <Badge
+            key={skill}
+            variant="secondary"
+            className="pl-2 pr-1 py-1 gap-1 bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 border-transparent font-medium"
+          >
+            {skill}
+            <button
+              type="button"
+              onClick={() => removeSkill(skill)}
+              className="ml-1 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-full p-0.5 transition-colors"
+            >
+              <X className="h-3 w-3" />
+              <span className="sr-only">Remove {skill}</span>
+            </button>
+          </Badge>
+        ))}
+      </div>
       
       <div className="relative">
         <Input
@@ -365,17 +386,7 @@ export function SkillInput({
       {/* Selected skills */}
       {selectedSkills.length > 0 && (
         <div className="flex flex-wrap gap-2">
-          {selectedSkills.map((skill) => (
-            <Badge
-              key={skill}
-              variant="default"
-              className="cursor-pointer hover:bg-destructive hover:text-destructive-foreground transition-colors"
-              onClick={() => removeSkill(skill)}
-            >
-              {skill}
-              <X className="ml-1 h-3 w-3" />
-            </Badge>
-          ))}
+            
         </div>
       )}
 
