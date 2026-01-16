@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { Inter } from "next/font/google";
 import localFont from "next/font/local";
 import { ClerkProvider } from "@clerk/nextjs";
+import { Toaster } from "sonner";
 import { QueryProvider } from "@/providers/query-provider";
 import { ToastProvider } from "@/contexts/toast-context";
 import { NotificationProvider } from "@/contexts/notification-context";
@@ -255,6 +256,7 @@ export default function RootLayout({
                     <HiddenSignInButton />
                   </Suspense>
                   <ServiceWorkerRegistration />
+                  <Toaster position="top-center" richColors closeButton duration={4000} />
                 </AchievementNotificationProvider>
               </ToastProvider>
             </NotificationProvider>
