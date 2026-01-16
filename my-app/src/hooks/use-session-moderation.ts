@@ -145,7 +145,7 @@ export function useSessionModeration({ sessionId, sessionType, isHost, token, us
       }
     });
 
-    s.on('meeting-ended', (data: any) => {
+    s.on('meeting-ended', (data: { reason?: string }) => {
       console.log('[moderation] meeting-ended', data);
       setMeetingEnded(true);
     });
@@ -277,7 +277,7 @@ export function useSessionModeration({ sessionId, sessionType, isHost, token, us
       }
     });
 
-    s.on('moderation-error', (data: any) => {
+    s.on('moderation-error', (data: { message?: string }) => {
       setError(data?.message || 'Moderation error');
     });
 
