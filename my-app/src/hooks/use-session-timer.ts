@@ -6,10 +6,12 @@ interface UseSessionTimerProps {
   onTimeUp: () => void;
   onWarning: (minutesLeft: number) => void;
   enabled?: boolean;
+  extendedEndTime?: number | null; // Optional extended end time from socket
 }
 
-export function useSessionTimer({ startTime, duration, onTimeUp, onWarning, enabled = true }: UseSessionTimerProps) {
+export function useSessionTimer({ startTime, duration, onTimeUp, onWarning, enabled = true, extendedEndTime }: UseSessionTimerProps) {
   const [timeSpent, setTimeSpent] = useState<number>(0);
+  const [currentDuration, setCurrentDuration] = useState<number>(duration);
   const warningShownRef = useRef(false);
   const timeUpCalledRef = useRef(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -22,13 +24,33 @@ export function useSessionTimer({ startTime, duration, onTimeUp, onWarning, enab
     };
   }, []);
 
+  // Update duration when session is extended
+  useEffect(() => {
+    if (extendedEndTime && startTime) {
+      const newDurationMs = extendedEndTime - startTime;
+      const newDurationMinutes = Math.ceil(newDurationMs / 60000);
+      setCurrentDuration(newDurationMinutes);
+      // Reset warning flag so warning can show again if needed
+      warningShownRef.current = false;
+    }
+  }, [extendedEndTime, startTime]);
+
+  // Reset duration when initial duration changes
+  useEffect(() => {
+    if (!extendedEndTime) {
+      setCurrentDuration(duration);
+    }
+  }, [duration, extendedEndTime]);
+
   useEffect(() => {
     if (!enabled || !isMountedRef.current) {
       return;
     }
 
-    // Reset refs
-    warningShownRef.current = false;
+    // Reset refs when enabled changes
+    if (!extendedEndTime) {
+      warningShownRef.current = false;
+    }
     timeUpCalledRef.current = false;
 
     const calculateTimeSpent = () => {
@@ -45,7 +67,7 @@ export function useSessionTimer({ startTime, duration, onTimeUp, onWarning, enab
       const spent = calculateTimeSpent();
       setTimeSpent(spent);
 
-			const durationMs = duration * 60000;
+			const durationMs = currentDuration * 60000;
 			const remainingMs = Math.max(0, durationMs - spent);
 
 			// Trigger warning at exactly 5:00 (300 seconds = 300000ms)
@@ -68,23 +90,28 @@ export function useSessionTimer({ startTime, duration, onTimeUp, onWarning, enab
         clearInterval(intervalRef.current);
       }
     };
-  }, [startTime, duration, enabled, onTimeUp, onWarning]);
+  }, [startTime, currentDuration, enabled, onTimeUp, onWarning, extendedEndTime]);
 
   const formatTime = useCallback(() => {
-    const durationMs = duration * 60000;
+    const durationMs = currentDuration * 60000;
     const remainingMs = Math.max(0, durationMs - timeSpent);
     const minutes = Math.floor(remainingMs / 60000);
     const seconds = Math.floor((remainingMs % 60000) / 1000);
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-  }, [timeSpent, duration]);
+  }, [timeSpent, currentDuration]);
 
-  const durationMs = duration * 60000;
+  const durationMs = currentDuration * 60000;
   const remainingMs = Math.max(0, durationMs - timeSpent);
+
+  // Calculate current end time for extension purposes
+  const currentEndTime = startTime + (currentDuration * 60000);
 
   return {
     timeSpent,
     timeRemaining: remainingMs,
     formattedTime: formatTime(),
     minutesLeft: Math.floor(remainingMs / 60000),
+    currentDuration,
+    currentEndTime,
   };
 }

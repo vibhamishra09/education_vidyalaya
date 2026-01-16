@@ -166,4 +166,23 @@ export class ChatService {
 
     return null;
   }
+
+  /**
+   * Get session info from a channel ID.
+   * Returns the externalType (studyRoom/peerSession) and externalId (sessionId).
+   */
+  async getSessionInfoFromChannelId(channelId: string): Promise<{ externalType: string; externalId: string } | null> {
+    const channel = await this.prisma.channel.findUnique({
+      where: { id: channelId },
+    }) as { externalType?: string | null; externalId?: string | null } | null;
+
+    if (!channel || !channel.externalType || !channel.externalId) {
+      return null;
+    }
+
+    return {
+      externalType: channel.externalType,
+      externalId: channel.externalId,
+    };
+  }
 }

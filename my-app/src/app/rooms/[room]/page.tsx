@@ -1,14 +1,16 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { useAuth } from '@clerk/nextjs'
 import axios from 'axios'
 import { EnhancedVideoRoom } from '@/components/livekit/EnhancedVideoRoom'
 import apiClient from '@/lib/api-client'
-import { Loader2 } from 'lucide-react'
+import { Loader2, XCircle } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 
 export default function RoomPage() {
 	const params = useParams<{ room: string }>()
+	const router = useRouter()
 	const roomName = params.room
 	const { getToken } = useAuth()
 	const [token, setToken] = useState<string | null>(null)
@@ -18,11 +20,13 @@ export default function RoomPage() {
 		date: string;
 		duration: number;
 		sessionType: 'studyRoom' | 'peerSession';
+		sessionStatus?: string;
 		[key: string]: unknown;
 	} | null>(null)
 	const [isHost, setIsHost] = useState<boolean>(false)
 	const [error, setError] = useState<string | null>(null)
 	const [loading, setLoading] = useState(true)
+	const [sessionEnded, setSessionEnded] = useState(false)
 
 	useEffect(() => {
 		let mounted = true
@@ -87,7 +91,19 @@ export default function RoomPage() {
 				}
 				if (results[2]?.data) {
 					// Add session type to sessionData
-					const data = results[2].data as { id: string; date: string; duration: number; [key: string]: unknown };
+					const data = results[2].data as { id: string; date: string; duration: number; sessionStatus?: string; [key: string]: unknown };
+					
+					// Check if session is already completed
+					if (data.sessionStatus === 'DONE' || data.sessionStatus === 'CANCELLED') {
+						setSessionEnded(true)
+						setSessionData({
+							...data,
+							sessionType: isStudyRoom ? 'studyRoom' : 'peerSession',
+						})
+						setLoading(false)
+						return
+					}
+					
 					setSessionData({
 						...data,
 						sessionType: isStudyRoom ? 'studyRoom' : 'peerSession',
@@ -146,6 +162,42 @@ export default function RoomPage() {
 				<div className="text-center text-red-600">
 					<p className="text-xl font-semibold mb-2">Error</p>
 					<p>{error}</p>
+				</div>
+			</div>
+		)
+	}
+
+	if (sessionEnded) {
+		return (
+			<div className="h-screen w-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800">
+				<div className="text-center max-w-md mx-auto p-8">
+					<div className="flex justify-center mb-6">
+						<div className="h-20 w-20 rounded-full bg-red-500/20 flex items-center justify-center ring-2 ring-red-500/30">
+							<XCircle className="h-10 w-10 text-red-400" />
+						</div>
+					</div>
+					<h1 className="text-2xl font-bold text-white mb-3">Session Has Ended</h1>
+					<p className="text-gray-400 mb-6">
+						This {sessionData?.sessionType === 'studyRoom' ? 'study room' : 'peer session'} has already been completed. 
+						You cannot join a session that has ended.
+					</p>
+					<div className="flex flex-col gap-3">
+						<Button 
+							onClick={() => router.push('/dashboard')}
+							className="w-full bg-primary hover:bg-primary/90"
+						>
+							Go to Dashboard
+						</Button>
+						{sessionData?.id && (
+							<Button 
+								variant="outline"
+								onClick={() => router.push(`/session-feedback/${sessionData.id}?type=${sessionData.sessionType}&isHost=false`)}
+								className="w-full border-white/20 text-white hover:bg-white/10"
+							>
+								Leave Feedback
+							</Button>
+						)}
+					</div>
 				</div>
 			</div>
 		)

@@ -23,6 +23,8 @@ import { StreaksModule } from './streaks/streaks.module';
 import { AchievementsModule } from './achievements/achievements.module';
 import { TranscriptsModule } from './transcripts/transcripts.module';
 import { DebugModule } from './debug/debug.module';
+import { SessionExtensionModule } from './session-extension/session-extension.module';
+import { SessionModerationModule } from './session-moderation/session-moderation.module';
 import { LoggingInterceptor } from './logging.interceptor';
 
 @Module({
@@ -54,6 +56,8 @@ import { LoggingInterceptor } from './logging.interceptor';
     AchievementsModule,
     TranscriptsModule,
     DebugModule,
+    SessionExtensionModule,
+    SessionModerationModule,
   ],
   controllers: [AppController],
   providers: [
