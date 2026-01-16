@@ -6,7 +6,7 @@ import '@livekit/components-styles'
 import { BackgroundProcessor, BackgroundBlur, VirtualBackground, BackgroundOptions } from '@livekit/track-processors'
 import { ChatWidget } from '@/components/chat/ChatWidget'
 import { Button } from '@/components/ui/button'
-import { MessageSquare, X, Users, Maximize2, Minimize2, Video, VideoOff, Mic, MicOff, Volume2, VolumeX, Clock, MonitorUp, MonitorOff, Grid2X2, Presentation, Pin, PinOff, User, PictureInPicture2, Camera, CameraOff, Sparkles } from 'lucide-react'
+import { MessageSquare, X, Users, Maximize2, Minimize2, Video, VideoOff, Mic, MicOff, Volume2, VolumeX, Clock, MonitorUp, MonitorOff, Grid2X2, Presentation, Pin, PinOff, User, PictureInPicture2, Camera, CameraOff, Sparkles, TimerReset, Lock, Unlock, Settings2, PhoneOff } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { useSessionTimer } from '@/hooks/use-session-timer'
@@ -19,6 +19,10 @@ import { dashboardKeys } from '@/hooks/use-dashboard'
 import { achievementKeys } from '@/hooks/use-achievements'
 import { io, Socket } from 'socket.io-client'
 import { useSpeechRecognition } from '@/hooks/use-speech-recognition'
+import { useSessionExtension } from '@/hooks/use-session-extension'
+import { ExtensionRequestDialog } from '@/components/study-room/extension-request-dialog'
+import { EndMeetingDialog } from '@/components/study-room/end-meeting-dialog'
+import { useSessionModeration, RoomPermissions, PermissionRequest, ParticipantPermissionRequest } from '@/hooks/use-session-moderation'
 
 // Stable virtual backgrounds constant to avoid re-creating array each render
 const VIRTUAL_BACKGROUNDS = [
@@ -89,6 +93,24 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 	// Socket.io for transcripts
 	const [transcriptSocket, setTranscriptSocket] = useState<Socket | null>(null)
 	const socketConnectingRef = useRef(false)
+	
+	// Auth token for socket connection
+	const [authToken, setAuthToken] = useState<string | null>(null)
+	
+	// Loading state when ending meeting
+	const [endingMeeting, setEndingMeeting] = useState(false)
+	
+	// Confirmation dialog for ending meeting
+	const [showEndConfirmation, setShowEndConfirmation] = useState(false)
+	
+	// Get auth token on mount
+	useEffect(() => {
+		async function fetchToken() {
+			const token = await getToken()
+			setAuthToken(token)
+		}
+		fetchToken()
+	}, [getToken])
 
 	// Store showSuccess in ref to avoid recreating handleWarning callback
 	const showSuccessRef = useRef(showSuccess)
@@ -106,7 +128,147 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 	// Session timer with warnings (only if we have start time and duration)
 	const timerEnabled = !!sessionStartTime && sessionDuration > 0 && !!sessionData
 	
+	// Session extension hook
+	const {
+		hasExtended,
+		extendedEndTime,
+		pendingRequest,
+		requestExtension,
+		approveExtension,
+		dismissRequest,
+	} = useSessionExtension({
+		sessionId: sessionData?.id || null,
+		sessionType: sessionData?.sessionType || null,
+		isHost,
+		token: authToken,
+		enabled: timerEnabled,
+	})
+
+	// Session moderation hook (host actions + listeners)
+	const {
+		socket: moderationSocket,
+		isConnected: moderationConnected,
+		meetingEnded,
+		chatDisabled,
+		permissions, // Room-wide permissions (Lock system)
+		endMeetingForAll,
+		lockAudio,
+		lockVideo,
+		lockChat,
+		lockUserAudio,
+		lockUserVideo,
+		muteAll,
+		unmuteAll,
+		muteParticipant,
+		unmuteParticipant,
+		disableVideoAll,
+		enableVideoAll,
+		disableVideoParticipant,
+		enableVideoParticipant,
+		toggleChatDisabled,
+		// New request functions
+		requestAudioOn,
+		requestVideoOn,
+		respondToAudioRequest,
+		respondToVideoRequest,
+		pendingPermissionRequest,
+		dismissPermissionRequest,
+		// Participant request functions
+		participantRequestAudio,
+		participantRequestVideo,
+		// Host response functions
+		hostRespondParticipantAudio,
+		hostRespondParticipantVideo,
+		// Pending participant requests (for host UI)
+		pendingParticipantRequests,
+		clearParticipantRequest,
+	} = useSessionModeration({
+		sessionId: sessionData?.id || null,
+		sessionType: sessionData?.sessionType || null,
+		isHost,
+		token: authToken,
+		userId: user?.id,
+		enabled: !!sessionData?.id,
+	})
+
+	// Redirect all clients when server signals meeting ended
+	useEffect(() => {
+		if (!meetingEnded) return
+		const redirectUrl = `/session-feedback/${sessionData?.id}?type=${sessionData?.sessionType}&isHost=${isHost}`
+		router.push(redirectUrl)
+	}, [meetingEnded, sessionData?.id, sessionData?.sessionType, isHost, router])
+	
+	// Wrapper functions for request actions with toast notifications
+	const handleRequestAudioOn = useCallback((targetUserId: string) => {
+		requestAudioOn(targetUserId)
+		showSuccess('Request sent', 'Asked participant to unmute microphone')
+	}, [requestAudioOn, showSuccess])
+	
+	const handleRequestVideoOn = useCallback((targetUserId: string) => {
+		requestVideoOn(targetUserId)
+		showSuccess('Request sent', 'Asked participant to enable camera')
+	}, [requestVideoOn, showSuccess])
+	
+	const handleParticipantRequestAudio = useCallback(() => {
+		participantRequestAudio()
+		showSuccess('Request sent', 'Asked host for permission to unmute')
+	}, [participantRequestAudio, showSuccess])
+	
+	const handleParticipantRequestVideo = useCallback(() => {
+		participantRequestVideo()
+		showSuccess('Request sent', 'Asked host for permission to enable camera')
+	}, [participantRequestVideo, showSuccess])
+	
+	// Show confirmation dialog before ending meeting
+	const handleEndMeetingClick = useCallback(() => {
+		setShowEndConfirmation(true)
+	}, [])
+	
+	// Actually end the meeting after confirmation
+	const confirmEndMeeting = useCallback(async () => {
+		setShowEndConfirmation(false)
+		setEndingMeeting(true)
+		
+		// Call backend to complete the session
+		if (sessionData?.id && sessionData?.sessionType) {
+			try {
+				const authTokenValue = await getToken()
+				
+				if (sessionData.sessionType === 'studyRoom') {
+					await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/study-rooms/${sessionData.id}/complete`, {
+						method: 'POST',
+						headers: {
+							'Content-Type': 'application/json',
+							'Authorization': `Bearer ${authTokenValue}`,
+						},
+					})
+				} else if (sessionData.sessionType === 'peerSession') {
+					await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/peer-sessions/${sessionData.id}/complete`, {
+						method: 'PATCH',
+						headers: {
+							'Content-Type': 'application/json',
+							'Authorization': `Bearer ${authTokenValue}`,
+						},
+					})
+				}
+				
+				// Invalidate queries
+				await queryClient.invalidateQueries({ queryKey: streakKeys.current() })
+				await queryClient.invalidateQueries({ queryKey: dashboardKeys.all })
+				await queryClient.invalidateQueries({ queryKey: achievementKeys.all })
+			} catch (error) {
+				console.error('Error completing session:', error)
+			}
+		}
+		
+		// End meeting for all participants via socket
+		endMeetingForAll()
+	}, [sessionData?.id, sessionData?.sessionType, getToken, queryClient, endMeetingForAll])
+	
 	const handleTimeUp = useCallback(async () => {
+		// Set loading state
+		setEndingMeeting(true)
+		
 		// Only host should call the backend to complete the session
 		if (sessionData?.id && sessionData?.sessionType && isHost) {
 			try {
@@ -176,13 +338,26 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 		showSuccessRef.current('⏰ Session Ending Soon', `Your session will end in ${minutes} minutes.`)
 	}, [])
 	
-	const { formattedTime, minutesLeft } = useSessionTimer({
+	const { formattedTime, minutesLeft, currentEndTime } = useSessionTimer({
 		startTime: sessionStartTimestamp,
 		duration: sessionDuration || 60,
 		enabled: timerEnabled,
 		onTimeUp: handleTimeUp,
 		onWarning: handleWarning,
+		extendedEndTime,
 	})
+	
+	// Handle approving extension request from the dialog
+	const handleApproveExtension = useCallback(() => {
+		approveExtension(currentEndTime)
+	}, [approveExtension, currentEndTime])
+	
+	// Show toast when session is extended
+	useEffect(() => {
+		if (hasExtended && extendedEndTime) {
+			showSuccessRef.current('⏱️ Session Extended!', 'The session has been extended by 10 minutes.')
+		}
+	}, [hasExtended, extendedEndTime])
 
 	// Auto-show chat on desktop, hide on mobile
 	useEffect(() => {
@@ -307,7 +482,7 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 	} as RoomOptions), [])
 
 	return (
-		<div className="h-screen w-screen flex flex-col bg-[#202124] overflow-hidden" style={{ overflow: 'hidden', position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}>
+		<div className="h-screen w-screen flex flex-col bg-[#202124] overflow-hidden fixed inset-0">
 			<LiveKitRoom
 				video={false}
 				audio={true}
@@ -331,8 +506,53 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 					minutesLeft={minutesLeft}
 					sessionTitle={sessionData?.title as string | undefined}
 					isHost={isHost}
+					hasExtended={hasExtended}
+					onRequestExtension={requestExtension}
+					onExtendSession={() => approveExtension(currentEndTime)}
+					currentUserId={user?.id}
+					moderationSocket={moderationSocket}
+					onEndMeeting={handleEndMeetingClick}
+					endingMeeting={endingMeeting}
+					onMuteAll={muteAll}
+					onUnmuteAll={unmuteAll}
+					onMuteParticipant={muteParticipant}
+					onUnmuteParticipant={unmuteParticipant}
+					onDisableVideoAll={disableVideoAll}
+					onEnableVideoAll={enableVideoAll}
+					onDisableVideoParticipant={disableVideoParticipant}
+					onEnableVideoParticipant={enableVideoParticipant}
+					onToggleChat={toggleChatDisabled}
+					chatDisabled={chatDisabled}
+					permissions={permissions}
+					onLockAudio={lockAudio}
+					onLockVideo={lockVideo}
+					onLockChat={lockChat}
+					onLockUserAudio={lockUserAudio}
+					onLockUserVideo={lockUserVideo}
+					onRequestAudioOn={handleRequestAudioOn}
+					onRequestVideoOn={handleRequestVideoOn}
+					pendingPermissionRequest={pendingPermissionRequest}
+					respondToAudioRequest={respondToAudioRequest}
+					respondToVideoRequest={respondToVideoRequest}
+					dismissPermissionRequest={dismissPermissionRequest}
+					participantRequestAudio={handleParticipantRequestAudio}
+					participantRequestVideo={handleParticipantRequestVideo}
+					hostRespondParticipantAudio={hostRespondParticipantAudio}
+					hostRespondParticipantVideo={hostRespondParticipantVideo}
+					pendingParticipantRequests={pendingParticipantRequests}
+					clearParticipantRequest={clearParticipantRequest}
 				/>
 		</LiveKitRoom>
+
+		{/* Extension Request Dialog - Shows when a participant requests extension (Host only) */}
+		{isHost && pendingRequest && (
+			<ExtensionRequestDialog
+				open={!!pendingRequest}
+				requesterName={pendingRequest.name}
+				onApprove={handleApproveExtension}
+				onDismiss={dismissRequest}
+			/>
+		)}
 
 		{/* Warning Dialog - Shows at 5 minutes (Only for host) */}
 		{timerEnabled && isHost && (
@@ -342,6 +562,29 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 					onClose={() => setShowWarning(false)}
 				/>
 			)}
+			
+		{/* End Meeting Confirmation Dialog */}
+		{isHost && (
+			<EndMeetingDialog
+				open={showEndConfirmation}
+				onConfirm={confirmEndMeeting}
+				onCancel={() => setShowEndConfirmation(false)}
+			/>
+		)}
+		
+		{/* Loading Overlay when ending meeting */}
+		{endingMeeting && (
+			<div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/90 backdrop-blur-sm">
+				<div className="relative">
+					<div className="h-16 w-16 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+					<div className="absolute inset-0 flex items-center justify-center">
+						<PhoneOff className="h-6 w-6 text-primary animate-pulse" />
+					</div>
+				</div>
+				<p className="mt-6 text-lg font-medium text-white">Ending Session...</p>
+				<p className="mt-2 text-sm text-gray-400">Please wait while we wrap things up</p>
+			</div>
+		)}
 		</div>
 	)
 }
@@ -361,6 +604,41 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	minutesLeft,
 	sessionTitle,
 	isHost,
+	hasExtended,
+	onRequestExtension,
+	onExtendSession,
+	currentUserId,
+	moderationSocket,
+	onEndMeeting,
+	endingMeeting,
+	onMuteAll,
+	onUnmuteAll,
+	onMuteParticipant,
+	onUnmuteParticipant,
+	onDisableVideoAll,
+	onEnableVideoAll,
+	onDisableVideoParticipant,
+	onEnableVideoParticipant,
+	onToggleChat,
+	chatDisabled,
+	permissions,
+	onLockAudio,
+	onLockVideo,
+	onLockChat,
+	onLockUserAudio,
+	onLockUserVideo,
+	onRequestAudioOn,
+	onRequestVideoOn,
+	pendingPermissionRequest,
+	respondToAudioRequest,
+	respondToVideoRequest,
+	dismissPermissionRequest,
+	participantRequestAudio,
+	participantRequestVideo,
+	hostRespondParticipantAudio,
+	hostRespondParticipantVideo,
+	pendingParticipantRequests,
+	clearParticipantRequest,
 }: {
 	showChat: boolean
 	setShowChat: (show: boolean) => void
@@ -375,12 +653,73 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	minutesLeft: number
 	sessionTitle?: string
 	isHost: boolean
+	hasExtended: boolean
+	onRequestExtension: () => void
+	onExtendSession: () => void
+	currentUserId?: string | null
+	moderationSocket?: Socket | null
+	onEndMeeting?: () => void
+	endingMeeting?: boolean
+	onMuteAll?: () => void
+	onUnmuteAll?: () => void
+	onMuteParticipant?: (targetUserId: string) => void
+	onUnmuteParticipant?: (targetUserId: string) => void
+	onDisableVideoAll?: () => void
+	onEnableVideoAll?: () => void
+	onDisableVideoParticipant?: (targetUserId: string) => void
+	onEnableVideoParticipant?: (targetUserId: string) => void
+	onToggleChat?: (disabled: boolean) => void
+	chatDisabled?: boolean
+	permissions?: RoomPermissions
+	onLockAudio?: (locked: boolean) => void
+	onLockVideo?: (locked: boolean) => void
+	onLockChat?: (locked: boolean) => void
+	onLockUserAudio?: (targetUserId: string, locked: boolean) => void
+	onLockUserVideo?: (targetUserId: string, locked: boolean) => void
+	onRequestAudioOn?: (targetUserId: string) => void
+	onRequestVideoOn?: (targetUserId: string) => void
+	pendingPermissionRequest?: PermissionRequest | null
+	respondToAudioRequest?: (accepted: boolean) => void
+	respondToVideoRequest?: (accepted: boolean) => void
+	dismissPermissionRequest?: () => void
+	participantRequestAudio?: () => void
+	participantRequestVideo?: () => void
+	hostRespondParticipantAudio?: (userId: string, accepted: boolean) => void
+	hostRespondParticipantVideo?: (userId: string, accepted: boolean) => void
+	pendingParticipantRequests?: ParticipantPermissionRequest[]
+	clearParticipantRequest?: (userId: string, type: 'audio' | 'video') => void
 }) {
 	const room = useRoomContext()
 	const params = useParams<{ room: string }>()
+	const { showWarning } = useToast()
+	
+	// Get participants list for name lookup
+	const allParticipants = useParticipants()
 	
 	// Get local participant state directly - most reliable source of truth
 	const { localParticipant, isCameraEnabled, isMicrophoneEnabled, isScreenShareEnabled } = useLocalParticipant()
+	
+	// Track pending requests to show toast when new requests arrive
+	const prevRequestCountRef = useRef(0)
+	useEffect(() => {
+		if (!isHost || !pendingParticipantRequests) return
+		
+		// Check if a new request was added
+		if (pendingParticipantRequests.length > prevRequestCountRef.current) {
+			// Find the newest request
+			const newest = pendingParticipantRequests[pendingParticipantRequests.length - 1]
+			// Look up participant name from room
+			const participant = allParticipants.find(p => p.identity === newest.userId)
+			const displayName = participant?.name || newest.userId
+			
+			if (newest.type === 'audio') {
+				showWarning('Permission Request', `${displayName} is requesting to unmute`)
+			} else {
+				showWarning('Permission Request', `${displayName} is requesting to enable camera`)
+			}
+		}
+		prevRequestCountRef.current = pendingParticipantRequests.length
+	}, [pendingParticipantRequests, isHost, showWarning, allParticipants])
 	
 	// Layout mode: 'focus' shows speaker large with others small, 'grid' shows equal tiles
 	const [layoutMode, setLayoutMode] = useState<'focus' | 'grid'>('grid')
@@ -412,6 +751,87 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	useEffect(() => { backgroundModeRef.current = backgroundMode }, [backgroundMode])
 	// CRITICAL: Keep localParticipant ref in sync
 	useEffect(() => { localParticipantRef.current = localParticipant }, [localParticipant])
+
+	// Listen for moderation socket events and apply local actions
+	useEffect(() => {
+		if (!moderationSocket) return
+
+		const handleMute = (data: { action: 'mute' | 'unmute'; targetUserId?: string; hostClerkId?: string; isLocked?: boolean }) => {
+			try {
+				// If targetUserId is specified and it's not this user, skip
+				if (data.targetUserId && data.targetUserId !== currentUserId) return
+				// If this is a global action (no targetUserId) but current user is the host, skip
+				// The host should NEVER be affected by global mute actions
+				if (!data.targetUserId && data.hostClerkId && data.hostClerkId === currentUserId) return
+				if (!localParticipant) return
+				const enable = data.action === 'unmute'
+				localParticipant.setMicrophoneEnabled(enable).catch(() => {})
+				
+				// Show toast notification when host mutes this participant
+				if (data.action === 'mute' && data.targetUserId === currentUserId) {
+					showWarning(
+						'Microphone muted',
+						data.isLocked 
+							? 'The host has muted your microphone and locked it. You cannot unmute until the host allows it.'
+							: 'The host has muted your microphone.'
+					)
+				}
+			} catch (err) {
+				console.warn('Error applying mute action:', err)
+			}
+		}
+
+		const handleVideo = (data: { action: 'disable' | 'enable'; targetUserId?: string; hostClerkId?: string; isLocked?: boolean }) => {
+			try {
+				// If targetUserId is specified and it's not this user, skip
+				if (data.targetUserId && data.targetUserId !== currentUserId) return
+				// If this is a global action (no targetUserId) but current user is the host, skip
+				// The host should NEVER be affected by global video disable actions
+				if (!data.targetUserId && data.hostClerkId && data.hostClerkId === currentUserId) return
+				if (!localParticipant) return
+				const enable = data.action === 'enable'
+				localParticipant.setCameraEnabled(enable).catch(() => {})
+				
+				// Show toast notification when host disables video for this participant
+				if (data.action === 'disable' && data.targetUserId === currentUserId) {
+					showWarning(
+						'Camera disabled',
+						data.isLocked 
+							? 'The host has disabled your camera and locked it. You cannot enable it until the host allows it.'
+							: 'The host has disabled your camera.'
+					)
+				}
+			} catch (err) {
+				console.warn('Error applying video action:', err)
+			}
+		}
+
+		moderationSocket.on('moderation-mute', handleMute)
+		moderationSocket.on('moderation-video', handleVideo)
+
+		return () => {
+			moderationSocket.off('moderation-mute', handleMute)
+			moderationSocket.off('moderation-video', handleVideo)
+		}
+	}, [moderationSocket, currentUserId, localParticipant, showWarning])
+
+	// Enforce permission locks on initial join and when permissions change
+	// This ensures that when a participant rejoins/refreshes, they respect the locked state
+	useEffect(() => {
+		if (!localParticipant || isHost) return
+		
+		// If audio is locked and mic is on, force disable it
+		if (permissions && !permissions.allowAudio && localParticipant.isMicrophoneEnabled) {
+			console.log('[permissions] Audio is locked, disabling microphone')
+			localParticipant.setMicrophoneEnabled(false).catch(() => {})
+		}
+		
+		// If video is locked and camera is on, force disable it
+		if (permissions && !permissions.allowVideo && localParticipant.isCameraEnabled) {
+			console.log('[permissions] Video is locked, disabling camera')
+			localParticipant.setCameraEnabled(false).catch(() => {})
+		}
+	}, [permissions, localParticipant, isHost])
 	
 	// Use memoized virtual backgrounds (moved outside with stable ref below)
 	// Access via `VIRTUAL_BACKGROUNDS` constant defined below to avoid re-creating this array each render
@@ -891,7 +1311,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 
 	return (
 		<>
-			<div className="flex-1 flex relative bg-[#202124] overflow-hidden" style={{ overflow: 'hidden', height: '100%', width: '100%' }}>
+			<div className="flex-1 flex relative bg-[#202124] overflow-hidden h-full w-full">
 			{/* Main Video Area */}
 			<div className={`flex-1 flex flex-col transition-all duration-300 ease-in-out overflow-hidden ${showChat && !showParticipants ? 'md:mr-80' : ''} ${showParticipants && !showChat ? 'md:mr-64' : ''} ${showChat && showParticipants ? 'md:mr-[22rem]' : ''}`}>
 				{/* Top Bar - Google Meet style */}
@@ -985,7 +1405,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				</div>
 
 				{/* Video Grid - Properly constrained */}
-				<div className="flex-1 overflow-hidden bg-[#202124] relative min-h-0 video-grid-container" style={{ paddingBottom: '80px' }}>
+				<div className="flex-1 overflow-hidden bg-[#202124] relative min-h-0 video-grid-container pb-20">
 					<style dangerouslySetInnerHTML={{__html: `
 					/* CRITICAL: Remove ALL green overlays and speaking indicators */
 					.video-grid-container .lk-participant-tile[data-lk-speaking="true"]::before,
@@ -1698,13 +2118,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 
 			{/* Controls Bar - Google Meet style, fixed at bottom - Always visible including fullscreen */}
 			<div 
-				className={`fixed bottom-0 left-0 right-0 h-16 md:h-20 bg-[#1f1f1f]/95 backdrop-blur-sm border-t border-white/5 flex items-center justify-center gap-1.5 md:gap-3 px-2 md:px-4 ${showChat && !showParticipants ? 'md:right-80' : ''} ${showParticipants && !showChat ? 'md:right-64' : ''} ${showChat && showParticipants ? 'md:right-[22rem]' : ''}`} 
-				style={{ 
-					overflowX: 'hidden', 
-					overflowY: 'hidden', 
-					zIndex: 9999,  // Highest z-index to appear above everything including fullscreen
-					position: 'fixed',  // Ensure it stays fixed
-				}}
+				className={`fixed bottom-0 left-0 right-0 h-16 md:h-20 bg-[#1f1f1f]/95 backdrop-blur-sm border-t border-white/5 flex items-center justify-center gap-1.5 md:gap-3 px-2 md:px-4 overflow-hidden z-[9999] ${showChat && !showParticipants ? 'md:right-80' : ''} ${showParticipants && !showChat ? 'md:right-64' : ''} ${showChat && showParticipants ? 'md:right-[22rem]' : ''}`} 
 			>
 				{/* Mobile Timer - Show timer on mobile in control bar */}
 				{timerEnabled && (
@@ -1728,6 +2142,14 @@ const VideoRoomContent = memo(function VideoRoomContent({
 							if (!participant) return
 							
 							const newState = !participant.isCameraEnabled
+							
+							// Check permission lock before enabling (non-hosts only)
+							if (newState && !isHost && permissions && !permissions.allowVideo) {
+								// Locked - send request to host
+								participantRequestVideo?.()
+								return
+							}
+							
 							await participant.setCameraEnabled(newState)
 						} catch (_err) {
 							// Show user-friendly error messages
@@ -1786,6 +2208,14 @@ const VideoRoomContent = memo(function VideoRoomContent({
 							if (!participant) return
 							
 							const newState = !participant.isMicrophoneEnabled
+							
+							// Check permission lock before enabling (non-hosts only)
+							if (newState && !isHost && permissions && !permissions.allowAudio) {
+								// Locked - send request to host
+								participantRequestAudio?.()
+								return
+							}
+							
 							await participant.setMicrophoneEnabled(newState)
 						} catch {
 							// Mic toggle failed silently
@@ -1870,12 +2300,64 @@ const VideoRoomContent = memo(function VideoRoomContent({
 					<PictureInPicture2 className="h-5 w-5 md:h-6 md:w-6" />
 				</Button>
 
+				{/* Session Extension Button - Only show when timer is enabled */}
+				{timerEnabled && (
+					<Button
+						onClick={isHost ? onExtendSession : onRequestExtension}
+						variant="ghost"
+						size="lg"
+						disabled={hasExtended}
+						className={`h-10 px-3 md:h-12 md:px-4 rounded-full transition-all flex-shrink-0 flex items-center gap-1.5 ${
+							hasExtended
+								? 'bg-white/5 text-white/40 cursor-not-allowed'
+								: 'bg-white/10 hover:bg-white/20 text-white'
+						}`}
+						title={
+							hasExtended 
+								? "Session already extended" 
+								: isHost 
+									? "Extend session by 10 minutes" 
+									: "Request to extend session by 10 minutes"
+						}
+					>
+						<TimerReset className="h-4 w-4 md:h-5 md:w-5" />
+						<span className="hidden md:inline text-xs md:text-sm font-medium">
+							{hasExtended ? "Extended" : isHost ? "+10m" : "Request +10m"}
+						</span>
+					</Button>
+				)}
+
+				{/* Moderation Buttons - Host only: End meeting only in bottom bar, rest moved to sidebar */}
+				{isHost && (
+					<Button
+						onClick={onEndMeeting}
+						disabled={endingMeeting}
+						variant="ghost"
+						size="lg"
+						className="h-10 px-3 md:h-12 md:px-6 rounded-full bg-[#ea4335] hover:bg-[#d33b2c] text-white font-medium text-xs md:text-base flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+						title="End meeting for all participants"
+					>
+						{endingMeeting ? (
+							<>
+								<div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-1.5" />
+								Ending...
+							</>
+						) : (
+							<>
+								<PhoneOff className="h-4 w-4 md:h-5 md:w-5 mr-1.5" />
+								End All
+							</>
+						)}
+					</Button>
+				)}
+
 				{/* Leave Button - Always visible */}
 				<Button
 					onClick={onLeave}
 					variant="ghost"
 					size="lg"
 					className="h-10 px-3 md:h-12 md:px-6 rounded-full bg-[#ea4335] hover:bg-[#d33b2c] text-white font-medium text-xs md:text-base flex-shrink-0"
+					title="Leave the meeting"
 				>
 					Leave
 				</Button>
@@ -1896,6 +2378,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 							<div className="w-10 h-1 bg-white/30 rounded-full" />
 						</div>
 						{/* Header */}
+
 						<div className="h-10 md:h-14 bg-[#1f1f1f] border-b border-white/5 flex items-center justify-between px-4 flex-shrink-0">
 							<h3 className="font-medium text-sm md:text-base text-white font-sans">Chat</h3>
 							<Button
@@ -1909,28 +2392,26 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						</div>
 						{/* Chat content - uses all remaining space */}
 						{channelId ? (
-							<ChatWidget channelId={channelId} className="flex-1 min-h-0 overflow-hidden" />
-						) : (
-							<div className="flex-1 flex items-center justify-center">
-								<p className="text-white/50 text-sm px-4 text-center font-sans">
-									Chat is not available for this session
-								</p>
-							</div>
-						)}
-					</div>
-				</>
-			)}
-
-			{/* Participants Sidebar - Mobile: Bottom sheet, Desktop: Sidebar */}
-			{showParticipants && (
-				<>
-					{/* Mobile Overlay Backdrop */}
-					<div 
-						className="fixed inset-0 bg-black/40 z-40 md:hidden"
-						onClick={() => setShowParticipants(false)}
+					<ChatWidget 
+						channelId={channelId} 
+						chatDisabled={chatDisabled}
+						className="flex-1 min-h-0 overflow-hidden" 
 					/>
-					{/* Participants Panel - Mobile: Bottom sheet, Desktop: Sidebar */}
-					<div className={`fixed md:absolute right-0 md:top-0 bottom-0 left-0 md:left-auto w-full md:w-64 h-[50vh] md:h-full bg-[#1f1f1f] border-t md:border-t-0 md:border-l border-white/10 flex flex-col z-50 md:z-20 rounded-t-2xl md:rounded-none shadow-2xl md:shadow-none ${showChat ? 'md:right-80' : ''}`}>
+			) : (
+				<div className="flex-1 flex items-center justify-center">
+					<p className="text-white/50 text-sm px-4 text-center font-sans">
+						Chat is not available for this session
+					</p>
+				</div>
+			)}
+		</div>
+	</>
+)}
+
+		{/* Participants Sidebar - Mobile: Bottom sheet, Desktop: Sidebar */}
+		{showParticipants && (
+			<>
+				<div className={`fixed md:absolute right-0 md:top-0 bottom-0 left-0 md:left-auto w-full md:w-72 h-[60vh] md:h-full bg-[#1f1f1f] border-t md:border-t-0 md:border-l border-white/10 flex flex-col z-50 md:z-20 rounded-t-2xl md:rounded-none shadow-2xl md:shadow-none ${showChat ? 'md:right-80' : ''}`}>
 						{/* Drag handle for mobile */}
 						<div className="md:hidden flex justify-center py-2">
 							<div className="w-10 h-1 bg-white/30 rounded-full" />
@@ -1946,8 +2427,159 @@ const VideoRoomContent = memo(function VideoRoomContent({
 								<X className="h-4 w-4" />
 							</Button>
 						</div>
+						
+						{/* Host Controls Section - Only visible to hosts */}
+						{isHost && (
+							<div className="p-3 md:p-4 border-b border-white/10 bg-[#252525]">
+								<div className="flex items-center gap-2 mb-3">
+									<Settings2 className="h-4 w-4 text-white/60" />
+									<span className="text-xs font-medium text-white/80 uppercase tracking-wider">Host Controls</span>
+								</div>
+								
+								{/* Permission Locks */}
+								<div className="space-y-2">
+									{/* Audio Lock Toggle */}
+									<div className="flex items-center justify-between py-2 px-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors">
+										<div className="flex items-center gap-2">
+											<Mic className="h-4 w-4 text-white/70" />
+											<span className="text-sm text-white/90">Participant Audio</span>
+										</div>
+										<Button
+											onClick={() => {
+												const isCurrentlyLocked = permissions?.allowAudio === false
+												if (isCurrentlyLocked) {
+													// Unlock audio
+													onLockAudio?.(false)
+												} else {
+													// Lock audio and mute all
+													onLockAudio?.(true)
+													onMuteAll?.()
+												}
+											}}
+											variant="ghost"
+											size="sm"
+											className={`h-7 w-7 p-0 rounded-full transition-colors ${
+												permissions?.allowAudio === false 
+													? 'bg-[#ea4335]/20 text-[#ea4335] hover:bg-[#ea4335]/30' 
+													: 'bg-white/10 text-white/70 hover:bg-white/20'
+											}`}
+											title={permissions?.allowAudio === false ? 'Unlock audio for all' : 'Lock audio (prevent unmuting)'}
+										>
+											{permissions?.allowAudio === false ? <Lock className="h-3.5 w-3.5" /> : <Unlock className="h-3.5 w-3.5" />}
+										</Button>
+									</div>
+									
+									{/* Video Lock Toggle */}
+									<div className="flex items-center justify-between py-2 px-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors">
+										<div className="flex items-center gap-2">
+											<Video className="h-4 w-4 text-white/70" />
+											<span className="text-sm text-white/90">Participant Video</span>
+										</div>
+										<Button
+											onClick={() => {
+												const isCurrentlyLocked = permissions?.allowVideo === false
+												if (isCurrentlyLocked) {
+													// Unlock video
+													onLockVideo?.(false)
+												} else {
+													// Lock video and disable all
+													onLockVideo?.(true)
+													onDisableVideoAll?.()
+												}
+											}}
+											variant="ghost"
+											size="sm"
+											className={`h-7 w-7 p-0 rounded-full transition-colors ${
+												permissions?.allowVideo === false 
+													? 'bg-[#ea4335]/20 text-[#ea4335] hover:bg-[#ea4335]/30' 
+													: 'bg-white/10 text-white/70 hover:bg-white/20'
+											}`}
+											title={permissions?.allowVideo === false ? 'Unlock video for all' : 'Lock video (prevent enabling)'}
+										>
+											{permissions?.allowVideo === false ? <Lock className="h-3.5 w-3.5" /> : <Unlock className="h-3.5 w-3.5" />}
+										</Button>
+									</div>
+									
+									{/* Chat Lock Toggle */}
+									<div className="flex items-center justify-between py-2 px-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors">
+										<div className="flex items-center gap-2">
+											<MessageSquare className="h-4 w-4 text-white/70" />
+											<span className="text-sm text-white/90">Participant Chat</span>
+										</div>
+										<Button
+											onClick={() => {
+												const isCurrentlyDisabled = chatDisabled || permissions?.allowChat === false
+												if (isCurrentlyDisabled) {
+													// Enable chat
+													onToggleChat?.(false)
+													onLockChat?.(false)
+												} else {
+													// Disable chat
+													onToggleChat?.(true)
+													onLockChat?.(true)
+												}
+											}}
+											variant="ghost"
+											size="sm"
+											className={`h-7 w-7 p-0 rounded-full transition-colors ${
+												chatDisabled 
+													? 'bg-[#ea4335]/20 text-[#ea4335] hover:bg-[#ea4335]/30' 
+													: 'bg-white/10 text-white/70 hover:bg-white/20'
+											}`}
+											title={chatDisabled ? 'Enable chat for all' : 'Disable chat for all'}
+										>
+											{chatDisabled ? <Lock className="h-3.5 w-3.5" /> : <Unlock className="h-3.5 w-3.5" />}
+										</Button>
+									</div>
+								</div>
+								
+								{/* Quick Actions */}
+								<div className="flex gap-2 mt-3">
+									<Button
+										onClick={() => {
+											onMuteAll?.()
+											onLockAudio?.(true) // Also lock to prevent unmuting
+										}}
+										variant="ghost"
+										size="sm"
+										className="flex-1 h-8 text-xs bg-white/5 hover:bg-white/10 text-white/80"
+										title="Mute all participants and lock audio"
+									>
+										<VolumeX className="h-3.5 w-3.5 mr-1" />
+										Mute All
+									</Button>
+									<Button
+										onClick={() => {
+											onDisableVideoAll?.()
+											onLockVideo?.(true) // Also lock to prevent enabling
+										}}
+										variant="ghost"
+										size="sm"
+										className="flex-1 h-8 text-xs bg-white/5 hover:bg-white/10 text-white/80"
+										title="Turn off all participant videos and lock"
+									>
+										<CameraOff className="h-3.5 w-3.5 mr-1" />
+										Video Off
+									</Button>
+								</div>
+							</div>
+						)}
+						
 						<div className="flex-1 overflow-y-auto p-3 md:p-4">
-							<ParticipantList />
+							<ParticipantList
+								isHost={isHost}
+								onMuteParticipant={onMuteParticipant}
+								onUnmuteParticipant={onUnmuteParticipant}
+								onDisableVideoParticipant={onDisableVideoParticipant}
+								onEnableVideoParticipant={onEnableVideoParticipant}
+								onLockUserAudio={onLockUserAudio}
+								onLockUserVideo={onLockUserVideo}
+								onRequestAudioOn={onRequestAudioOn}
+								onRequestVideoOn={onRequestVideoOn}
+								pendingParticipantRequests={pendingParticipantRequests}
+								onApproveAudioRequest={hostRespondParticipantAudio}
+								onApproveVideoRequest={hostRespondParticipantVideo}
+							/>
 						</div>
 					</div>
 				</>
@@ -1956,7 +2588,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 
 		{/* Background Effects Popup - At root level, outside all containers */}
 		{showBackgroundMenu && (
-			<div className="fixed inset-0 flex items-center justify-center p-4" style={{ zIndex: 9999999 }}>
+			<div className="fixed inset-0 flex items-center justify-center p-4 z-[9999999]">
 				{/* Dark backdrop overlay */}
 				<div 
 					className="absolute inset-0 bg-black/70 backdrop-blur-sm"
@@ -1976,6 +2608,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						<button
 							onClick={() => setShowBackgroundMenu(false)}
 							className="h-8 w-8 rounded-lg hover:bg-white/10 transition-colors flex items-center justify-center text-white/60 hover:text-white"
+							title="Close background effects"
+							aria-label="Close background effects"
 						>
 							<X className="h-5 w-5" />
 						</button>
@@ -2039,10 +2673,9 @@ const VideoRoomContent = memo(function VideoRoomContent({
 									step="1"
 									value={blurAmount}
 									onChange={(e) => handleBlurSliderChange(parseInt(e.target.value))}
-									className="w-full h-2 bg-white/20 rounded-lg appearance-none cursor-pointer slider-green"
-									style={{
-										background: `linear-gradient(to right, #00DC6E 0%, #00DC6E ${((blurAmount - 1) / 19) * 100}%, rgba(255,255,255,0.2) ${((blurAmount - 1) / 19) * 100}%, rgba(255,255,255,0.2) 100%)`
-									}}
+									className="w-full h-2 bg-white/20 rounded-lg appearance-none cursor-pointer slider-green blur-slider"
+									title={`Blur intensity: ${blurAmount}`}
+									aria-label="Blur intensity slider"
 								/>
 								<div className="flex justify-between text-xs text-white/40 mt-1">
 									<span>Subtle</span>
@@ -2126,12 +2759,69 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				</div>
 			</div>
 		)}
-		</>
-	)
+		
+		{/* Permission Request Modal - Shows when host asks participant to enable audio/video */}
+		{!isHost && pendingPermissionRequest && (
+			<PermissionRequestModal
+				type={pendingPermissionRequest.type}
+				onAccept={() => {
+					if (pendingPermissionRequest.type === 'audio') {
+						respondToAudioRequest?.(true)
+					} else {
+						respondToVideoRequest?.(true)
+					}
+				}}
+				onDeny={() => {
+					if (pendingPermissionRequest.type === 'audio') {
+						respondToAudioRequest?.(false)
+					} else {
+						respondToVideoRequest?.(false)
+					}
+				}}
+				onDismiss={dismissPermissionRequest}
+			/>
+		)}
+	</>
+)
 })
 
-function ParticipantList() {
+function ParticipantList({
+	isHost,
+	onMuteParticipant,
+	onUnmuteParticipant,
+	onDisableVideoParticipant,
+	onEnableVideoParticipant,
+	onLockUserAudio,
+	onLockUserVideo,
+	onRequestAudioOn,
+	onRequestVideoOn,
+	pendingParticipantRequests,
+	onApproveAudioRequest,
+	onApproveVideoRequest,
+}: {
+	isHost: boolean
+	onMuteParticipant?: (targetUserId: string) => void
+	onUnmuteParticipant?: (targetUserId: string) => void
+	onDisableVideoParticipant?: (targetUserId: string) => void
+	onEnableVideoParticipant?: (targetUserId: string) => void
+	onLockUserAudio?: (targetUserId: string, locked: boolean) => void
+	onLockUserVideo?: (targetUserId: string, locked: boolean) => void
+	onRequestAudioOn?: (targetUserId: string) => void
+	onRequestVideoOn?: (targetUserId: string) => void
+	pendingParticipantRequests?: ParticipantPermissionRequest[]
+	onApproveAudioRequest?: (userId: string, accepted: boolean) => void
+	onApproveVideoRequest?: (userId: string, accepted: boolean) => void
+}) {
 	const participants = useParticipants()
+	const { localParticipant } = useLocalParticipant()
+
+	// Check if a participant has a pending audio request
+	const hasAudioRequest = (identity: string) => 
+		pendingParticipantRequests?.some(r => r.userId === identity && r.type === 'audio')
+	
+	// Check if a participant has a pending video request
+	const hasVideoRequest = (identity: string) => 
+		pendingParticipantRequests?.some(r => r.userId === identity && r.type === 'video')
 
 	return (
 		<div className="space-y-1">
@@ -2140,29 +2830,194 @@ function ParticipantList() {
 					<p className="text-xs md:text-sm text-white/50 font-sans">No other participants</p>
 				</div>
 			) : (
-				participants.map((participant) => (
-					<div
-						key={participant.identity}
-						className="flex items-center gap-3 p-2 md:p-3 rounded-lg hover:bg-white/5 transition-colors group"
-					>
-						<div className="relative h-9 w-9 md:h-10 md:w-10 rounded-full bg-gradient-to-br from-[#008CD2] to-[#00DC6E] flex items-center justify-center text-white font-medium flex-shrink-0 text-sm md:text-base font-sans">
-							{participant.name?.charAt(0).toUpperCase() || participant.identity.charAt(0).toUpperCase()}
-							{participant.isSpeaking && (
-								<div className="absolute -bottom-0.5 -right-0.5 h-3 w-3 md:h-3.5 md:w-3.5 bg-[#00DC6E] rounded-full border-2 border-[#1f1f1f] animate-pulse" />
+				participants.map((participant) => {
+					const isLocal = participant.identity === localParticipant?.identity
+					const isMicOn = participant.isMicrophoneEnabled
+					const isCamOn = participant.isCameraEnabled
+
+					return (
+						<div
+							key={participant.identity}
+							className="flex items-start gap-3 p-2 md:p-3 rounded-lg hover:bg-white/5 transition-colors group"
+						>
+							<div className="relative h-9 w-9 md:h-10 md:w-10 rounded-full bg-gradient-to-br from-[#008CD2] to-[#00DC6E] flex items-center justify-center text-white font-medium flex-shrink-0 text-sm md:text-base font-sans">
+								{participant.name?.charAt(0).toUpperCase() || participant.identity.charAt(0).toUpperCase()}
+								{participant.isSpeaking && (
+									<div className="absolute -bottom-0.5 -right-0.5 h-3 w-3 md:h-3.5 md:w-3.5 bg-[#00DC6E] rounded-full border-2 border-[#1f1f1f] animate-pulse" />
+								)}
+							</div>
+							<div className="flex-1 min-w-0">
+								<p className="font-medium text-sm md:text-base text-white truncate font-sans">
+									{participant.name || participant.identity}
+									{isLocal && <span className="text-white/50 text-xs ml-1">(You)</span>}
+								</p>
+								{participant.isSpeaking && (
+									<p className="text-xs text-[#00DC6E] mt-0.5 font-sans">Speaking</p>
+								)}
+								{/* Show pending request indicator */}
+								{isHost && !isLocal && hasAudioRequest(participant.identity) && (
+									<p className="text-xs text-amber-400 mt-0.5 font-sans animate-pulse">🎤 Requesting to unmute</p>
+								)}
+								{isHost && !isLocal && hasVideoRequest(participant.identity) && (
+									<p className="text-xs text-amber-400 mt-0.5 font-sans animate-pulse">📹 Requesting camera</p>
+								)}
+							</div>
+
+							{/* Host moderation buttons - only show for remote participants */}
+							{isHost && !isLocal && (
+								<div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+									{/* Approve request buttons - shown above mic/video buttons */}
+									{(hasAudioRequest(participant.identity) || hasVideoRequest(participant.identity)) && (
+										<div className="flex gap-1">
+											{hasAudioRequest(participant.identity) && (
+												<button
+													onClick={() => onApproveAudioRequest?.(participant.identity, true)}
+													className="px-2 py-1 text-xs font-semibold bg-green-600 text-white rounded hover:bg-green-700 transition-colors shadow-sm whitespace-nowrap"
+													title="Approve unmute request"
+												>
+													✓ Unmute
+												</button>
+											)}
+											{hasVideoRequest(participant.identity) && (
+												<button
+													onClick={() => onApproveVideoRequest?.(participant.identity, true)}
+													className="px-2 py-1 text-xs font-semibold bg-green-600 text-white rounded hover:bg-green-700 transition-colors shadow-sm whitespace-nowrap"
+													title="Approve video request"
+												>
+													✓ Video
+												</button>
+											)}
+										</div>
+									)}
+									{/* Mic/Video control buttons */}
+									<div className="flex gap-1">
+										{/* Individual mute button - mutes and locks, or requests unmute */}
+										<button
+											onClick={() => {
+												if (isMicOn) {
+													// Mute this participant (also locks their audio permission)
+													onMuteParticipant?.(participant.identity)
+												} else {
+													// Request unmute - cannot force due to browser privacy
+													onRequestAudioOn?.(participant.identity)
+												}
+											}}
+											className={`p-1.5 rounded-full transition-colors ${isMicOn ? 'hover:bg-red-500/20 text-white/60 hover:text-red-400' : hasAudioRequest(participant.identity) ? 'bg-amber-500/30 text-amber-400' : 'bg-white/10 text-white/40 hover:bg-white/20'}`}
+											title={isMicOn ? 'Mute this participant' : 'Ask to unmute'}
+										>
+											{isMicOn ? <Mic className="h-3.5 w-3.5" /> : <MicOff className="h-3.5 w-3.5" />}
+										</button>
+										{/* Individual video button - disables and locks, or requests video on */}
+										<button
+											onClick={() => {
+												if (isCamOn) {
+													// Disable video for this participant (also locks their video permission)
+													onDisableVideoParticipant?.(participant.identity)
+												} else {
+													// Request video on - cannot force due to browser privacy
+													onRequestVideoOn?.(participant.identity)
+												}
+											}}
+											className={`p-1.5 rounded-full transition-colors ${isCamOn ? 'hover:bg-red-500/20 text-white/60 hover:text-red-400' : hasVideoRequest(participant.identity) ? 'bg-amber-500/30 text-amber-400' : 'bg-white/10 text-white/40 hover:bg-white/20'}`}
+											title={isCamOn ? 'Turn off video' : 'Ask to start video'}
+										>
+											{isCamOn ? <Video className="h-3.5 w-3.5" /> : <VideoOff className="h-3.5 w-3.5" />}
+										</button>
+									</div>
+								</div>
 							)}
 						</div>
-						<div className="flex-1 min-w-0">
-							<p className="font-medium text-sm md:text-base text-white truncate font-sans">
-								{participant.name || participant.identity}
-							</p>
-							{participant.isSpeaking && (
-								<p className="text-xs text-[#00DC6E] mt-0.5 font-sans">Speaking</p>
-							)}
-						</div>
-					</div>
-				))
+					)
+				})
 			)}
 		</div>
 	)
 }
 
+// Permission Request Modal - Shows when host asks participant to enable audio/video
+function PermissionRequestModal({
+	type,
+	onAccept,
+	onDeny,
+	onDismiss,
+}: {
+	type: 'audio' | 'video'
+	onAccept: () => void
+	onDeny: () => void
+	onDismiss?: () => void
+}) {
+	const { localParticipant } = useLocalParticipant()
+	
+	const handleAccept = async () => {
+		try {
+			if (type === 'audio') {
+				await localParticipant?.setMicrophoneEnabled(true)
+			} else {
+				await localParticipant?.setCameraEnabled(true)
+			}
+			onAccept()
+		} catch (err) {
+			console.error('Failed to enable device:', err)
+			onDeny()
+		}
+	}
+
+	return (
+		<div className="fixed inset-0 flex items-center justify-center p-4 z-[9999999]">
+			{/* Dark backdrop overlay */}
+			<div 
+				className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+				onClick={onDismiss}
+			/>
+			
+			{/* Modal card */}
+			<div className="relative bg-[#2d2d2d] rounded-2xl shadow-2xl border border-white/20 w-full max-w-sm animate-in zoom-in-95 duration-200">
+				{/* Header */}
+				<div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
+					<div className="flex items-center gap-3">
+						<div className={`h-10 w-10 rounded-xl flex items-center justify-center ${type === 'audio' ? 'bg-gradient-to-br from-blue-500 to-cyan-500' : 'bg-gradient-to-br from-purple-500 to-pink-500'}`}>
+							{type === 'audio' ? <Mic className="h-5 w-5 text-white" /> : <Video className="h-5 w-5 text-white" />}
+						</div>
+						<h3 className="text-lg font-semibold text-white">
+							{type === 'audio' ? 'Unmute Request' : 'Video Request'}
+						</h3>
+					</div>
+					<button
+						onClick={onDismiss}
+						className="h-8 w-8 rounded-lg hover:bg-white/10 transition-colors flex items-center justify-center text-white/60 hover:text-white"
+						title="Close"
+						aria-label="Close"
+					>
+						<X className="h-5 w-5" />
+					</button>
+				</div>
+				
+				{/* Content */}
+				<div className="p-6">
+					<p className="text-white/80 text-sm mb-6">
+						{type === 'audio' 
+							? 'The host has asked you to unmute your microphone. Would you like to turn it on?'
+							: 'The host has asked you to turn on your camera. Would you like to enable it?'
+						}
+					</p>
+					
+					<div className="flex gap-3">
+						<Button
+							onClick={onDeny}
+							variant="ghost"
+							className="flex-1 h-10 bg-white/5 hover:bg-white/10 text-white/80"
+						>
+							Deny
+						</Button>
+						<Button
+							onClick={handleAccept}
+							className={`flex-1 h-10 text-white ${type === 'audio' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-purple-600 hover:bg-purple-700'}`}
+						>
+							{type === 'audio' ? 'Turn On Mic' : 'Turn On Camera'}
+						</Button>
+					</div>
+				</div>
+			</div>
+		</div>
+	)
+}
