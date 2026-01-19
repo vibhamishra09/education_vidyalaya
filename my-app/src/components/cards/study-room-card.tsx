@@ -161,9 +161,7 @@ export function StudyRoomCard({
                 variant="ghost"
                 size="icon"
                 className="h-9 w-9 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all"
-             >
-                <Share2 className="h-4 w-4" />
-             </ShareButton>
+             />
             
             <Button
               className={cn(

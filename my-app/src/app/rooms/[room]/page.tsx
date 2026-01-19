@@ -147,7 +147,7 @@ export default function RoomPage() {
 
 	if (loading) {
 		return (
-			<div className="h-screen w-screen flex items-center justify-center bg-black">
+			<div className="fixed inset-0 flex items-center justify-center bg-black z-50">
 				<div className="text-center text-white">
 					<Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
 					<p>Connecting to video call...</p>
@@ -192,7 +192,7 @@ export default function RoomPage() {
 							<Button 
 								variant="outline"
 								onClick={() => router.push(`/session-feedback/${sessionData.id}?type=${sessionData.sessionType}&isHost=false`)}
-								className="w-full border-white/20 text-white hover:bg-white/10"
+								className="w-full border-white/20 text-white hover:bg-white/10 hover:text-white"
 							>
 								Leave Feedback
 							</Button>

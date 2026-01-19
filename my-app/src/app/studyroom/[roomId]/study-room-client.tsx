@@ -24,7 +24,6 @@ import { useToast } from "@/contexts/toast-context";
 import Link from "next/link";
 import { SessionStatus } from "@/types";
 import { ReviewsSection } from "@/components/reviews/reviews-section";
-import { ChatWidget } from "@/components/chat/ChatWidget";
 import { formatCoins } from "@/lib/utils/coin-format";
 import { ShareButton } from "@/components/share/share-button";
 
@@ -224,6 +223,7 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
                   {role === "learner" && (
                     <Badge variant="secondary" className="bg-emerald-100 text-emerald-800 border border-emerald-200">Enrolled</Badge>
                   )}
+                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                   {room.skills && room.skills.map((skill: any) => {
                     const skillName = typeof skill === 'string' ? skill : (skill.name || skill.skill?.name);
                     const skillKey = typeof skill === 'string' ? skill : (skill.id || skill.skill?.id || Math.random());
@@ -427,20 +427,6 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
               </div>
             </CardContent>
           </Card>
-
-          {/* Chat Widget - Only show when session is UPCOMING (not during live call) */}
-          {room.sessionStatus === SessionStatus.UPCOMING && (
-            <Card className="border-none shadow-lg bg-white/60 dark:bg-slate-900/60 backdrop-blur-md">
-              <CardHeader className="border-b border-black/5 dark:border-white/5 pb-4">
-                <CardTitle className="text-lg">Discussion Board</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="h-[500px]">
-                  <ChatWidget channelId={room.chatChannelId} />
-                </div>
-              </CardContent>
-            </Card>
-          )}
         </div>
       )}
 

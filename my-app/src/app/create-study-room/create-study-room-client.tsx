@@ -74,6 +74,7 @@ export function CreateStudyRoomClient() {
   const [error, setError] = useState<string | null>(null);
   const [createdRoom, setCreatedRoom] = useState<StudyRoom | null>(null);
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
+  const [isCopied, setIsCopied] = useState(false);
 
   // Sync instant room time
   useEffect(() => {
@@ -617,9 +618,11 @@ export function CreateStudyRoomClient() {
                     className="h-9 w-16 text-xs font-semibold rounded-lg bg-background shadow-sm hover:shadow border border-border/50 text-foreground"
                     onClick={() => {
                        navigator.clipboard.writeText(`${window.location.origin}/studyroom/${createdRoom.id}`);
+                       setIsCopied(true);
+                       setTimeout(() => setIsCopied(false), 2000);
                     }}
                   >
-                    Copy
+                    {isCopied ? "Copied" : "Copy"}
                   </Button>
                 </div>
                 

@@ -20,8 +20,8 @@ interface UseSessionExtensionReturn {
   extendedEndTime: number | null;
   isConnected: boolean;
   pendingRequest: ExtensionRequest | null;
-  requestExtension: () => void;
-  approveExtension: (currentEndTime: number) => void;
+  requestExtension: (minutes?: number) => void;
+  approveExtension: (currentEndTime: number, minutes?: number) => void;
   dismissRequest: () => void;
   error: string | null;
 }
@@ -142,7 +142,7 @@ export function useSessionExtension({
   }, [sessionId, sessionType, token, enabled, isHost]);
 
   // Request extension (for participants)
-  const requestExtension = useCallback(() => {
+  const requestExtension = useCallback((minutes: number = 10) => {
     if (!socket || !sessionId || !sessionType) {
       setError('Not connected to extension service');
       return;
@@ -153,12 +153,12 @@ export function useSessionExtension({
       return;
     }
 
-    console.log('📤 [Extension] Sending request...');
-    socket.emit('request-extension', { sessionId, sessionType });
+    console.log(`📤 [Extension] Sending request for ${minutes} minutes...`);
+    socket.emit('request-extension', { sessionId, sessionType, extensionMinutes: minutes });
   }, [socket, sessionId, sessionType, hasExtended]);
 
   // Approve extension (for host)
-  const approveExtension = useCallback((currentEndTime: number) => {
+  const approveExtension = useCallback((currentEndTime: number, minutes: number = 10) => {
     if (!socket || !sessionId || !sessionType) {
       setError('Not connected to extension service');
       return;
@@ -169,12 +169,12 @@ export function useSessionExtension({
       return;
     }
 
-    console.log('✅ [Extension] Approving extension...');
+    console.log(`✅ [Extension] Approving extension for ${minutes} minutes...`);
     socket.emit('extend-session', {
       sessionId,
       sessionType,
       currentEndTime,
-      extensionMinutes: 10,
+      extensionMinutes: minutes,
     });
   }, [socket, sessionId, sessionType, hasExtended]);
 
