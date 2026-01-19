@@ -85,67 +85,67 @@ export function StudyRoomCard({
       className="h-full group"
     >
       <Card className={cn(
-        "h-full flex flex-col p-3 bg-gradient-to-br transition-all duration-300 border shadow-sm hover:shadow-lg",
+        "h-full flex flex-col p-4 bg-gradient-to-br transition-all duration-300 border shadow-sm hover:shadow-lg",
         theme.gradient,
         theme.border,
         theme.hoverBorder
       )}>
         
         {/* Header: Category Badge & Status */}
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-3">
           <Badge variant="secondary" className={cn(
-            "text-[10px] font-bold px-1.5 py-0.5 transition-colors uppercase tracking-wider rounded-md border-0",
+            "text-xs font-bold px-2 py-0.5 transition-colors uppercase tracking-wider rounded-lg border-0",
             theme.badge
           )}>
             {category}
           </Badge>
           
-          <div className={cn("flex items-center gap-1.5", theme.iconColor)}>
-            <span className="relative flex h-1.5 w-1.5">
+          <div className={cn("flex items-center gap-2", theme.iconColor)}>
+            <span className="relative flex h-2 w-2">
               {statusIsLive && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>}
-              <span className={cn("relative inline-flex rounded-full h-1.5 w-1.5", statusIsLive ? "bg-red-500" : "bg-emerald-500")}></span>
+              <span className={cn("relative inline-flex rounded-full h-2 w-2", statusIsLive ? "bg-red-500" : "bg-emerald-500")}></span>
             </span>
-            <span className="text-[10px] font-extrabold tracking-widest uppercase">
+            <span className="text-[11px] font-extrabold tracking-widest uppercase">
               {statusIsLive ? "LIVE" : "SCHEDULED"}
             </span>
           </div>
         </div>
 
         {/* Main Content: Title & Description */}
-        <div className="flex-1 space-y-1 mb-2">
-          <h3 className={cn("text-xl font-bold leading-tight text-foreground tracking-tight transition-colors line-clamp-2", theme.titleHover)}>
+        <div className="flex-1 space-y-1.5 mb-4">
+          <h3 className={cn("text-2xl font-bold leading-tight text-foreground tracking-tight transition-colors line-clamp-2", theme.titleHover)}>
             {title}
           </h3>
           {description && (
-            <p className="text-xs text-muted-foreground leading-relaxed line-clamp-1">
+            <p className="text-sm text-muted-foreground leading-relaxed line-clamp-1">
               {description}
             </p>
           )}
         </div>
 
         {/* Footer: Host, Participants & Actions */}
-        <div className="flex items-center justify-between pt-2 border-t border-dashed border-border/60 mt-auto">
+        <div className="flex items-center justify-between pt-3 border-t border-dashed border-border/60 mt-auto">
           
           {/* Host & Participant Info */}
-          <div className="flex flex-col gap-0.5">
+          <div className="flex flex-col gap-1.5">
              {/* Host */}
-            <div className="flex items-center gap-1.5">
-              <Avatar className={cn("h-6 w-6 border transition-colors", theme.avatarBorder)}>
+            <div className="flex items-center gap-2">
+              <Avatar className={cn("h-7 w-7 border transition-colors", theme.avatarBorder)}>
                 <AvatarImage src={host?.avatar} />
-                <AvatarFallback className={cn("text-[10px] font-bold", theme.avatarFallback)}>
+                <AvatarFallback className={cn("text-xs font-bold", theme.avatarFallback)}>
                     {hostInitial}
                 </AvatarFallback>
               </Avatar>
-              <span className="text-xs font-semibold text-muted-foreground truncate max-w-[100px]">
+              <span className="text-sm font-semibold text-muted-foreground truncate max-w-[100px]">
                 {host?.name}
               </span>
             </div>
              
              {/* Participants */}
              {participants && (
-                <div className="flex items-center gap-1 text-muted-foreground/80">
-                  <Users className="h-3 w-3" />
-                  <span className="text-[10px] font-bold tabular-nums">
+                <div className="flex items-center gap-1.5 text-muted-foreground/80">
+                  <Users className="h-3.5 w-3.5" />
+                  <span className="text-xs font-bold tabular-nums">
                     {participantCurrent}/{participantMax} joined
                   </span>
                 </div>
@@ -153,21 +153,21 @@ export function StudyRoomCard({
           </div>
 
           {/* Actions: Share & CTA Button */}
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2">
              <ShareButton
                 url={`${typeof window !== "undefined" ? window.location.origin : ""}/studyroom/${roomId}`}
                 title={title}
                 description={description}
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all"
+                className="h-9 w-9 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all"
              >
-                <Share2 className="h-3.5 w-3.5" />
+                <Share2 className="h-4 w-4" />
              </ShareButton>
             
             <Button
               className={cn(
-                "h-8 pl-3 pr-4 text-[10px] font-bold rounded-full shadow-md transition-all",
+                "h-9 pl-3 pr-4 text-xs font-bold rounded-full shadow-md transition-all",
                 actionVariant ? "" : theme.button
               )}
               variant={actionVariant || "default"}
@@ -175,11 +175,11 @@ export function StudyRoomCard({
               disabled={actionDisabled || actionLoading}
             >
               {actionLoading ? (
-                  <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
+                  <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
               ) : statusIsLive ? (
-                  <Play className="h-3 w-3 mr-1.5 fill-current" />
+                  <Play className="h-3.5 w-3.5 mr-1.5 fill-current" />
               ) : (
-                  <Calendar className="h-3 w-3 mr-1.5" />
+                  <Calendar className="h-3.5 w-3.5 mr-1.5" />
               )}
               {actionLoading ? "Wait" : (actionLabel || (statusIsLive ? "Join" : "View"))}
             </Button>
