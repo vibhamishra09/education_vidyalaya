@@ -62,7 +62,9 @@ export class TranscriptsGateway
       }
 
       try {
-        const clerkRequest = new Request('http://localhost:3001', {
+        // Use environment variable or construct from PORT
+        const baseUrl = process.env.API_URL || `http://localhost:${process.env.PORT || 3001}`;
+        const clerkRequest = new Request(baseUrl, {
           method: 'GET',
           headers: {
             authorization: `Bearer ${token}`,

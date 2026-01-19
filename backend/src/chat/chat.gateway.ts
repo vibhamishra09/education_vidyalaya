@@ -9,16 +9,32 @@ import {
 import { Server, Socket } from 'socket.io';
 import { ChatService } from './chat.service';
 import { createClerkClient } from '@clerk/backend';
+import { PermissionsService } from '../session-moderation/permissions.service';
 
 @WebSocketGateway({
   cors: {
-    origin: process.env.FRONTEND_URLS?.split(',')
-      .map((url) => url.trim())
-      .filter(Boolean)
-      .concat(['http://localhost:3000', 'http://localhost:3002']) || [
-      'http://localhost:3000',
-      'http://localhost:3002',
-    ],
+    origin: (() => {
+      const envUrls = process.env.FRONTEND_URLS?.split(',')
+        .map((url) => url.trim())
+        .filter(Boolean) || [];
+      const defaultUrls = [
+        'https://www.webyalaya.com',
+        'https://webyalaya.com',
+        'https://webyalaya-next.vercel.app',
+        'https://test.webyalaya.com',
+        'https://test2.webyalaya.com',
+        'https://webyalaya-next-test.vercel.app',
+        'https://dev.webyalaya.com',
+        'https://dev2.webyalaya.com',
+        'https://hedera.webyalaya.com',
+        'https://webyalaya-green.vercel.app',
+        'https://webyalaya-purple.vercel.app',
+        'http://localhost:3000',
+        'http://localhost:3002',
+        'http://localhost:3007',
+      ];
+      return [...new Set([...envUrls, ...defaultUrls])];
+    })(),
     credentials: true,
   },
 })
@@ -31,7 +47,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
   });
 
-  constructor(private chatService: ChatService) {}
+  constructor(
+    private chatService: ChatService,
+    private permissionsService: PermissionsService,
+  ) {}
 
   async handleConnection(client: Socket) {
     try {
@@ -46,7 +65,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       // Verify token directly with Clerk (for WebSocket, we can't use authenticateRequest)
       try {
-        const clerkRequest = new Request('http://localhost:3001', {
+        // Use environment variable or construct from PORT
+        const baseUrl = process.env.API_URL || `http://localhost:${process.env.PORT || 3001}`;
+        const clerkRequest = new Request(baseUrl, {
           method: 'GET',
           headers: {
             authorization: `Bearer ${token}`,
@@ -114,6 +135,26 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
 
     try {
+      // Get session info from channel to check chat permissions
+      const sessionInfo = await this.chatService.getSessionInfoFromChannelId(payload.channelId);
+      
+      if (sessionInfo) {
+        // Check if user has chat permission for this session
+        const canChat = await this.permissionsService.hasPermission(
+          sessionInfo.externalId,
+          client.data.userId,
+          'chat',
+        );
+        
+        if (!canChat) {
+          client.emit('error', { 
+            code: 'CHAT_DISABLED',
+            message: 'Chat is disabled by the host',
+          });
+          return;
+        }
+      }
+
       // Get user DB ID from clerkId
       const user = await this.chatService.getUserByClerkId(client.data.userId);
 
