@@ -20,7 +20,8 @@ import { ImprovedAvailabilityCalendar } from "@/components/availability/improved
 import { useFormPersistence } from "@/hooks/use-local-storage";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { formatMaya } from "@/lib/utils/coin-format";
+import { formatCoins } from "@/lib/utils/coin-format";
+import { toast } from "sonner";
 
 interface SessionFormData {
   skills: string[];
@@ -275,6 +276,12 @@ export default function RequestSessionPage({
       // Clear form from localStorage on successful submission
       clearForm();
       
+      // Show success toast notification
+      toast.success("Session request sent!", {
+        description: `Your session request with ${peer.name} has been submitted. They will be notified to accept or decline.`,
+        duration: 5000,
+      });
+      
       // Success - redirect to dashboard
       router.push("/dashboard");
     } catch (err: unknown) {
@@ -284,16 +291,21 @@ export default function RequestSessionPage({
         const apiError = err as { response: { data: { code: string; message: string } } };
         if (apiError.response?.data?.code === 'CANNOT_REQUEST_SELF') {
           setError(apiError.response.data.message || 'You cannot request a session to yourself.');
+          toast.error("Cannot request session", { description: "You cannot request a session to yourself." });
         } else if (apiError.response?.data?.code === 'TIME_SLOT_UNAVAILABLE') {
           setError(apiError.response.data.message || 'The selected time slot is not available.');
+          toast.error("Time slot unavailable", { description: "The selected time slot is not available." });
         } else if (apiError.response?.data?.code === 'INSUFFICIENT_FUNDS') {
-          setError('You do not have enough mAYA tokens to book this session. Please add funds to your wallet.');
+          setError('You do not have enough AYA tokens to book this session. Please add funds to your wallet.');
+          toast.error("Insufficient funds", { description: "You do not have enough AYA tokens." });
         } else {
           setError(apiError.response?.data?.message || 'Failed to send session request');
+          toast.error("Request failed", { description: apiError.response?.data?.message || 'Failed to send session request' });
         }
       } else {
         const errorMessage = err instanceof Error ? err.message : 'Failed to send session request';
         setError(errorMessage);
+        toast.error("Request failed", { description: errorMessage });
       }
     } finally {
       setSubmitting(false);
@@ -630,7 +642,7 @@ export default function RequestSessionPage({
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Rate</span>
                     <span className="font-medium">
-                      {peer?.hourlyRate ? <>{formatMaya(costPerHour)} <span className="text-[10px]">m</span>AYA/hour</> : 'Not set'}
+                      {peer?.hourlyRate ? <>{formatCoins(costPerHour)} AYA/hour</> : 'Not set'}
                     </span>
                   </div>
                   <div className="border-t pt-2 mt-2">
@@ -639,7 +651,7 @@ export default function RequestSessionPage({
                       <div className="flex items-center gap-1">
                         <Coins className="h-4 w-4 text-yellow-600" />
                         <span className="font-semibold">
-                          {peer?.hourlyRate ? <>{formatMaya(calculatedCost)} <span className="text-xs">m</span>AYA</> : 'N/A'}
+                          {peer?.hourlyRate ? <>{formatCoins(calculatedCost)} AYA</> : 'N/A'}
                         </span>
                       </div>
                     </div>
@@ -653,7 +665,7 @@ export default function RequestSessionPage({
                     </span>
                     <div className="flex items-center gap-1">
                       <Coins className="h-4 w-4 text-yellow-600" />
-                      <span className="font-medium">{formatMaya(typeof currentUser.coins === 'string' ? parseFloat(currentUser.coins) : currentUser.coins)} <span className="text-xs">m</span>AYA</span>
+                      <span className="font-medium">{formatCoins(typeof currentUser.coins === 'string' ? parseFloat(currentUser.coins) : currentUser.coins)} AYA</span>
                     </div>
                   </div>
 

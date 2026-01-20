@@ -3,9 +3,10 @@
  */
 
 /**
- * Formats a coin value as a whole number (no decimals)
- * @param coins - The coin value to format
- * @returns Formatted string as whole number
+ * Formats AYA coin value for display - shows actual value with up to 2 decimal places
+ * No conversion is done - displays the raw value as stored
+ * @param coins - The AYA coin value to format
+ * @returns Formatted string with up to 2 decimal places
  */
 export function formatCoins(coins: number | string | null | undefined): string {
   // Handle null, undefined, or empty string
@@ -21,34 +22,22 @@ export function formatCoins(coins: number | string | null | undefined): string {
     return '0';
   }
 
-  // Round to whole number
-  return Math.round(numCoins).toString();
+  // Display with up to 2 decimal places, removing trailing zeros
+  if (Number.isInteger(numCoins)) {
+    return numCoins.toString();
+  }
+  
+  // Round to 2 decimal places and remove trailing zeros
+  const formatted = numCoins.toFixed(2);
+  return parseFloat(formatted).toString();
 }
 
 /**
- * Formats mAYA tokens for display (mAYA = AYA * 100)
- * @param ayaCoins - The AYA coin value to convert and format
- * @returns Formatted string as whole number representing mAYA value
+ * @deprecated Use formatCoins instead - there is no mAYA/AYA conversion
+ * This function now just calls formatCoins for backward compatibility
  */
-export function formatMaya(ayaCoins: number | string | null | undefined): string {
-  // Handle null, undefined, or empty string
-  if (ayaCoins === null || ayaCoins === undefined || ayaCoins === '') {
-    return '0';
-  }
-
-  // Convert to number if it's a string
-  const numCoins = typeof ayaCoins === 'string' ? parseFloat(ayaCoins) : ayaCoins;
-
-  // Check if the conversion resulted in a valid number
-  if (isNaN(numCoins)) {
-    return '0';
-  }
-
-  // Convert AYA to mAYA (multiply by 100)
-  const mAyaValue = numCoins * 100;
-
-  // Round to whole number
-  return Math.round(mAyaValue).toString();
+export function formatMaya(coins: number | string | null | undefined): string {
+  return formatCoins(coins);
 }
 
 /**

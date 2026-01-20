@@ -5,13 +5,15 @@ import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
 import {
   Calendar,
   Clock,
   Users,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   BookOpen,
   ArrowRight,
   Eye
@@ -38,12 +40,18 @@ interface SessionListProps {
   ongoingSessions?: Session[];
   pastSessions?: Session[];
   isLoading?: boolean;
+  currentPage?: number;
+  onPageChange?: (page: number) => void;
+  hasNextPage?: boolean;
 }
 
 export function SessionList({
   upcomingSessions = [],
   ongoingSessions = [],
-  pastSessions = []
+  pastSessions = [],
+  currentPage = 1,
+  onPageChange,
+  hasNextPage = false
 }: SessionListProps) {
   const [activeTab, setActiveTab] = useState<"upcoming" | "ongoing" | "past">("upcoming");
   const [expandedSession, setExpandedSession] = useState<string | null>(null);
@@ -243,10 +251,14 @@ export function SessionList({
   return (
     <div className="space-y-4">
       {/* Tabs */}
-      <Tabs className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger
-            active={activeTab === "upcoming"}
+      <div className="w-full">
+        <div className="grid w-full grid-cols-3 h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground">
+          <button
+            type="button"
+            className={cn(
+              "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+              activeTab === "upcoming" ? "bg-background text-foreground shadow-sm" : "hover:bg-background/50 hover:text-foreground"
+            )}
             onClick={() => setActiveTab("upcoming")}
           >
             Upcoming
@@ -255,9 +267,13 @@ export function SessionList({
                 {upcomingSessions.length}
               </Badge>
             )}
-          </TabsTrigger>
-          <TabsTrigger
-            active={activeTab === "ongoing"}
+          </button>
+          <button
+            type="button"
+            className={cn(
+              "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+              activeTab === "ongoing" ? "bg-background text-foreground shadow-sm" : "hover:bg-background/50 hover:text-foreground"
+            )}
             onClick={() => setActiveTab("ongoing")}
           >
             Ongoing
@@ -266,9 +282,13 @@ export function SessionList({
                 {ongoingSessions.length}
               </Badge>
             )}
-          </TabsTrigger>
-          <TabsTrigger
-            active={activeTab === "past"}
+          </button>
+          <button
+            type="button"
+            className={cn(
+              "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+              activeTab === "past" ? "bg-background text-foreground shadow-sm" : "hover:bg-background/50 hover:text-foreground"
+            )}
             onClick={() => setActiveTab("past")}
           >
             Past
@@ -277,12 +297,12 @@ export function SessionList({
                 {pastSessions.length}
               </Badge>
             )}
-          </TabsTrigger>
-        </TabsList>
-      </Tabs>
+          </button>
+        </div>
+      </div>
 
       {/* Session Lists */}
-      <div className="space-y-3">
+      <div className="max-h-[500px] overflow-y-auto pr-2 space-y-3 custom-scrollbar">
         {activeTab === "upcoming" && (
           <>
             {upcomingSessions.length === 0 ? (
@@ -329,14 +349,32 @@ export function SessionList({
         )}
       </div>
 
-      {/* View All Link */}
-      {((activeTab === "upcoming" && upcomingSessions.length > 5) ||
-        (activeTab === "ongoing" && ongoingSessions.length > 5) ||
-        (activeTab === "past" && pastSessions.length > 5)) && (
-        <div className="text-center pt-2">
-          <Button variant="ghost" size="sm">
-            View All Sessions
-            <ArrowRight className="h-4 w-4 ml-2" />
+      {/* Pagination Controls */}
+      {onPageChange && (
+        <div className="flex items-center justify-between pt-4 border-t">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onPageChange(currentPage - 1)}
+            disabled={currentPage <= 1}
+          >
+            <ChevronLeft className="h-4 w-4 mr-2" />
+            Previous
+          </Button>
+          <span className="text-sm text-muted-foreground">
+            Page {currentPage}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onPageChange(currentPage + 1)}
+            disabled={!hasNextPage && (
+               (activeTab === "upcoming" && upcomingSessions.length < 10) ||
+               (activeTab === "past" && pastSessions.length < 10)
+            )}
+          >
+            Next
+            <ChevronRight className="h-4 w-4 ml-2" />
           </Button>
         </div>
       )}

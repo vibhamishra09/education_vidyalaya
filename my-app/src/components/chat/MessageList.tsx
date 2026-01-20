@@ -39,10 +39,10 @@ export function MessageList({ messages }: { messages: Message[] }) {
 	}
 
 	return (
-		<div ref={containerRef} className="flex-1 overflow-y-auto p-2 md:p-4 space-y-2 md:space-y-3">
+		<div ref={containerRef} className="h-full overflow-y-auto p-2 md:p-4 space-y-2 md:space-y-3">
 			{messages.length === 0 ? (
 				<div className="text-center py-8 md:py-12">
-					<p className="text-xs md:text-sm text-muted-foreground">No messages yet. Start the conversation!</p>
+					<p className="text-xs md:text-sm text-white/50">No messages yet. Start the conversation!</p>
 				</div>
 			) : (
 				messages.map((m) => {
@@ -51,8 +51,8 @@ export function MessageList({ messages }: { messages: Message[] }) {
 					const initials = senderName.charAt(0).toUpperCase()
 
 					return (
-						<div key={m.id} className="flex gap-2 md:gap-3 hover:bg-primary/5 rounded-lg p-1.5 md:p-2 -mx-1 md:-mx-2 transition-colors">
-							<Avatar className="h-7 w-7 md:h-8 md:w-8 flex-shrink-0 border border-primary/20">
+						<div key={m.id} className="flex gap-2 md:gap-3 hover:bg-white/5 rounded-lg p-1.5 md:p-2 -mx-1 md:-mx-2 transition-colors">
+							<Avatar className="h-7 w-7 md:h-8 md:w-8 flex-shrink-0 border border-white/20">
 								<AvatarImage src={senderAvatar || undefined} alt={senderName} />
 								<AvatarFallback className="text-[10px] md:text-xs bg-gradient-to-br from-primary to-secondary text-white">
 									{initials}
@@ -60,10 +60,10 @@ export function MessageList({ messages }: { messages: Message[] }) {
 							</Avatar>
 							<div className="flex-1 min-w-0">
 								<div className="flex items-baseline gap-1.5 md:gap-2 mb-0.5 md:mb-1">
-									<span className="font-semibold text-xs md:text-sm text-foreground truncate">{senderName}</span>
-									<span className="text-[10px] md:text-xs text-muted-foreground flex-shrink-0">{formatTime(m.createdAt)}</span>
-								</div>
-								<div className="text-xs md:text-sm text-foreground/90 break-words leading-relaxed">
+								<span className="font-semibold text-xs md:text-sm text-white truncate">{senderName}</span>
+								<span className="text-[10px] md:text-xs text-white/60 flex-shrink-0">{formatTime(m.createdAt)}</span>
+							</div>
+							<div className="text-xs md:text-sm text-white/90 break-words leading-relaxed">
 									{m.content}
 								</div>
 							</div>

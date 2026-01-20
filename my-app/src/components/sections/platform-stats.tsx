@@ -3,7 +3,7 @@
 import { motion, useInView } from "framer-motion";
 import { useRef, useEffect, useState } from "react";
 import { usePlatformStats } from "@/hooks/use-platform-stats";
-import { Users, BookOpen, Clock, Star, GraduationCap } from "lucide-react";
+import { Users, BookOpen, Clock, Star } from "lucide-react";
 
 interface CountUpProps {
   end: number;
@@ -25,8 +25,6 @@ function CountUp({ end, duration = 2, suffix = "" }: CountUpProps) {
     const animate = (timestamp: number) => {
       if (!startTime) startTime = timestamp;
       const progress = Math.min((timestamp - startTime) / (duration * 1000), 1);
-
-      // Easing function for smooth animation
       const easeOutQuart = 1 - Math.pow(1 - progress, 4);
       setCount(Math.floor(easeOutQuart * end));
 
@@ -52,182 +50,140 @@ interface StatCardProps {
   value: number;
   label: string;
   suffix?: string;
-  delay?: number;
-  gradient: string;
   showRating?: boolean;
   rating?: number;
 }
 
-function StarRating({ rating }: { rating: number }) {
-  const fullStars = Math.floor(rating);
-  const hasHalfStar = rating % 1 >= 0.5;
-  const emptyStars = 5 - fullStars - (hasHalfStar ? 1 : 0);
-
+function StatCard({ icon, value, label, suffix, showRating = false, rating }: StatCardProps) {
   return (
-    <div className="flex items-center gap-0.5">
-      {Array.from({ length: fullStars }).map((_, i) => (
-        <Star key={`full-${i}`} className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-      ))}
-      {hasHalfStar && (
-        <div className="relative">
-          <Star className="w-4 h-4 text-gray-300" />
-          <div className="absolute inset-0 overflow-hidden" style={{ width: "50%" }}>
-            <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+    <div className="group h-full rounded-2xl border border-border/50 bg-card px-5 py-4 shadow-sm transition-all duration-300 hover:shadow-md hover:border-emerald-500/20 hover:-translate-y-0.5 flex flex-col justify-center">
+      <div className="flex items-center justify-between gap-4">
+        
+        {/* Text Section (Left) */}
+        <div className="flex flex-col">
+          {/* Label Row - Now includes Rating if present */}
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              {label}
+            </span>
+            
+            {showRating && rating !== undefined && (
+              <div className="flex items-center gap-1 bg-yellow-400/10 px-1.5 py-0.5 rounded-full">
+                <div className="flex gap-0.5">
+                  {[...Array(5)].map((_, i) => (
+                    <Star 
+                      key={i}
+                      className={`w-2.5 h-2.5 ${
+                        i < Math.floor(rating) 
+                          ? "fill-yellow-500 text-yellow-500" 
+                          : "text-gray-300 dark:text-gray-700"
+                      }`}
+                    />
+                  ))}
+                </div>
+                <span className="text-[10px] font-bold text-yellow-600 dark:text-yellow-500">
+                  {rating}
+                </span>
+              </div>
+            )}
           </div>
+          
+          {/* Value Row */}
+          <span className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+            <CountUp end={value} suffix={suffix} />
+          </span>
         </div>
-      )}
-      {Array.from({ length: emptyStars }).map((_, i) => (
-        <Star key={`empty-${i}`} className="w-4 h-4 text-gray-300" />
-      ))}
+
+        {/* Icon Section (Right) */}
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-emerald-100/80 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400 group-hover:scale-110 transition-transform duration-300">
+          {icon}
+        </div>
+      </div>
     </div>
   );
 }
 
-function StatCard({ icon, value, label, suffix, delay = 0, gradient, showRating = false, rating }: StatCardProps) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 30, scale: 0.9 }}
-      whileInView={{ opacity: 1, y: 0, scale: 1 }}
-      viewport={{ once: true, margin: "-50px" }}
-      transition={{ duration: 0.5, delay, ease: "easeOut" }}
-      className="relative group"
-    >
-      <div className="relative overflow-hidden rounded-2xl bg-card border border-border/50 p-6 transition-all duration-300 hover:border-green-500/30 hover:shadow-lg hover:shadow-green-500/5">
-        {/* Gradient accent */}
-        <div className={`absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 ${gradient}`} />
-        
-        <div className="relative z-10 flex flex-col items-center text-center space-y-3">
-          {/* Icon */}
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500/20 to-blue-500/20 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-            {icon}
-          </div>
-
-          {/* Rating Display (if showRating is true) */}
-          {showRating && rating !== undefined ? (
-            <div className="flex flex-col items-center gap-2">
-              <div className="flex items-center gap-2">
-                <StarRating rating={rating} />
-                <span className="text-2xl font-bold bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent">
-                  {rating}
-                </span>
-              </div>
-              <div className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent">
-                <CountUp end={value} suffix={suffix} />
-              </div>
-            </div>
-          ) : (
-            /* Value */
-            <div className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent">
-              <CountUp end={value} suffix={suffix} />
-            </div>
-          )}
-
-          {/* Label */}
-          <p className="text-sm text-muted-foreground font-medium font-tagline">
-            {label}
-          </p>
-        </div>
-      </div>
-    </motion.div>
-  );
-}
-
-// Minimum display values - show these until actual data exceeds them
 const MIN_STATS = {
   usersOnboarded: 145,
   studyRoomsHosted: 85,
   sessionsCompleted: 230,
   learningHours: 520,
-  reviewsGiven: 180,
+  reviewsGiven: 2640,
 };
 
 export function PlatformStats() {
   const { data: stats } = usePlatformStats();
 
-  // Use the higher of actual stats or minimum values
   const displayStats = {
     usersOnboarded: Math.max(stats?.usersOnboarded ?? 0, MIN_STATS.usersOnboarded),
     studyRoomsHosted: Math.max(stats?.studyRoomsHosted ?? 0, MIN_STATS.studyRoomsHosted),
-    sessionsCompleted: Math.max(stats?.sessionsCompleted ?? 0, MIN_STATS.sessionsCompleted),
     learningHours: Math.max(stats?.learningHours ?? 0, MIN_STATS.learningHours),
     reviewsGiven: Math.max(stats?.reviewsGiven ?? 0, MIN_STATS.reviewsGiven),
   };
 
-  const topStats = [
+  const allStats = [
     {
-      icon: <Users className="w-6 h-6 text-green-600" />,
+      icon: <Users className="w-6 h-6" />,
       value: displayStats.usersOnboarded,
-      label: "Learners Onboarded",
-      gradient: "bg-gradient-to-br from-green-500/5 to-transparent",
+      label: "Learners",
     },
     {
-      icon: <BookOpen className="w-6 h-6 text-blue-600" />,
+      icon: <BookOpen className="w-6 h-6" />,
       value: displayStats.studyRoomsHosted,
-      label: "Study Rooms Hosted",
-      gradient: "bg-gradient-to-br from-blue-500/5 to-transparent",
+      label: "Study Rooms",
     },
     {
-      icon: <Clock className="w-6 h-6 text-amber-600" />,
+      icon: <Clock className="w-6 h-6" />,
       value: displayStats.learningHours,
-      label: "Hours of Learning",
+      label: "Hours Spent",
       suffix: "+",
-      gradient: "bg-gradient-to-br from-amber-500/5 to-transparent",
+    },
+    {
+      icon: <Star className="w-6 h-6" />,
+      value: displayStats.reviewsGiven,
+      label: "Reviews", // Changed label back to Reviews, but keeping rating logic
+      showRating: true,
+      rating: 4.8,
     },
   ];
 
-  const reviewStat = {
-    icon: <Star className="w-6 h-6 text-rose-600" />,
-    value: 2640,
-    label: "Reviews Given",
-    gradient: "bg-gradient-to-br from-rose-500/5 to-transparent",
-    showRating: true,
-    rating: 4.8,
-  };
-
   return (
-    <section className="py-16 relative overflow-hidden">
-      {/* Background pattern */}
-      <div className="absolute inset-0 bg-gradient-to-b from-background via-muted/20 to-background" />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-green-500/5 via-transparent to-transparent" />
-
+    <section className="py-10 relative overflow-hidden bg-muted/30 border-y border-border/50">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5 }}
-          className="text-center mb-12"
-        >
-          <h2 className="text-3xl sm:text-4xl font-bold mb-4">
-            Growing Together
-          </h2>
-          <p className="text-muted-foreground max-w-2xl mx-auto font-tagline">
-            Join our thriving community of learners helping each other succeed
-          </p>
-        </motion.div>
+        <div className="flex flex-col gap-6 max-w-6xl mx-auto">
+          {/* Header */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
+            className="text-center space-y-2"
+          >
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+              Growing Together
+            </h2>
+            <p className="text-sm text-muted-foreground font-tagline">
+              Join our thriving community of learners helping each other succeed
+            </p>
+          </motion.div>
 
-        {/* First three stats in a row */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 max-w-4xl mx-auto mb-6">
-          {topStats.map((stat, index) => (
-            <StatCard
-              key={stat.label}
-              {...stat}
-              delay={index * 0.1}
-            />
-          ))}
-        </div>
-
-        {/* Review stat centered below */}
-        <div className="flex justify-center">
-          <div className="w-full max-w-sm">
-            <StatCard
-              {...reviewStat}
-              delay={0.3}
-            />
+          {/* Stats Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {allStats.map((stat, index) => (
+              <motion.div
+                key={stat.label}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.4, delay: index * 0.1 }}
+                className="h-full"
+              >
+                <StatCard {...stat} />
+              </motion.div>
+            ))}
           </div>
         </div>
       </div>
     </section>
   );
 }
-

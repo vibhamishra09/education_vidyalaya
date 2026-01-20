@@ -5,7 +5,6 @@ import { Calendar, ChevronLeft, ChevronRight, Clock, List, Grid3x3 } from "lucid
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Popover,
   PopoverContent,
@@ -259,34 +258,43 @@ export function EnhancedCalendarWidget({ sessions = [] }: EnhancedCalendarWidget
         </div>
 
         {/* View Mode Tabs */}
-        <Tabs className="w-full">
-          <TabsList className="grid w-full grid-cols-3 h-9 sm:h-10">
-            <TabsTrigger
-              active={viewMode === "month"}
+        <div className="w-full">
+          <div className="grid w-full grid-cols-3 h-9 sm:h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground">
+            <button
+              type="button"
+              className={cn(
+                "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-[10px] sm:text-xs font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+                viewMode === "month" ? "bg-background text-foreground shadow-sm" : "hover:bg-background/50 hover:text-foreground"
+              )}
               onClick={() => setViewMode("month")}
-              className="text-[10px] sm:text-xs"
             >
               <Grid3x3 className="h-2.5 w-2.5 sm:h-3 sm:w-3 sm:mr-1" />
               <span className="hidden sm:inline">Month</span>
-            </TabsTrigger>
-            <TabsTrigger
-              active={viewMode === "week"}
+            </button>
+            <button
+              type="button"
+              className={cn(
+                "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-[10px] sm:text-xs font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+                viewMode === "week" ? "bg-background text-foreground shadow-sm" : "hover:bg-background/50 hover:text-foreground"
+              )}
               onClick={() => setViewMode("week")}
-              className="text-[10px] sm:text-xs"
             >
               <Calendar className="h-2.5 w-2.5 sm:h-3 sm:w-3 sm:mr-1" />
               <span className="hidden sm:inline">Week</span>
-            </TabsTrigger>
-            <TabsTrigger
-              active={viewMode === "agenda"}
+            </button>
+            <button
+              type="button"
+              className={cn(
+                "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-[10px] sm:text-xs font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+                viewMode === "agenda" ? "bg-background text-foreground shadow-sm" : "hover:bg-background/50 hover:text-foreground"
+              )}
               onClick={() => setViewMode("agenda")}
-              className="text-[10px] sm:text-xs"
             >
               <List className="h-2.5 w-2.5 sm:h-3 sm:w-3 sm:mr-1" />
               <span className="hidden sm:inline">Agenda</span>
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
+            </button>
+          </div>
+        </div>
       </CardHeader>
 
       <CardContent className="space-y-4">
@@ -321,7 +329,7 @@ export function EnhancedCalendarWidget({ sessions = [] }: EnhancedCalendarWidget
             <div className="grid grid-cols-7 gap-1">
               {/* Empty cells for days before the month starts */}
               {Array.from({ length: startingDayOfWeek }).map((_, i) => (
-                <div key={`empty-${i}`} className="aspect-square" />
+                <div key={`empty-${i}`} className="h-10 sm:h-12 w-full" />
               ))}
 
               {/* Days of the month */}
@@ -349,9 +357,9 @@ export function EnhancedCalendarWidget({ sessions = [] }: EnhancedCalendarWidget
                       <button
                         type="button"
                         className={cn(
-                          "aspect-square w-full h-full flex items-center justify-center text-xs sm:text-sm rounded-lg cursor-pointer transition-colors relative",
+                          "h-10 sm:h-12 w-full flex items-center justify-center text-xs sm:text-sm rounded-lg cursor-pointer transition-colors relative",
                           today
-                            ? "bg-primary text-primary-foreground font-semibold"
+                            ? "bg-purple-100 text-purple-700 font-semibold ring-1 ring-purple-200"
                             : hasSession
                             ? "bg-blue-50 text-blue-700 font-medium hover:bg-blue-100"
                             : "hover:bg-muted"
@@ -455,7 +463,7 @@ export function EnhancedCalendarWidget({ sessions = [] }: EnhancedCalendarWidget
                       <div
                         className={cn(
                           "text-sm font-semibold mx-auto w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-full",
-                          today && "bg-primary text-primary-foreground"
+                          today && "bg-purple-100 text-purple-700 ring-1 ring-purple-200"
                         )}
                       >
                         {day.getDate()}
@@ -570,7 +578,7 @@ export function EnhancedCalendarWidget({ sessions = [] }: EnhancedCalendarWidget
               <span>Teaching</span>
             </div>
             <div className="flex items-center gap-1">
-              <div className="w-3 h-3 rounded bg-primary" />
+              <div className="w-3 h-3 rounded bg-purple-100 border border-purple-200" />
               <span>Today</span>
             </div>
           </div>

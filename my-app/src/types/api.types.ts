@@ -150,6 +150,7 @@ export enum SessionStatus {
   ONGOING = 'ONGOING',
   CANCELLED = 'CANCELLED',
   DONE = 'DONE',
+  NOT_COMPLETED = 'NOT_COMPLETED',
 }
 
 export enum PaymentStatus {
@@ -499,6 +500,12 @@ export interface DashboardData {
   pastSessions?: PastSession[];
   upcomingStudyRooms?: UpcomingStudyRoom[];
   pastStudyRooms?: PastStudyRoom[];
+  sessionsPagination?: {
+    upcomingSessions: Pagination;
+    pastSessions: Pagination;
+    upcomingStudyRooms: Pagination;
+    pastStudyRooms: Pagination;
+  };
   pendingReviews?: number;
   notifications?: Notification[];
   streak?: StreakData;
@@ -605,6 +612,8 @@ export interface DashboardQuery {
   includeNotifications?: boolean;
   includeStreaks?: boolean;
   includeAchievements?: boolean;
+  page?: number;
+  limit?: number;
   [key: string]: unknown;
 }
 
@@ -704,4 +713,95 @@ export interface MonthlyTopUsersResponse {
   topTeacher: MonthlyTopUser | null;
   month: number;
   year: number;
+}
+
+// Session Feedback Types (Post-session survey)
+export type FirstFeelingOption = 'Excited' | 'Curious' | 'Confused' | 'Neutral' | 'Disgusting';
+export type ClarityOption = 'Very clear' | 'Somewhat clear' | 'Not clear' | 'Confusing';
+export type ProblemSolvedOption = 'Completely' | 'Mostly' | 'Partially' | 'Not really';
+export type PreviousSolutionOption = 'YouTube or online videos' | 'Paid courses' | 'Friends or peers' | 'Self-learning' | "Couldn't find a solution";
+export type EaseOfStartOption = 'Extremely easy' | 'Easy' | 'Neutral' | 'Difficult' | 'Very difficult';
+export type YesNoOption = 'Yes' | 'No';
+export type TrustIncreaseOption = 'User profiles & credibility' | 'Ratings & reviews' | 'AI Moderation & guidelines' | 'Verified users';
+export type PlatformComparisonOption = 'Human' | 'Practical' | 'Interactive' | 'Flexible' | 'Confusing' | 'Less useful';
+export type ContinueUsingOption = 'Very likely' | 'Likely' | 'Not sure' | 'Unlikely';
+export type WillingToPayOption = 'Yes, definitely' | 'Maybe, if the value is clear' | 'No';
+export type PaidFeatureOption = 
+  | 'Unlimited live learning sessions'
+  | 'Access to high-quality peers / mentors'
+  | 'Debate Rooms'
+  | 'Session recordings and notes'
+  | 'Sessions being moderated and rated by AI'
+  | 'Verified experts / credibility badges'
+  | 'AI-powered learning recommendations'
+  | 'Certificates / proof of learning'
+  | 'Community-only learning circles';
+
+export interface SessionFeedbackAnswers {
+  // Q1: Time spent (in minutes)
+  timeSpentMinutes?: number;
+  // Q2: One sentence description
+  oneSentenceDescription?: string;
+  // Q3: First feeling
+  firstFeeling?: FirstFeelingOption;
+  // Q4: Clarity of purpose
+  clarityOfPurpose?: ClarityOption;
+  // Q5: Problem hoping to solve
+  problemHopingToSolve?: string;
+  // Q6: To what extent problem solved
+  problemSolvedExtent?: ProblemSolvedOption;
+  // Q7: Previous solution attempts
+  previousSolution?: PreviousSolutionOption;
+  // Q8: Ease of getting started
+  easeOfStart?: EaseOfStartOption;
+  // Q9: Confidence interacting with others
+  confidenceInteracting?: string;
+  // Q10: What enjoyed most
+  enjoyedMost?: string;
+  // Q11: Felt stuck at any point
+  feltStuck?: YesNoOption;
+  // Q12: Where felt stuck (if yes)
+  whereStuck?: string;
+  // Q13: What would remove to reduce friction
+  removeForFriction?: string;
+  // Q14: Value score (1-10)
+  valueScore?: number;
+  // Q15: What would make it must-use
+  whatMakeMustUse?: string;
+  // Q16: Believe peer learning is helpful
+  believePeerLearningHelpful?: YesNoOption;
+  // Q17: What would increase trust most
+  trustIncreaseOption?: TrustIncreaseOption;
+  // Q18: How different from other platforms
+  howDifferent?: string;
+  // Q19: What would use instead
+  alternativeIfNotExist?: string;
+  // Q20: Platform comparison feeling
+  platformComparison?: PlatformComparisonOption;
+  // Q21: Likelihood to continue using
+  likelihoodToContinue?: ContinueUsingOption;
+  // Q22: NPS Score (0-10)
+  npsScore?: number;
+  // Q23: What would stop recommending
+  stopRecommending?: string;
+  // Q24: Willing to pay ₹1/day
+  willingToPay?: WillingToPayOption;
+  // Q25: Most valuable paid features (multi-select)
+  valuablePaidFeatures?: PaidFeatureOption[];
+  // Q26: What makes worth paying for
+  whatMakesWorthPaying?: string;
+  // Q27: What would change/improve
+  whatWouldChange?: string;
+  // Q28: Open to feedback call
+  openToFeedbackCall?: YesNoOption;
+  // Q29: Final thoughts
+  finalThoughts?: string;
+}
+
+export interface SessionFeedbackSubmission {
+  sessionId: string;
+  sessionType: 'studyRoom' | 'peerSession';
+  isHost: boolean;
+  answers: SessionFeedbackAnswers;
+  submittedAt?: string;
 }

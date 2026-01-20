@@ -14,8 +14,6 @@ export class AchievementsService {
    * @returns Categorized achievements (unlocked, in-progress, locked)
    */
   async getUserAchievements(userId: string) {
-    console.log('[AchievementsService] Getting achievements for userId:', userId);
-    
     // userId is actually Clerk ID, convert to database ID
     const user = await this.prisma.user.findUnique({
       where: { clerkId: userId },
@@ -28,26 +26,17 @@ export class AchievementsService {
     }
 
     const dbUserId = user.id;
-    console.log('[AchievementsService] Converted Clerk ID to database ID:', { clerkId: userId, dbUserId, userName: user.name });
     
     // Get all achievements
     const allAchievements = await this.prisma.achievement.findMany({
       orderBy: [{ category: 'asc' }, { rarity: 'asc' }],
     });
-    console.log('[AchievementsService] Total achievements in DB:', allAchievements.length);
 
     // Get user's achievement progress
     const userAchievements = await this.prisma.userAchievement.findMany({
       where: { userId: dbUserId },
       include: { achievement: true },
     });
-    console.log('[AchievementsService] User achievement records:', userAchievements.length);
-    console.log('[AchievementsService] Sample user achievements:', userAchievements.slice(0, 3).map(ua => ({
-      achievementId: ua.achievementId,
-      title: ua.achievement.title,
-      progress: ua.progress,
-      unlockedAt: ua.unlockedAt,
-    })));
 
     // Create a map for quick lookup
     const userAchievementMap = new Map(
@@ -124,7 +113,8 @@ export class AchievementsService {
     });
 
     if (!achievement) {
-      throw new Error(`Achievement ${achievementId} not found`);
+      this.logger.warn(`Achievement ${achievementId} not found - skipping progress update`);
+      return null;
     }
 
     // Upsert user achievement
@@ -257,17 +247,22 @@ export class AchievementsService {
 
     for (const milestone of sessionMilestones) {
       if (totalSessions >= milestone.count) {
-        const userAchievement = await this.prisma.userAchievement.findUnique({
-          where: {
-            userId_achievementId: {
-              userId,
-              achievementId: milestone.id,
+        try {
+          const userAchievement = await this.prisma.userAchievement.findUnique({
+            where: {
+              userId_achievementId: {
+                userId,
+                achievementId: milestone.id,
+              },
             },
-          },
-        });
+          });
 
-        if (!userAchievement?.unlockedAt) {
-          await this.updateProgress(userId, milestone.id, totalSessions);
+          if (!userAchievement?.unlockedAt) {
+            await this.updateProgress(userId, milestone.id, totalSessions);
+          }
+        } catch (error) {
+          this.logger.error(`Failed to update progress for achievement ${milestone.id}:`, error);
+          // Continue processing other achievements
         }
       }
     }
@@ -281,11 +276,45 @@ export class AchievementsService {
 
       for (const milestone of teachingMilestones) {
         if (totalTeacherSessions >= milestone.count) {
+          try {
+            const userAchievement = await this.prisma.userAchievement.findUnique({
+              where: {
+                userId_achievementId: {
+                  userId,
+                  achievementId: milestone.id,
+                },
+              },
+            });
+
+            if (!userAchievement?.unlockedAt) {
+              await this.updateProgress(
+                userId,
+                milestone.id,
+                totalTeacherSessions,
+              );
+            }
+          } catch (error) {
+            this.logger.error(`Failed to update progress for teaching achievement ${milestone.id}:`, error);
+            // Continue processing other achievements
+          }
+        }
+      }
+
+      // Check 5-star ratings achievement
+      try {
+        const fiveStarRatings = await this.prisma.review.count({
+          where: {
+            revieweeId: userId,
+            rating: 5,
+          },
+        });
+
+        if (fiveStarRatings >= 50) {
           const userAchievement = await this.prisma.userAchievement.findUnique({
             where: {
               userId_achievementId: {
                 userId,
-                achievementId: milestone.id,
+                achievementId: 'achievement_master_educator',
               },
             },
           });
@@ -293,71 +322,52 @@ export class AchievementsService {
           if (!userAchievement?.unlockedAt) {
             await this.updateProgress(
               userId,
-              milestone.id,
-              totalTeacherSessions,
+              'achievement_master_educator',
+              fiveStarRatings,
             );
           }
         }
-      }
-
-      // Check 5-star ratings achievement
-      const fiveStarRatings = await this.prisma.review.count({
-        where: {
-          revieweeId: userId,
-          rating: 5,
-        },
-      });
-
-      if (fiveStarRatings >= 50) {
-        const userAchievement = await this.prisma.userAchievement.findUnique({
-          where: {
-            userId_achievementId: {
-              userId,
-              achievementId: 'achievement_master_educator',
-            },
-          },
-        });
-
-        if (!userAchievement?.unlockedAt) {
-          await this.updateProgress(
-            userId,
-            'achievement_master_educator',
-            fiveStarRatings,
-          );
-        }
+      } catch (error) {
+        this.logger.error('Failed to check 5-star ratings achievement:', error);
+        // Continue processing
       }
     }
 
     // Check social achievement (unique learners connected)
     if (role === 'teacher') {
-      const uniqueLearners = await this.prisma.peerSession.findMany({
-        where: {
-          requestedToId: userId,
-          sessionStatus: 'DONE',
-        },
-        select: {
-          requestedById: true,
-        },
-        distinct: ['requestedById'],
-      });
-
-      if (uniqueLearners.length >= 20) {
-        const userAchievement = await this.prisma.userAchievement.findUnique({
+      try {
+        const uniqueLearners = await this.prisma.peerSession.findMany({
           where: {
-            userId_achievementId: {
-              userId,
-              achievementId: 'achievement_social_butterfly',
-            },
+            requestedToId: userId,
+            sessionStatus: 'DONE',
           },
+          select: {
+            requestedById: true,
+          },
+          distinct: ['requestedById'],
         });
 
-        if (!userAchievement?.unlockedAt) {
-          await this.updateProgress(
-            userId,
-            'achievement_social_butterfly',
-            uniqueLearners.length,
-          );
+        if (uniqueLearners.length >= 20) {
+          const userAchievement = await this.prisma.userAchievement.findUnique({
+            where: {
+              userId_achievementId: {
+                userId,
+                achievementId: 'achievement_social_butterfly',
+              },
+            },
+          });
+
+          if (!userAchievement?.unlockedAt) {
+            await this.updateProgress(
+              userId,
+              'achievement_social_butterfly',
+              uniqueLearners.length,
+            );
+          }
         }
+      } catch (error) {
+        this.logger.error('Failed to check social butterfly achievement:', error);
+        // Continue processing
       }
     }
   }
@@ -380,17 +390,22 @@ export class AchievementsService {
 
     for (const milestone of streakMilestones) {
       if (currentStreak >= milestone.streak) {
-        const userAchievement = await this.prisma.userAchievement.findUnique({
-          where: {
-            userId_achievementId: {
-              userId,
-              achievementId: milestone.id,
+        try {
+          const userAchievement = await this.prisma.userAchievement.findUnique({
+            where: {
+              userId_achievementId: {
+                userId,
+                achievementId: milestone.id,
+              },
             },
-          },
-        });
+          });
 
-        if (!userAchievement?.unlockedAt) {
-          await this.updateProgress(userId, milestone.id, currentStreak);
+          if (!userAchievement?.unlockedAt) {
+            await this.updateProgress(userId, milestone.id, currentStreak);
+          }
+        } catch (error) {
+          this.logger.error(`Failed to update progress for streak achievement ${milestone.id}:`, error);
+          // Continue processing other achievements
         }
       }
     }

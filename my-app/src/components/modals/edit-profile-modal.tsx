@@ -240,8 +240,8 @@ export function EditProfileModal({
   const [location, setLocation] = useState(user.location || "");
   const [school, setSchool] = useState(user.school || "");
   const [hourlyRate, setHourlyRate] = useState<number | string>(
-    user.hourlyRate ? (typeof user.hourlyRate === 'number' ? user.hourlyRate * 100 : parseFloat(user.hourlyRate) * 100) : ""
-  ); // Convert AYA to mAYA for display
+    user.hourlyRate ? (typeof user.hourlyRate === 'number' ? user.hourlyRate : parseFloat(user.hourlyRate)) : ""
+  ); // AYA value
   const [hasSkills, setHasSkills] = useState<string[]>(user.hasSkills || []);
   const [wantSkills, setWantSkills] = useState<string[]>(user.wantSkills || []);
   
@@ -262,8 +262,8 @@ export function EditProfileModal({
     setLocation(user.location || "");
     setSchool(user.school || "");
     setHourlyRate(
-      user.hourlyRate ? (typeof user.hourlyRate === 'number' ? user.hourlyRate * 100 : parseFloat(user.hourlyRate) * 100) : ""
-    ); // Convert AYA to mAYA for display
+      user.hourlyRate ? (typeof user.hourlyRate === 'number' ? user.hourlyRate : parseFloat(user.hourlyRate)) : ""
+    ); // AYA value
     setHasSkills(user.hasSkills || []);
     setWantSkills(user.wantSkills || []);
     setSocialLinks(user.socialLinks || []);
@@ -404,7 +404,7 @@ export function EditProfileModal({
       if (hourlyRate !== "" && hourlyRate !== null && hourlyRate !== undefined) {
         const numValue = typeof hourlyRate === 'number' ? hourlyRate : parseFloat(String(hourlyRate));
         if (!isNaN(numValue)) {
-          hourlyRateValue = numValue / 100; // Convert mAYA input to AYA for storage
+          hourlyRateValue = numValue; // AYA value - no conversion needed
         }
       }
       
@@ -611,7 +611,7 @@ export function EditProfileModal({
               />
             </div>
             <p className="text-xs text-muted-foreground">
-              Set your hourly rate in mAYA tokens for teaching sessions. Leave empty or 0 to not display a rate.
+              Set your hourly rate in AYA tokens for teaching sessions. Leave empty or 0 to not display a rate.
             </p>
           </div>
 

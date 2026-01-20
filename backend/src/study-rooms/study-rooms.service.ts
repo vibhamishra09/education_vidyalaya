@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -11,6 +12,7 @@ import { StreaksService } from '../streaks/streaks.service';
 import { AchievementsService } from '../achievements/achievements.service';
 import { TranscriptsService } from '../transcripts/transcripts.service';
 import { CreateStudyRoomDto, UpdateStudyRoomDto } from './dto/study-room.dto';
+import { SessionFeedbackDto } from '../common/dto/session-feedback.dto';
 import {
   Prisma,
   SessionStatus,
@@ -52,6 +54,8 @@ type StudyRoomWithRelations = {
 
 @Injectable()
 export class StudyRoomsService {
+  private readonly logger = new Logger(StudyRoomsService.name);
+
   constructor(
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
@@ -71,9 +75,31 @@ export class StudyRoomsService {
     limit: number = 10,
     trending?: boolean,
   ) {
+    const dbStartTime = Date.now();
+    const isHomePageRequest = trending === true && limit === 6;
+
     if (trending) {
+      this.logger.debug({
+        message: isHomePageRequest
+          ? '[HomePage] Fetching trending study rooms'
+          : '[StudyRooms] Fetching trending study rooms',
+        limit,
+      });
       return this.getTrendingStudyRooms(limit);
     }
+
+    this.logger.debug({
+      message: '[StudyRooms] Building query filters',
+      filters: {
+        search,
+        skills,
+        status,
+        dateFrom,
+        dateTo,
+        page,
+        limit,
+      },
+    });
 
     const where: any = {};
 
@@ -106,141 +132,21 @@ export class StudyRoomsService {
 
     const skip = (page - 1) * limit;
 
-    const [studyRooms, total] = await Promise.all([
-      this.prisma.studyRoom.findMany({
-        where,
-        skip,
-        take: limit,
-        include: {
-          createdBy: {
-            select: {
-              id: true,
-              name: true,
-              avatar: true,
-              reviewsReceived: {
-                select: { rating: true },
-              },
-              _count: {
-                select: {
-                  studyRooms: {
-                    where: { sessionStatus: SessionStatus.DONE },
-                  },
-                  peerSessionsReceived: {
-                    where: { sessionStatus: SessionStatus.DONE },
-                  },
-                },
-              },
-            },
-          },
-          skills: {
-            include: {
-              skill: {
-                select: {
-                  id: true,
-                  name: true,
-                },
-              },
-            },
-          },
-          learners: {
-            select: {
-              user: {
-                select: {
-                  id: true,
-                  name: true,
-                  avatar: true,
-                },
-              },
-            },
-          },
-        },
-        orderBy: { date: 'asc' },
-      }),
-      this.prisma.studyRoom.count({ where }),
-    ]);
-
-    const studyRoomCards = studyRooms.map((room) => {
-      const hostReviews = (room.createdBy as any).reviewsReceived || [];
-      const hostAvgRating =
-        hostReviews.length > 0
-          ? hostReviews.reduce((sum: number, r: { rating: number }) => sum + r.rating, 0) /
-            hostReviews.length
-          : undefined;
-      const hostTotalSessions =
-        ((room.createdBy as any)._count?.studyRooms || 0) +
-        ((room.createdBy as any)._count?.peerSessionsReceived || 0);
-
-      return this.buildStudyRoomCard(room, {
-        avgRating: hostAvgRating,
-        reviewCount: hostReviews.length,
-        totalSessions: hostTotalSessions,
-      });
-    });
-
-    return {
-      studyRooms: studyRoomCards,
-      pagination: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
-        hasMore: skip + limit < total,
-      },
-    };
-  }
-
-  private async getTrendingStudyRooms(limit?: number) {
-    const normalizedLimit = Math.max(1, limit ?? 6);
-    const now = new Date();
-
-    const teacherRatings = await this.prisma.review.groupBy({
-      by: ['revieweeId'],
-      where: {
-        reviewee: {
-          studyRooms: {
-            some: {
-              sessionStatus: SessionStatus.UPCOMING,
-              date: { gte: now },
-            },
-          },
-        },
-      },
-      _avg: { rating: true },
-      _count: { rating: true },
-      orderBy: [{ _avg: { rating: 'desc' } }, { _count: { rating: 'desc' } }],
-      take: normalizedLimit * 4,
-    });
-
-    if (teacherRatings.length === 0) {
-      return this.getFallbackTrendingRooms(normalizedLimit, now);
-    }
-
-    const MIN_AVG_RATING = 4;
-    const prioritizedTeachers = teacherRatings.filter(
-      (teacher) =>
-        (teacher._avg.rating ?? 0) >= MIN_AVG_RATING &&
-        (teacher._count.rating ?? 0) > 0,
-    );
-
-    const orderedTeachers =
-      prioritizedTeachers.length >= normalizedLimit
-        ? prioritizedTeachers
-        : teacherRatings;
-
-    const roomEntries = await Promise.all(
-      orderedTeachers.map(async (teacher) => {
-        const room = await this.prisma.studyRoom.findFirst({
-          where: {
-            createdById: teacher.revieweeId,
-            sessionStatus: SessionStatus.UPCOMING,
-            date: { gte: now },
-          },
+    try {
+      const [studyRooms, total] = await Promise.all([
+        this.prisma.studyRoom.findMany({
+          where,
+          skip,
+          take: limit,
           include: {
             createdBy: {
               select: {
                 id: true,
                 name: true,
                 avatar: true,
+                reviewsReceived: {
+                  select: { rating: true },
+                },
                 _count: {
                   select: {
                     studyRooms: {
@@ -276,78 +182,280 @@ export class StudyRoomsService {
             },
           },
           orderBy: { date: 'asc' },
-        });
+        }),
+        this.prisma.studyRoom.count({ where }),
+      ]);
 
-        if (!room) {
-          return null;
-        }
+      const dbDuration = Date.now() - dbStartTime;
+      this.logger.debug({
+        message: '[StudyRooms] Database query completed',
+        dbDuration: `${dbDuration}ms`,
+        results: {
+          studyRoomsCount: studyRooms.length,
+          total,
+        },
+      });
 
-        const totalSessions =
+      const studyRoomCards = studyRooms.map((room) => {
+        const hostReviews = (room.createdBy as any).reviewsReceived || [];
+        const hostAvgRating =
+          hostReviews.length > 0
+            ? hostReviews.reduce((sum: number, r: { rating: number }) => sum + r.rating, 0) /
+              hostReviews.length
+            : undefined;
+        const hostTotalSessions =
           ((room.createdBy as any)._count?.studyRooms || 0) +
           ((room.createdBy as any)._count?.peerSessionsReceived || 0);
 
-        return {
-          room,
-          rating: teacher._avg.rating ?? 0,
-          reviewCount: teacher._count.rating ?? 0,
-          totalSessions,
-        };
-      }),
-    );
+        return this.buildStudyRoomCard(room, {
+          avgRating: hostAvgRating,
+          reviewCount: hostReviews.length,
+          totalSessions: hostTotalSessions,
+        });
+      });
 
-    const uniqueRooms: Array<{
-      room: StudyRoomWithRelations;
-      rating: number;
-      reviewCount: number;
-      totalSessions: number;
-    }> = [];
-    const seenRoomIds = new Set<string>();
+      return {
+        studyRooms: studyRoomCards,
+        pagination: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
+          hasMore: skip + limit < total,
+        },
+      };
+    } catch (error) {
+      const dbDuration = Date.now() - dbStartTime;
+      this.logger.error({
+        message: '[StudyRooms] Database query failed',
+        dbDuration: `${dbDuration}ms`,
+        filters: { search, skills, status, page, limit },
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+      throw error;
+    }
+  }
 
-    for (const entry of roomEntries) {
-      if (!entry || seenRoomIds.has(entry.room.id)) {
-        continue;
+  private async getTrendingStudyRooms(limit?: number) {
+    const dbStartTime = Date.now();
+    const normalizedLimit = Math.max(1, limit ?? 6);
+    const now = new Date();
+    const isHomePageRequest = limit === 6;
+
+    this.logger.debug({
+      message: isHomePageRequest
+        ? '[HomePage] Fetching trending study rooms from database'
+        : '[StudyRooms] Fetching trending study rooms from database',
+      limit: normalizedLimit,
+    });
+
+    try {
+      const teacherRatings = await this.prisma.review.groupBy({
+        by: ['revieweeId'],
+        where: {
+          reviewee: {
+            studyRooms: {
+              some: {
+                sessionStatus: SessionStatus.UPCOMING,
+                date: { gte: now },
+              },
+            },
+          },
+        },
+        _avg: { rating: true },
+        _count: { rating: true },
+        orderBy: [{ _avg: { rating: 'desc' } }, { _count: { rating: 'desc' } }],
+        take: normalizedLimit * 4,
+      });
+
+      this.logger.debug({
+        message: isHomePageRequest
+          ? '[HomePage] Teacher ratings query completed'
+          : '[StudyRooms] Teacher ratings query completed',
+        teacherRatingsCount: teacherRatings.length,
+      });
+
+      if (teacherRatings.length === 0) {
+        this.logger.debug({
+          message: isHomePageRequest
+            ? '[HomePage] No teacher ratings found, using fallback'
+            : '[StudyRooms] No teacher ratings found, using fallback',
+        });
+        return this.getFallbackTrendingRooms(normalizedLimit, now);
       }
 
-      seenRoomIds.add(entry.room.id);
-      uniqueRooms.push(entry);
+      const MIN_AVG_RATING = 4;
+      const prioritizedTeachers = teacherRatings.filter(
+        (teacher) =>
+          (teacher._avg.rating ?? 0) >= MIN_AVG_RATING &&
+          (teacher._count.rating ?? 0) > 0,
+      );
 
-      if (uniqueRooms.length >= normalizedLimit * 2) {
-        break;
+      const orderedTeachers =
+        prioritizedTeachers.length >= normalizedLimit
+          ? prioritizedTeachers
+          : teacherRatings;
+
+      this.logger.debug({
+        message: isHomePageRequest
+          ? '[HomePage] Fetching study rooms for prioritized teachers'
+          : '[StudyRooms] Fetching study rooms for prioritized teachers',
+        prioritizedCount: prioritizedTeachers.length,
+        orderedCount: orderedTeachers.length,
+      });
+
+      const roomEntries = await Promise.all(
+        orderedTeachers.map(async (teacher) => {
+          const room = await this.prisma.studyRoom.findFirst({
+            where: {
+              createdById: teacher.revieweeId,
+              sessionStatus: SessionStatus.UPCOMING,
+              date: { gte: now },
+            },
+            include: {
+              createdBy: {
+                select: {
+                  id: true,
+                  name: true,
+                  avatar: true,
+                  _count: {
+                    select: {
+                      studyRooms: {
+                        where: { sessionStatus: SessionStatus.DONE },
+                      },
+                      peerSessionsReceived: {
+                        where: { sessionStatus: SessionStatus.DONE },
+                      },
+                    },
+                  },
+                },
+              },
+              skills: {
+                include: {
+                  skill: {
+                    select: {
+                      id: true,
+                      name: true,
+                    },
+                  },
+                },
+              },
+              learners: {
+                select: {
+                  user: {
+                    select: {
+                      id: true,
+                      name: true,
+                      avatar: true,
+                    },
+                  },
+                },
+              },
+            },
+            orderBy: { date: 'asc' },
+          });
+
+          if (!room) {
+            return null;
+          }
+
+          const totalSessions =
+            ((room.createdBy as any)._count?.studyRooms || 0) +
+            ((room.createdBy as any)._count?.peerSessionsReceived || 0);
+
+          return {
+            room,
+            rating: teacher._avg.rating ?? 0,
+            reviewCount: teacher._count.rating ?? 0,
+            totalSessions,
+          };
+        }),
+      );
+
+      const uniqueRooms: Array<{
+        room: StudyRoomWithRelations;
+        rating: number;
+        reviewCount: number;
+        totalSessions: number;
+      }> = [];
+      const seenRoomIds = new Set<string>();
+
+      for (const entry of roomEntries) {
+        if (!entry || seenRoomIds.has(entry.room.id)) {
+          continue;
+        }
+
+        seenRoomIds.add(entry.room.id);
+        uniqueRooms.push(entry);
+
+        if (uniqueRooms.length >= normalizedLimit * 2) {
+          break;
+        }
       }
-    }
 
-    if (uniqueRooms.length === 0) {
-      return this.getFallbackTrendingRooms(normalizedLimit, now);
-    }
+      if (uniqueRooms.length === 0) {
+        this.logger.debug({
+          message: isHomePageRequest
+            ? '[HomePage] No unique rooms found, using fallback'
+            : '[StudyRooms] No unique rooms found, using fallback',
+        });
+        return this.getFallbackTrendingRooms(normalizedLimit, now);
+      }
 
-    const sortedRooms = uniqueRooms
-      .sort((a, b) => {
-        if (b.rating !== a.rating) {
-          return b.rating - a.rating;
-        }
+      const sortedRooms = uniqueRooms
+        .sort((a, b) => {
+          if (b.rating !== a.rating) {
+            return b.rating - a.rating;
+          }
 
-        if (b.reviewCount !== a.reviewCount) {
-          return b.reviewCount - a.reviewCount;
-        }
+          if (b.reviewCount !== a.reviewCount) {
+            return b.reviewCount - a.reviewCount;
+          }
 
-        return a.room.date.getTime() - b.room.date.getTime();
-      })
-      .slice(0, normalizedLimit);
+          return a.room.date.getTime() - b.room.date.getTime();
+        })
+        .slice(0, normalizedLimit);
 
-    const studyRoomCards = sortedRooms.map(({ room, rating, reviewCount, totalSessions }) =>
-      this.buildStudyRoomCard(room, { avgRating: rating, reviewCount, totalSessions }),
-    );
+      const studyRoomCards = sortedRooms.map(({ room, rating, reviewCount, totalSessions }) =>
+        this.buildStudyRoomCard(room, { avgRating: rating, reviewCount, totalSessions }),
+      );
 
-    return {
-      studyRooms: studyRoomCards,
-      pagination: {
-        total: studyRoomCards.length,
-        page: 1,
+      const dbDuration = Date.now() - dbStartTime;
+      this.logger.debug({
+        message: isHomePageRequest
+          ? '[HomePage] Trending study rooms query completed'
+          : '[StudyRooms] Trending study rooms query completed',
+        dbDuration: `${dbDuration}ms`,
+        results: {
+          studyRoomsCount: studyRoomCards.length,
+          uniqueRoomsFound: uniqueRooms.length,
+        },
+      });
+
+      return {
+        studyRooms: studyRoomCards,
+        pagination: {
+          total: studyRoomCards.length,
+          page: 1,
+          limit: normalizedLimit,
+          totalPages: 1,
+          hasMore: false,
+        },
+      };
+    } catch (error) {
+      const dbDuration = Date.now() - dbStartTime;
+      this.logger.error({
+        message: isHomePageRequest
+          ? '[HomePage] Trending study rooms query failed'
+          : '[StudyRooms] Trending study rooms query failed',
+        dbDuration: `${dbDuration}ms`,
         limit: normalizedLimit,
-        totalPages: 1,
-        hasMore: false,
-      },
-    };
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+      throw error;
+    }
   }
 
   private async getFallbackTrendingRooms(limit: number, fromDate: Date) {
@@ -968,12 +1076,8 @@ export class StudyRoomsService {
       'teacher',
       0,
     );
-    console.log('✅ [completeStudyRoom] Creator streak updated successfully');
 
     // Check achievements for creator
-    console.log(
-      '🏆 [completeStudyRoom] Checking session achievements for creator',
-    );
     await this.achievementsService.checkSessionAchievements(
       studyRoom.createdById,
       'teacher',
@@ -983,27 +1087,14 @@ export class StudyRoomsService {
     const creatorStreak = await this.streaksService.getUserStreak(
       studyRoom.createdById,
     );
-    console.log('📊 [completeStudyRoom] Creator streak info:', {
-      userId: studyRoom.createdById,
-      currentStreak: creatorStreak.currentStreak,
-      longestStreak: creatorStreak.longestStreak,
-      lastActivityDate: creatorStreak.lastActivityDate,
-    });
     await this.achievementsService.checkStreakAchievements(
       studyRoom.createdById,
       creatorStreak.currentStreak,
     );
 
     // Update streak for all participants (learners)
-    console.log(
-      `🔄 [completeStudyRoom] Starting streak updates for ${participants.length} participant(s)...`,
-    );
     for (let i = 0; i < participants.length; i++) {
       const participant = participants[i];
-      console.log(
-        `🔥 [completeStudyRoom] Updating streak for participant ${i + 1}/${participants.length}:`,
-        participant.userId,
-      );
 
       await this.streaksService.updateUserActivity(
         participant.userId,
@@ -1011,9 +1102,6 @@ export class StudyRoomsService {
         studyRoom.duration,
         'learner',
         0,
-      );
-      console.log(
-        `✅ [completeStudyRoom] Participant ${i + 1} streak updated successfully`,
       );
 
       // Check achievements for participant
@@ -1026,20 +1114,11 @@ export class StudyRoomsService {
       const participantStreak = await this.streaksService.getUserStreak(
         participant.userId,
       );
-      console.log(`📊 [completeStudyRoom] Participant ${i + 1} streak info:`, {
-        userId: participant.userId,
-        currentStreak: participantStreak.currentStreak,
-        longestStreak: participantStreak.longestStreak,
-      });
       await this.achievementsService.checkStreakAchievements(
         participant.userId,
         participantStreak.currentStreak,
       );
     }
-
-    console.log(
-      '🎉 [completeStudyRoom] All streak updates completed successfully!',
-    );
 
     // Generate AI summary from transcripts
     let summary: string | null = null;
@@ -1097,5 +1176,150 @@ export class StudyRoomsService {
     const isHost = studyRoom.createdById === user.id;
 
     return { isHost };
+  }
+
+  async markNotCompleted(studyRoomId: string, userId: string) {
+    console.log('⏰ [markNotCompleted] Called with:', {
+      studyRoomId,
+      clerkUserId: userId,
+    });
+
+    // userId is actually clerkId, so we need to find the user by clerkId first
+    const user = await this.prisma.user.findUnique({
+      where: { clerkId: userId },
+      select: { id: true, name: true },
+    });
+
+    if (!user) {
+      console.error('❌ [markNotCompleted] User not found for clerkId:', userId);
+      throw new NotFoundException('User not found');
+    }
+
+    const studyRoom = await this.prisma.studyRoom.findUnique({
+      where: { id: studyRoomId },
+      select: {
+        id: true,
+        title: true,
+        createdById: true,
+        sessionStatus: true,
+      },
+    });
+
+    if (!studyRoom) {
+      console.error('❌ [markNotCompleted] Study room not found:', studyRoomId);
+      throw new NotFoundException('Study room not found');
+    }
+
+    // Check if user is the host (only host can mark as not completed)
+    if (studyRoom.createdById !== user.id) {
+      console.error('❌ [markNotCompleted] Not authorized - not the host');
+      throw new ForbiddenException(
+        'Only the host can mark the session as not completed',
+      );
+    }
+
+    // Update study room status to NOT_COMPLETED
+    console.log('📝 [markNotCompleted] Updating study room status to NOT_COMPLETED...');
+    const updatedRoom = await this.prisma.studyRoom.update({
+      where: { id: studyRoomId },
+      data: { sessionStatus: SessionStatus.NOT_COMPLETED },
+    });
+    console.log('✅ [markNotCompleted] Study room status updated to NOT_COMPLETED');
+
+    // No streak updates, no achievements, no summary for NOT_COMPLETED sessions
+    return {
+      success: true,
+      message: 'Study room marked as not completed (time expired)',
+      studyRoom: updatedRoom,
+    };
+  }
+
+  async saveSessionFeedback(
+    studyRoomId: string,
+    userId: string,
+    feedbackDto: SessionFeedbackDto,
+  ) {
+    // userId is actually clerkId, so we need to find the user by clerkId first
+    const user = await this.prisma.user.findUnique({
+      where: { clerkId: userId },
+      select: { id: true, name: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const studyRoom = await this.prisma.studyRoom.findUnique({
+      where: { id: studyRoomId },
+      select: { 
+        id: true, 
+        createdById: true,
+        learners: {
+          select: { userId: true },
+        },
+      },
+    });
+
+    if (!studyRoom) {
+      throw new NotFoundException('Study room not found');
+    }
+
+    // Check if user is either the host or a participant
+    const isHost = studyRoom.createdById === user.id;
+    const isParticipant = studyRoom.learners.some((l) => l.userId === user.id);
+
+    if (!isHost && !isParticipant) {
+      throw new ForbiddenException(
+        'You are not authorized to submit feedback for this study room',
+      );
+    }
+
+    // Check if user has already submitted feedback for this session
+    const existingFeedback = await this.prisma.sessionFeedback.findFirst({
+      where: {
+        userId: user.id,
+        studyRoomId: studyRoomId,
+      },
+    });
+
+    // Store all answers as JSON (cast to Prisma's InputJsonValue type)
+    const answersJson = (feedbackDto.answers || {}) as unknown as Prisma.InputJsonValue;
+
+    if (existingFeedback) {
+      // Update existing feedback
+      await this.prisma.sessionFeedback.update({
+        where: { id: existingFeedback.id },
+        data: {
+          isHost: feedbackDto.isHost,
+          answers: answersJson,
+        },
+      });
+
+      console.log(
+        '✅ [saveSessionFeedback] Feedback updated for study room:',
+        studyRoomId,
+      );
+    } else {
+      // Create new feedback entry
+      await this.prisma.sessionFeedback.create({
+        data: {
+          userId: user.id,
+          studyRoomId: studyRoomId,
+          isHost: feedbackDto.isHost,
+          answers: answersJson,
+        },
+      });
+
+      console.log(
+        '✅ [saveSessionFeedback] Feedback created for study room:',
+        studyRoomId,
+      );
+    }
+
+    return {
+      success: true,
+      message: 'Feedback submitted successfully',
+      studyRoomId,
+    };
   }
 }

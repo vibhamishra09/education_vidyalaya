@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { Inter } from "next/font/google";
 import localFont from "next/font/local";
 import { ClerkProvider } from "@clerk/nextjs";
+import { Toaster } from "sonner";
 import { QueryProvider } from "@/providers/query-provider";
 import { ToastProvider } from "@/contexts/toast-context";
 import { NotificationProvider } from "@/contexts/notification-context";
@@ -13,6 +14,7 @@ import { PushNotificationPrompt } from "@/components/notifications/push-notifica
 import { PushNotificationListener } from "@/components/notifications/push-notification-listener";
 import { HiddenSignInButton } from "@/components/auth/hidden-sign-in-button";
 import { ServiceWorkerRegistration } from "@/components/pwa/service-worker-registration";
+import { BackgroundGradient } from "@/components/ui/background-gradient";
 import "./globals.css";
 
 const inter = Inter({
@@ -64,11 +66,8 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 5,
   userScalable: true,
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#16a34a" },
-    { media: "(prefers-color-scheme: dark)", color: "#15803d" },
-  ],
-  colorScheme: "light dark",
+  themeColor: "#16a34a",
+  colorScheme: "light",
 };
 
 export const metadata: Metadata = {
@@ -79,7 +78,7 @@ export const metadata: Metadata = {
     default: "Webyalaya - Peer to Peer Learning Platform",
     template: "%s | Webyalaya",
   },
-  description: "Connect with peers to learn and teach. Join study rooms, host sessions, earn mAYA coins, and grow together in a collaborative learning community. Free peer-to-peer education platform.",
+  description: "Connect with peers to learn and teach. Join study rooms, host sessions, earn AYA coins, and grow together in a collaborative learning community. Free peer-to-peer education platform.",
   keywords: [
     "peer learning",
     "online tutoring",
@@ -93,7 +92,7 @@ export const metadata: Metadata = {
     "tutoring platform",
     "skill exchange",
     "knowledge sharing",
-    "mAYA coins",
+    "AYA coins",
     "webyalaya",
   ],
   authors: [{ name: "Webyalaya Team" }],
@@ -240,7 +239,10 @@ export default function RootLayout({
           {/* DNS Prefetch for external APIs */}
           <link rel="dns-prefetch" href="https://api.dicebear.com" />
         </head>
-        <body className={`${inter.variable} ${harabara.variable} ${gotham.variable} antialiased font-sans pb-16 md:pb-0`}>
+        <body
+          className={`${inter.variable} ${harabara.variable} ${gotham.variable} relative min-h-screen bg-background text-foreground antialiased font-sans pb-16 md:pb-0`}
+        >
+          <BackgroundGradient />
           <QueryProvider>
             <NotificationProvider>
               <ToastProvider>
@@ -254,6 +256,7 @@ export default function RootLayout({
                     <HiddenSignInButton />
                   </Suspense>
                   <ServiceWorkerRegistration />
+                  <Toaster position="top-center" richColors closeButton duration={4000} />
                 </AchievementNotificationProvider>
               </ToastProvider>
             </NotificationProvider>
