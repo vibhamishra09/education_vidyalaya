@@ -194,14 +194,7 @@ export default function SessionFeedbackPage() {
           />
         )}
         
-        <div className="mt-6 pt-4 border-t flex items-center justify-between">
-          <Button 
-            variant="ghost" 
-            onClick={handleBackToDashboard}
-            className="text-muted-foreground hover:text-foreground"
-          >
-            Exit to Dashboard
-          </Button>
+        <div className="mt-6 pt-4 border-t flex items-center justify-end">
           <Button 
             variant="ghost" 
             onClick={handleReviewSkip}

@@ -85,6 +85,58 @@ export class PeerSessionsService {
       this.prisma.peerSession.count({ where }),
     ]);
 
+    // Auto-expire sessions that have passed their scheduled end time
+    const now = new Date();
+    const expiredSessions = peerSessions.filter((ps) => {
+      const sessionEndTime = new Date(ps.date.getTime() + ps.duration * 60000);
+      const isExpired = sessionEndTime < now;
+      const isNotInTerminalState = !['DONE', 'CANCELLED', 'NOT_COMPLETED'].includes(ps.sessionStatus);
+      return isExpired && isNotInTerminalState;
+    });
+
+    // Process expired sessions (no payment processing - payments are only processed after reviews)
+    for (const session of expiredSessions) {
+      console.log('⏰ [getPeerSessions] Auto-expiring session:', {
+        sessionId: session.id,
+        scheduledEnd: new Date(session.date.getTime() + session.duration * 60000).toISOString(),
+        currentStatus: session.sessionStatus,
+      });
+
+      // Update status to NOT_COMPLETED
+      await this.prisma.peerSession.update({
+        where: { id: session.id },
+        data: { sessionStatus: SessionStatus.NOT_COMPLETED },
+      });
+
+      // Notify both parties
+      await this.notificationsService.createAndPushNotification(
+        session.requestedById,
+        `Your session with ${session.requestedTo.name} has expired and was not completed.`,
+        'Session Expired',
+        NotifType.NORMAL,
+        {
+          actionType: 'SESSION_EXPIRED',
+          peerSessionId: session.id,
+          actionData: { sessionId: session.id, sessionType: 'peerSession' },
+        },
+      );
+
+      await this.notificationsService.createAndPushNotification(
+        session.requestedToId,
+        `Your session with ${session.requestedBy.name} has expired and was not completed.`,
+        'Session Expired',
+        NotifType.NORMAL,
+        {
+          actionType: 'SESSION_EXPIRED',
+          peerSessionId: session.id,
+          actionData: { sessionId: session.id, sessionType: 'peerSession' },
+        },
+      );
+
+      // Update the status in the returned list
+      session.sessionStatus = SessionStatus.NOT_COMPLETED;
+    }
+
     return {
       peerSessions: peerSessions.map((ps) => ({
         id: ps.id,
@@ -109,7 +161,7 @@ export class PeerSessionsService {
   }
 
   async getPeerSessionDetails(peerSessionId: string, userId?: string) {
-    const peerSession = await this.prisma.peerSession.findUnique({
+    let peerSession = await this.prisma.peerSession.findUnique({
       where: { id: peerSessionId },
       include: {
         requestedBy: {
@@ -124,6 +176,61 @@ export class PeerSessionsService {
 
     if (!peerSession) {
       throw new NotFoundException('Peer session not found');
+    }
+
+    // Auto-mark as NOT_COMPLETED if session time has passed and not in terminal state
+    const now = new Date();
+    const sessionEndTime = new Date(peerSession.date.getTime() + peerSession.duration * 60000);
+    const isExpired = sessionEndTime < now;
+    const isNotInTerminalState = !['DONE', 'CANCELLED', 'NOT_COMPLETED'].includes(peerSession.sessionStatus);
+
+    if (isExpired && isNotInTerminalState) {
+      console.log('⏰ [getPeerSessionDetails] Session expired, marking as NOT_COMPLETED:', {
+        sessionId: peerSessionId,
+        scheduledEnd: sessionEndTime.toISOString(),
+        currentTime: now.toISOString(),
+        currentStatus: peerSession.sessionStatus,
+      });
+
+      // Update session status to NOT_COMPLETED
+      peerSession = await this.prisma.peerSession.update({
+        where: { id: peerSessionId },
+        data: { sessionStatus: SessionStatus.NOT_COMPLETED },
+        include: {
+          requestedBy: {
+            select: { id: true, name: true, avatar: true, clerkId: true },
+          },
+          requestedTo: {
+            select: { id: true, name: true, avatar: true, clerkId: true },
+          },
+          skills: { include: { skill: { select: { id: true, name: true } } } },
+        },
+      });
+
+      // Notify both parties (no payment processing since payments are only processed after reviews)
+      await this.notificationsService.createAndPushNotification(
+        peerSession.requestedById,
+        `Your session with ${peerSession.requestedTo.name} has expired and was not completed.`,
+        'Session Expired',
+        NotifType.NORMAL,
+        {
+          actionType: 'SESSION_EXPIRED',
+          peerSessionId: peerSession.id,
+          actionData: { sessionId: peerSession.id, sessionType: 'peerSession' },
+        },
+      );
+
+      await this.notificationsService.createAndPushNotification(
+        peerSession.requestedToId,
+        `Your session with ${peerSession.requestedBy.name} has expired and was not completed.`,
+        'Session Expired',
+        NotifType.NORMAL,
+        {
+          actionType: 'SESSION_EXPIRED',
+          peerSessionId: peerSession.id,
+          actionData: { sessionId: peerSession.id, sessionType: 'peerSession' },
+        },
+      );
     }
 
     // Determine user role in the session
