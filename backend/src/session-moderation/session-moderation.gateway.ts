@@ -291,10 +291,17 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
       const clerkId = client.data.userId;
 
       if (sessionType === 'studyRoom') {
-        // Call completeStudyRoom which verifies user.
-        await this.studyRoomsService.completeStudyRoom(sessionId, clerkId);
+        // Check if already completed to avoid duplicate completion
+        const roomDetails = await this.studyRoomsService.getStudyRoomDetails(sessionId);
+        if (roomDetails.sessionStatus !== 'DONE' && roomDetails.sessionStatus !== 'NOT_COMPLETED' && roomDetails.sessionStatus !== 'CANCELLED') {
+          await this.studyRoomsService.completeStudyRoom(sessionId, clerkId);
+        }
       } else {
-        await this.peerSessionsService.completePeerSession(sessionId, clerkId);
+        // Check if already completed to avoid duplicate completion
+        const sessionDetails = await this.peerSessionsService.getPeerSessionDetails(sessionId);
+        if (sessionDetails.sessionStatus !== 'DONE' && sessionDetails.sessionStatus !== 'NOT_COMPLETED' && sessionDetails.sessionStatus !== 'CANCELLED') {
+          await this.peerSessionsService.completePeerSession(sessionId, clerkId);
+        }
       }
 
       // Cleanup Redis permissions for this session

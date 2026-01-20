@@ -21,6 +21,7 @@ import { useFormPersistence } from "@/hooks/use-local-storage";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatCoins } from "@/lib/utils/coin-format";
+import { toast } from "sonner";
 
 interface SessionFormData {
   skills: string[];
@@ -275,6 +276,12 @@ export default function RequestSessionPage({
       // Clear form from localStorage on successful submission
       clearForm();
       
+      // Show success toast notification
+      toast.success("Session request sent!", {
+        description: `Your session request with ${peer.name} has been submitted. They will be notified to accept or decline.`,
+        duration: 5000,
+      });
+      
       // Success - redirect to dashboard
       router.push("/dashboard");
     } catch (err: unknown) {
@@ -284,16 +291,21 @@ export default function RequestSessionPage({
         const apiError = err as { response: { data: { code: string; message: string } } };
         if (apiError.response?.data?.code === 'CANNOT_REQUEST_SELF') {
           setError(apiError.response.data.message || 'You cannot request a session to yourself.');
+          toast.error("Cannot request session", { description: "You cannot request a session to yourself." });
         } else if (apiError.response?.data?.code === 'TIME_SLOT_UNAVAILABLE') {
           setError(apiError.response.data.message || 'The selected time slot is not available.');
+          toast.error("Time slot unavailable", { description: "The selected time slot is not available." });
         } else if (apiError.response?.data?.code === 'INSUFFICIENT_FUNDS') {
           setError('You do not have enough AYA tokens to book this session. Please add funds to your wallet.');
+          toast.error("Insufficient funds", { description: "You do not have enough AYA tokens." });
         } else {
           setError(apiError.response?.data?.message || 'Failed to send session request');
+          toast.error("Request failed", { description: apiError.response?.data?.message || 'Failed to send session request' });
         }
       } else {
         const errorMessage = err instanceof Error ? err.message : 'Failed to send session request';
         setError(errorMessage);
+        toast.error("Request failed", { description: errorMessage });
       }
     } finally {
       setSubmitting(false);

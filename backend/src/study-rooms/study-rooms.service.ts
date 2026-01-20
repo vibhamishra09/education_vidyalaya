@@ -1178,6 +1178,62 @@ export class StudyRoomsService {
     return { isHost };
   }
 
+  async markNotCompleted(studyRoomId: string, userId: string) {
+    console.log('⏰ [markNotCompleted] Called with:', {
+      studyRoomId,
+      clerkUserId: userId,
+    });
+
+    // userId is actually clerkId, so we need to find the user by clerkId first
+    const user = await this.prisma.user.findUnique({
+      where: { clerkId: userId },
+      select: { id: true, name: true },
+    });
+
+    if (!user) {
+      console.error('❌ [markNotCompleted] User not found for clerkId:', userId);
+      throw new NotFoundException('User not found');
+    }
+
+    const studyRoom = await this.prisma.studyRoom.findUnique({
+      where: { id: studyRoomId },
+      select: {
+        id: true,
+        title: true,
+        createdById: true,
+        sessionStatus: true,
+      },
+    });
+
+    if (!studyRoom) {
+      console.error('❌ [markNotCompleted] Study room not found:', studyRoomId);
+      throw new NotFoundException('Study room not found');
+    }
+
+    // Check if user is the host (only host can mark as not completed)
+    if (studyRoom.createdById !== user.id) {
+      console.error('❌ [markNotCompleted] Not authorized - not the host');
+      throw new ForbiddenException(
+        'Only the host can mark the session as not completed',
+      );
+    }
+
+    // Update study room status to NOT_COMPLETED
+    console.log('📝 [markNotCompleted] Updating study room status to NOT_COMPLETED...');
+    const updatedRoom = await this.prisma.studyRoom.update({
+      where: { id: studyRoomId },
+      data: { sessionStatus: SessionStatus.NOT_COMPLETED },
+    });
+    console.log('✅ [markNotCompleted] Study room status updated to NOT_COMPLETED');
+
+    // No streak updates, no achievements, no summary for NOT_COMPLETED sessions
+    return {
+      success: true,
+      message: 'Study room marked as not completed (time expired)',
+      studyRoom: updatedRoom,
+    };
+  }
+
   async saveSessionFeedback(
     studyRoomId: string,
     userId: string,
