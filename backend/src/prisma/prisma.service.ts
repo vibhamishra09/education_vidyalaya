@@ -21,10 +21,12 @@ const RETRYABLE_ERROR_MESSAGES = [
   'Connection closed',
   'socket hang up',
   'Client has encountered a connection error',
+  'Engine is not yet connected',
+  'Engine not started',
 ];
 
 const MAX_RETRIES = 3;
-const INITIAL_BACKOFF_MS = 100;
+const INITIAL_BACKOFF_MS = 200;
 
 /**
  * Determines if an error is retryable (connection/timeout related)
@@ -35,7 +37,12 @@ function isRetryableError(error: unknown): boolean {
   }
   
   if (error instanceof Prisma.PrismaClientInitializationError) {
-    return true; // Always retry initialization errors
+    return true;
+  }
+
+  if (error instanceof Prisma.PrismaClientUnknownRequestError) {
+    const message = error.message;
+    return RETRYABLE_ERROR_MESSAGES.some(msg => message.includes(msg));
   }
   
   if (error instanceof Error) {
@@ -53,6 +60,11 @@ function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+// Store connection state outside the class to avoid issues with extended client
+let isConnected = false;
+let connectionPromise: Promise<void> | null = null;
+let baseClient: PrismaClient | null = null;
+
 @Injectable()
 export class PrismaService
   extends PrismaClient
@@ -63,15 +75,17 @@ export class PrismaService
 
   constructor() {
     super({
-      // Optimize for serverless: shorter connection timeout, limited pool
       datasources: {
         db: {
           url: process.env.DATABASE_URL,
         },
       },
-      // Only log errors, no query logs
       log: ['error'],
+      errorFormat: 'minimal',
     });
+
+    // Store reference to the base client for connection management
+    baseClient = this;
 
     // Apply retry extension to handle zombie connections
     return this.withRetryExtension();
@@ -81,9 +95,14 @@ export class PrismaService
    * Creates a Prisma client with automatic retry logic for connection errors
    */
   private withRetryExtension() {
+    const logger = this.logger;
+
     return this.$extends({
       query: {
         $allOperations: async ({ operation, model, args, query }) => {
+          // Ensure connection is established before executing any query
+          await ensureConnected(logger);
+
           let lastError: unknown;
           
           for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
@@ -93,12 +112,11 @@ export class PrismaService
               lastError = error;
               
               if (!isRetryableError(error)) {
-                // Not a connection error, throw immediately
                 throw error;
               }
               
               if (attempt === MAX_RETRIES) {
-                this.logger.error(
+                logger.error(
                   `Query failed after ${MAX_RETRIES} retries: ${model}.${operation}`,
                   error instanceof Error ? error.stack : String(error),
                 );
@@ -107,16 +125,18 @@ export class PrismaService
               
               const backoffMs = INITIAL_BACKOFF_MS * Math.pow(2, attempt - 1);
               
-              // Only log on first retry attempt to reduce noise
               if (attempt === 1) {
-                this.logger.warn(
+                logger.warn(
                   `Connection error on ${model}.${operation}, retrying with backoff...`,
                 );
               }
               
               // Force disconnect to clear any stale connections before retry
               try {
-                await this.$disconnect();
+                if (baseClient) {
+                  await baseClient.$disconnect();
+                  isConnected = false;
+                }
               } catch {
                 // Ignore disconnect errors
               }
@@ -125,9 +145,12 @@ export class PrismaService
               
               // Reconnect before retry
               try {
-                await this.$connect();
+                if (baseClient) {
+                  await baseClient.$connect();
+                  isConnected = true;
+                }
               } catch (connectError) {
-                this.logger.warn(
+                logger.warn(
                   `Reconnect failed on attempt ${attempt}: ${connectError instanceof Error ? connectError.message : String(connectError)}`,
                 );
               }
@@ -141,69 +164,84 @@ export class PrismaService
   }
 
   async onModuleInit() {
-    // Retry connection with backoff on startup
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    const INIT_MAX_RETRIES = 5;
+    const INIT_BACKOFF_MS = 2000;
+
+    for (let attempt = 1; attempt <= INIT_MAX_RETRIES; attempt++) {
       try {
-        await this.$connect();
-        this.logger.log('Database connected');
+        this.logger.log(`Attempting database connection (${attempt}/${INIT_MAX_RETRIES})...`);
         
-        // Start background task to prevent zombie connections
-        // Neon scales to zero after 5 minutes of inactivity
-        // We proactively cycle connections every 3 minutes to stay ahead
-        this.startConnectionHealthCheck();
-        
-        return;
-      } catch (error) {
-        if (attempt === MAX_RETRIES) {
-          this.logger.error('Database connection failed', error);
-          throw error;
+        if (baseClient) {
+          await baseClient.$connect();
+          isConnected = true;
         }
         
-        const backoffMs = INITIAL_BACKOFF_MS * Math.pow(2, attempt - 1);
+        this.logger.log('✅ Database connected successfully');
+        
+        this.startConnectionHealthCheck();
+        return;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        this.logger.warn(`Database connection attempt ${attempt}/${INIT_MAX_RETRIES} failed: ${errorMessage}`);
+
+        if (attempt === INIT_MAX_RETRIES) {
+          this.logger.error('❌ Database connection failed after all retries');
+          this.logger.error('Please check:');
+          this.logger.error('  1. Database server is running and accessible');
+          this.logger.error('  2. DATABASE_URL is correct in .env file');
+          this.logger.error('  3. Network connectivity to database server');
+          this.logger.error('  4. For Neon: Check if project is active in dashboard');
+          throw error;
+        }
+
+        const backoffMs = INIT_BACKOFF_MS * Math.pow(2, attempt - 1);
+        this.logger.log(`Retrying in ${backoffMs}ms...`);
         await sleep(backoffMs);
       }
     }
   }
 
   async onModuleDestroy() {
-    // Stop health check before disconnecting
     if (this.connectionCheckInterval) {
       clearInterval(this.connectionCheckInterval);
     }
-    await this.$disconnect();
+    isConnected = false;
+    if (baseClient) {
+      await baseClient.$disconnect();
+    }
   }
 
-  /**
-   * Proactively disconnects and reconnects every 3 minutes
-   * This prevents holding connections longer than Neon's idle timeout
-   * and avoids zombie connections when Neon scales to zero
-   */
   private startConnectionHealthCheck() {
-    const CHECK_INTERVAL = 3 * 60 * 1000; // 3 minutes (before Neon's 5-min scale-to-zero)
-    
+    const CHECK_INTERVAL = 3 * 60 * 1000; // 3 minutes
+
     this.connectionCheckInterval = setInterval(async () => {
       try {
-        // Test if connection is alive with a simple query
-        await this.$queryRaw`SELECT 1`;
+        if (baseClient) {
+          await baseClient.$queryRaw`SELECT 1`;
+        }
       } catch (error) {
-        // Connection is dead/stale - force reconnect
+        this.logger.warn('Health check failed, reconnecting...');
         try {
-          await this.$disconnect();
-          await this.$connect();
+          if (baseClient) {
+            await baseClient.$disconnect();
+            isConnected = false;
+            await baseClient.$connect();
+            isConnected = true;
+          }
         } catch (reconnectError) {
-          this.logger.warn('Connection health check reconnect failed', reconnectError);
+          this.logger.warn('Health check reconnect failed', reconnectError);
         }
       }
     }, CHECK_INTERVAL);
   }
 
-  /**
-   * Health check method - useful for ECS health checks
-   */
   async isHealthy(): Promise<boolean> {
     try {
-      await this.$queryRaw`SELECT 1`;
-      return true;
+      if (baseClient) {
+        await baseClient.$queryRaw`SELECT 1`;
+        return true;
+      }
+      return false;
     } catch {
       return false;
     }
@@ -211,51 +249,48 @@ export class PrismaService
 }
 
 /**
- * ═══════════════════════════════════════════════════════════════════════════
- * HOW THIS FIXES THE "ZOMBIE CONNECTION" PROBLEM
- * ═══════════════════════════════════════════════════════════════════════════
- * 
- * THE PROBLEM (TCP State Mismatch):
- * 1. Your ECS container opens a connection to Neon (state: ESTABLISHED)
- * 2. After 5 minutes of idle time, Neon scales to zero (shuts down compute)
- * 3. Neon disappears WITHOUT sending TCP FIN/RST - just vanishes
- * 4. Your container still thinks the connection is alive (zombie state)
- * 5. Next query is sent → black hole → TCP retransmits for 15 minutes
- * 6. AWS Load Balancer times out after 60 seconds → 500 Error
- * 
- * THE SOLUTION (3-Layer Defense):
- * 
- * Layer 1: DATABASE_URL Configuration
- * - connection_limit=3: Minimal pool (fewer connections = fewer zombies)
- * - connect_timeout=10: Fast fail when connecting to sleeping Neon
- * - pool_timeout=10: Don't wait long for pool connections
- * - pgbouncer=true: Use Neon's pooler for connection management
- * 
- * Layer 2: Proactive Health Checks (NEW)
- * - Every 3 minutes, test connection with SELECT 1
- * - If connection is dead, force disconnect + reconnect
- * - This happens BEFORE Neon's 5-minute scale-to-zero window
- * - Result: No connection ever sits idle long enough to become a zombie
- * 
- * Layer 3: Retry Logic on Failure
- * - If a query hits a zombie connection, catch the error
- * - Force disconnect to kill the zombie socket
- * - Reconnect (wakes Neon if sleeping)
- * - Retry the query (exponential backoff: 100ms → 200ms → 400ms)
- * - Max 3 retries before giving up
- * 
- * TIMELINE:
- * 0:00 - Connection created
- * 3:00 - Health check keeps connection alive
- * 5:00 - Neon would scale to zero, but we've kept it awake
- * 6:00 - Another health check
- * ... pattern continues, preventing zombies
- * 
- * If Neon does sleep and a query fails:
- * → Retry logic catches it
- * → Disconnects zombie socket
- * → Reconnects (wakes Neon)
- * → Query succeeds on retry
- * → No 500 error to user
- * ═══════════════════════════════════════════════════════════════════════════
+ * Ensures the database connection is established before executing queries
  */
+async function ensureConnected(logger: Logger): Promise<void> {
+  if (isConnected) {
+    return;
+  }
+
+  if (connectionPromise) {
+    await connectionPromise;
+    return;
+  }
+
+  connectionPromise = doConnect(logger);
+  try {
+    await connectionPromise;
+  } finally {
+    connectionPromise = null;
+  }
+}
+
+async function doConnect(logger: Logger): Promise<void> {
+  const MAX_CONNECT_RETRIES = 3;
+  const CONNECT_BACKOFF_MS = 500;
+
+  for (let attempt = 1; attempt <= MAX_CONNECT_RETRIES; attempt++) {
+    try {
+      if (baseClient) {
+        await baseClient.$connect();
+        isConnected = true;
+        logger.log('Database connection established on demand');
+        return;
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.warn(`On-demand connection attempt ${attempt}/${MAX_CONNECT_RETRIES} failed: ${errorMessage}`);
+      
+      if (attempt === MAX_CONNECT_RETRIES) {
+        throw error;
+      }
+      
+      const backoffMs = CONNECT_BACKOFF_MS * Math.pow(2, attempt - 1);
+      await sleep(backoffMs);
+    }
+  }
+}

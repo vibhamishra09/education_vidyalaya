@@ -126,6 +126,19 @@ export class PeerSessionsController {
     return this.peerSessionsService.checkIsHost(peerSessionId, userId);
   }
 
+  @Patch(':peerSessionId/not-completed')
+  @UseGuards(ClerkAuthGuard)
+  async markNotCompleted(
+    @Param('peerSessionId') peerSessionId: string,
+    @CurrentUser() userId: string,
+  ) {
+    console.log(
+      '⏱️ [PeerSessionsController.markNotCompleted] Endpoint called:',
+      { peerSessionId, userId },
+    );
+    return this.peerSessionsService.markNotCompleted(peerSessionId, userId);
+  }
+
   @Post(':peerSessionId/feedback')
   @UseGuards(ClerkAuthGuard)
   async submitSessionFeedback(
