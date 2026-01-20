@@ -31,6 +31,14 @@ const DURATION_OPTIONS: { value: DurationOption; label: string }[] = [
   { value: 120, label: "2 hours" },
 ];
 
+// Helper function to format date as YYYY-MM-DD in local timezone (not UTC)
+const formatLocalDate = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 export function ImprovedAvailabilityCalendar({
   peerId,
   onSlotSelect,
@@ -41,12 +49,14 @@ export function ImprovedAvailabilityCalendar({
   const [currentDate, setCurrentDate] = useState(new Date());
   const [summary, setSummary] = useState<AvailabilityDateSummary[]>([]);
   const [loadingSummary, setLoadingSummary] = useState(true);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
   const [hoveredDate, setHoveredDate] = useState<string | null>(null);
   const [selectedDurationTab, setSelectedDurationTab] = useState<DurationOption>(
     (selectedDuration as DurationOption) || 60
   );
   const [detailedSlots, setDetailedSlots] = useState<DetailedSlot[]>([]);
   const [loadingDetailed, setLoadingDetailed] = useState(false);
+  const [detailedError, setDetailedError] = useState<string | null>(null);
   const [popoverOpen, setPopoverOpen] = useState(false);
 
   const monthNames = [
@@ -56,11 +66,13 @@ export function ImprovedAvailabilityCalendar({
 
   const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-  // Fetch availability summary for current month
+  // Fetch availability summary for current month with retry logic
   useEffect(() => {
-    const fetchSummary = async () => {
+    const fetchSummary = async (retryCount = 0) => {
+      const maxRetries = 2;
       try {
         setLoadingSummary(true);
+        setSummaryError(null);
         const year = currentDate.getFullYear();
         const month = currentDate.getMonth();
 
@@ -68,8 +80,8 @@ export function ImprovedAvailabilityCalendar({
         const firstDay = new Date(year, month, 1);
         const lastDay = new Date(year, month + 1, 0);
 
-        const startDate = firstDay.toISOString().split('T')[0];
-        const endDate = lastDay.toISOString().split('T')[0];
+        const startDate = formatLocalDate(firstDay);
+        const endDate = formatLocalDate(lastDay);
 
         const response = await availabilityApi.getAvailabilitySummary(
           peerId,
@@ -80,7 +92,15 @@ export function ImprovedAvailabilityCalendar({
         setSummary(response.summary);
       } catch (error) {
         console.error('Error fetching availability summary:', error);
+        if (retryCount < maxRetries) {
+          // Retry with exponential backoff
+          const delay = Math.pow(2, retryCount) * 1000;
+          console.log(`Retrying availability summary in ${delay}ms (attempt ${retryCount + 1}/${maxRetries})`);
+          setTimeout(() => fetchSummary(retryCount + 1), delay);
+          return;
+        }
         setSummary([]);
+        setSummaryError('Failed to load availability. Tap to retry.');
       } finally {
         setLoadingSummary(false);
       }
@@ -91,10 +111,12 @@ export function ImprovedAvailabilityCalendar({
     }
   }, [currentDate, peerId]);
 
-  // Fetch detailed slots when date is hovered/clicked
-  const fetchDetailedSlots = async (date: string, duration: DurationOption) => {
+  // Fetch detailed slots when date is hovered/clicked with retry logic
+  const fetchDetailedSlots = async (date: string, duration: DurationOption, retryCount = 0) => {
+    const maxRetries = 2;
     try {
       setLoadingDetailed(true);
+      setDetailedError(null);
       const response = await availabilityApi.getDetailedSlots(
         peerId,
         date,
@@ -103,14 +125,53 @@ export function ImprovedAvailabilityCalendar({
       setDetailedSlots(response.slots);
     } catch (error) {
       console.error('Error fetching detailed slots:', error);
+      if (retryCount < maxRetries) {
+        // Retry with exponential backoff
+        const delay = Math.pow(2, retryCount) * 1000;
+        console.log(`Retrying detailed slots in ${delay}ms (attempt ${retryCount + 1}/${maxRetries})`);
+        setTimeout(() => fetchDetailedSlots(date, duration, retryCount + 1), delay);
+        return;
+      }
       setDetailedSlots([]);
+      setDetailedError('Failed to load time slots. Tap to retry.');
     } finally {
       setLoadingDetailed(false);
     }
   };
 
+  // Retry function for summary
+  const retrySummary = () => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const startDate = formatLocalDate(firstDay);
+    const endDate = formatLocalDate(lastDay);
+    
+    setSummaryError(null);
+    setLoadingSummary(true);
+    availabilityApi.getAvailabilitySummary(peerId, startDate, endDate)
+      .then(response => {
+        setSummary(response.summary);
+      })
+      .catch(error => {
+        console.error('Retry failed:', error);
+        setSummaryError('Failed to load availability. Tap to retry.');
+      })
+      .finally(() => {
+        setLoadingSummary(false);
+      });
+  };
+
+  // Retry function for detailed slots
+  const retryDetailedSlots = () => {
+    if (hoveredDate) {
+      fetchDetailedSlots(hoveredDate, selectedDurationTab);
+    }
+  };
+
   const handleDateHover = (date: Date) => {
-    const dateStr = date.toISOString().split('T')[0];
+    const dateStr = formatLocalDate(date);
     setHoveredDate(dateStr);
     fetchDetailedSlots(dateStr, selectedDurationTab);
   };
@@ -153,7 +214,7 @@ export function ImprovedAvailabilityCalendar({
   };
 
   const getDaySummary = (date: Date): AvailabilityDateSummary | undefined => {
-    const dateStr = date.toISOString().split('T')[0];
+    const dateStr = formatLocalDate(date);
     return summary.find((s) => s.date === dateStr);
   };
 
@@ -220,6 +281,16 @@ export function ImprovedAvailabilityCalendar({
               <Skeleton className="h-8 w-full" />
               <Skeleton className="h-48 w-full" />
             </div>
+          ) : summaryError ? (
+            <div 
+              className="flex flex-col items-center justify-center py-8 text-center cursor-pointer hover:bg-muted/50 rounded-lg transition-colors"
+              onClick={retrySummary}
+            >
+              <div className="text-destructive text-sm mb-2">⚠️ {summaryError}</div>
+              <Button variant="outline" size="sm" className="text-xs">
+                Retry
+              </Button>
+            </div>
           ) : (
             <>
               {/* Day names */}
@@ -239,7 +310,7 @@ export function ImprovedAvailabilityCalendar({
                   }
 
                   const isPast = date < today;
-                  const isSelected = selectedDate === date.toISOString().split('T')[0];
+                  const isSelected = selectedDate === formatLocalDate(date);
                   const isToday =
                     date.getDate() === today.getDate() &&
                     date.getMonth() === today.getMonth() &&
@@ -257,7 +328,7 @@ export function ImprovedAvailabilityCalendar({
                   return (
                     <Popover
                       key={index}
-                      open={popoverOpen && hoveredDate === date.toISOString().split('T')[0]}
+                      open={popoverOpen && hoveredDate === formatLocalDate(date)}
                       onOpenChange={(open) => {
                         setPopoverOpen(open);
                         if (!open) setHoveredDate(null);
@@ -330,14 +401,48 @@ export function ImprovedAvailabilityCalendar({
                                         <Skeleton key={i} className="h-8 w-full" />
                                       ))}
                                     </div>
+                                  ) : detailedError ? (
+                                    <div 
+                                      className="flex flex-col items-center justify-center py-4 text-center cursor-pointer hover:bg-muted/50 rounded-lg transition-colors"
+                                      onClick={retryDetailedSlots}
+                                    >
+                                      <div className="text-destructive text-xs mb-2">⚠️ {detailedError}</div>
+                                      <Button variant="outline" size="sm" className="text-xs">
+                                        Retry
+                                      </Button>
+                                    </div>
                                   ) : detailedSlots.length === 0 ? (
                                     <div className="text-center py-4 text-muted-foreground text-sm">
                                       No slots found
                                     </div>
                                   ) : (
+                                    (() => {
+                                      // Filter past slots if today (use local date comparison)
+                                      const now = new Date();
+                                      const todayStr = formatLocalDate(now);
+                                      const isToday = hoveredDate === todayStr;
+                                      
+                                      const filteredSlots = detailedSlots.filter((slot) => {
+                                        if (!isToday) return true;
+                                        const slotDate = new Date(slot.startTime);
+                                        const bufferMs = 15 * 60 * 1000; // 15 minute buffer
+                                        return slotDate.getTime() >= (now.getTime() + bufferMs);
+                                      });
+
+                                      if (filteredSlots.length === 0) {
+                                        return (
+                                          <div className="text-center py-4 text-muted-foreground text-sm">
+                                            {isToday 
+                                              ? "No future slots available today. Try selecting a different date." 
+                                              : "No slots available for this date"}
+                                          </div>
+                                        );
+                                      }
+
+                                      return (
                                     <div className="space-y-3">
                                       <div className="grid grid-cols-3 gap-2 max-h-64 overflow-y-auto">
-                                        {detailedSlots.map((slot, idx) => {
+                                        {filteredSlots.map((slot, idx) => {
                                           const slotTimeStr = formatSlotTime(slot);
                                           const isSlotSelected =
                                             hoveredDate === selectedDate &&
@@ -382,6 +487,8 @@ export function ImprovedAvailabilityCalendar({
                                         </p>
                                       </div>
                                     </div>
+                                      );
+                                    })()
                                   )}
                               </div>
                             </div>

@@ -150,6 +150,7 @@ export enum SessionStatus {
   ONGOING = 'ONGOING',
   CANCELLED = 'CANCELLED',
   DONE = 'DONE',
+  NOT_COMPLETED = 'NOT_COMPLETED',
 }
 
 export enum PaymentStatus {
