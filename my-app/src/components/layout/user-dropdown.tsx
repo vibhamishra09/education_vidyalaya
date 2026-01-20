@@ -115,11 +115,11 @@ export function UserDropdown({ user, signOut }: UserDropdownProps) {
                     </div>
                     <div
                       className="flex items-center gap-1 mt-2 px-1 cursor-help"
-                      title={isUserLoading ? 'Loading...' : `${formatCoins(currentUserData?.user?.coins)} AYA`}
+                      title={isUserLoading ? 'Loading...' : `${formatCoins(currentUserData?.user?.coins)} WEBYA`}
                     >
                       <Coins className="h-4 w-4 text-yellow-600" />
                       <span className="text-sm font-medium">
-                        {isUserLoading ? '...' : formatCoins(currentUserData?.user?.coins)} Webya
+                        {isUserLoading ? '...' : formatCoins(currentUserData?.user?.coins)} WEBYA
                       </span>
                     </div>
                   </div>

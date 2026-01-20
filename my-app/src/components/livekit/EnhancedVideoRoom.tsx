@@ -6,7 +6,13 @@ import '@livekit/components-styles'
 import { BackgroundProcessor, BackgroundBlur, VirtualBackground, BackgroundOptions } from '@livekit/track-processors'
 import { ChatWidget } from '@/components/chat/ChatWidget'
 import { Button } from '@/components/ui/button'
-import { MessageSquare, X, Users, Maximize2, Minimize2, Video, VideoOff, Mic, MicOff, Volume2, VolumeX, Clock, MonitorUp, MonitorOff, Grid2X2, Presentation, Pin, PinOff, User, PictureInPicture2, Camera, CameraOff, Sparkles, Lock, Settings2, PhoneOff, ChevronUp, ChevronLeft, ChevronRight, ShieldCheck, Ban, Aperture, ImageIcon, LayoutGrid, Check, Timer } from 'lucide-react'
+import { 
+  MessageSquare, X, Users, Maximize2, Minimize2, Video, VideoOff, Mic, MicOff, 
+  Volume2, Clock, MonitorUp, MonitorOff, Grid2X2, Presentation, Pin, 
+  PinOff, User, PictureInPicture2, Camera, CameraOff, Sparkles, Lock, Settings2, 
+  PhoneOff, ChevronUp, ChevronLeft, ChevronRight, ShieldCheck, Ban, Aperture, 
+  ImageIcon, LayoutGrid, Check, Timer 
+} from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { useSessionTimer } from '@/hooks/use-session-timer'

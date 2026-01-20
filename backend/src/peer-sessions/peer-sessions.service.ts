@@ -315,7 +315,7 @@ export class PeerSessionsService {
     if (parseFloat(user.coins.toString()) < requestDto.cost) {
       throw new BadRequestException({
         code: 'INSUFFICIENT_FUNDS',
-        message: 'Not enough Webya',
+        message: 'Not enough WEBYA',
       });
     }
 

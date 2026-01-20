@@ -62,8 +62,12 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
       setUnreadCount(response.unreadCount);
       setHasMore(response.pagination.hasMore);
       setCurrentPage(page);
-    } catch (err) {
-      console.error('Error fetching notifications:', err);
+    } catch (err: any) {
+      console.error('Error fetching notifications:', {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status
+      });
       // Only set error on the first attempt, silently fail on subsequent background refreshes
       if (!append && page === 1) {
         setError('Failed to load notifications');

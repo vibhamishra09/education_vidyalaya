@@ -181,7 +181,7 @@ export function AchievementUnlockPopup({ achievement, onClose }: AchievementUnlo
                 <div className="flex items-center justify-center gap-2">
                   <span className="text-2xl">🪙</span>
                   <span className="text-xl font-bold text-yellow-600 dark:text-yellow-400">
-                    +{formatCoins(achievement.coins)} Webya
+                    +{formatCoins(achievement.coins)} WEBYA
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">Reward added to your wallet</p>

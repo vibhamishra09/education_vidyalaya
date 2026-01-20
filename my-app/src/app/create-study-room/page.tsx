@@ -3,7 +3,7 @@ import { CreateStudyRoomClient } from "./create-study-room-client";
 
 export const metadata: Metadata = {
   title: "Create Study Room",
-  description: "Host a group learning session on Webyalaya. Set your topic, schedule, and participant limit to start teaching and earning AYA coins.",
+  description: "Host a group learning session on Webyalaya. Set your topic, schedule, and participant limit to start teaching and earning WEBYA coins.",
   keywords: [
     "create study room",
     "host study session",

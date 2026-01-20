@@ -75,7 +75,7 @@ export function DashboardClient() {
        name: "Total Earnings",
        value: "0",
        icon: "coins",
-       description: "Webya earned"
+       description: "WEBYA earned"
     },
     {
        name: "Average Rating",

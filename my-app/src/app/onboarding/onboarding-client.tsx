@@ -95,7 +95,7 @@ export function OnboardingClient() {
       formData.append('bio', bio);
       formData.append('location', location);
       formData.append('school', school);
-      formData.append('hourlyRate', hourlyRate.toString()); // AYA value - no conversion needed
+      formData.append('hourlyRate', hourlyRate.toString()); // WEBYA value - no conversion needed
       formData.append('skillsIHave', JSON.stringify(skillsIHave));
       formData.append('skillsIWant', JSON.stringify(skillsIWant));
 
@@ -265,7 +265,7 @@ export function OnboardingClient() {
                   {/* Hourly Rate */}
                   <div className="space-y-2">
                     <label className="text-sm font-medium">
-                      Hourly Rate (Webya) <span className="text-muted-foreground">(Optional)</span>
+                      Hourly Rate (WEBYA) <span className="text-muted-foreground">(Optional)</span>
                     </label>
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">🪙</span>
@@ -280,7 +280,7 @@ export function OnboardingClient() {
                       />
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Set your hourly rate in Webya for teaching sessions. You can change this later in your profile.
+                      Set your hourly rate in WEBYA for teaching sessions. You can change this later in your profile.
                     </p>
                   </div>
 
@@ -293,7 +293,7 @@ export function OnboardingClient() {
                       <div>
                         <p className="font-semibold">Welcome Bonus!</p>
                         <p className="text-sm text-muted-foreground">
-                          You&apos;ll receive 1000 Webya to start your learning journey
+                          You&apos;ll receive 1000 WEBYA to start your learning journey
                         </p>
                       </div>
                     </div>

@@ -642,7 +642,7 @@ export default function RequestSessionPage({
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Rate</span>
                     <span className="font-medium">
-                      {peer?.hourlyRate ? <>{formatCoins(costPerHour)} AYA/hour</> : 'Not set'}
+                      {peer?.hourlyRate ? <>{formatCoins(costPerHour)} WEBYA/hour</> : 'Not set'}
                     </span>
                   </div>
                   <div className="border-t pt-2 mt-2">
@@ -651,7 +651,7 @@ export default function RequestSessionPage({
                       <div className="flex items-center gap-1">
                         <Coins className="h-4 w-4 text-yellow-600" />
                         <span className="font-semibold">
-                          {peer?.hourlyRate ? <>{formatCoins(calculatedCost)} AYA</> : 'N/A'}
+                          {peer?.hourlyRate ? <>{formatCoins(calculatedCost)} WEBYA</> : 'N/A'}
                         </span>
                       </div>
                     </div>
@@ -665,7 +665,7 @@ export default function RequestSessionPage({
                     </span>
                     <div className="flex items-center gap-1">
                       <Coins className="h-4 w-4 text-yellow-600" />
-                      <span className="font-medium">{formatCoins(typeof currentUser.coins === 'string' ? parseFloat(currentUser.coins) : currentUser.coins)} AYA</span>
+                      <span className="font-medium">{formatCoins(typeof currentUser.coins === 'string' ? parseFloat(currentUser.coins) : currentUser.coins)} WEBYA</span>
                     </div>
                   </div>
 

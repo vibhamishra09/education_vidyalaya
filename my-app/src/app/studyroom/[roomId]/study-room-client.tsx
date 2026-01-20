@@ -96,7 +96,7 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
       if (error && typeof error === 'object' && 'response' in error) {
         const apiError = error as { response: { data: { code: string; message: string } } };
         if (apiError.response?.data?.code === 'INSUFFICIENT_COINS') {
-          showError("Insufficient AYA", apiError.response.data.message);
+          showError("Insufficient WEBYA", apiError.response.data.message);
         } else if (apiError.response?.data?.code === 'ROOM_FULL') {
           showError("Room Full", apiError.response.data.message);
         } else {
@@ -275,7 +275,7 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
                       ) : (
                         <>
                           <Coins className="h-5 w-5 mr-2 stroke-[2.5]" />
-                          Join Room ({formatCoins(room.joiningFee)} Webya)
+                          Join Room ({formatCoins(room.joiningFee)} WEBYA)
                         </>
                       )}
                     </Button>

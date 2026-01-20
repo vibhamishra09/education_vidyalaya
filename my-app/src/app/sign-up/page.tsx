@@ -5,7 +5,7 @@ import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "Sign Up",
-  description: "Join Webyalaya for free! Create your account to start learning and teaching with peers. Connect with study rooms, share skills, and earn Webya.",
+  description: "Join Webyalaya for free! Create your account to start learning and teaching with peers. Connect with study rooms, share skills, and earn WEBYA.",
   keywords: [
     "sign up",
     "register",
@@ -128,7 +128,7 @@ export default function SignUpPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
-                <span>Earn Webya by teaching others</span>
+                <span>Earn WEBYA by teaching others</span>
               </div>
             </div>
           </div>

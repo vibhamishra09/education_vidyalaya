@@ -3,7 +3,7 @@ import { HomeClient } from "./home-client";
 
 export const metadata: Metadata = {
   title: "Webyalaya - Peer to Peer Learning Platform | Learn & Teach Together",
-  description: "Join Webyalaya, the collaborative learning platform where you can connect with peers, host study rooms, attend live sessions, and earn Webya while learning and teaching skills.",
+  description: "Join Webyalaya, the collaborative learning platform where you can connect with peers, host study rooms, attend live sessions, and earn WEBYA while learning and teaching skills.",
   keywords: [
     "peer learning platform",
     "online study rooms",
@@ -13,7 +13,7 @@ export const metadata: Metadata = {
     "group study sessions",
     "learn programming online",
     "teach skills online",
-    "Webya",
+    "WEBYA",
     "webyalaya",
   ],
   openGraph: {
