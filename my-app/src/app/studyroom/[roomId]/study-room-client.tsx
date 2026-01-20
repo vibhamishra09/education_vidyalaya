@@ -170,45 +170,34 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
   const liveRoomName = `studyroom-${roomId}`;
 
   return (
-    <div className="min-h-screen flex flex-col bg-muted/5 selection:bg-emerald-100 selection:text-emerald-900">
+    <div className="min-h-screen flex flex-col bg-background selection:bg-primary/10 selection:text-primary">
       <Navigation />
 
-      <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12 max-w-6xl">
+      <main className="flex-1 container mx-auto px-4 py-12 max-w-4xl">
         {/* Back Button */}
-        <Link href="/browse" className="inline-block mb-8">
-          <Button variant="ghost" className="rounded-full hover:bg-emerald-50 hover:text-emerald-700 transition-colors group">
-            <ArrowLeft className="h-4 w-4 mr-2 group-hover:-translate-x-1 transition-transform" />
-            Back to Browse
-          </Button>
+        <Link href="/browse" className="inline-flex items-center text-sm font-medium text-muted-foreground hover:text-foreground mb-12 transition-colors group">
+          <ArrowLeft className="h-4 w-4 mr-2 group-hover:-translate-x-1 transition-transform" />
+          Back to Browse
         </Link>
 
-        {/* Study Room Header */}
-        <Card className="mb-10 border-none shadow-xl bg-white/70 dark:bg-slate-900/40 backdrop-blur-xl ring-1 ring-white/50 dark:ring-white/10 overflow-hidden relative">
-          <div className="absolute top-0 right-0 -mt-20 -mr-20 w-80 h-80 bg-gradient-to-br from-emerald-100/50 to-sky-100/50 rounded-full blur-3xl opacity-60 pointer-events-none" />
-          <div className="absolute bottom-0 left-0 -mb-20 -ml-20 w-80 h-80 bg-gradient-to-tr from-lime-100/50 to-amber-100/50 rounded-full blur-3xl opacity-60 pointer-events-none" />
-          
-          <CardContent className="pt-8 pb-8 px-6 md:px-10 relative">
-            <div className="flex flex-col lg:flex-row items-start justify-between gap-8 mb-8">
-              <div className="flex-1 space-y-4">
-                <div className="flex flex-wrap items-center gap-3">
-                  {/* Status Badge */}
+        {/* Header Section */}
+        <div className="space-y-8 mb-16">
+           <div className="space-y-6">
+              <div className="flex flex-wrap items-center gap-3">
+                 {/* Status Badge */}
                    <Badge
                     variant={
                       room.sessionStatus === SessionStatus.ONGOING
                         ? "destructive"
-                        : "outline"
+                        : "secondary"
                     }
-                    className={
-                      room.sessionStatus === SessionStatus.ONGOING 
-                      ? "animate-pulse shadow-red-200 shadow-lg px-4 py-1.5 text-sm" 
-                      : "bg-white/50 backdrop-blur-md border-emerald-200 text-emerald-800 px-4 py-1.5 text-sm"
-                    }
+                    className="rounded-full px-3 py-0.5 font-medium"
                   >
                     {room.sessionStatus === SessionStatus.ONGOING ? (
                       <span className="flex items-center gap-2">
                         <span className="relative flex h-2 w-2">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-current opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-current"></span>
                         </span>
                         Live Now
                       </span>
@@ -216,14 +205,13 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
                       "Upcoming"
                     )}
                   </Badge>
-
+                  
                   {role === "teacher" && (
-                    <Badge className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md border-none px-3 py-1">Teacher</Badge>
+                    <Badge variant="default" className="rounded-full px-3 py-0.5">Teacher</Badge>
                   )}
                   {role === "learner" && (
-                    <Badge variant="secondary" className="bg-emerald-100 text-emerald-800 border border-emerald-200">Enrolled</Badge>
+                    <Badge variant="outline" className="rounded-full px-3 py-0.5">Enrolled</Badge>
                   )}
-                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                   {room.skills && room.skills.map((skill: any) => {
                     const skillName = typeof skill === 'string' ? skill : (skill.name || skill.skill?.name);
                     const skillKey = typeof skill === 'string' ? skill : (skill.id || skill.skill?.id || Math.random());
@@ -231,260 +219,188 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
                     if (!skillName) return null;
 
                     return (
-                      <Badge key={skillKey} variant="outline" className="border-slate-200 text-slate-600 bg-slate-50/50">
+                      <Badge key={skillKey} variant="secondary" className="bg-muted text-muted-foreground hover:bg-muted/80 rounded-full px-3 py-0.5">
                         {skillName}
                       </Badge>
                     );
                   })}
-                </div>
+              </div>
 
-                <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100 leading-tight">
+              <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-foreground leading-tight">
                   {room.title}
-                </h1>
-                
-                {room.description && (
-                  <p className="text-lg text-muted-foreground/90 max-w-3xl leading-relaxed">
+              </h1>
+              
+              {room.description && (
+                  <p className="text-lg text-muted-foreground leading-relaxed max-w-2xl">
                     {room.description}
                   </p>
-                )}
-              </div>
-
-              <div className="flex flex-col items-end gap-3 w-full lg:w-auto">
-                <div className="flex items-center gap-3 w-full lg:w-auto">
-                  <ShareButton
-                    url={`${typeof window !== "undefined" ? window.location.origin : process.env.NEXT_PUBLIC_BASE_URL || ""}/studyroom/${roomId}`}
-                    title={room.title}
-                    description={room.description || ""}
-                    variant="outline"
-                    size="lg"
-                    className="flex-1 lg:flex-none border-slate-200 hover:bg-slate-50 hover:text-slate-900"
-                  />
-                  
-                  {role === "empty" && !isFull && (
-                    <Button 
-                      size="lg" 
-                      onClick={handleJoinRoom}
-                      disabled={isJoining}
-                      className="flex-1 lg:flex-none bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-600/20 rounded-xl px-8 h-12 text-base font-semibold transition-all hover:-translate-y-0.5"
-                    >
-                      {isJoining ? (
-                        <>
-                          <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                          Joining...
-                        </>
-                      ) : (
-                        <>
-                          <Coins className="h-5 w-5 mr-2 stroke-[2.5]" />
-                          Join Room ({formatCoins(room.joiningFee)} WEBYA)
-                        </>
-                      )}
-                    </Button>
-                  )}
-                  
-                  {isFull && role === "empty" && (
-                    <Button size="lg" disabled className="flex-1 lg:flex-none rounded-xl opacity-80">
-                      Room Full
-                    </Button>
-                  )}
-                </div>
-                
-                {/* Secondary Actions Row */}
-                {(role === "teacher" || role === "learner") && (
-                   <span className="text-xs text-muted-foreground font-medium px-2">
-                     You are a participant in this room
-                   </span>
-                )}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-10">
-              <div className="flex items-center gap-4 bg-white/40 dark:bg-black/20 p-4 rounded-2xl border border-white/40 shadow-sm backdrop-blur-sm transition-all hover:bg-white/60">
-                <div className="h-12 w-12 rounded-xl bg-orange-100 flex items-center justify-center text-orange-600 shadow-inner">
-                  <Calendar className="h-6 w-6" />
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0.5">Date</p>
-                  <p className="font-semibold text-slate-900 dark:text-slate-100">{formattedDate}</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-4 bg-white/40 dark:bg-black/20 p-4 rounded-2xl border border-white/40 shadow-sm backdrop-blur-sm transition-all hover:bg-white/60">
-                <div className="h-12 w-12 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600 shadow-inner">
-                  <Clock className="h-6 w-6" />
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0.5">Time</p>
-                  <p className="font-semibold text-slate-900 dark:text-slate-100">
-                    {formattedTime} <span className="text-muted-foreground font-normal text-sm">({room.duration}m)</span>
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-4 bg-white/40 dark:bg-black/20 p-4 rounded-2xl border border-white/40 shadow-sm backdrop-blur-sm transition-all hover:bg-white/60">
-                <div className="h-12 w-12 rounded-xl bg-purple-100 flex items-center justify-center text-purple-600 shadow-inner">
-                  <Users className="h-6 w-6" />
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0.5">Participants</p>
-                  <p className="font-semibold text-slate-900 dark:text-slate-100">
-                    {room.participantCount || 0} / {room.maxParticipants} <span className="text-emerald-600 text-xs font-medium ml-1">Active</span>
-                  </p>
-                </div>
-              </div>
-
-              <Link 
-                href={`/profile/${room.createdBy.id}`}
-                className="flex items-center gap-4 bg-white/40 dark:bg-black/20 p-4 rounded-2xl border border-white/40 shadow-sm backdrop-blur-sm transition-all hover:bg-white/60 hover:shadow-md group"
-              >
-                <div className="relative">
-                  <Avatar className="h-12 w-12 ring-2 ring-white shadow-md">
-                    <AvatarImage
-                      src={room.createdBy.avatar}
-                      alt={room.createdBy.name}
-                      className="object-cover"
-                    />
-                    <AvatarFallback className="bg-emerald-100 text-emerald-800">
-                      {room.createdBy.name.charAt(0)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="absolute -bottom-1 -right-1 bg-emerald-500 rounded-full p-0.5 border-2 border-white">
-                     <div className="h-2 w-2 rounded-full bg-white animate-pulse" />
-                  </div>
-                </div>
-                <div className="overflow-hidden">
-                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0.5">Host</p>
-                  <p className="font-semibold text-slate-900 dark:text-slate-100 truncate group-hover:text-emerald-700 transition-colors">{room.createdBy.name}</p>
-                </div>
-              </Link>
-
-              {room.gmeetLink && room.gmeetLink !== "https://meet.google.com/your-meeting-code" && (
-                <div className="flex items-center gap-4 bg-blue-50/50 p-4 rounded-2xl border border-blue-100/50 transition-all hover:bg-blue-50">
-                  <div className="h-12 w-12 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600 shadow-inner">
-                    <ExternalLink className="h-6 w-6" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-blue-600/70 uppercase tracking-wider mb-0.5">Meeting Link</p>
-                    <a 
-                      href={room.gmeetLink} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="font-semibold text-blue-700 hover:text-blue-900 hover:underline decoration-2 underline-offset-2"
-                    >
-                      Join via Google Meet
-                    </a>
-                  </div>
-                </div>
               )}
-            </div>
-          </CardContent>
-        </Card>
+           </div>
 
-      {/* Live Session (LiveKit) Area - Sticky or Prominent */}
+           {/* Action Buttons */}
+           <div className="flex flex-wrap items-center gap-4 pt-2">
+              {role === "empty" && !isFull && (
+                <Button 
+                  size="lg" 
+                  onClick={handleJoinRoom}
+                  disabled={isJoining}
+                  className="rounded-full px-8 h-12 text-base font-medium"
+                >
+                  {isJoining ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Joining
+                    </>
+                  ) : (
+                    <>
+                      Join for {formatCoins(room.joiningFee)} WEBYA
+                    </>
+                  )}
+                </Button>
+              )}
+              
+              {isFull && role === "empty" && (
+                <Button size="lg" disabled variant="secondary" className="rounded-full px-8 h-12">
+                  Room Full
+                </Button>
+              )}
+
+              <ShareButton
+                url={`${typeof window !== "undefined" ? window.location.origin : process.env.NEXT_PUBLIC_BASE_URL || ""}/studyroom/${roomId}`}
+                title={room.title}
+                description={room.description || ""}
+                variant="outline"
+                className="rounded-full h-12 px-6 border-muted-foreground/20 hover:bg-muted/50 transition-colors"
+              />
+           </div>
+        </div>
+        
+        <div className="h-px bg-border/50 mb-16" />
+
+        {/* Details Grid */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-y-10 gap-x-8 mb-16">
+            
+            {/* Date */}
+            <div className="space-y-1">
+               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                 Date
+               </span>
+               <div className="flex items-center gap-2 text-foreground font-medium">
+                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                  {formattedDate}
+               </div>
+            </div>
+
+            {/* Time */}
+            <div className="space-y-1">
+               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                 Time
+               </span>
+               <div className="flex items-center gap-2 text-foreground font-medium">
+                  <Clock className="h-4 w-4 text-muted-foreground" />
+                  {formattedTime} <span className="text-muted-foreground font-normal text-sm">({room.duration} min)</span>
+               </div>
+            </div>
+
+            {/* Participants */}
+            <div className="space-y-1">
+               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                 Participants
+               </span>
+               <div className="flex items-center gap-2 text-foreground font-medium">
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                  {room.participantCount || 0} / {room.maxParticipants}
+               </div>
+            </div>
+
+            {/* Host */}
+            <div className="space-y-1">
+               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                 Host
+               </span>
+               <Link href={`/profile/${room.createdBy.id}`} className="flex items-center gap-2 group w-max">
+                 <Avatar className="h-5 w-5 border border-border">
+                    <AvatarImage src={room.createdBy.avatar} />
+                    <AvatarFallback className="text-[10px]">{room.createdBy.name.charAt(0)}</AvatarFallback>
+                 </Avatar>
+                 <span className="font-medium text-foreground group-hover:underline decoration-1 underline-offset-4 decoration-muted-foreground">{room.createdBy.name}</span>
+               </Link>
+            </div>
+        </div>
+
+        {/* External Link */}
+        {room.gmeetLink && room.gmeetLink !== "https://meet.google.com/your-meeting-code" && (
+            <div className="mb-16 p-4 rounded-lg bg-muted/30 border border-border/50 inline-block">
+                 <a 
+                    href={room.gmeetLink} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-sm font-medium hover:text-primary transition-colors"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    Join via Google Meet
+                  </a>
+            </div>
+        )}
+
+      {/* Live Session CTA */}
       {(room.sessionStatus === SessionStatus.UPCOMING || room.sessionStatus === SessionStatus.ONGOING) && (role === "teacher" || role === "learner") && (
-        <div className="space-y-6 mb-12">
-          <Card className="border-none shadow-xl bg-gradient-to-r from-indigo-500/10 to-purple-500/10 backdrop-blur-md ring-1 ring-black/5 dark:ring-white/10 overflow-hidden relative">
-             <div className="absolute inset-0 bg-grid-white/10 [mask-image:linear-gradient(0deg,white,rgba(255,255,255,0.6))]" />
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-xl relative z-10">
-                 <div className="bg-indigo-100 p-2 rounded-lg">
-                   <Users className="h-5 w-5 text-indigo-600" />
-                 </div>
-                 Live Session
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="relative z-10">
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
-                <div className="space-y-1">
-                   {canJoinVideoCall ? (
-                     <p className="font-medium text-lg">The room is open!</p>
-                   ) : (
-                     <p className="font-medium text-lg text-muted-foreground">Waiting to start...</p>
-                   )}
-                   <p className="text-sm text-muted-foreground max-w-md">
-                     {canJoinVideoCall 
+        <div className="rounded-2xl border border-border bg-card p-8 flex flex-col md:flex-row items-center justify-between gap-8 mb-16 shadow-sm">
+            <div className="space-y-2 text-center md:text-left">
+               <h3 className="text-xl font-semibold tracking-tight">
+                  {canJoinVideoCall ? "The classroom is open" : "Waiting to start"}
+               </h3>
+               <p className="text-muted-foreground max-w-md">
+                   {canJoinVideoCall 
                        ? "Jump in to collaborate with your peers using high-quality video and audio." 
                        : "The virtual classroom will open 5 minutes before the scheduled start time."}
-                   </p>
-                </div>
-                
-                {canJoinVideoCall ? (
-                  <Link href={`/rooms/${liveRoomName}`}>
-                    <Button size="lg" className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-600/20 text-white rounded-xl px-8 h-12 text-lg transition-transform hover:-translate-y-0.5">
+               </p>
+            </div>
+            {canJoinVideoCall ? (
+                  <Link href={`/rooms/${liveRoomName}`} className="w-full md:w-auto">
+                    <Button size="lg" className="w-full md:w-auto px-8 rounded-full h-12 shadow-sm">
                       Enter Classroom
-                      <ArrowLeft className="h-5 w-5 ml-2 rotate-180" />
+                      <ArrowLeft className="h-4 w-4 ml-2 rotate-180" />
                     </Button>
                   </Link>
                 ) : (
-                  <Button 
-                    size="lg" 
-                    disabled
-                    className="w-full sm:w-auto bg-slate-100 text-slate-400 border-slate-200 rounded-xl px-8 h-12 text-lg"
-                  >
-                    <Clock className="h-5 w-5 mr-2" />
+                  <Button disabled size="lg" variant="secondary" className="w-full md:w-auto px-8 rounded-full h-12 bg-muted text-muted-foreground opacity-50">
+                    <Clock className="h-4 w-4 mr-2" />
                     Opens Soon
                   </Button>
                 )}
-              </div>
-            </CardContent>
-          </Card>
         </div>
       )}
 
-
-
-        {/* Summary & Reviews (only for concluded sessions) */}
-        {room.sessionStatus === SessionStatus.DONE && (
-          <div className="space-y-8 mt-12 pb-12">
-            <div className="flex items-center gap-4">
-              <div className="h-px bg-gradient-to-r from-transparent via-border to-transparent flex-1" />
-              <h2 className="text-2xl font-bold text-muted-foreground/50">Session Concluded</h2>
-              <div className="h-px bg-gradient-to-r from-transparent via-border to-transparent flex-1" />
-            </div>
-
-            {/* AI Summary */}
-            <Card className="border-none shadow-md bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <div className="bg-sky-100 p-2 rounded-lg">
-                    <Loader2 className="h-5 w-5 text-sky-600" />
-                  </div>
-                  Session Summary
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="prose prose-slate dark:prose-invert max-w-none">
-                  <p className="text-muted-foreground mb-6 text-lg leading-relaxed">
-                    This session has ended. A summary of the key topics covered will appear here shortly.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Reviews */}
-            <div className="bg-white/40 dark:bg-black/20 rounded-3xl p-6 md:p-8 backdrop-blur-sm ring-1 ring-black/5">
-              <ReviewsSection 
-                sessionId={roomId} 
-                showTitle={true}
-              />
-            
-              {/* Review Submission Button */}
-              {role === 'learner' && (
-                 <div className="mt-8 text-center bg-white/50 rounded-xl p-8 border border-dashed border-slate-300">
-                    <p className="text-lg font-medium text-slate-700 mb-4">
+      {/* Reviews etc */}
+       {room.sessionStatus === SessionStatus.DONE && (
+          <div className="space-y-16">
+             <div className="pt-8 border-t border-border/50">
+                <h3 className="text-xl font-semibold mb-6 tracking-tight">Session Summary</h3>
+                 <div className="prose prose-slate dark:prose-invert max-w-none text-muted-foreground leading-relaxed">
+                    <p>This session has ended. A summary of the key topics covered will appear here shortly.</p>
+                 </div>
+             </div>
+             
+             <div className="pt-8 border-t border-border/50">
+                <ReviewsSection sessionId={roomId} showTitle={true} />
+                {role === 'learner' && (
+                 <div className="mt-10 p-8 rounded-2xl bg-muted/30 border border-dashed border-border text-center">
+                    <p className="text-lg font-medium mb-4 text-foreground">
                       How was your learning experience?
                     </p>
                     <Link href={`/submit-review/${roomId}?type=studyRoom`}>
-                      <Button variant="outline" className="border-emerald-200 hover:bg-emerald-50 text-emerald-700">
+                      <Button variant="outline" className="rounded-full px-6">
                         Write a Review
                       </Button>
                     </Link>
                  </div>
               )}
-            </div>
+             </div>
           </div>
-        )}
-      </main>
+       )}
 
+      </main>
       <Footer />
     </div>
   );

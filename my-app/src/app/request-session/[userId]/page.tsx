@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState, useEffect, useCallback } from "react";
+import { use, useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { Navigation } from "@/components/layout/navigation";
 import { Footer } from "@/components/layout/footer";
@@ -224,6 +224,9 @@ export default function RequestSessionPage({
 
   const costPerHour = peer?.hourlyRate ? (typeof peer.hourlyRate === 'string' ? parseFloat(peer.hourlyRate) : peer.hourlyRate) : 0;
   const calculatedCost = peer?.hourlyRate ? (parseInt(formData.duration) / 60) * costPerHour : 0;
+
+  // Memoize minDate to prevent hydration errors (Date value must be consistent between server and client)
+  const minDate = useMemo(() => new Date().toISOString().split("T")[0], []);
 
   const toggleSkill = (skillId: string) => {
     const newSkills = formData.skills.includes(skillId)
@@ -493,7 +496,7 @@ export default function RequestSessionPage({
                           value={formData.date}
                           onChange={(e) => updateField("date", e.target.value)}
                           required
-                          min={new Date().toISOString().split("T")[0]}
+                          min={minDate}
                           disabled={isSelfRequest}
                         />
                       </div>

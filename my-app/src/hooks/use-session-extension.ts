@@ -66,11 +66,14 @@ export function useSessionExtension({
         });
 
         socketInstance.on('connect', () => {
-          console.log('✅ [Extension] Socket connected');
+          console.log('✅ [Extension] Socket connected, waiting for methods...');
           setIsConnected(true);
           setSocket(socketInstance);
+        });
 
-          // Join the session room
+        socketInstance.on('authenticated', () => {
+          console.log('🔐 [Extension] Authenticated');
+          // Join the session room only after auth confirmation
           socketInstance?.emit('join-session', { sessionId, sessionType });
         });
 
