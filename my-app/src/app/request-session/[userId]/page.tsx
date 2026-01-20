@@ -167,7 +167,7 @@ export default function RequestSessionPage({
   // Show loading while Clerk is initializing
   if (!isLoaded) {
     return (
-      <div className="min-h-screen flex flex-col">
+      <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950">
         <Navigation />
         <main className="flex-1 container mx-auto px-4 py-8">
           <div className="flex items-center justify-center min-h-[400px]">
@@ -184,7 +184,7 @@ export default function RequestSessionPage({
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col">
+      <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950">
         <Navigation />
         <main className="flex-1 container mx-auto px-4 py-8">
           <div className="flex items-center justify-center min-h-[400px]">
@@ -201,7 +201,7 @@ export default function RequestSessionPage({
 
   if (error || !peer || !currentUser) {
     return (
-      <div className="min-h-screen flex flex-col">
+      <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950">
         <Navigation />
         <main className="flex-1 container mx-auto px-4 py-8">
           <div className="text-center">
@@ -301,7 +301,7 @@ export default function RequestSessionPage({
   };
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950">
       <Navigation />
 
       <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -342,7 +342,7 @@ export default function RequestSessionPage({
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Form */}
           <div className="lg:col-span-2">
-            <Card>
+            <Card className="shadow-sm border-border/60">
               <CardHeader>
                 <CardTitle>Session Details</CardTitle>
               </CardHeader>
@@ -615,7 +615,7 @@ export default function RequestSessionPage({
 
           {/* Summary Sidebar */}
           <div className="lg:col-span-1">
-            <Card className="sticky top-8">
+            <Card className="sticky top-8 shadow-sm border-border/60">
               <CardHeader>
                 <CardTitle>Summary</CardTitle>
               </CardHeader>

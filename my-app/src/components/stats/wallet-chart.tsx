@@ -115,7 +115,7 @@ export function WalletChart({ className }: WalletChartProps) {
                 Earned
               </span>
               <span className="font-semibold text-emerald-600">
-                +{formatCoins(data.earned)} AYA
+                +{formatCoins(data.earned)} Webya
               </span>
             </div>
             <div className="flex items-center justify-between gap-6">
@@ -125,14 +125,14 @@ export function WalletChart({ className }: WalletChartProps) {
                 Spent
               </span>
               <span className="font-semibold text-rose-600">
-                -{formatCoins(data.spent)} AYA
+                -{formatCoins(data.spent)} Webya
               </span>
             </div>
             <div className="border-t border-border/50 pt-2 mt-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Net</span>
                 <span className={`font-bold ${data.net >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                  {data.net >= 0 ? "+" : ""}{formatCoins(data.net)} AYA
+                  {data.net >= 0 ? "+" : ""}{formatCoins(data.net)} Webya
                 </span>
               </div>
             </div>
@@ -172,7 +172,7 @@ export function WalletChart({ className }: WalletChartProps) {
               Wallet Activity
             </CardTitle>
             <p className="text-sm text-muted-foreground mt-1">
-              Your AYA tokens flow over the last 6 months
+              Your Webya flow over the last 6 months
             </p>
           </div>
         </div>
@@ -185,7 +185,7 @@ export function WalletChart({ className }: WalletChartProps) {
               <span className="text-xs text-muted-foreground">Total Earned</span>
             </div>
             <p className="text-xl font-bold text-emerald-600 mt-1">
-              +{formatCoins(stats.totalEarned)} AYA
+              +{formatCoins(stats.totalEarned)} Webya
             </p>
           </div>
           <div className="bg-gradient-to-br from-rose-500/10 to-rose-500/5 rounded-lg p-3 border border-rose-500/20">
@@ -194,7 +194,7 @@ export function WalletChart({ className }: WalletChartProps) {
               <span className="text-xs text-muted-foreground">Total Spent</span>
             </div>
             <p className="text-xl font-bold text-rose-600 mt-1">
-              -{formatCoins(stats.totalSpent)} AYA
+              -{formatCoins(stats.totalSpent)} Webya
             </p>
           </div>
           <div className={`bg-gradient-to-br ${stats.totalNet >= 0 ? "from-blue-500/10 to-blue-500/5 border-blue-500/20" : "from-orange-500/10 to-orange-500/5 border-orange-500/20"} rounded-lg p-3 border`}>

@@ -6,7 +6,7 @@ import '@livekit/components-styles'
 import { BackgroundProcessor, BackgroundBlur, VirtualBackground, BackgroundOptions } from '@livekit/track-processors'
 import { ChatWidget } from '@/components/chat/ChatWidget'
 import { Button } from '@/components/ui/button'
-import { MessageSquare, X, Users, Maximize2, Minimize2, Video, VideoOff, Mic, MicOff, Volume2, VolumeX, Clock, MonitorUp, MonitorOff, Grid2X2, Presentation, Pin, PinOff, User, PictureInPicture2, Camera, CameraOff, Sparkles, TimerReset, Lock, Unlock, Settings2, PhoneOff, ChevronUp, ShieldCheck, Ban, Aperture, ImageIcon, LayoutGrid, Check, Timer } from 'lucide-react'
+import { MessageSquare, X, Users, Maximize2, Minimize2, Video, VideoOff, Mic, MicOff, Volume2, VolumeX, Clock, MonitorUp, MonitorOff, Grid2X2, Presentation, Pin, PinOff, User, PictureInPicture2, Camera, CameraOff, Sparkles, Lock, Settings2, PhoneOff, ChevronUp, ChevronLeft, ChevronRight, ShieldCheck, Ban, Aperture, ImageIcon, LayoutGrid, Check, Timer } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { useSessionTimer } from '@/hooks/use-session-timer'
@@ -102,6 +102,34 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 	
 	// Confirmation dialog for ending meeting
 	const [showEndConfirmation, setShowEndConfirmation] = useState(false)
+
+	// User activity tracking for auto-hiding controls
+	const [isUserActive, setIsUserActive] = useState(true)
+
+	useEffect(() => {
+		let timeoutId: NodeJS.Timeout
+		const handleActivity = () => {
+			setIsUserActive(true)
+			clearTimeout(timeoutId)
+			timeoutId = setTimeout(() => setIsUserActive(false), 3000)
+		}
+
+		window.addEventListener('mousemove', handleActivity)
+		window.addEventListener('keydown', handleActivity)
+		window.addEventListener('click', handleActivity)
+		window.addEventListener('touchstart', handleActivity)
+
+		// Initial timeout
+		timeoutId = setTimeout(() => setIsUserActive(false), 3000)
+
+		return () => {
+			window.removeEventListener('mousemove', handleActivity)
+			window.removeEventListener('keydown', handleActivity)
+			window.removeEventListener('click', handleActivity)
+			window.removeEventListener('touchstart', handleActivity)
+			clearTimeout(timeoutId)
+		}
+	}, [])
 	
 	// Get auth token on mount
 	useEffect(() => {
@@ -132,6 +160,7 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 	const {
 		hasExtended,
 		extendedEndTime,
+		extensionMinutes,
 		pendingRequest,
 		requestExtension,
 		approveExtension,
@@ -354,10 +383,10 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 	
 	// Show toast when session is extended
 	useEffect(() => {
-		if (hasExtended && extendedEndTime) {
-			showSuccessRef.current('⏱️ Session Extended!', 'The session has been extended by 10 minutes.')
+		if (hasExtended && extendedEndTime && extensionMinutes) {
+			showSuccessRef.current('⏱️ Session Extended!', `The session has been extended by ${extensionMinutes} minutes.`)
 		}
-	}, [hasExtended, extendedEndTime])
+	}, [hasExtended, extendedEndTime, extensionMinutes])
 
 	// Auto-show chat on desktop, hide on mobile
 	useEffect(() => {
@@ -493,6 +522,7 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 				options={roomOptions}
 			>
 				<VideoRoomContent
+					isUserActive={isUserActive}
 					showChat={showChat}
 					setShowChat={setShowChat}
 					showParticipants={showParticipants}
@@ -508,7 +538,7 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 					isHost={isHost}
 					hasExtended={hasExtended}
 					onRequestExtension={requestExtension}
-					onExtendSession={() => approveExtension(currentEndTime)}
+					onExtendSession={(mins) => approveExtension(currentEndTime, mins)}
 					currentUserId={user?.id}
 					moderationSocket={moderationSocket}
 					onEndMeeting={handleEndMeetingClick}
@@ -558,7 +588,7 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 		{timerEnabled && isHost && (
 			<SessionEndWarningDialog
 					open={showWarning}
-					minutesRemaining={5}
+					minutesRemaining={minutesLeft}
 					onClose={() => setShowWarning(false)}
 				/>
 			)}
@@ -591,6 +621,7 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 
 // Memoized to prevent re-renders from parent component state changes
 const VideoRoomContent = memo(function VideoRoomContent({
+	isUserActive,
 	showChat,
 	setShowChat,
 	showParticipants,
@@ -640,6 +671,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	pendingParticipantRequests,
 	clearParticipantRequest,
 }: {
+	isUserActive: boolean
 	showChat: boolean
 	setShowChat: (show: boolean) => void
 	showParticipants: boolean
@@ -654,8 +686,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	sessionTitle?: string
 	isHost: boolean
 	hasExtended: boolean
-	onRequestExtension: () => void
-	onExtendSession: () => void
+	onRequestExtension: (minutes?: number) => void
+	onExtendSession: (minutes?: number) => void
 	currentUserId?: string | null
 	moderationSocket?: Socket | null
 	onEndMeeting?: () => void
@@ -691,7 +723,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 }) {
 	const room = useRoomContext()
 	const params = useParams<{ room: string }>()
-	const { showWarning } = useToast()
+	const { showWarning, showSuccess, showInfo, showError } = useToast()
 	
 	// Get participants list for name lookup
 	const allParticipants = useParticipants()
@@ -726,6 +758,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	const [isViewMenuOpen, setIsViewMenuOpen] = useState(false)
 	const [showEndMenu, setShowEndMenu] = useState(false)
 	const [showExtendMenu, setShowExtendMenu] = useState(false)
+	// Expanded view - hide thumbnails and show only main video
+	const [isExpandedView, setIsExpandedView] = useState(false)
 	
 	// Close extend menu on outside click
 	useEffect(() => {
@@ -755,6 +789,17 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	const localParticipantRef = useRef(localParticipant)
 	// Prevent concurrent effect applications
 	const isApplyingEffectRef = useRef(false)
+	
+	// Helper function to get avatar URL from participant metadata
+	const getParticipantAvatar = useCallback((participant: { metadata?: string | null }): string | null => {
+		if (!participant.metadata) return null
+		try {
+			const metadata = JSON.parse(participant.metadata)
+			return metadata.avatar || null
+		} catch {
+			return null
+		}
+	}, [])
 	
 	// Keep refs in sync with state
 	useEffect(() => { blurAmountRef.current = blurAmount }, [blurAmount])
@@ -828,8 +873,11 @@ const VideoRoomContent = memo(function VideoRoomContent({
 
 	// Enforce permission locks on initial join and when permissions change
 	// This ensures that when a participant rejoins/refreshes, they respect the locked state
+	const prevPermissionsRef = useRef(permissions)
 	useEffect(() => {
 		if (!localParticipant || isHost) return
+		
+		const prevPermissions = prevPermissionsRef.current
 		
 		// If audio is locked and mic is on, force disable it
 		if (permissions && !permissions.allowAudio && localParticipant.isMicrophoneEnabled) {
@@ -842,7 +890,40 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			console.log('[permissions] Video is locked, disabling camera')
 			localParticipant.setCameraEnabled(false).catch(() => {})
 		}
-	}, [permissions, localParticipant, isHost])
+		
+		// Show notifications to participants when permissions change
+		if (permissions && prevPermissions) {
+			// Audio lock changed
+			if (prevPermissions.allowAudio !== permissions.allowAudio) {
+				if (!permissions.allowAudio) {
+					showWarning('🔇 Audio Locked', 'The host has locked audio. You cannot unmute until allowed.')
+				} else {
+					showSuccess('🎤 Audio Unlocked', 'You can now unmute your microphone.')
+				}
+			}
+			
+			// Video lock changed
+			if (prevPermissions.allowVideo !== permissions.allowVideo) {
+				if (!permissions.allowVideo) {
+					showWarning('📷 Video Locked', 'The host has locked video. You cannot enable camera until allowed.')
+				} else {
+					showSuccess('📹 Video Unlocked', 'You can now enable your camera.')
+				}
+			}
+			
+			// Chat lock changed
+			if (prevPermissions.allowChat !== permissions.allowChat) {
+				if (!permissions.allowChat) {
+					showWarning('💬 Chat Locked', 'The host has disabled chat.')
+				} else {
+					showSuccess('💬 Chat Unlocked', 'You can now send messages.')
+				}
+			}
+		}
+		
+		// Update ref for next comparison
+		prevPermissionsRef.current = permissions
+	}, [permissions, localParticipant, isHost, showWarning, showSuccess])
 	
 	// Use memoized virtual backgrounds (moved outside with stable ref below)
 	// Access via `VIRTUAL_BACKGROUNDS` constant defined below to avoid re-creating this array each render
@@ -1237,6 +1318,43 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	
 	// Native Picture-in-Picture state and refs
 	const [isPiPActive, setIsPiPActive] = useState(false)
+	
+	// Thumbnails scroll logic
+	const thumbnailsRef = useRef<HTMLDivElement>(null)
+	const [canScrollLeft, setCanScrollLeft] = useState(false)
+	const [canScrollRight, setCanScrollRight] = useState(false)
+
+	const checkScroll = useCallback(() => {
+		if (thumbnailsRef.current) {
+			const { scrollLeft, scrollWidth, clientWidth } = thumbnailsRef.current
+			setCanScrollLeft(scrollLeft > 0)
+			setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 5) // -5 buffer
+		}
+	}, [])
+
+	useEffect(() => {
+		const el = thumbnailsRef.current
+		if (el) {
+			checkScroll()
+			el.addEventListener('scroll', checkScroll)
+			window.addEventListener('resize', checkScroll)
+			return () => {
+				el.removeEventListener('scroll', checkScroll)
+				window.removeEventListener('resize', checkScroll)
+			}
+		}
+	}, [checkScroll, sortedCameraTracks.length]) // Re-check when tracks change
+
+	const scrollThumbnails = (direction: 'left' | 'right') => {
+		if (thumbnailsRef.current) {
+			const scrollAmount = thumbnailsRef.current.clientWidth * 0.75
+			thumbnailsRef.current.scrollBy({
+				left: direction === 'left' ? -scrollAmount : scrollAmount,
+				behavior: 'smooth'
+			})
+		}
+	}
+
 	const pipVideoRef = useRef<HTMLVideoElement | null>(null)
 	const pipCanvasRef = useRef<HTMLCanvasElement | null>(null)
 	const pipStreamVideoRef = useRef<HTMLVideoElement | null>(null)
@@ -1409,103 +1527,103 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			<div className="flex-1 flex relative bg-[#09090b] overflow-hidden h-full w-full">
 			{/* Main Video Area - Centered and full width always (overlays used for sidebars) */}
 			<div className={`flex-1 flex flex-col transition-all duration-300 ease-in-out overflow-hidden relative ${(showChat || showParticipants) ? 'md:mr-96' : ''}`}>
-				{/* Zoom-Style Top Info Bar */}
-				<div className="absolute top-0 left-0 right-0 h-10 bg-[#1a1a1a] flex items-center justify-between px-4 z-30 select-none">
-					{/* Left: Meeting Info */}
-					<div className="flex items-center gap-2">
-						<div className="text-green-500">
-							<ShieldCheck className="h-4 w-4" />
-						</div>
+				{/* Zoom-Style Top Info Bar - Centered */}
+				<div className={`absolute left-0 right-0 h-auto flex items-center justify-center pointer-events-none z-30 select-none transition-all duration-300 ${isUserActive ? 'top-4 opacity-100' : 'top-[-60px] opacity-0'}`}>
+					<div className="bg-[#1a1a1a]/90 backdrop-blur-md px-4 py-1.5 rounded-full flex items-center gap-4 border border-white/10 pointer-events-auto shadow-lg hover:bg-[#252525]/95 transition-all">
+						{/* Meeting Info */}
 						<div className="flex items-center gap-2">
-							<span className="text-white text-xs font-medium">
-								{sessionTitle || 'Webyalaya Meeting'}
-							</span>
-							<div className="w-px h-3 bg-white/20" />
-							<span className="text-white/60 text-[10px] md:text-xs">
-								{formattedTime}
-							</span>
+							<div className="text-[#00DC6E]">
+								<ShieldCheck className="h-4 w-4" />
+							</div>
+							<div className="flex items-center gap-2">
+								<span className="text-white text-xs font-semibold tracking-wide">
+									{sessionTitle || 'Webyalaya Meeting'}
+								</span>
+								<div className="w-px h-3 bg-white/10" />
+								<span className="text-white/50 text-[10px] md:text-xs font-mono">
+									{formattedTime}
+								</span>
+							</div>
 						</div>
-					</div>
 
-					{/* Right: View Switcher */}
-					<div className="relative">
-						<Button
-							variant="ghost"
-							size="sm"
-							onClick={() => setIsViewMenuOpen(!isViewMenuOpen)}
-							className="h-7 px-2 bg-[#252525] hover:bg-[#2d2d2d] text-white text-xs gap-1.5 rounded-md border border-white/10"
-						>
-							<span>View</span>
-							<Grid2X2 className="h-3.5 w-3.5" />
-						</Button>
+						{/* View Switcher Button */}
+						<div className="relative">
+							<button
+								onClick={() => setIsViewMenuOpen(!isViewMenuOpen)}
+								className="h-6 w-6 flex items-center justify-center rounded-full hover:bg-white/10 text-white/70 hover:text-white transition-colors"
+								title="Change View"
+							>
+								<LayoutGrid className="h-3.5 w-3.5" />
+							</button>
 
-						{/* View Menu Dropdown */}
-						{isViewMenuOpen && (
-							<>
-								<div className="fixed inset-0 z-[100]" onClick={() => setIsViewMenuOpen(false)} />
-								<div className="absolute right-0 top-full mt-2 w-48 bg-[#252525] border border-white/10 rounded-lg shadow-xl z-[101] py-1 animate-in fade-in zoom-in-95 duration-100">
-									<div className="px-3 py-2 text-xs font-semibold text-white/50 uppercase tracking-wider">
-										Layout
+							{/* View Menu Dropdown */}
+							{isViewMenuOpen && (
+								<>
+									<div className="fixed inset-0 z-[100]" onClick={() => setIsViewMenuOpen(false)} />
+									<div className="absolute right-0 top-full mt-2 w-48 bg-[#252525] border border-white/10 rounded-lg shadow-xl z-[101] py-1 animate-in fade-in zoom-in-95 duration-100">
+										<div className="px-3 py-2 text-xs font-semibold text-white/50 uppercase tracking-wider">
+											Layout
+										</div>
+										<button
+											onClick={() => {
+												setLayoutMode('focus')
+												setIsViewMenuOpen(false)
+											}}
+											className="w-full px-3 py-2 text-left text-sm text-white hover:bg-white/10 flex items-center justify-between group"
+										>
+											<div className="flex items-center gap-2">
+												<Presentation className="h-4 w-4 text-white/70 group-hover:text-white" />
+												<span>Speaker</span>
+											</div>
+											{layoutMode === 'focus' && <Check className="h-4 w-4 text-[#00DC6E]" />}
+										</button>
+										<button
+											onClick={() => {
+												setLayoutMode('grid')
+												setIsViewMenuOpen(false)
+											}}
+											className="w-full px-3 py-2 text-left text-sm text-white hover:bg-white/10 flex items-center justify-between group"
+										>
+											<div className="flex items-center gap-2">
+												<Grid2X2 className="h-4 w-4 text-white/70 group-hover:text-white" />
+												<span>Gallery</span>
+											</div>
+											{layoutMode === 'grid' && <Check className="h-4 w-4 text-[#00DC6E]" />}
+										</button>
+										
+										<div className="my-1 border-t border-white/10" />
+										
+										<button
+											onClick={() => {
+												if (document.fullscreenElement) {
+													document.exitFullscreen()
+													setIsFullscreen(false)
+												} else {
+													document.documentElement.requestFullscreen()
+													setIsFullscreen(true)
+												}
+												setIsViewMenuOpen(false)
+											}}
+											className="w-full px-3 py-2 text-left text-sm text-white hover:bg-white/10 flex items-center justify-between group"
+										>
+											<div className="flex items-center gap-2">
+												{isFullscreen ? (
+													<Minimize2 className="h-4 w-4 text-white/70 group-hover:text-white" />
+												) : (
+													<Maximize2 className="h-4 w-4 text-white/70 group-hover:text-white" />
+												)}
+												<span>{isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}</span>
+											</div>
+										</button>
 									</div>
-									<button
-										onClick={() => {
-											setLayoutMode('focus')
-											setIsViewMenuOpen(false)
-										}}
-										className="w-full px-3 py-2 text-left text-sm text-white hover:bg-white/10 flex items-center justify-between group"
-									>
-										<div className="flex items-center gap-2">
-											<Presentation className="h-4 w-4 text-white/70 group-hover:text-white" />
-											<span>Speaker</span>
-										</div>
-										{layoutMode === 'focus' && <Check className="h-4 w-4 text-[#00DC6E]" />}
-									</button>
-									<button
-										onClick={() => {
-											setLayoutMode('grid')
-											setIsViewMenuOpen(false)
-										}}
-										className="w-full px-3 py-2 text-left text-sm text-white hover:bg-white/10 flex items-center justify-between group"
-									>
-										<div className="flex items-center gap-2">
-											<Grid2X2 className="h-4 w-4 text-white/70 group-hover:text-white" />
-											<span>Gallery</span>
-										</div>
-										{layoutMode === 'grid' && <Check className="h-4 w-4 text-[#00DC6E]" />}
-									</button>
-									
-									<div className="my-1 border-t border-white/10" />
-									
-									<button
-										onClick={() => {
-											if (document.fullscreenElement) {
-												document.exitFullscreen()
-												setIsFullscreen(false)
-											} else {
-												document.documentElement.requestFullscreen()
-												setIsFullscreen(true)
-											}
-											setIsViewMenuOpen(false)
-										}}
-										className="w-full px-3 py-2 text-left text-sm text-white hover:bg-white/10 flex items-center justify-between group"
-									>
-										<div className="flex items-center gap-2">
-											{isFullscreen ? (
-												<Minimize2 className="h-4 w-4 text-white/70 group-hover:text-white" />
-											) : (
-												<Maximize2 className="h-4 w-4 text-white/70 group-hover:text-white" />
-											)}
-											<span>{isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}</span>
-										</div>
-									</button>
-								</div>
-							</>
-						)}
+								</>
+							)}
+						</div>
 					</div>
 				</div>
 
-				{/* Video Grid - Adjusted padding for top bar and bottom bar */}
-				<div className="flex-1 overflow-hidden bg-black relative min-h-0 video-grid-container pt-10 pb-[72px]">
+				{/* Video Grid - No padding needed since bars are floating overlays */}
+				<div className="flex-1 overflow-hidden bg-black relative min-h-0 video-grid-container pt-2 pb-2">
 					<style dangerouslySetInnerHTML={{__html: `
 					/* CRITICAL: Remove ALL green overlays and speaking indicators */
 					.video-grid-container .lk-participant-tile[data-lk-speaking="true"]::before,
@@ -1589,8 +1707,10 @@ const VideoRoomContent = memo(function VideoRoomContent({
 					.lk-participant-name,
 					.lk-participant-metadata {
 						color: white !important;
-						background: linear-gradient(transparent, rgba(0,0,0,0.8)) !important;
-						padding: 8px 12px !important;
+						background: linear-gradient(to top, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.3) 50%, transparent 100%) !important;
+						padding: 6px 12px !important;
+						height: 32px !important;
+						max-height: 32px !important;
 						font-size: 13px !important;
 						font-weight: 500 !important;
 						text-shadow: 0 1px 3px rgba(0,0,0,0.8) !important;
@@ -1599,6 +1719,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						left: 0 !important;
 						right: 0 !important;
 						z-index: 10 !important;
+						display: flex !important;
+						align-items: flex-end !important;
 					}
 					
 					.grid-mode .lk-participant-metadata-item,
@@ -1620,37 +1742,84 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						.grid-mode .lk-participant-name,
 						.lk-participant-name {
 							font-size: 11px !important;
-							padding: 6px 8px !important;
+							padding: 4px 8px !important;
+							height: 26px !important;
+							max-height: 26px !important;
 						}
 					}
 					
-/* Focus/Presenter Layout Styles - Side by Side */
-	.focus-layout-container {
-		display: flex;
-		flex-direction: row;
+					/* Focus/Presenter Layout Styles - Zoom Style */
+					.focus-layout-container {
+						display: flex;
+						flex-direction: column;
 						height: 100%;
 						width: 100%;
 						padding: 0;
 						gap: 0;
 						overflow: hidden;
-						background: black;
+						background: #0a0a0a;
 					}
 					
-					/* Thumbnail strip - Adjusted for 16:9 ratio */
+					/* Thumbnail strip at top */
+					.focus-thumbnails-wrapper {
+						position: relative;
+						width: 100%;
+						height: auto;
+						min-height: 140px;
+						display: flex;
+						align-items: center;
+						background: #0d0d0d;
+						border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+						padding: 10px 0;
+						z-index: 10;
+					}
+
 					.focus-thumbnails {
+						position: relative;
 						display: flex !important;
+						align-items: flex-start;
+						justify-content: flex-start;
+						gap: 12px;
+						width: 100%;
+						overflow-x: auto;
+						overflow-y: hidden;
+						padding: 4px 48px; /* Side padding for buttons */
+						scroll-behavior: smooth;
+						scrollbar-width: none;
+					}
+					
+					.focus-thumbnails::-webkit-scrollbar {
+						display: none;
+					}
+					
+					/* Scroll buttons */
+					.focus-scroll-btn {
+						position: absolute;
+						top: 50%;
+						transform: translateY(-50%);
+						width: 32px;
+						height: 32px;
+						border-radius: 50%;
+						background: rgba(30, 30, 30, 0.9);
+						border: 1px solid rgba(255, 255, 255, 0.1);
+						color: white;
+						display: flex;
 						align-items: center;
 						justify-content: center;
-						gap: 12px;
-		height: 120px;
-		min-height: 120px;
-		flex-shrink: 0;
-		overflow-x: auto;
-		overflow-y: hidden;
-		padding: 8px 12px;
-
-					.focus-thumbnails::-webkit-scrollbar {
-						height: 4px;
+						z-index: 20;
+						cursor: pointer;
+						transition: all 0.2s;
+						box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+					}
+					.focus-scroll-btn:hover {
+						background: #404040;
+						border-color: rgba(255,255,255,0.3);
+					}
+					.focus-scroll-btn.left { left: 8px; }
+					.focus-scroll-btn.right { right: 8px; }
+					.focus-scroll-btn:disabled {
+						opacity: 0;
+						pointer-events: none;
 					}
 
 					/* Main video filling below */
@@ -1661,7 +1830,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						justify-content: center;
 						min-height: 0;
 						overflow: hidden;
-						background: black;
+						background: #0a0a0a;
 						padding: 0;
 					}
 					
@@ -1669,12 +1838,11 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						position: relative;
 						width: 100%;
 						height: 100%;
+						max-width: 100%;
 						max-height: 100%;
-						/* No max-width for Zoom style, fill available space */
-						aspect-ratio: auto; 
-						border-radius: 0;
+						border-radius: 16px;
 						overflow: hidden;
-						background: #000;
+						background: #1a1a1a;
 						display: flex;
 						align-items: center;
 						justify-content: center;
@@ -1682,14 +1850,11 @@ const VideoRoomContent = memo(function VideoRoomContent({
 
 					/* Remove border radius from tiles in main view */
 					@media (max-width: 768px) {
-						.focus-main-video {
-							border-radius: 0;
-						}
-						.focus-thumbnails {
-							height: 90px;
-							min-height: 90px;
-							justify-content: flex-start;
+						.focus-main-wrapper {
 							padding: 8px;
+						}
+						.focus-main-video {
+							border-radius: 8px;
 						}
 					}
 					
@@ -1731,10 +1896,12 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						bottom: 0;
 						left: 0;
 						right: 0;
-						padding: 12px 16px;
-						background: linear-gradient(transparent, rgba(0,0,0,0.8));
+						padding: 8px 16px;
+						height: 40px;
+						max-height: 40px;
+						background: linear-gradient(to top, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.3) 60%, transparent 100%);
 						display: flex;
-						align-items: center;
+						align-items: flex-end;
 						gap: 8px;
 						z-index: 15;
 					}
@@ -1748,73 +1915,46 @@ const VideoRoomContent = memo(function VideoRoomContent({
 					
 					@media (max-width: 768px) {
 						.focus-participant-name {
-							padding: 8px 12px;
+							padding: 6px 12px;
+							height: 32px;
+							max-height: 32px;
 						}
 						.focus-participant-name span {
 							font-size: 12px;
 						}
 					}
 					
-					
-					/* SCROLLBAR CUSTOMIZATION override */
-					.focus-thumbnails::-webkit-scrollbar {
-					width: 6px;
-				}
-				
-				.focus-thumbnails::-webkit-scrollbar-track {
-					background: transparent;
-				}
-				
-				.focus-thumbnails::-webkit-scrollbar-thumb {
-					background: rgba(255,255,255,0.3);
-					border-radius: 3px;
-				}
-				
-				@media (max-width: 768px) {
-					.focus-layout-container {
-						flex-direction: column;
-					}
-					.focus-thumbnails {
-						flex-direction: row;
-						width: 100%;
-						height: 100px;
-						min-height: 100px;
-						min-width: auto;
-						gap: 6px;
-						padding: 8px;
-						border-left: none;
-						border-bottom: 1px solid #333;
-						overflow-x: auto;
-						overflow-y: hidden;
-					}
+					/* Individual thumbnail */
 					.focus-thumbnail {
-						width: 178px !important;
-						min-width: 178px !important;
-						height: 100% !important;
-						min-height: auto !important;
-					}
-				}
-				
-				/* Individual thumbnail */
-				.focus-thumbnail {
-					position: relative;
-					width: 100%;
-					height: 150px;
-					min-height: 150px;
-					flex-shrink: 0;
-					border-radius: 8px;
-						border: 2px solid transparent;
+						position: relative;
+						width: 180px;
+						min-width: 180px;
+						display: flex;
+						flex-direction: column;
+						gap: 6px;
 						cursor: pointer;
+						transition: all 0.2s ease;
+						flex-shrink: 0;
+					}
+					
+					.focus-thumbnail-video-container {
+						position: relative;
+						width: 100%;
+						aspect-ratio: 16/9;
+						overflow: hidden;
+						background: #1a1a1a;
+						border: 2px solid rgba(255, 255, 255, 0.08);
+						border-radius: 12px;
 						transition: all 0.2s ease;
 					}
 					
-					.focus-thumbnail:hover {
-						border-color: rgba(255,255,255,0.5);
+					.focus-thumbnail:hover .focus-thumbnail-video-container {
+						border-color: rgba(255, 255, 255, 0.4);
 						transform: scale(1.02);
 					}
 					
-					.focus-thumbnail > div,
-					.focus-thumbnail .lk-participant-tile {
+					.focus-thumbnail-video-container > div,
+					.focus-thumbnail-video-container .lk-participant-tile {
 						width: 100% !important;
 						height: 100% !important;
 						position: absolute !important;
@@ -1822,53 +1962,43 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						left: 0 !important;
 					}
 					
-					.focus-thumbnail.speaking {
+					.focus-thumbnail.speaking .focus-thumbnail-video-container {
+						border-color: #00DC6E !important;
+						border-width: 2px;
+						box-shadow: 0 0 0 2px rgba(0, 220, 110, 0.4);
+						animation: pulse-border 2s ease-in-out infinite;
+					}
+					
+					.focus-thumbnail.pinned .focus-thumbnail-video-container {
+						border-color: #3b82f6 !important;
+						box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+					}
+					
+					.focus-thumbnail.active .focus-thumbnail-video-container {
 						border-color: #00DC6E;
 						box-shadow: 0 0 0 2px rgba(0, 220, 110, 0.3);
-					animation: pulse-border 2s ease-in-out infinite;
-				}
-				
-				.focus-thumbnail.pinned {
 					}
 					
-					.focus-thumbnail.active {
-						border-color: #008CD2;
-						box-shadow: 0 0 0 2px rgba(0, 140, 210, 0.3);
-					}
-					
-					/* Thumbnail name label */
+					/* Thumbnail name label (below video now) */
 					.focus-thumbnail-name {
-						position: absolute;
-						bottom: 0;
-						left: 0;
-						right: 0;
-						padding: 4px 6px;
-						background: linear-gradient(transparent, rgba(0,0,0,0.9));
-						z-index: 15;
+						display: flex;
+						align-items: center;
+						justify-content: center;
+						padding: 0 4px;
 					}
 					
 					.focus-thumbnail-name span {
-						color: white !important;
-						font-size: 10px;
+						color: rgba(255,255,255,0.6) !important;
+						font-size: 11px;
 						font-weight: 500;
-						display: block;
 						overflow: hidden;
 						text-overflow: ellipsis;
 						white-space: nowrap;
 					}
 					
-					@media (max-width: 768px) {
-						.focus-thumbnail {
-							width: 100px;
-							min-width: 100px;
-							border-radius: 6px;
-						}
-						.focus-thumbnail-name {
-							padding: 2px 4px;
-						}
-						.focus-thumbnail-name span {
-							font-size: 9px;
-						}
+					.focus-thumbnail.speaking .focus-thumbnail-name span {
+						color: #00DC6E !important;
+						font-weight: 600;
 					}
 					
 					/* Hide default LiveKit name in thumbnails (we use our own) */
@@ -1877,39 +2007,49 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						display: none !important;
 					}
 					
-					/* View More button in thumbnail strip */
+					/* "View All" button in thumbnail strip - Smaller */
 					.focus-view-more {
-		width: 100%;
-		min-height: 50px;
-				}
-
-				/* Custom Grid Layout - Fixed to prevent overlapping */
+						width: 36px;
+						min-width: 36px;
+						height: 36px;
+						flex-shrink: 0;
+						border-radius: 50%;
+						display: flex;
+						align-items: center;
+						justify-content: center;
+						background: rgba(30, 30, 30, 0.6);
+						border: 1px solid rgba(255, 255, 255, 0.1);
+						cursor: pointer;
+						transition: all 0.2s ease;
+						margin-left: 4px;
+					}
+					
+					.focus-view-more:hover {
+						background: rgba(50, 50, 50, 0.9);
+						border-color: rgba(255,255,255,0.3);
+						transform: scale(1.05);
+					}
+					.custom-grid {
 						display: grid;
 						gap: 12px;
-						height: 100%;
-						width: 100%;
-						padding: 12px;
-						align-content: center;
-						justify-content: center;
-						overflow: hidden;
-					}
-		
-		.custom-grid-tile.speaking {
-			border: 3px solid #00DC6E !important;
-			box-shadow: 0 0 0 2px rgba(0, 220, 110, 0.3);
-			animation: pulse-border 2s ease-in-out infinite;
-		}
-		
-		@keyframes pulse-border {
-			0%, 100% {
-				box-shadow: 0 0 0 2px rgba(0, 220, 110, 0.3);
-			}
-			50% {
-				box-shadow: 0 0 0 4px rgba(0, 220, 110, 0.5);
-			}
-		}
+										height: 90%;
+										width: 100%;
+										max-width: 100%;
+										padding: 16px;
+										align-items: stretch;
+										justify-items: stretch;
+										overflow: hidden;
+										box-sizing: border-box;
+										margin: auto;
+						grid-template-columns: minmax(0, 900px);
 						grid-template-rows: minmax(0, 1fr);
-						max-height: 60%;
+						justify-content: center;
+					}
+					
+					/* 2 participants - side by side */
+					.custom-grid[data-count="2"] {
+						grid-template-columns: repeat(2, minmax(0, 1fr));
+						grid-template-rows: minmax(0, 1fr);
 					}
 					
 					/* 3-4 participants - 2x2 grid */
@@ -1926,7 +2066,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						grid-template-rows: repeat(2, minmax(0, 1fr));
 					}
 					
-					/* 7+ participants - 3x3 or more */
+					/* 7-9 participants - 3x3 grid */
 					.custom-grid[data-count="7"],
 					.custom-grid[data-count="8"],
 					.custom-grid[data-count="9"] {
@@ -1934,10 +2074,13 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						grid-template-rows: repeat(3, minmax(0, 1fr));
 					}
 					
-					/* Fallback for many participants */
-					.custom-grid {
-						grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-						grid-auto-rows: minmax(150px, 1fr);
+					@keyframes pulse-border {
+						0%, 100% {
+							box-shadow: 0 0 0 2px rgba(0, 220, 110, 0.3);
+						}
+						50% {
+							box-shadow: 0 0 0 4px rgba(0, 220, 110, 0.5);
+						}
 					}
 					
 					@media (max-width: 768px) {
@@ -1948,9 +2091,15 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						
 						.custom-grid[data-count="1"] {
 							grid-template-columns: 1fr;
+							max-height: 100%;
 						}
 						
-						.custom-grid[data-count="2"],
+						.custom-grid[data-count="2"] {
+							grid-template-columns: 1fr;
+							grid-template-rows: repeat(2, minmax(0, 1fr));
+							max-height: 100%;
+						}
+						
 						.custom-grid[data-count="3"],
 						.custom-grid[data-count="4"] {
 							grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1964,25 +2113,33 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						}
 					}
 					
-					@media (max-width: 480px) {
-						.custom-grid[data-count="2"] {
-							grid-template-columns: 1fr;
-							grid-template-rows: repeat(2, minmax(0, 1fr));
-						}
-					}
-					
+					/* Grid tile styling */
 					.custom-grid-tile {
-						position: relative;
 						width: 100%;
 						height: 100%;
+						max-width: 100%;
+						max-height: 100%;
 						min-height: 0;
 						min-width: 0;
+						display: flex;
+						flex-direction: column;
+						gap: 4px;
+						overflow: hidden;
+					}
+					
+					.custom-grid-tile-content {
+						position: relative;
+						width: 100%;
+						flex: 1;
+						min-height: 0;
 						border-radius: 16px;
 						overflow: hidden;
-						background: #2d2d2d;
-					border: 2px solid transparent;
-					transition: all 0.2s ease;
-					.custom-grid-tile > div:first-child {
+						background: #1a1a1a;
+						border: 2px solid transparent;
+						transition: all 0.2s ease;
+					}
+					
+					.custom-grid-tile-content > div:first-child {
 						position: absolute !important;
 						top: 0 !important;
 						left: 0 !important;
@@ -1992,8 +2149,22 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						height: 100% !important;
 					}
 					
-					.custom-grid-tile.speaking {
-						box-shadow: 0 0 0 3px #00DC6E;
+					/* Ensure video fills height and adjusts width proportionally */
+					.custom-grid-tile-content video {
+						object-fit: contain !important;
+						width: 100% !important;
+						height: 100% !important;
+					}
+					
+					.custom-grid-tile-content.speaking {
+						border-color: #00DC6E !important;
+						border-width: 3px;
+						box-shadow: 0 0 0 2px rgba(0, 220, 110, 0.3);
+						animation: pulse-border 2s ease-in-out infinite;
+					}
+					
+					.custom-grid-tile-content:hover {
+						border-color: rgba(255, 255, 255, 0.3);
 					}
 					
 					/* Custom Scrollbar for Sidebar */
@@ -2025,157 +2196,242 @@ const VideoRoomContent = memo(function VideoRoomContent({
 					{/* Layout rendering */}
 					{layoutMode === 'focus' ? (
 						<div className="focus-layout-container">
-							{/* Thumbnail strip at TOP - Zoom Style */}
-							<div className="focus-thumbnails">
-								{sortedCameraTracks.map((track) => {
-									const isActive = focusedTrack?.participant?.identity === track.participant.identity && !isScreenShareFocused
-									const isLocal = track.participant.isLocal
-									const isMuted = !track.participant.isMicrophoneEnabled
-									return (
-										<div 
-											key={`thumb-${track.participant.identity}`}
-											className={`focus-thumbnail ${
-												track.participant.isSpeaking ? 'speaking' : ''
-											} ${
-												pinnedParticipantId === track.participant.identity ? 'pinned' : ''
-											} ${isActive ? 'active' : ''} ${isLocal ? 'local' : ''}`}
-											onClick={() => handleThumbnailClick(track.participant.identity)}
+							{/* Thumbnail strip at TOP with Scroll Buttons */}
+							{!isExpandedView && (
+							<div className="focus-thumbnails-wrapper">
+								{/* Left Scroll Button */}
+								<button 
+									className={`focus-scroll-btn left ${!canScrollLeft ? 'opacity-0 pointer-events-none' : ''}`}
+									onClick={() => scrollThumbnails('left')}
+									disabled={!canScrollLeft}
+								>
+									<ChevronLeft className="w-5 h-5" />
+								</button>
+
+								<div className="focus-thumbnails" ref={thumbnailsRef}>
+									{sortedCameraTracks
+										.filter((track) => {
+											// Exclude the focused participant from thumbnails to avoid showing them twice
+											const isFocused = focusedTrack?.participant?.identity === track.participant.identity
+											return !isFocused || isScreenShareFocused
+										})
+										.map((track) => {
+										const isLocal = track.participant.isLocal
+										const isMuted = !track.participant.isMicrophoneEnabled
+										const hasVideo = isTrackReference(track) && track.publication?.track
+										const avatarUrl = getParticipantAvatar(track.participant)
+										const name = track.participant.isLocal ? 'You' : (track.participant.name || track.participant.identity)
+										
+										return (
+											<div 
+												key={`thumb-${track.participant.identity}`}
+												className={`focus-thumbnail ${
+													track.participant.isSpeaking ? 'speaking' : ''
+												} ${
+													pinnedParticipantId === track.participant.identity ? 'pinned' : ''
+												}`}
+												onClick={() => handleThumbnailClick(track.participant.identity)}
+											>
+												{/* Video/Avatar Container */}
+												<div className="focus-thumbnail-video-container">
+													{/* Avatar background layer - always visible */}
+													<div className="absolute inset-0 flex items-center justify-center bg-gradient-to-b from-[#2a2a2a] to-[#1f1f1f] z-[1]">
+														{avatarUrl ? (
+															<Image
+																src={avatarUrl}
+																alt={track.participant.name || 'Participant'}
+																width={40}
+																height={40}
+																className="w-10 h-10 rounded-full object-cover"
+															/>
+														) : (
+															<div className="w-10 h-10 rounded-full bg-gradient-to-b from-[#404040] to-[#303030] flex items-center justify-center">
+																<User className="w-5 h-5 text-[#666]" />
+															</div>
+														)}
+													</div>
+													{/* Video layer on top - ONLY render when there's actual video track */}
+													{hasVideo && (
+														<div className="absolute inset-0 z-[2]">
+															<VideoTrack 
+																trackRef={track} 
+																className={`w-full h-full object-cover ${isLocal ? 'scale-x-[-1]' : ''}`} 
+															/>
+														</div>
+													)}
+												</div>
+												
+												{/* Name below video */}
+												<div className="focus-thumbnail-name">
+													<span>{name}</span>
+													{track.participant.isSpeaking && (
+														<div className="w-1.5 h-1.5 rounded-full bg-[#00DC6E] animate-pulse ml-1.5" />
+													)}
+												</div>
+											</div>
+										)
+									})}
+									{/* View All button - switch to grid view */}
+									{sortedCameraTracks.length > 1 && (
+										<button
+											onClick={() => setLayoutMode('grid')}
+											className="focus-view-more"
+											title="View All"
 										>
-											{/* Avatar background layer - always visible */}
-											<div className="absolute inset-0 flex items-center justify-center bg-[#3d3d3d] z-[1]">
-												<div className="w-10 h-10 rounded-full bg-[#555] flex items-center justify-center">
-													<User className="w-6 h-6 text-[#888]" />
-												</div>
-											</div>
-											{/* Video layer on top - ONLY render when there's actual video track */}
-											{isTrackReference(track) && track.publication?.track && (
-												<div className="absolute inset-0 z-[2]">
-													<VideoTrack 
-														trackRef={track} 
-														className={`w-full h-full object-cover ${isLocal ? 'scale-x-[-1]' : ''}`} 
-													/>
-												</div>
-											)}
-											{/* Mute indicator icon (top right) */}
-											{isMuted && (
-												<div className="absolute top-1 right-1 bg-black/70 px-1.5 py-1 rounded flex items-center z-20" title="Muted">
-													<MicOff className="h-3 w-3 text-red-500" />
-												</div>
-											)}
-											{/* Name label with pin indicator text */}
-											<div className="focus-thumbnail-name">
-												<span>{isLocal ? 'You' : (track.participant.name || track.participant.identity?.slice(0, 10))}</span>
-												{pinnedParticipantId === track.participant.identity && (
-													<Pin className="h-2.5 w-2.5 text-[#00DC6E] ml-1 inline" />
-												)}
-											</div>
-										</div>
-									)
-								})}
-								{/* View More button - switch to grid view */}
-								{sortedCameraTracks.length > 0 && (
-									<button
-										onClick={() => setLayoutMode('grid')}
-										className="focus-view-more flex-shrink-0 px-4 h-full flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors cursor-pointer border-none"
-									>
-										<Grid2X2 className="h-4 w-4 text-white" />
-										<span className="text-white text-xs font-medium whitespace-nowrap">View All</span>
-									</button>
-								)}
+											<Grid2X2 className="h-4 w-4 text-white/80" />
+											<span className="sr-only">View All</span>
+										</button>
+									)}
+								</div>
+
+								{/* Right Scroll Button */}
+								<button 
+									className={`focus-scroll-btn right ${!canScrollRight ? 'opacity-0 pointer-events-none' : ''}`}
+									onClick={() => scrollThumbnails('right')}
+									disabled={!canScrollRight}
+								>
+									<ChevronRight className="w-5 h-5" />
+								</button>
 							</div>
+							)}
 
 							{/* Main focused video wrapper - centers the video */}
 							<div className="focus-main-wrapper">
 								{focusedTrack ? (
-									<div className={`focus-main-video relative group`}>
-												{/* Always show avatar background */}
-												<div className="absolute inset-0 flex items-center justify-center bg-[#2d2d2d] z-[1]">
-													<div className="w-24 h-24 rounded-full bg-[#444] flex items-center justify-center">
-														<User className="w-14 h-14 text-[#888]" />
-													</div>
-												</div>
-												{/* Video layer on top - ONLY render when there's actual video track */}
-												{isTrackReference(focusedTrack) && (isScreenShareFocused || focusedTrack.publication?.track) && (
-													<div className="absolute inset-0 z-[2]">
-														<VideoTrack 
-															trackRef={focusedTrack} 
-															className={`w-full h-full object-contain ${focusedTrack.participant.isLocal && !isScreenShareFocused ? 'scale-x-[-1]' : ''}`} 
+									<div className="flex flex-col w-full h-full max-h-full">
+										<div className={`focus-main-video relative group flex-1 min-h-0`}>
+											{/* Always show avatar background */}
+											<div className="absolute inset-0 flex items-center justify-center bg-gradient-to-b from-[#252525] to-[#1a1a1a] z-[1]">
+												{(() => {
+													const avatarUrl = getParticipantAvatar(focusedTrack.participant)
+													return avatarUrl ? (
+														<Image
+															src={avatarUrl}
+															alt={focusedTrack.participant.name || 'Participant'}
+															width={112}
+															height={112}
+															className="w-28 h-28 rounded-full object-cover shadow-2xl"
 														/>
+													) : (
+														<div className="w-28 h-28 rounded-full bg-gradient-to-b from-[#3a3a3a] to-[#2a2a2a] flex items-center justify-center shadow-2xl">
+															<User className="w-14 h-14 text-[#555]" />
+														</div>
+													)
+												})()}
+											</div>
+											{/* Video layer on top - ONLY render when there's actual video track */}
+											{isTrackReference(focusedTrack) && (isScreenShareFocused || focusedTrack.publication?.track) && (
+												<div className="absolute inset-0 z-[2]">
+													<VideoTrack 
+														trackRef={focusedTrack} 
+														className={`w-full h-full object-contain ${focusedTrack.participant.isLocal && !isScreenShareFocused ? 'scale-x-[-1]' : ''}`} 
+													/>
+												</div>
+											)}
+											
+											{/* Audio/Video status icons in top-right corner */}
+											<div className="absolute top-4 right-4 flex items-center gap-2 z-20">
+												{!focusedTrack.participant.isMicrophoneEnabled && (
+													<div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center" title="Muted">
+														<MicOff className="h-4 w-4 text-white" />
 													</div>
 												)}
-												{/* Participant name overlay at bottom - Zoom Style Floating Pill */}
-												<div className="focus-participant-name" style={{background: 'transparent', padding: 0, left: '16px', bottom: '16px', width: 'auto', right: 'auto'}}>
-													<div className="bg-black/60 backdrop-blur-sm px-3 py-1.5 rounded-md flex items-center gap-2">
-
-														{isScreenShareFocused && (
-															<span className="text-white/60 text-xs ml-1">(Screen Share)</span>
-														)}
+												{!focusedTrack.participant.isCameraEnabled && !isScreenShareFocused && (
+													<div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center" title="Camera off">
+														<VideoOff className="h-4 w-4 text-white" />
 													</div>
+												)}
+											</div>
+											
+											{/* Pin/Unpin button overlay - Top Left */}
+											{!isScreenShareFocused && (
+												<div className="absolute top-4 left-4 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+													<Button
+														variant="ghost"
+														size="sm"
+														onClick={togglePinFocused}
+														className={`h-9 px-4 rounded-lg border ${
+															pinnedParticipantId === focusedTrack?.participant?.identity
+																? 'bg-[#3b82f6] text-white hover:bg-[#2563eb] border-[#3b82f6]'
+																: 'bg-black/60 text-white hover:bg-black/80 border-white/10 backdrop-blur-sm'
+														}`}
+														title={pinnedParticipantId === focusedTrack?.participant?.identity ? 'Unpin' : 'Pin this video'}
+													>
+														{pinnedParticipantId === focusedTrack?.participant?.identity ? (
+															<>
+																<PinOff className="h-4 w-4 mr-1.5" /> Unpin
+															</>
+														) : (
+															<>
+																<Pin className="h-4 w-4 mr-1.5" /> Pin
+															</>
+														)}
+													</Button>
 												</div>
-												
-												{/* Audio/Video status icons in top-right corner (like Zoom) */}
-												<div className="absolute top-4 right-4 flex items-center gap-2 z-20">
-													{!focusedTrack.participant.isMicrophoneEnabled && (
-														<div className="bg-black/70 px-2 py-1 rounded flex items-center gap-1" title="Muted">
-															<MicOff className="h-4 w-4 text-red-500" />
-														</div>
-													)}
-													{!focusedTrack.participant.isCameraEnabled && !isScreenShareFocused && (
-														<div className="bg-black/70 px-2 py-1 rounded flex items-center gap-1" title="Camera off">
-															<VideoOff className="h-4 w-4 text-red-500" />
-														</div>
-													)}
+											)}
+											
+											{/* Screen Share indicator badge */}
+											{isScreenShareFocused && (
+												<div className="absolute top-4 left-4 flex items-center gap-1.5 bg-[#3b82f6] text-white text-xs px-3 py-1.5 rounded-lg z-10 font-medium backdrop-blur-sm border border-blue-400/30">
+													<MonitorUp className="h-3.5 w-3.5" />
+													<span>Screen Share</span>
 												</div>
-										
-										{/* Pin/Unpin button overlay - Top Left */}
-										{!isScreenShareFocused && (
-											<div className="absolute top-4 left-4 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+											)}
+											
+											{/* Expand/Collapse button - Bottom Right */}
+											<div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity z-20">
 												<Button
 													variant="ghost"
 													size="sm"
-													onClick={togglePinFocused}
-													className={`h-8 px-3 rounded-md border border-white/10 ${
-														pinnedParticipantId === focusedTrack?.participant?.identity
-															? 'bg-[#00DC6E] text-white hover:bg-[#00b058]'
-															: 'bg-black/60 text-white hover:bg-black/80'
-													}`}
-													title={pinnedParticipantId === focusedTrack?.participant?.identity ? 'Unpin' : 'Pin this video'}
+													onClick={() => setIsExpandedView(!isExpandedView)}
+													className="h-10 w-10 rounded-xl bg-black/60 text-white hover:bg-black/80 border border-white/10 backdrop-blur-sm flex items-center justify-center"
+													title={isExpandedView ? 'Show participants' : 'Expand video'}
 												>
-													{pinnedParticipantId === focusedTrack?.participant?.identity ? (
-														<>
-															<PinOff className="h-4 w-4 mr-1.5" /> Unpin
-														</>
-													) : (
-														<>
-															<Pin className="h-4 w-4 mr-1.5" /> Pin
-														</>
-													)}
+													{isExpandedView ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
 												</Button>
 											</div>
-										)}
+										</div>
 										
-										{/* Screen Share indicator badge */}
-										{isScreenShareFocused && (
-											<div className="absolute top-4 left-4 flex items-center gap-1.5 bg-[#008CD2] text-white text-xs px-3 py-1.5 rounded-md z-10 font-medium">
-												<MonitorUp className="h-3.5 w-3.5" />
-												<span>Viewing Screen Share</span>
+										{/* Participant name bar below video */}
+										<div className="h-10 shrink-0 flex items-center justify-between px-2 pt-1.5">
+											<div className="flex items-center gap-2">
+												<span className="text-white text-sm font-medium">
+													{focusedTrack.participant.isLocal ? 'You' : (focusedTrack.participant.name || focusedTrack.participant.identity)}
+												</span>
+												{focusedTrack.participant.isSpeaking && (
+													<div className="flex items-center gap-1.5 ml-1">
+														<div className="w-1.5 h-1.5 rounded-full bg-[#00DC6E] animate-pulse" />
+													</div>
+												)}
+												{isScreenShareFocused && (
+													<span className="text-white/60 text-xs ml-1">(Screen)</span>
+												)}
 											</div>
-										)}
+										</div>
 									</div>
 								) : (
 									<div className="focus-main-video flex items-center justify-center">
-										<div className="flex flex-col items-center gap-3">
-											<div className="w-20 h-20 rounded-full bg-[#444] flex items-center justify-center">
-												<User className="w-12 h-12 text-[#888]" />
+										<div className="flex flex-col items-center gap-6 animate-in fade-in duration-700">
+											<div className="relative">
+												<div className="absolute inset-0 bg-[#00DC6E]/20 rounded-full blur-xl animate-pulse" />
+												<div className="w-24 h-24 rounded-full bg-gradient-to-b from-[#3a3a3a] to-[#2a2a2a] flex items-center justify-center shadow-2xl relative border border-white/5">
+													<User className="w-10 h-10 text-white/40" />
+												</div>
+												{/* Decorative rings */}
+												<div className="absolute inset-[-12px] border border-white/5 rounded-full animate-[spin_8s_linear_infinite]" style={{ borderTopColor: 'rgba(255,255,255,0.1)' }} />
+												<div className="absolute inset-[-24px] border border-white/5 rounded-full animate-[spin_12s_linear_infinite_reverse]" style={{ borderBottomColor: 'rgba(255,255,255,0.05)' }} />
 											</div>
-											<p className="text-white/50 text-sm">No participant selected</p>
+											<div className="text-center space-y-2">
+												<h3 className="text-white font-medium text-lg">Waiting for others</h3>
+												<p className="text-white/40 text-sm max-w-[200px]">You are the only one here. Invite others to join the session.</p>
+											</div>
 										</div>
 									</div>
 								)}
 							</div>
 						</div>
 					) : (
-						<div className="grid-mode h-full w-full p-2">
+						<div className="grid-mode h-full w-full">
 							{/* Custom Grid layout with pin buttons */}
 							<div className="custom-grid" data-count={Math.min(sortedCameraTracks.length, 9)}>
 								{sortedCameraTracks.map((track) => {
@@ -2183,60 +2439,77 @@ const VideoRoomContent = memo(function VideoRoomContent({
 									const hasVideo = isTrackReference(track) && track.publication?.track
 									const isMuted = !track.participant.isMicrophoneEnabled
 									const isVideoOff = !track.participant.isCameraEnabled
+									const avatarUrl = getParticipantAvatar(track.participant)
 									return (
 										<div 
 											key={`grid-${track.participant.identity}`}
-											className={`custom-grid-tile group ${track.participant.isSpeaking ? 'speaking' : ''}`}
+											className={`custom-grid-tile group`}
 										>
-											{/* Avatar background layer - always visible */}
-											<div className="absolute inset-0 flex items-center justify-center bg-[#2d2d2d] z-[1]">
-												<div className="w-16 h-16 rounded-full bg-[#444] flex items-center justify-center">
-													<User className="w-10 h-10 text-[#888]" />
+											<div className={`custom-grid-tile-content ${track.participant.isSpeaking ? 'speaking' : ''}`}>
+												{/* Avatar background layer - always visible */}
+												<div className="absolute inset-0 flex items-center justify-center bg-gradient-to-b from-[#252525] to-[#1a1a1a] z-[1]">
+													{avatarUrl ? (
+														<Image
+															src={avatarUrl}
+															alt={track.participant.name || 'Participant'}
+															width={80}
+															height={80}
+															className="w-20 h-20 rounded-full object-cover shadow-lg"
+														/>
+													) : (
+														<div className="w-20 h-20 rounded-full bg-gradient-to-b from-[#3a3a3a] to-[#2a2a2a] flex items-center justify-center shadow-lg">
+															<User className="w-10 h-10 text-[#666]" />
+														</div>
+													)}
 												</div>
+												{/* Video layer on top - ONLY render when there's actual video track */}
+												{hasVideo && (
+													<div className="absolute inset-0 z-[2] flex items-center justify-center">
+														<VideoTrack 
+															trackRef={track} 
+															className={`w-full h-full object-contain ${isLocal ? 'scale-x-[-1]' : ''}`} 
+														/>
+													</div>
+												)}
+												{/* Pin button overlay */}
+												<button
+													onClick={(e) => {
+														e.stopPropagation()
+														pinAndSwitchToPresenter(track.participant.identity)
+													}}
+													className="absolute top-3 right-3 w-8 h-8 bg-black/60 hover:bg-black/80 backdrop-blur-sm rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all z-20 border border-white/10"
+													title="Pin and switch to speaker view"
+												>
+													<Pin className="h-4 w-4 text-white" />
+												</button>
+												{/* Speaking indicator */}
+												{track.participant.isSpeaking && (
+													<div className="absolute top-3 left-3 flex items-center gap-1.5 bg-[#00DC6E]/90 backdrop-blur-sm px-2 py-1 rounded-full z-20">
+														<div className="w-2 h-2 rounded-full bg-white animate-pulse" />
+														<span className="text-white text-[10px] font-medium">Speaking</span>
+													</div>
+												)}
 											</div>
-											{/* Video layer on top - ONLY render when there's actual video track */}
-											{hasVideo && (
-												<div className="absolute inset-0 z-[2]">
-													<VideoTrack 
-														trackRef={track} 
-														className={`w-full h-full object-cover ${isLocal ? 'scale-x-[-1]' : ''}`} 
-													/>
-												</div>
-											)}
-											{/* Pin button overlay */}
-											<button
-												onClick={(e) => {
-													e.stopPropagation()
-													pinAndSwitchToPresenter(track.participant.identity)
-												}}
-												className="absolute top-2 right-2 w-8 h-8 bg-black/60 hover:bg-black/80 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20"
-												title="Pin and switch to presenter view"
-											>
-												<Pin className="h-4 w-4 text-white" />
-											</button>
-											{/* Speaking indicator */}
-											{track.participant.isSpeaking && (
-												<div className="absolute top-2 left-2 w-3 h-3 rounded-full bg-[#00DC6E] animate-pulse z-20" />
-											)}
-											{/* Bottom bar with name and audio/video status (like Zoom) */}
-											<div className="absolute bottom-0 left-0 right-0 flex items-center justify-between px-3 py-2 bg-gradient-to-t from-black/80 to-transparent z-20">
-												<span className="text-white text-sm font-medium truncate max-w-[70%]">
+											
+											{/* Bottom bar with name and audio/video status - NOW BELOW THE VIDEO */}
+											<div className="flex items-center justify-between px-2 pt-1 h-8 shrink-0">
+												<span className="text-white text-sm font-medium truncate max-w-[65%]">
 													{isLocal ? 'You' : (track.participant.name || track.participant.identity)}
 												</span>
 												<div className="flex items-center gap-1.5">
 													{/* Mic status icon */}
 													{isMuted ? (
-														<div className="w-6 h-6 rounded-full bg-red-500/90 flex items-center justify-center" title="Muted">
+														<div className="w-6 h-6 rounded-full bg-red-500 flex items-center justify-center" title="Muted">
 															<MicOff className="h-3.5 w-3.5 text-white" />
 														</div>
 													) : (
-														<div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center" title="Unmuted">
+														<div className="w-6 h-6 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center" title="Unmuted">
 															<Mic className="h-3.5 w-3.5 text-white" />
 														</div>
 													)}
 													{/* Video status icon */}
 													{isVideoOff && (
-														<div className="w-6 h-6 rounded-full bg-red-500/90 flex items-center justify-center" title="Camera off">
+														<div className="w-6 h-6 rounded-full bg-red-500 flex items-center justify-center" title="Camera off">
 															<VideoOff className="h-3.5 w-3.5 text-white" />
 														</div>
 													)}
@@ -2252,15 +2525,15 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				</div>
 			</div>
 
-			{/* Zoom-Style Bottom Control Bar */}
+			{/* Zoom-Style Bottom Control Bar - Floating Island */}
 			<div 
-				className={`fixed bottom-0 left-0 right-0 flex items-center justify-between px-4 h-[72px] bg-[#1a1a1a] border-t border-black/20 z-[50] transition-all duration-300`} 
+				className={`fixed left-4 right-4 md:left-1/2 md:-translate-x-1/2 md:w-fit md:min-w-[500px] flex items-center justify-between px-4 py-3 bg-[#141414]/90 backdrop-blur-xl border border-white/10 shadow-2xl z-[50] transition-all duration-300 rounded-2xl gap-4 md:gap-8 ${isUserActive ? 'bottom-6 opacity-100' : 'bottom-[-100px] opacity-0'}`} 
 			>
-				{/* LEFT: Audio/Video Controls - Vertical Stack */}
-				<div className="flex items-center gap-2 md:gap-4">
+				{/* LEFT: Audio/Video Controls - Horizontal Group */}
+				<div className="flex items-center gap-2 md:gap-3">
 					{/* Audio Button Stack */}
-					<div className="flex flex-col items-center justify-center min-w-[60px] group">
-						<div className="flex items-center gap-0.5">
+					<div className="flex flex-col items-center justify-center group relative">
+						<div className="flex items-center bg-white/5 rounded-xl p-1 border border-white/5">
 							<button
 								onClick={async () => {
 									try {
@@ -2275,20 +2548,17 @@ const VideoRoomContent = memo(function VideoRoomContent({
 										await participant.setMicrophoneEnabled(newState)
 									} catch {}
 								}}
-								className="h-9 w-9 flex items-center justify-center rounded-xl hover:bg-white/10 transition-colors"
+								className={`h-10 w-10 flex items-center justify-center rounded-lg hover:bg-white/10 transition-colors ${(room?.localParticipant?.isMicrophoneEnabled ?? isMicrophoneEnabled) ? 'text-white' : 'bg-red-500/10 text-red-500'}`}
+								title="Toggle Microphone"
 							>
-								{(room?.localParticipant?.isMicrophoneEnabled ?? isMicrophoneEnabled) ? <Mic className="h-5 w-5 text-white" /> : <MicOff className="h-5 w-5 text-red-500" />}
-							</button>
-							<button className="h-9 w-5 flex items-center justify-center rounded-xl hover:bg-white/10 transition-colors cursor-pointer">
-								<ChevronUp className="h-3 w-3 text-white/90" />
+								{(room?.localParticipant?.isMicrophoneEnabled ?? isMicrophoneEnabled) ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />}
 							</button>
 						</div>
-						<span className="text-[10px] text-white/90 mt-0.5">Audio</span>
 					</div>
 
 					{/* Video Button Stack */}
-					<div className="flex flex-col items-center justify-center min-w-[60px] group">
-						<div className="flex items-center gap-0.5">
+					<div className="flex flex-col items-center justify-center group relative">
+						<div className="flex items-center bg-white/5 rounded-xl p-1 border border-white/5">
 							<button
 								onClick={async () => {
 									try {
@@ -2302,53 +2572,28 @@ const VideoRoomContent = memo(function VideoRoomContent({
 										await participant.setCameraEnabled(newState)
 									} catch (_err) {}
 								}}
-								className="h-9 w-9 flex items-center justify-center rounded-xl hover:bg-white/10 transition-colors"
+								className={`h-10 w-10 flex items-center justify-center rounded-lg hover:bg-white/10 transition-colors ${(room?.localParticipant?.isCameraEnabled ?? isCameraEnabled) ? 'text-white' : 'bg-red-500/10 text-red-500'}`}
+								title="Toggle Camera"
 							>
-								{(room?.localParticipant?.isCameraEnabled ?? isCameraEnabled) ? <Video className="h-5 w-5 text-white" /> : <VideoOff className="h-5 w-5 text-red-500" />}
+								{(room?.localParticipant?.isCameraEnabled ?? isCameraEnabled) ? <Video className="h-5 w-5" /> : <VideoOff className="h-5 w-5" />}
 							</button>
+							<div className="w-px h-6 bg-white/10 mx-1" />
 							<button 
 								onClick={() => setShowBackgroundMenu(!showBackgroundMenu)}
-								className="h-9 w-5 flex items-center justify-center rounded-xl hover:bg-white/10 transition-colors cursor-pointer"
+								className="h-10 w-6 flex items-center justify-center rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+								title="Video Settings"
 							>
-								<ChevronUp className="h-3 w-3 text-white/90" />
+								<ChevronUp className="h-3 w-3 text-white/70" />
 							</button>
 						</div>
-						<span className="text-[10px] text-white/90 mt-0.5">Video</span>
 					</div>
 				</div>
 
-				{/* CENTER: Meeting Controls - Vertical Stack */}
-				<div className="flex items-center gap-3 md:gap-6">
+				{/* CENTER: Main Controls */}
+				<div className="flex items-center gap-2 md:gap-3 flex-1 justify-center">
 					
-					{/* Participants */}
-					<div className="flex flex-col items-center justify-center min-w-[60px] group">
-						<button
-							onClick={() => setShowParticipants(!showParticipants)}
-							className={`h-9 w-9 flex items-center justify-center rounded-xl hover:bg-white/10 transition-colors relative mb-0.5 ${showParticipants ? 'bg-white/10 text-[#00DC6E]' : 'text-white'}`}
-						>
-							<Users className="h-5 w-5" />
-							{allParticipants && allParticipants.length > 0 && (
-								<span className="absolute -top-1 -right-1 bg-[#3d3d3d] text-white text-[9px] font-bold px-1 rounded-full min-w-[16px] h-4 flex items-center justify-center border border-[#1a1a1a]">
-									{allParticipants.length}
-								</span>
-							)}
-						</button>
-						<span className="text-[10px] text-white/90 mt-0.5">Participants</span>
-					</div>
-
-					{/* Chat */}
-					<div className="flex flex-col items-center justify-center min-w-[60px] group">
-						<button
-							onClick={() => setShowChat(!showChat)}
-							className={`h-9 w-9 flex items-center justify-center rounded-xl hover:bg-white/10 transition-colors relative mb-0.5 ${showChat ? 'bg-white/10 text-[#00DC6E]' : 'text-white'}`}
-						>
-							<MessageSquare className="h-5 w-5" />
-						</button>
-						<span className="text-[10px] text-white/90 mt-0.5">Chat</span>
-					</div>
-
 					{/* Share Screen */}
-					<div className="hidden md:flex flex-col items-center justify-center min-w-[60px] group">
+					<div className="hidden md:flex flex-col items-center justify-center group">
 						<button
 							onClick={async () => {
 								try {
@@ -2356,60 +2601,108 @@ const VideoRoomContent = memo(function VideoRoomContent({
 									await localParticipant?.setScreenShareEnabled(newState)
 								} catch {}
 							}}
-							className={`h-9 w-9 flex items-center justify-center rounded-xl hover:bg-white/10 transition-colors mb-0.5 ${isScreenShareEnabled ? 'text-[#00DC6E]' : 'text-white'}`}
+							className={`h-11 w-11 flex items-center justify-center rounded-xl hover:bg-white/10 transition-all ${isScreenShareEnabled ? 'bg-[#00DC6E]/20 text-[#00DC6E]' : 'text-white/80 hover:text-white'}`}
+							title="Share Screen"
 						>
 							{isScreenShareEnabled ? <MonitorOff className="h-5 w-5 font-bold" /> : <MonitorUp className="h-5 w-5" />}
 						</button>
-						<span className="text-[10px] text-white/90 mt-0.5">Share</span>
+					</div>
+
+					{/* Chat */}
+					<div className="flex flex-col items-center justify-center group">
+						<button
+							onClick={() => {
+								if (!showChat) setShowParticipants(false)
+								setShowChat(!showChat)
+							}}
+							className={`h-11 w-11 flex items-center justify-center rounded-xl hover:bg-white/10 transition-all relative ${showChat ? 'bg-white/10 text-[#00DC6E]' : 'text-white/80 hover:text-white'}`}
+							title="Chat"
+						>
+							<MessageSquare className="h-5 w-5" />
+						</button>
+					</div>
+
+					{/* Participants */}
+					<div className="flex flex-col items-center justify-center group">
+						<button
+							onClick={() => {
+								if (!showParticipants) setShowChat(false)
+								setShowParticipants(!showParticipants)
+							}}
+							className={`h-11 w-11 flex items-center justify-center rounded-xl hover:bg-white/10 transition-all relative ${showParticipants ? 'bg-white/10 text-[#00DC6E]' : 'text-white/80 hover:text-white'}`}
+							title="Participants"
+						>
+							<Users className="h-5 w-5" />
+							{allParticipants && allParticipants.length > 0 && (
+								<span className="absolute -top-1 -right-1 bg-[#00DC6E] text-white text-[9px] font-bold px-1.5 rounded-full min-w-[16px] h-[16px] flex items-center justify-center border-2 border-[#141414]">
+									{allParticipants.length}
+								</span>
+							)}
+						</button>
 					</div>
 					
 					{/* PiP */}
-					<div className="hidden md:flex flex-col items-center justify-center min-w-[60px] group">
+					<div className="hidden md:flex flex-col items-center justify-center group">
 						<button
 							onClick={togglePiP}
-							className={`h-9 w-9 flex items-center justify-center rounded-xl hover:bg-white/10 transition-colors mb-0.5 ${isPiPActive ? 'text-[#00DC6E]' : 'text-white'}`}
+							className={`h-11 w-11 flex items-center justify-center rounded-xl hover:bg-white/10 transition-all ${isPiPActive ? 'bg-white/10 text-[#00DC6E]' : 'text-white/80 hover:text-white'}`}
+							title="Picture in Picture"
 						>
 							<PictureInPicture2 className="h-5 w-5" />
 						</button>
-						<span className="text-[10px] text-white/90 mt-0.5">PiP</span>
 					</div>
 
-					{/* Extend Session */}
-					<div className="relative flex flex-col items-center justify-center min-w-[60px] group">
+					{/* Extend Session - Only show if timer is enabled AND user is host */}
+					{timerEnabled && isHost && (
+					<div className="relative flex flex-col items-center justify-center group">
 						<button
 						onClick={(e) => {
 							e.stopPropagation();
 							setShowExtendMenu(!showExtendMenu);
 						}}
-						className="h-9 w-9 flex items-center justify-center rounded-xl hover:bg-white/10 transition-colors mb-0.5 text-white"
+						className="h-11 w-11 flex items-center justify-center rounded-xl hover:bg-white/10 transition-all text-white/80 hover:text-white"
+						title="Extend Session"
 					>
 						<Timer className="h-5 w-5" />
 					</button>
-					<span className="text-[10px] text-white/90 mt-0.5">Extend</span>
 					
-					{showExtendMenu && (
+							{showExtendMenu && (
 						<div 
-							className="absolute bottom-full mb-2 right-1/2 translate-x-1/2 bg-[#1a1a1a] rounded-lg shadow-xl border border-white/10 py-1 min-w-[140px] z-50"
+							className="absolute bottom-full mb-4 left-1/2 -translate-x-1/2 bg-[#1a1a1a] rounded-xl shadow-2xl border border-white/10 py-1 min-w-[140px] z-50 overflow-hidden"
 							onClick={(e) => e.stopPropagation()}
 						>
-						{[5, 10, 30].map((minutes) => (
+						{[5, 10, 30].map((mins) => (
 							<button
-								key={minutes}
+								key={mins}
 								onClick={() => {
-									requestExtension(minutes);
+									if (hasExtended) {
+										showError('Already Extended', 'Session can only be extended once');
+										setShowExtendMenu(false);
+										return;
+									}
+									// Host directly extends the session
+									onExtendSession(mins);
+									showSuccess('⏱️ Session Extended!', `Session extended by ${mins} minutes`);
 									setShowExtendMenu(false);
 								}}
-								className="w-full px-4 py-2 text-left text-sm text-white hover:bg-white/10 transition-colors"
+								disabled={hasExtended}
+								className={`w-full px-4 py-2.5 text-left text-sm transition-colors flex items-center gap-2 ${
+									hasExtended 
+										? 'text-white/30 cursor-not-allowed' 
+										: 'text-white hover:bg-white/10'
+								}`}
 							>
-								{minutes} minutes
+								<Clock className={`w-4 h-4 ${hasExtended ? 'text-white/20' : 'text-white/50'}`} />
+								<span>{mins} minutes</span>
 							</button>
 						))}
 					</div>
 				)}
 				</div>
-			</div>
+					)}
+				</div>
 			{/* RIGHT: End Meeting - Single Button with Dropdown */}
-			<div className="flex items-center justify-end min-w-[80px]">
+			<div className="flex items-center justify-end">
 				<div className="relative">
 					<Button
 						onClick={() => {
@@ -2421,7 +2714,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 								setShowEndMenu(!showEndMenu)
 							}
 						}}
-						className="bg-[#E01E5A] hover:bg-[#C01B4B] text-white font-medium text-sm h-9 px-4 rounded-lg shadow-lg shadow-red-900/20"
+						className="bg-[#E01E5A] hover:bg-[#C01B4B] text-white font-semibold text-sm h-10 px-5 rounded-xl shadow-lg shadow-red-500/20 hover:shadow-red-500/30 transition-all hover:scale-105"
 					>
 						End
 					</Button>
@@ -2476,43 +2769,25 @@ const VideoRoomContent = memo(function VideoRoomContent({
 							<div className="w-10 h-1 bg-white/30 rounded-full" />
 						</div>
 
-						{/* Tab Switcher Header */}
-						<div className="h-16 bg-gradient-to-b from-[#1a1a1a] to-[#1a1a1a]/95 border-b border-white/10 flex items-center justify-between px-4 flex-shrink-0">
-							<div className="flex h-full items-center gap-2">
-								<button
-									onClick={() => {
-										setShowParticipants(true)
-										setShowChat(false)
-									}}
-									className={`relative h-10 px-4 flex items-center gap-2 text-sm font-semibold transition-all rounded-lg ${
-										!showChat 
-											? 'text-white bg-white/10 shadow-sm' 
-											: 'text-white/60 hover:text-white hover:bg-white/5'
-									}`}
-								>
-									<Users className="h-4 w-4" />
-									<span>Participants</span>
-									{!showChat && (
-										<div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-[#00DC6E] to-transparent" />
-									)}
-								</button>
-								<button
-									onClick={() => {
-										setShowChat(true)
-										setShowParticipants(false)
-									}}
-									className={`relative h-10 px-4 flex items-center gap-2 text-sm font-semibold transition-all rounded-lg ${
-										showChat 
-											? 'text-white bg-white/10 shadow-sm' 
-											: 'text-white/60 hover:text-white hover:bg-white/5'
-									}`}
-								>
-									<MessageSquare className="h-4 w-4" />
-									<span>Chat</span>
-									{showChat && (
-										<div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-[#00DC6E] to-transparent" />
-									)}
-								</button>
+						{/* Sidebar Header */}
+						<div className="h-16 bg-gradient-to-b from-[#1a1a1a] to-[#1a1a1a]/95 border-b border-white/10 flex items-center justify-between px-6 flex-shrink-0">
+							<div className="flex items-center gap-3">
+								{showChat ? (
+									<>
+										<MessageSquare className="h-5 w-5 text-[#00DC6E]" />
+										<span className="text-white font-semibold text-lg">Chat</span>
+									</>
+								) : (
+									<>
+										<Users className="h-5 w-5 text-[#00DC6E]" />
+										<span className="text-white font-semibold text-lg">Participants</span>
+										{allParticipants && allParticipants.length > 0 && (
+											<span className="bg-white/10 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+												{allParticipants.length}
+											</span>
+										)}
+									</>
+								)}
 							</div>
 							<Button
 								variant="ghost"
@@ -2556,169 +2831,97 @@ const VideoRoomContent = memo(function VideoRoomContent({
 								<div className="absolute inset-0 flex flex-col bg-gradient-to-b from-[#0a0a0a] to-[#0f0f0f]">
 									{/* Host Controls Section - Only visible to hosts */}
 									{isHost && (
-										<div className="px-3 py-2.5 border-b border-white/10 bg-gradient-to-br from-[#1f1f1f] to-[#1a1a1a] flex-shrink-0">
-											{/* Header */}
-											<div className="flex items-center gap-2 mb-2">
-												<div className="h-6 w-6 rounded-md bg-gradient-to-br from-[#00DC6E] to-[#00B85C] flex items-center justify-center">
-													<Settings2 className="h-3 w-3 text-white" />
+										<div className="px-4 py-3 border-b border-white/10 bg-gradient-to-br from-[#1f1f1f] to-[#1a1a1a] flex-shrink-0">
+											<div className="flex items-center gap-2 mb-3">
+												<div className="h-5 w-5 rounded bg-white/10 flex items-center justify-center">
+													<Settings2 className="h-3 w-3 text-white/70" />
 												</div>
-												<h3 className="text-xs font-bold text-white">Host Controls</h3>
+												<h3 className="text-xs font-bold text-white/90 uppercase tracking-wider">Restrict Participants</h3>
 											</div>
 											
-											{/* Permission Locks - Compact Cards */}
-											<div className="space-y-1.5">
-												{/* Audio Lock Toggle */}
-												<div className={`group relative overflow-hidden rounded-lg border transition-all ${
-													permissions?.allowAudio === false 
-														? 'bg-red-500/5 border-red-500/30' 
-														: 'bg-white/3 border-white/10'
-												}`}>
-													<div className="flex items-center justify-between px-2 py-1.5">
-														<div className="flex items-center gap-2 min-w-0 flex-1">
-															<div className={`h-6 w-6 rounded flex items-center justify-center flex-shrink-0 ${
-																permissions?.allowAudio === false 
-																	? 'bg-red-500/20 text-red-400' 
-																	: 'bg-white/10 text-white/70'
-															}`}>
-																<Mic className="h-3 w-3" />
-															</div>
-															<span className="text-xs font-medium text-white/90 truncate">Microphone</span>
-														</div>
-														<Button
-															onClick={() => {
-																const isCurrentlyLocked = permissions?.allowAudio === false
-																if (isCurrentlyLocked) {
-																	onLockAudio?.(false)
-																} else {
-																	onLockAudio?.(true)
-																	onMuteAll?.()
-																}
-															}}
-															variant="ghost"
-															size="sm"
-															className={`h-6 w-6 p-0 rounded flex-shrink-0 ${
-																permissions?.allowAudio === false 
-																	? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' 
-																	: 'bg-[#00DC6E]/20 text-[#00DC6E] hover:bg-[#00DC6E]/30'
-															}`}
-															title={permissions?.allowAudio === false ? 'Unlock audio' : 'Lock audio'}
-														>
-															{permissions?.allowAudio === false ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}
-														</Button>
-													</div>
-												</div>
-												
-												{/* Video Lock Toggle */}
-												<div className={`group relative overflow-hidden rounded-lg border transition-all ${
-													permissions?.allowVideo === false 
-														? 'bg-red-500/5 border-red-500/30' 
-														: 'bg-white/3 border-white/10'
-												}`}>
-													<div className="flex items-center justify-between px-2 py-1.5">
-														<div className="flex items-center gap-2 min-w-0 flex-1">
-															<div className={`h-6 w-6 rounded flex items-center justify-center flex-shrink-0 ${
-																permissions?.allowVideo === false 
-																	? 'bg-red-500/20 text-red-400' 
-																	: 'bg-white/10 text-white/70'
-															}`}>
-																<Video className="h-3 w-3" />
-															</div>
-															<span className="text-xs font-medium text-white/90 truncate">Camera</span>
-														</div>
-														<Button
-															onClick={() => {
-																const isCurrentlyLocked = permissions?.allowVideo === false
-																if (isCurrentlyLocked) {
-																	onLockVideo?.(false)
-																} else {
-																	onLockVideo?.(true)
-																	onDisableVideoAll?.()
-																}
-															}}
-															variant="ghost"
-															size="sm"
-															className={`h-6 w-6 p-0 rounded flex-shrink-0 ${
-																permissions?.allowVideo === false 
-																	? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' 
-																	: 'bg-[#00DC6E]/20 text-[#00DC6E] hover:bg-[#00DC6E]/30'
-															}`}
-															title={permissions?.allowVideo === false ? 'Unlock video' : 'Lock video'}
-														>
-															{permissions?.allowVideo === false ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}
-														</Button>
-													</div>
-												</div>
-												
-												{/* Chat Lock Toggle */}
-												<div className={`group relative overflow-hidden rounded-lg border transition-all ${
-													chatDisabled 
-														? 'bg-red-500/5 border-red-500/30' 
-														: 'bg-white/3 border-white/10'
-												}`}>
-													<div className="flex items-center justify-between px-2 py-1.5">
-														<div className="flex items-center gap-2 min-w-0 flex-1">
-															<div className={`h-6 w-6 rounded flex items-center justify-center flex-shrink-0 ${
-																chatDisabled 
-																	? 'bg-red-500/20 text-red-400' 
-																	: 'bg-white/10 text-white/70'
-															}`}>
-																<MessageSquare className="h-3 w-3" />
-															</div>
-															<span className="text-xs font-medium text-white/90 truncate">Chat</span>
-														</div>
-														<Button
-															onClick={() => {
-																const isCurrentlyDisabled = chatDisabled || permissions?.allowChat === false
-																if (isCurrentlyDisabled) {
-																	onToggleChat?.(false)
-																	onLockChat?.(false)
-																} else {
-																	onToggleChat?.(true)
-																	onLockChat?.(true)
-																}
-															}}
-															variant="ghost"
-															size="sm"
-															className={`h-6 w-6 p-0 rounded flex-shrink-0 ${
-																chatDisabled 
-																	? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' 
-																	: 'bg-[#00DC6E]/20 text-[#00DC6E] hover:bg-[#00DC6E]/30'
-															}`}
-															title={chatDisabled ? 'Enable chat' : 'Disable chat'}
-														>
-															{chatDisabled ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}
-														</Button>
-													</div>
-												</div>
-											</div>
-											
-											{/* Quick Actions - Compact */}
-											<div className="flex gap-1.5 mt-2">
+											<div className="grid grid-cols-3 gap-2">
+												{/* Mute All / Unmute All Toggle */}
 												<Button
 													onClick={() => {
-														onMuteAll?.()
-														onLockAudio?.(true)
+														const isCurrentlyLocked = permissions?.allowAudio === false
+														if (isCurrentlyLocked) {
+															onUnmuteAll?.()
+															onLockAudio?.(false)
+															showSuccess('Audio Unlocked', 'Participants can now unmute their microphones')
+														} else {
+															onMuteAll?.()
+															onLockAudio?.(true)
+															showSuccess('Audio Locked', 'All participants have been muted')
+														}
 													}}
 													variant="ghost"
-													size="sm"
-													className="flex-1 h-7 text-[10px] font-semibold bg-white/5 hover:bg-white/10 text-white/80 rounded"
-													title="Mute all and lock"
+													className={`flex flex-col items-center justify-center h-auto py-2 gap-1 rounded-lg border transition-all ${
+														permissions?.allowAudio === false
+															? 'bg-red-500/10 text-red-500 border-red-500/20 hover:bg-red-500/20' 
+															: 'bg-white/5 text-white/70 border-white/5 hover:bg-white/10 hover:text-white'
+													}`}
+													title={permissions?.allowAudio === false ? 'Unlock audio for all participants' : 'Mute all and lock audio'}
 												>
-													<VolumeX className="h-3 w-3 mr-1" />
-													Mute All
+													{permissions?.allowAudio === false ? <Lock className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
+													<span className="text-[10px] font-medium">{permissions?.allowAudio === false ? 'Unlock Audio' : 'Mute All'}</span>
 												</Button>
+
+												{/* Stop Video / Enable Video Toggle */}
 												<Button
 													onClick={() => {
-														onDisableVideoAll?.()
-														onLockVideo?.(true)
+														const isCurrentlyLocked = permissions?.allowVideo === false
+														if (isCurrentlyLocked) {
+															onEnableVideoAll?.()
+															onLockVideo?.(false)
+															showSuccess('Video Unlocked', 'Participants can now enable their cameras')
+														} else {
+															onDisableVideoAll?.()
+															onLockVideo?.(true)
+															showSuccess('Video Locked', 'All participant cameras have been disabled')
+														}
 													}}
 													variant="ghost"
-													size="sm"
-													className="flex-1 h-7 text-[10px] font-semibold bg-white/5 hover:bg-white/10 text-white/80 rounded"
-													title="Video off all and lock"
+													className={`flex flex-col items-center justify-center h-auto py-2 gap-1 rounded-lg border transition-all ${
+														permissions?.allowVideo === false
+															? 'bg-red-500/10 text-red-500 border-red-500/20 hover:bg-red-500/20' 
+															: 'bg-white/5 text-white/70 border-white/5 hover:bg-white/10 hover:text-white'
+													}`}
+													title={permissions?.allowVideo === false ? 'Unlock video for all participants' : 'Disable all video and lock'}
 												>
-													<CameraOff className="h-3 w-3 mr-1" />
-													Video Off
+													{permissions?.allowVideo === false ? <Lock className="h-4 w-4" /> : <CameraOff className="h-4 w-4" />}
+													<span className="text-[10px] font-medium">{permissions?.allowVideo === false ? 'Unlock Video' : 'Stop Video'}</span>
+												</Button>
+
+												{/* Lock Chat */}
+												<Button
+													onClick={() => {
+														const isCurrentlyDisabled = chatDisabled || permissions?.allowChat === false
+														if (isCurrentlyDisabled) {
+															onToggleChat?.(false)
+															onLockChat?.(false)
+															showSuccess('Chat Unlocked', 'Participants can now send messages')
+														} else {
+															onToggleChat?.(true)
+															onLockChat?.(true)
+															showSuccess('Chat Locked', 'Participants can no longer send messages')
+														}
+													}}
+													variant="ghost"
+													className={`flex flex-col items-center justify-center h-auto py-2 gap-1 rounded-lg border transition-all ${
+														(chatDisabled || permissions?.allowChat === false)
+															? 'bg-red-500/10 text-red-500 border-red-500/20 hover:bg-red-500/20' 
+															: 'bg-white/5 text-white/70 border-white/5 hover:bg-white/10 hover:text-white'
+													}`}
+													title={chatDisabled ? 'Enable chat' : 'Disable chat'}
+												>
+													{(chatDisabled || permissions?.allowChat === false) ? (
+														<Lock className="h-4 w-4" />
+													) : (
+														<MessageSquare className="h-4 w-4" />
+													)}
+													<span className="text-[10px] font-medium">
+														{(chatDisabled || permissions?.allowChat === false) ? 'Unlock Chat' : 'Lock Chat'}
+													</span>
 												</Button>
 											</div>
 										</div>
@@ -2748,91 +2951,76 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			)}
 		</div>
 
-		{/* Background Effects Popup - At root level, outside all containers */}
+		{/* Background Effects Popup - Floating Panel */}
 		{showBackgroundMenu && (
-			<div className="fixed inset-0 flex items-center justify-center p-4 z-[9999999]">
-				{/* Dark backdrop overlay */}
-				<div 
-					className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-					onClick={() => setShowBackgroundMenu(false)}
-				/>
-				
+			<div className="fixed bottom-24 left-4 md:left-[140px] z-[50] animate-in slide-in-from-bottom-5 zoom-in-95 fade-in duration-200">
 				{/* Popup card */}
-				<div className="relative bg-[#2d2d2d] rounded-2xl shadow-2xl border border-white/20 w-full max-w-sm animate-in zoom-in-95 duration-200">
+				<div className="bg-[#1a1a1a]/95 backdrop-blur-2xl rounded-2xl shadow-2xl border border-white/10 w-[300px] overflow-hidden">
 					{/* Header */}
-					<div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
-						<div className="flex items-center gap-3">
-							<div className="h-10 w-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-								<Sparkles className="h-5 w-5 text-white" />
-							</div>
-							<h3 className="text-lg font-semibold text-white">Background Effects</h3>
+					<div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-white/5">
+						<div className="flex items-center gap-2">
+							<Sparkles className="w-4 h-4 text-[#00DC6E]" />
+							<span className="text-sm font-semibold text-white">Background Effects</span>
 						</div>
 						<button
 							onClick={() => setShowBackgroundMenu(false)}
-							className="h-8 w-8 rounded-lg hover:bg-white/10 transition-colors flex items-center justify-center text-white/60 hover:text-white"
-							title="Close background effects"
-							aria-label="Close background effects"
+							className="h-6 w-6 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-colors"
 						>
-							<X className="h-5 w-5" />
+							<X className="w-3.5 h-3.5" />
 						</button>
 					</div>
 					
-					{/* Options */}
 					<div className="p-4 space-y-4">
-						<div className="grid grid-cols-3 gap-3">
-							{/* None Option */}
+						{/* Type Selector (Segmented Control) */}
+						<div className="flex p-1 bg-black/40 rounded-lg">
 							<button
 								onClick={() => applyBackgroundEffect('none')}
-								className={`flex flex-col items-center justify-center gap-2 p-3 rounded-xl transition-all border-2 ${
-									backgroundMode === 'none'
-										? 'bg-[#00DC6E]/10 border-[#00DC6E] text-[#00DC6E]'
-										: 'bg-white/5 border-transparent text-white/60 hover:bg-white/10 hover:text-white'
+								className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium rounded-md transition-all ${
+									backgroundMode === 'none' 
+										? 'bg-[#3d3d3d] text-white shadow-sm ring-1 ring-white/10' 
+										: 'text-white/60 hover:text-white hover:bg-white/5'
 								}`}
 							>
-								<Ban className="h-6 w-6" />
-								<span className="text-xs font-medium">None</span>
+								<Ban className="w-3 h-3" />
+								None
 							</button>
-
-							{/* Blur Option */}
 							<button
 								onClick={() => applyBackgroundEffect('blur')}
-								className={`flex flex-col items-center justify-center gap-2 p-3 rounded-xl transition-all border-2 ${
-									backgroundMode === 'blur'
-										? 'bg-[#00DC6E]/10 border-[#00DC6E] text-[#00DC6E]'
-										: 'bg-white/5 border-transparent text-white/60 hover:bg-white/10 hover:text-white'
+								className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium rounded-md transition-all ${
+									backgroundMode === 'blur' 
+										? 'bg-[#3d3d3d] text-white shadow-sm ring-1 ring-white/10' 
+										: 'text-white/60 hover:text-white hover:bg-white/5'
 								}`}
 							>
-								<Aperture className="h-6 w-6" />
-								<span className="text-xs font-medium">Blur</span>
+								<Aperture className="w-3 h-3" />
+								Blur
 							</button>
-
-							{/* Virtual Option */}
 							<button
 								onClick={() => applyBackgroundEffect('virtual')}
-								className={`flex flex-col items-center justify-center gap-2 p-3 rounded-xl transition-all border-2 ${
-									backgroundMode === 'virtual'
-										? 'bg-[#00DC6E]/10 border-[#00DC6E] text-[#00DC6E]'
-										: 'bg-white/5 border-transparent text-white/60 hover:bg-white/10 hover:text-white'
+								className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium rounded-md transition-all ${
+									backgroundMode === 'virtual' 
+										? 'bg-[#3d3d3d] text-white shadow-sm ring-1 ring-white/10' 
+										: 'text-white/60 hover:text-white hover:bg-white/5'
 								}`}
 							>
-								<ImageIcon className="h-6 w-6" />
-								<span className="text-xs font-medium">Image</span>
+								<ImageIcon className="w-3 h-3" />
+								Image
 							</button>
 						</div>
 
-						{/* Dynamic Controls based on selection */}
-						<div className="min-h-[120px]">
+						{/* Dynamic Controls */}
+						<div className="min-h-[100px]">
 							{backgroundMode === 'none' && (
-								<div className="h-full flex flex-col items-center justify-center text-center p-4 text-white/40">
-									<p className="text-sm">No background effect applied</p>
+								<div className="h-[100px] flex flex-col items-center justify-center text-center text-white/40 border-2 border-dashed border-white/5 rounded-xl">
+									<p className="text-xs">No effect applied</p>
 								</div>
 							)}
 
 							{backgroundMode === 'blur' && (
-								<div className="animate-in fade-in slide-in-from-top-2 duration-200">
-									<div className="flex items-center justify-between mb-3">
-										<label className="text-sm font-medium text-white/90">Blur Intensity</label>
-										<span className="text-xs font-mono bg-white/10 px-2 py-0.5 rounded text-[#00DC6E]">{blurAmount}</span>
+								<div className="space-y-3 animate-in fade-in duration-200">
+									<div className="flex items-center justify-between">
+										<label className="text-xs font-medium text-white/80">Blur Intensity</label>
+										<span className="text-[10px] font-mono bg-white/10 px-1.5 py-0.5 rounded text-[#00DC6E]">{blurAmount}</span>
 									</div>
 									<input
 										type="range"
@@ -2841,19 +3029,19 @@ const VideoRoomContent = memo(function VideoRoomContent({
 										step="1"
 										value={blurAmount}
 										onChange={(e) => handleBlurSliderChange(parseInt(e.target.value))}
-										className="w-full h-2 bg-white/20 rounded-lg appearance-none cursor-pointer slider-green blur-slider"
+										className="w-full h-1.5 bg-white/20 rounded-lg appearance-none cursor-pointer slider-green blur-slider"
 									/>
-									<div className="flex justify-between text-xs text-white/40 mt-2">
-										<span>Subtle</span>
+									<div className="flex justify-between text-[10px] text-white/40">
+										<span>Soft</span>
 										<span>Strong</span>
 									</div>
 								</div>
 							)}
 
 							{backgroundMode === 'virtual' && (
-								<div className="animate-in fade-in slide-in-from-top-2 duration-200">
-									<p className="text-sm font-medium text-white/90 mb-3">Select Background</p>
-									<div className="grid grid-cols-3 gap-2 max-h-[200px] overflow-y-auto pr-1 custom-scrollbar">
+								<div className="animate-in fade-in duration-200">
+									<p className="text-xs font-medium text-white/50 mb-2">Select Image</p>
+									<div className="grid grid-cols-3 gap-2 max-h-[180px] overflow-y-auto pr-1 custom-scrollbar">
 										{VIRTUAL_BACKGROUNDS.map((bg) => (
 											<button
 												key={bg.id}
@@ -2863,8 +3051,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 												}}
 												className={`relative aspect-video rounded-lg overflow-hidden transition-all group ${
 													selectedVirtualBg === bg.id
-														? 'ring-2 ring-[#00DC6E] ring-offset-2 ring-offset-[#2d2d2d]'
-														: 'opacity-70 hover:opacity-100'
+														? 'ring-2 ring-[#00DC6E] ring-offset-1 ring-offset-[#2d2d2d]'
+														: 'opacity-70 hover:opacity-100 hover:ring-1 hover:ring-white/20'
 												}`}
 											>
 												<img
@@ -2874,8 +3062,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 												/>
 												{selectedVirtualBg === bg.id && (
 													<div className="absolute inset-0 bg-[#00DC6E]/20 flex items-center justify-center">
-														<div className="bg-[#00DC6E] rounded-full p-1">
-															<ShieldCheck className="w-3 h-3 text-white" />
+														<div className="bg-[#00DC6E] rounded-full p-0.5">
+															<ShieldCheck className="w-2.5 h-2.5 text-white" />
 														</div>
 													</div>
 												)}
@@ -2885,13 +3073,6 @@ const VideoRoomContent = memo(function VideoRoomContent({
 								</div>
 							)}
 						</div>
-					</div>
-					
-					{/* Footer note */}
-					<div className="px-6 py-3 bg-white/5 rounded-b-2xl">
-						<p className="text-xs text-white/50 text-center">
-							💡 Effects work best in well-lit environments
-						</p>
 					</div>
 				</div>
 			</div>

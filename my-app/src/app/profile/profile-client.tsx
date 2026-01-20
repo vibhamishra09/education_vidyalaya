@@ -93,7 +93,7 @@ function ProfileContent() {
   // Show loading while Clerk is initializing
   if (!isLoaded) {
     return (
-      <div className="min-h-screen flex flex-col">
+      <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950">
         <Navigation />
         <main className="flex-1 container mx-auto px-4 py-8 pb-20 md:pb-8">
           <div className="flex items-center justify-center min-h-[400px]">
@@ -110,7 +110,7 @@ function ProfileContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col">
+      <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950">
         <Navigation />
         <main className="flex-1 container mx-auto px-4 py-8 pb-20 md:pb-8">
           <div className="flex items-center justify-center min-h-[400px]">
@@ -127,7 +127,7 @@ function ProfileContent() {
 
   if (error || !currentUser) {
     return (
-      <div className="min-h-screen flex flex-col">
+      <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950">
         <Navigation />
         <main className="flex-1 container mx-auto px-4 py-8 pb-20 md:pb-8">
           <div className="text-center">
@@ -142,12 +142,12 @@ function ProfileContent() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-muted/5">
+    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950">
       <Navigation />
 
       <main className="flex-1 container mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-8 pb-20 md:pb-8">
         {/* Profile Header */}
-        <Card className="mb-8 border-none shadow-sm bg-white">
+        <Card className="mb-8 shadow-sm border-border/60">
           <CardContent className="pt-8 pb-8">
             <div className="flex flex-col lg:flex-row items-center lg:items-start gap-6 lg:gap-10">
               <div className="relative group">
@@ -193,14 +193,14 @@ function ProfileContent() {
                       <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-700 shadow-sm">
                         <Coins className="h-4 w-4 text-emerald-600" />
                         <span className="font-bold">{formatCoins(currentUser.coins)}</span>
-                        <span className="text-xs opacity-70">AYA</span>
+                        <span className="text-xs opacity-70">Webya</span>
                       </div>
 
                       {currentUser.hourlyRate && (
                         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-sky-50 border border-sky-100 text-sky-700 shadow-sm">
                           <Coins className="h-4 w-4 text-sky-600" />
                           <span className="font-bold">{formatCoins(currentUser.hourlyRate)}</span>
-                          <span className="text-xs opacity-70">AYA/hr</span>
+                          <span className="text-xs opacity-70">Webya/hr</span>
                         </div>
                       )}
 

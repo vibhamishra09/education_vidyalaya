@@ -50,7 +50,7 @@ export function CoinDropdown({ coins = 0, isLoading = false }: CoinDropdownProps
       >
         <Coins className="h-4 w-4 text-yellow-600" />
         <span className="text-sm font-medium">
-          {isLoading ? '...' : formatCoins(displayCoins)} AYA
+          {isLoading ? '...' : formatCoins(displayCoins)} Webya
         </span>
       </div>
 
@@ -75,7 +75,7 @@ export function CoinDropdown({ coins = 0, isLoading = false }: CoinDropdownProps
               <Card className="shadow-lg">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-lg">
-                    <span>AYA Balance</span>
+                    <span>Webya Balance</span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -84,7 +84,7 @@ export function CoinDropdown({ coins = 0, isLoading = false }: CoinDropdownProps
                     <div className="flex items-center justify-center gap-2">
                       <Coins className="h-6 w-6 text-yellow-600" />
                       <span className="text-3xl font-bold">
-                        {formatCoins(displayCoins)} AYA
+                        {formatCoins(displayCoins)} Webya
                       </span>
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5">
@@ -145,7 +145,7 @@ export function CoinDropdown({ coins = 0, isLoading = false }: CoinDropdownProps
                                   : 'text-green-600'
                               }`}>
                                 {transaction.type === 'PAYMENT_MADE' ? '-' : '+'}
-                                {formatCoins(transaction.amount)} AYA
+                                {formatCoins(transaction.amount)} Webya
                               </p>
                               <Badge
                                 variant="outline"

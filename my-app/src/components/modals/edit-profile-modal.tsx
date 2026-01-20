@@ -588,7 +588,7 @@ export function EditProfileModal({
 
           {/* Hourly Rate */}
           <div className="space-y-2">
-            <Label htmlFor="hourlyRate">Hourly Rate (<span className="text-xs">m</span>AYA)</Label>
+            <Label htmlFor="hourlyRate">Hourly Rate (Webya)</Label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">🪙</span>
               <Input
@@ -611,7 +611,7 @@ export function EditProfileModal({
               />
             </div>
             <p className="text-xs text-muted-foreground">
-              Set your hourly rate in AYA tokens for teaching sessions. Leave empty or 0 to not display a rate.
+              Set your hourly rate in Webya for teaching sessions. Leave empty or 0 to not display a rate.
             </p>
           </div>
 

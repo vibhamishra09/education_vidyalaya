@@ -119,7 +119,7 @@ export function UserDropdown({ user, signOut }: UserDropdownProps) {
                     >
                       <Coins className="h-4 w-4 text-yellow-600" />
                       <span className="text-sm font-medium">
-                        {isUserLoading ? '...' : formatCoins(currentUserData?.user?.coins)} AYA
+                        {isUserLoading ? '...' : formatCoins(currentUserData?.user?.coins)} Webya
                       </span>
                     </div>
                   </div>

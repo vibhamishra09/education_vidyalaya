@@ -78,7 +78,7 @@ export const metadata: Metadata = {
     default: "Webyalaya - Peer to Peer Learning Platform",
     template: "%s | Webyalaya",
   },
-  description: "Connect with peers to learn and teach. Join study rooms, host sessions, earn AYA coins, and grow together in a collaborative learning community. Free peer-to-peer education platform.",
+  description: "Connect with peers to learn and teach. Join study rooms, host sessions, earn Webya, and grow together in a collaborative learning community. Free peer-to-peer education platform.",
   keywords: [
     "peer learning",
     "online tutoring",
@@ -92,7 +92,7 @@ export const metadata: Metadata = {
     "tutoring platform",
     "skill exchange",
     "knowledge sharing",
-    "AYA coins",
+    "Webya",
     "webyalaya",
   ],
   authors: [{ name: "Webyalaya Team" }],

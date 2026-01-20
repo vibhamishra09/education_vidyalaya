@@ -275,7 +275,7 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
                       ) : (
                         <>
                           <Coins className="h-5 w-5 mr-2 stroke-[2.5]" />
-                          Join Room ({formatCoins(room.joiningFee)} AYA)
+                          Join Room ({formatCoins(room.joiningFee)} Webya)
                         </>
                       )}
                     </Button>

@@ -24,7 +24,7 @@ export function CoinWidget({ coins = 0, isLoading = false }: CoinWidgetProps) {
     <Card>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-lg">AYA Balance</CardTitle>
+          <CardTitle className="text-lg">Webya Balance</CardTitle>
           <Link href="/profile?tab=wallet">
             <Button variant="ghost" size="sm">
               View All
@@ -42,7 +42,7 @@ export function CoinWidget({ coins = 0, isLoading = false }: CoinWidgetProps) {
             <>
               <div className="flex items-center justify-center gap-2">
                 <Coins className="h-6 w-6 text-yellow-600" />
-                <span className="text-3xl font-bold">{formatCoins(coins)} AYA</span>
+                <span className="text-3xl font-bold">{formatCoins(coins)} Webya</span>
               </div>
               <p className="text-xs text-muted-foreground mt-1">Available Balance</p>
             </>

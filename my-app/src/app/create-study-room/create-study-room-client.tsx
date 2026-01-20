@@ -457,7 +457,7 @@ export function CreateStudyRoomClient() {
                     <Label className="flex items-center justify-between text-sm font-medium">
                       Entry Fee
                       <span className="text-xs font-normal bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 px-2 py-0.5 rounded-full flex items-center gap-1">
-                        <Coins className="h-3 w-3" /> mAYA
+                        <Coins className="h-3 w-3" /> Webya
                       </span>
                     </Label>
                     <div className="relative group flex items-center gap-2">
@@ -522,7 +522,7 @@ export function CreateStudyRoomClient() {
                         </div>
                         <div className="flex items-baseline gap-1">
                           <span className="text-4xl font-black tracking-tight tabular-nums">{potentialEarnings}</span>
-                          <span className="text-lg font-bold text-amber-500">mAYA</span>
+                          <span className="text-lg font-bold text-amber-500">Webya</span>
                         </div>
                     </div>
 

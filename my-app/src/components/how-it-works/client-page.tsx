@@ -41,16 +41,16 @@ const FEATURES = {
     href: "/browse?tab=peers"
   },
   "aya-coins": {
-    label: "mAYA Coins",
+    label: "Webya",
     title: "Earn rewards for your learning journey.",
     description: "Our virtual currency system rewards you for being an active and helpful member of the community. Invest in your learning growth.",
     points: [
-      "Earn by helping: Get coins for hosting study rooms or teaching peers.",
+      "Earn by helping: Get Webya for hosting study rooms or teaching peers.",
       "Daily rewards: Login bonuses and streak milestones boost your wallet.",
-      "Spend wisely: Use coins to highlight your requests or join premium rooms.",
+      "Spend wisely: Use Webya to highlight your requests or join premium rooms.",
       "Transparent wallet: Track every earning and spending transaction easily."
     ],
-    image: "https://placehold.co/800x500/fff7ed/ea580c?text=mAYA+Coins+Demo",
+    image: "https://placehold.co/800x500/fff7ed/ea580c?text=Webya+Demo",
     cta: "Check Wallet",
     href: "/profile?tab=wallet"
   },

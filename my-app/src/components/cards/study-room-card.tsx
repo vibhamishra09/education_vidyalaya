@@ -124,7 +124,7 @@ export function StudyRoomCard({
         </div>
 
         {/* Footer: Host, Participants & Actions */}
-        <div className="flex items-center justify-between pt-3 border-t border-dashed border-border/60 mt-auto">
+        <div className="flex flex-wrap gap-y-3 items-center justify-between pt-3 border-t border-dashed border-border/60 mt-auto">
           
           {/* Host & Participant Info */}
           <div className="flex flex-col gap-1.5">

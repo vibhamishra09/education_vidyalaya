@@ -468,7 +468,7 @@ export class UsersService {
         location: data.location,
         school: data.school,
         hourlyRate: normalizedHourlyRate,
-        coins: 10, // Award 10 coins for completing onboarding
+        coins: 10, // Award 10 Webya for completing onboarding
         onboarded: true,
       },
       create: {

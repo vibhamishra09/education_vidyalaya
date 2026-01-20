@@ -18,6 +18,7 @@ interface UseSessionExtensionProps {
 interface UseSessionExtensionReturn {
   hasExtended: boolean;
   extendedEndTime: number | null;
+  extensionMinutes: number | null;
   isConnected: boolean;
   pendingRequest: ExtensionRequest | null;
   requestExtension: (minutes?: number) => void;
@@ -37,6 +38,7 @@ export function useSessionExtension({
   const [isConnected, setIsConnected] = useState(false);
   const [hasExtended, setHasExtended] = useState(false);
   const [extendedEndTime, setExtendedEndTime] = useState<number | null>(null);
+  const [extensionMinutes, setExtensionMinutes] = useState<number | null>(null);
   const [pendingRequest, setPendingRequest] = useState<ExtensionRequest | null>(null);
   const [error, setError] = useState<string | null>(null);
   const socketConnectingRef = useRef(false);
@@ -108,6 +110,7 @@ export function useSessionExtension({
           console.log('✅ [Extension] Session extended! New end time:', new Date(data.newEndTime).toISOString());
           setHasExtended(data.hasExtended);
           setExtendedEndTime(data.newEndTime);
+          setExtensionMinutes(data.extensionMinutes);
           setPendingRequest(null);
         });
 
@@ -186,6 +189,7 @@ export function useSessionExtension({
   return {
     hasExtended,
     extendedEndTime,
+    extensionMinutes,
     isConnected,
     pendingRequest,
     requestExtension,
