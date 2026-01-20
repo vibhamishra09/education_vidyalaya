@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useState, useEffect } from "react";
 import { Navigation } from "@/components/layout/navigation";
 import { Footer } from "@/components/layout/footer";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -26,7 +26,6 @@ import { useToast } from "@/contexts/toast-context";
 import Link from "next/link";
 import { SessionStatus } from "@/types";
 import { ReviewsSection } from "@/components/reviews/reviews-section";
-import { ChatWidget } from "@/components/chat/ChatWidget";
 
 export default function PeerSessionPage({
   params,
@@ -37,9 +36,54 @@ export default function PeerSessionPage({
   const { getToken } = useAuth();
   const { showSuccess, showError } = useToast();
   const [isUpdating, setIsUpdating] = useState(false);
+  const [canJoinVideoCall, setCanJoinVideoCall] = useState(false);
+  const [canCancel, setCanCancel] = useState(true);
   
   const { data: session, isLoading, error } = usePeerSessionDetails(sessionId);
   const updateSessionStatus = useUpdatePeerSessionStatus();
+
+  // Check if video call can be joined (within 5 minutes of start time)
+  // and if cancellation is still allowed (before scheduled time)
+  useEffect(() => {
+    if (!session) {
+      setCanJoinVideoCall(false);
+      setCanCancel(true);
+      return;
+    }
+
+    // If session is ongoing, always allow joining
+    if (session.sessionStatus === SessionStatus.ONGOING) {
+      setCanJoinVideoCall(true);
+      setCanCancel(false);
+      return;
+    }
+
+    if (session.sessionStatus !== SessionStatus.UPCOMING && session.sessionStatus !== SessionStatus.PENDING) {
+      setCanJoinVideoCall(false);
+      setCanCancel(false);
+      return;
+    }
+
+    const checkAvailability = () => {
+      const now = new Date();
+      const scheduledStart = new Date(session.date);
+      const fiveMinutesBefore = new Date(scheduledStart.getTime() - 5 * 60 * 1000);
+      
+      // Enable joining if current time is >= 5 minutes before start time
+      setCanJoinVideoCall(now >= fiveMinutesBefore && session.sessionStatus === SessionStatus.UPCOMING);
+      
+      // Disable cancel if scheduled time has passed
+      setCanCancel(now < scheduledStart);
+    };
+
+    // Check immediately
+    checkAvailability();
+
+    // Update every minute
+    const interval = setInterval(checkAvailability, 60000);
+
+    return () => clearInterval(interval);
+  }, [session]);
 
   // Handle session status updates
   const handleStatusUpdate = async (newStatus: SessionStatus) => {
@@ -65,6 +109,7 @@ export default function PeerSessionPage({
         [SessionStatus.CANCELLED]: "Session cancelled successfully!",
         [SessionStatus.DONE]: "Session marked as complete!",
         [SessionStatus.ONGOING]: "Session status updated!",
+        [SessionStatus.NOT_COMPLETED]: "Session marked as not completed.",
       };
       
       showSuccess("Status Updated", statusMessages[newStatus]);
@@ -123,9 +168,11 @@ export default function PeerSessionPage({
   const isRequestedTo = role === 'requestedTo';
   const isParticipant = role === 'requester' || role === 'requestedTo'; // User is a participant in the session
   const canAccept = isRequestedTo && session.sessionStatus === SessionStatus.PENDING;
-  const canCancel = isParticipant && 
-    (session.sessionStatus === SessionStatus.PENDING || session.sessionStatus === SessionStatus.UPCOMING);
-  const canComplete = isRequestedTo && session.sessionStatus === SessionStatus.UPCOMING;
+  // Cancel is allowed only before scheduled time and when status is PENDING or UPCOMING
+  const canCancelSession = isParticipant && 
+    (session.sessionStatus === SessionStatus.PENDING || session.sessionStatus === SessionStatus.UPCOMING) &&
+    canCancel; // canCancel is computed in useEffect based on time
+  // No manual complete - session completes automatically when time ends in the video room
 
   const formattedDate = new Date(session.date).toLocaleDateString("en-US", {
     weekday: "long",
@@ -139,7 +186,7 @@ export default function PeerSessionPage({
     minute: "2-digit",
   });
 
-  const liveRoomName = `session-${sessionId}`;
+  const liveRoomName = `peersession-${sessionId}`;
 
   const getStatusBadge = () => {
     switch (session.sessionStatus) {
@@ -153,6 +200,8 @@ export default function PeerSessionPage({
         return <Badge variant="secondary" className="text-green-600 border-green-600">Completed</Badge>;
       case SessionStatus.CANCELLED:
         return <Badge variant="destructive">Cancelled</Badge>;
+      case SessionStatus.NOT_COMPLETED:
+        return <Badge variant="outline" className="text-orange-600 border-orange-600">Not Completed</Badge>;
       default:
         return <Badge variant="outline">{session.sessionStatus}</Badge>;
     }
@@ -205,23 +254,7 @@ export default function PeerSessionPage({
                   </Button>
                 )}
 
-                {canComplete && (
-                  <Button 
-                    size="lg" 
-                    onClick={() => handleStatusUpdate(SessionStatus.DONE)}
-                    disabled={isUpdating}
-                    className="bg-blue-600 hover:bg-blue-700"
-                  >
-                    {isUpdating ? (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    ) : (
-                      <CheckCircle className="h-4 w-4 mr-2" />
-                    )}
-                    Mark Complete
-                  </Button>
-                )}
-
-                {canCancel && (
+                {canCancelSession && (
                   <Button 
                     size="lg" 
                     variant="destructive"
@@ -303,8 +336,8 @@ export default function PeerSessionPage({
           </CardContent>
         </Card>
 
-      {/* Live Session (LiveKit) */}
-      {(session.sessionStatus === SessionStatus.UPCOMING || session.sessionStatus === SessionStatus.ONGOING) && (
+      {/* Live Session (LiveKit) - Only show for participants */}
+      {(session.sessionStatus === SessionStatus.UPCOMING || session.sessionStatus === SessionStatus.ONGOING) && isParticipant && (
         <>
           <Card className="mb-8">
             <CardHeader>
@@ -312,28 +345,28 @@ export default function PeerSessionPage({
             </CardHeader>
             <CardContent>
               <div className="flex flex-wrap gap-3">
-                <Link href={`/rooms/${liveRoomName}`}>
-                  <Button className="bg-blue-600 hover:bg-blue-700">
-                    Join Live Session
-                  </Button>
-                </Link>
+                {canJoinVideoCall ? (
+                  <Link href={`/rooms/${liveRoomName}`}>
+                    <Button className="bg-blue-600 hover:bg-blue-700">
+                      Join Live Session
+                    </Button>
+                  </Link>
+                ) : (
+                  <div className="space-y-2">
+                    <Button 
+                      className="bg-blue-600 hover:bg-blue-700" 
+                      disabled
+                    >
+                      Join Live Session
+                    </Button>
+                    <p className="text-sm text-muted-foreground">
+                      Video call will be available 5 minutes before the scheduled start time.
+                    </p>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
-
-          {/* Chat Widget - Only show when session is UPCOMING (not during live call) and user is a participant */}
-          {session.sessionStatus === SessionStatus.UPCOMING && isParticipant && (
-            <Card className="mb-8">
-              <CardHeader>
-                <CardTitle>Chat</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="h-[500px]">
-                  <ChatWidget channelId={session.chatChannelId} />
-                </div>
-              </CardContent>
-            </Card>
-          )}
         </>
       )}
 
@@ -493,6 +526,20 @@ export default function PeerSessionPage({
               </div>
               <p className="text-red-700 mt-2">
                 This session has been cancelled. Any payments have been refunded.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
+        {session.sessionStatus === SessionStatus.NOT_COMPLETED && (
+          <Card className="mb-8 border-orange-200 bg-orange-50">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-2 text-orange-800">
+                <AlertCircle className="h-5 w-5" />
+                <p className="font-medium">Session Not Completed</p>
+              </div>
+              <p className="text-orange-700 mt-2">
+                This session was not completed properly. Any payments have been refunded.
               </p>
             </CardContent>
           </Card>

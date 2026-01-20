@@ -6,7 +6,7 @@ import { useUser } from "@clerk/nextjs";
 import { Navigation } from "@/components/layout/navigation";
 import { HeroSection } from "@/components/sections/hero";
 import { PlatformStats } from "@/components/sections/platform-stats";
-import { RatingsSection } from "@/components/sections/ratings-section";
+import { TestimonialsSlider } from "@/components/sections/testimonials-slider";
 import { StudyRoomCard } from "@/components/cards/study-room-card";
 import { DebateRoomCard } from "@/components/cards/debate-room-card";
 import { Footer } from "@/components/layout/footer";
@@ -107,23 +107,23 @@ export function HomeClient() {
         <HeroSection />
 
         {/* Trending Study Rooms Section */}
-        <section className="py-16 bg-muted/30" id="features">
+        <section className="py-10 sm:py-12" id="features">
           <div className="container mx-auto px-4 sm:px-6 lg:px-8">
             <FadeIn>
-              <div className="flex items-center justify-between mb-8">
-                <h2 className="text-3xl font-bold">Trending Study Rooms</h2>
-                <Button variant="ghost" onClick={handleViewAll}>
+              <div className="flex items-center justify-between mb-5 sm:mb-6">
+                <h2 className="text-3xl sm:text-4xl font-bold tracking-tight">Trending Study Rooms</h2>
+                <Button variant="ghost" className="hover:bg-muted/50" onClick={handleViewAll}>
                   View All
                 </Button>
               </div>
             </FadeIn>
 
             {studyRoomsLoading ? (
-              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
                 {Array.from({ length: 6 }).map((_, index) => (
                   <FadeIn key={index} delay={index * 0.1}>
                     <div className="h-full" data-testid="study-room-skeleton">
-                      <div className="border rounded-lg p-6 space-y-4">
+                      <div className="border rounded-lg p-5 space-y-4">
                         <div className="flex items-center justify-between">
                           <Skeleton className="h-6 w-16" />
                           <Skeleton className="h-6 w-20" />
@@ -144,25 +144,30 @@ export function HomeClient() {
                 ))}
               </div>
             ) : studyRoomsError ? (
-              <div className="text-center py-12">
-                <p className="text-muted-foreground mb-4">
-                  Failed to load study rooms. Please try again later.
-                </p>
-                <Button 
-                  variant="outline" 
-                  onClick={() => window.location.reload()}
-                >
-                  Retry
-                </Button>
+              <div className="py-10">
+                <div className="max-w-md mx-auto border rounded-xl bg-card p-6 shadow-sm text-center">
+                  <p className="text-muted-foreground mb-4">
+                    Failed to load study rooms. Please try again later.
+                  </p>
+                  <Button 
+                    variant="default"
+                    onClick={() => window.location.reload()}
+                    className="bg-green-100 text-green-800 hover:bg-green-200 border border-green-300 shadow-none"
+                  >
+                    Retry
+                  </Button>
+                </div>
               </div>
             ) : studyRooms.length === 0 ? (
-              <div className="text-center py-12">
-                <p className="text-muted-foreground">
+              <div className="py-10">
+                <div className="max-w-md mx-auto border rounded-xl bg-card p-6 shadow-sm text-center">
+                  <p className="text-muted-foreground">
                   No trending study rooms are available right now. Check back soon!
-                </p>
+                  </p>
+                </div>
               </div>
             ) : (
-              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
                 {studyRooms.map((room, index) => {
                   const isLive = room.sessionStatus === SessionStatus.ONGOING;
                   const isFull = (room.participantCount || 0) >= room.maxParticipants;
@@ -213,18 +218,18 @@ export function HomeClient() {
         </section>
 
         {/* Debate Rooms Section (Mock Data) */}
-        <section className="py-16" id="community">
+        <section className="py-10 sm:py-12" id="community">
           <div className="container mx-auto px-4 sm:px-6 lg:px-8">
             <FadeIn>
-              <div className="mb-8">
-                <h2 className="text-3xl font-bold mb-2">Debate Rooms</h2>
-                <p className="text-muted-foreground font-tagline">
+              <div className="mb-5 sm:mb-6">
+                <h2 className="text-3xl sm:text-4xl font-bold tracking-tight mb-2">Debate Rooms</h2>
+                <p className="text-sm sm:text-base text-muted-foreground font-tagline">
                   Engage in structured peer-to-peer debates
                 </p>
               </div>
             </FadeIn>
 
-            <div className="grid sm:grid-cols-2 gap-6 max-w-4xl">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 sm:gap-5">
               {debateRooms.map((room, index) => (
                 <FadeIn key={room.title} delay={index * 0.1}>
                   <DebateRoomCard {...room} />
@@ -237,8 +242,8 @@ export function HomeClient() {
         {/* Platform Stats Section */}
         <PlatformStats />
 
-        {/* Ratings & Reviews Section */}
-        <RatingsSection />
+        {/* Testimonials Slider Section */}
+        <TestimonialsSlider />
       </main>
 
       <Footer />

@@ -520,12 +520,10 @@ export class AvailabilityService {
       dbUserId = userByClerkId.id;
     }
 
-    const targetDate = new Date(date);
-    const dayStart = new Date(targetDate);
-    dayStart.setHours(0, 0, 0, 0);
-
-    const dayEnd = new Date(dayStart);
-    dayEnd.setHours(23, 59, 59, 999);
+    // Parse date as local date (YYYY-MM-DD format)
+    const [year, month, day] = date.split('-').map(Number);
+    const dayStart = new Date(year, month - 1, day, 0, 0, 0, 0);
+    const dayEnd = new Date(year, month - 1, day, 23, 59, 59, 999);
 
     const user = await this.prisma.user.findUnique({
       where: { id: dbUserId },
@@ -600,6 +598,16 @@ export class AvailabilityService {
       { startTime: Date; endTime: Date; isAvailable: boolean }[]
     > = {};
 
+    // Determine effective start time (filter past slots if today)
+    const now = new Date();
+    const nowYear = now.getFullYear();
+    const nowMonth = now.getMonth();
+    const nowDay = now.getDate();
+    const isToday = (year === nowYear && month - 1 === nowMonth && day === nowDay);
+    const effectiveStart = isToday 
+      ? new Date(Math.max(dayStart.getTime(), now.getTime() + 15 * 60 * 1000)) // 15min buffer
+      : dayStart;
+
     for (const currentDuration of uniqueDurations) {
       const durationSlots: {
         startTime: Date;
@@ -608,7 +616,7 @@ export class AvailabilityService {
       }[] = [];
 
       for (
-        let slotStart = new Date(dayStart);
+        let slotStart = new Date(effectiveStart);
         slotStart.getTime() + currentDuration * 60000 <= dayEnd.getTime();
         slotStart = new Date(slotStart.getTime() + slotInterval * 60000)
       ) {
@@ -890,12 +898,10 @@ export class AvailabilityService {
       dbUserId = userByClerkId.id;
     }
 
-    const targetDate = new Date(date);
-    const dayStart = new Date(targetDate);
-    dayStart.setHours(0, 0, 0, 0);
-
-    const dayEnd = new Date(dayStart);
-    dayEnd.setHours(23, 59, 59, 999);
+    // Parse date as local date (YYYY-MM-DD format)
+    const [year, month, day] = date.split('-').map(Number);
+    const dayStart = new Date(year, month - 1, day, 0, 0, 0, 0);
+    const dayEnd = new Date(year, month - 1, day, 23, 59, 59, 999);
 
     const user = await this.prisma.user.findUnique({
       where: { id: dbUserId },
@@ -957,10 +963,21 @@ export class AvailabilityService {
       reason?: string;
     }[] = [];
 
-    // Generate slots with 5-minute intervals to show all possible slots (including conflicting ones)
-    // This provides good granularity without creating too many slots (288 slots per day)
+    // Determine the actual start time for slot generation
+    // If the date is today, start from current time + 15min buffer, otherwise start from beginning of day
+    const now = new Date();
+    const nowYear = now.getFullYear();
+    const nowMonth = now.getMonth();
+    const nowDay = now.getDate();
+    const isToday = (year === nowYear && month - 1 === nowMonth && day === nowDay);
+    const effectiveStart = isToday 
+      ? new Date(Math.max(dayStart.getTime(), now.getTime() + 15 * 60 * 1000)) // Start from now + 15min if today
+      : dayStart;
+
+    // Generate slots with 15-minute intervals
+    // This provides good granularity without creating too many slots
     for (
-      let slotStart = new Date(dayStart);
+      let slotStart = new Date(effectiveStart);
       slotStart.getTime() + duration * 60000 <= dayEnd.getTime();
       slotStart = new Date(slotStart.getTime() + 15 * 60000)
     ) {

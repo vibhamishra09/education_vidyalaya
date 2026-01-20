@@ -109,7 +109,11 @@ const PAID_FEATURE_OPTIONS: PaidFeatureOption[] = [
 ];
 
 export function SessionFeedbackForm({
+  sessionId: _sessionId,
+  sessionType: _sessionType,
+  isHost: _isHost,
   onComplete,
+  onSkip: _onSkip,
   loading = false,
   onBackToDashboard,
 }: SessionFeedbackFormProps) {

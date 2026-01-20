@@ -4,7 +4,8 @@ export enum SessionStatus {
   UPCOMING = 'UPCOMING',
   ONGOING = 'ONGOING',
   CANCELLED = 'CANCELLED',
-  DONE = 'DONE'
+  DONE = 'DONE',
+  NOT_COMPLETED = 'NOT_COMPLETED'
 }
 
 export enum PaymentStatus {

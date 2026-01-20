@@ -1,4 +1,3 @@
-import { Card, CardContent } from '@/components/ui/card';
 import { LucideIcon, TrendingUp, Star, Book, BookOpen, Coins, CheckCircle, Users } from 'lucide-react';
 import type { MetricCard } from '@/types';
 
@@ -20,23 +19,38 @@ export function MetricCardComponent({ metric }: MetricCardProps) {
   const Icon = metric.icon ? iconMap[metric.icon] || TrendingUp : TrendingUp;
 
   return (
-    <Card>
-      <CardContent className="pt-6">
-        <div className="flex items-center justify-between">
-          <div className="flex-1">
-            <p className="text-sm text-muted-foreground">{metric.name}</p>
-            <p className="text-3xl font-bold mt-1">{metric.value}</p>
-            {metric.description && (
-              <p className="text-xs text-muted-foreground mt-1">{metric.description}</p>
-            )}
-          </div>
-          <div className="ml-4">
-            <div className="bg-primary/10 p-3 rounded-full">
-              <Icon className="h-6 w-6 text-primary" />
-            </div>
+    <div className="relative group w-full overflow-hidden rounded-[24px] bg-white dark:bg-card border border-border/40 p-6 transition-all duration-300 hover:border-primary/20 hover:shadow-lg hover:shadow-primary/5">
+      
+      <div className="flex items-center justify-between">
+        
+        {/* Left Side: Text Information */}
+        <div className="flex flex-col space-y-1">
+          {/* Label: Uppercase & Muted (Matches "LEARNERS") */}
+          <span className="text-xs font-bold tracking-wider text-muted-foreground uppercase whitespace-nowrap">
+            {metric.name}
+          </span>
+          
+          {/* Value: Large & Bold (Matches "145") */}
+          <span className="text-4xl font-bold text-foreground tracking-tight">
+            {metric.value}
+          </span>
+
+          {/* Description (Optional) */}
+          {metric.description && (
+            <p className="text-xs text-muted-foreground/60 font-medium pt-1">
+              {metric.description}
+            </p>
+          )}
+        </div>
+
+        {/* Right Side: Circular Icon */}
+        <div className="shrink-0">
+          <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center group-hover:scale-105 transition-transform duration-300">
+            <Icon className="h-8 w-8 text-primary" strokeWidth={2.5} />
           </div>
         </div>
-      </CardContent>
-    </Card>
+
+      </div>
+    </div>
   );
 }

@@ -1,6 +1,6 @@
 # AWS Account Setup Guide
 
-This guide provides step-by-step instructions for setting up Development, Test, and Production environments in a new AWS account for the WebYalaya application.
+This guide provides step-by-step instructions for setting up Development, Test, and Production environments in a new AWS account for the Webyalaya application.
 
 ## Overview
 
@@ -226,7 +226,7 @@ echo "Subnet 2: $SUBNET_2"
 # Create ALB security group
 ALB_SG_ID=$(aws ec2 create-security-group \
   --group-name webyalaya-alb-sg \
-  --description "Security group for WebYalaya ALB" \
+  --description "Security group for Webyalaya ALB" \
   --vpc-id $DEFAULT_VPC_ID \
   --region $AWS_REGION \
   --query 'GroupId' \
@@ -258,7 +258,7 @@ echo "✅ Created ALB Security Group: $ALB_SG_ID"
 # Create ECS task security group
 ECS_SG_ID=$(aws ec2 create-security-group \
   --group-name webyalaya-ecs-task-sg \
-  --description "Security group for WebYalaya ECS tasks" \
+  --description "Security group for Webyalaya ECS tasks" \
   --vpc-id $DEFAULT_VPC_ID \
   --region $AWS_REGION \
   --query 'GroupId' \

@@ -257,7 +257,7 @@ We keep design and architecture docs under `docs/`:
 
 If your work changes APIs, DB schema, or important flows, **update the corresponding docs** in the same PR.
 
----
+----
 
 ## Coding & Commit Style (Short Version)
 

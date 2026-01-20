@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Popover,
@@ -32,6 +31,14 @@ const DURATION_OPTIONS: { value: DurationOption; label: string }[] = [
   { value: 120, label: "2 hours" },
 ];
 
+// Helper function to format date as YYYY-MM-DD in local timezone (not UTC)
+const formatLocalDate = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 export function ImprovedAvailabilityCalendar({
   peerId,
   onSlotSelect,
@@ -42,12 +49,14 @@ export function ImprovedAvailabilityCalendar({
   const [currentDate, setCurrentDate] = useState(new Date());
   const [summary, setSummary] = useState<AvailabilityDateSummary[]>([]);
   const [loadingSummary, setLoadingSummary] = useState(true);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
   const [hoveredDate, setHoveredDate] = useState<string | null>(null);
   const [selectedDurationTab, setSelectedDurationTab] = useState<DurationOption>(
     (selectedDuration as DurationOption) || 60
   );
   const [detailedSlots, setDetailedSlots] = useState<DetailedSlot[]>([]);
   const [loadingDetailed, setLoadingDetailed] = useState(false);
+  const [detailedError, setDetailedError] = useState<string | null>(null);
   const [popoverOpen, setPopoverOpen] = useState(false);
 
   const monthNames = [
@@ -57,11 +66,13 @@ export function ImprovedAvailabilityCalendar({
 
   const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-  // Fetch availability summary for current month
+  // Fetch availability summary for current month with retry logic
   useEffect(() => {
-    const fetchSummary = async () => {
+    const fetchSummary = async (retryCount = 0) => {
+      const maxRetries = 2;
       try {
         setLoadingSummary(true);
+        setSummaryError(null);
         const year = currentDate.getFullYear();
         const month = currentDate.getMonth();
 
@@ -69,8 +80,8 @@ export function ImprovedAvailabilityCalendar({
         const firstDay = new Date(year, month, 1);
         const lastDay = new Date(year, month + 1, 0);
 
-        const startDate = firstDay.toISOString().split('T')[0];
-        const endDate = lastDay.toISOString().split('T')[0];
+        const startDate = formatLocalDate(firstDay);
+        const endDate = formatLocalDate(lastDay);
 
         const response = await availabilityApi.getAvailabilitySummary(
           peerId,
@@ -81,7 +92,15 @@ export function ImprovedAvailabilityCalendar({
         setSummary(response.summary);
       } catch (error) {
         console.error('Error fetching availability summary:', error);
+        if (retryCount < maxRetries) {
+          // Retry with exponential backoff
+          const delay = Math.pow(2, retryCount) * 1000;
+          console.log(`Retrying availability summary in ${delay}ms (attempt ${retryCount + 1}/${maxRetries})`);
+          setTimeout(() => fetchSummary(retryCount + 1), delay);
+          return;
+        }
         setSummary([]);
+        setSummaryError('Failed to load availability. Tap to retry.');
       } finally {
         setLoadingSummary(false);
       }
@@ -92,10 +111,12 @@ export function ImprovedAvailabilityCalendar({
     }
   }, [currentDate, peerId]);
 
-  // Fetch detailed slots when date is hovered/clicked
-  const fetchDetailedSlots = async (date: string, duration: DurationOption) => {
+  // Fetch detailed slots when date is hovered/clicked with retry logic
+  const fetchDetailedSlots = async (date: string, duration: DurationOption, retryCount = 0) => {
+    const maxRetries = 2;
     try {
       setLoadingDetailed(true);
+      setDetailedError(null);
       const response = await availabilityApi.getDetailedSlots(
         peerId,
         date,
@@ -104,14 +125,53 @@ export function ImprovedAvailabilityCalendar({
       setDetailedSlots(response.slots);
     } catch (error) {
       console.error('Error fetching detailed slots:', error);
+      if (retryCount < maxRetries) {
+        // Retry with exponential backoff
+        const delay = Math.pow(2, retryCount) * 1000;
+        console.log(`Retrying detailed slots in ${delay}ms (attempt ${retryCount + 1}/${maxRetries})`);
+        setTimeout(() => fetchDetailedSlots(date, duration, retryCount + 1), delay);
+        return;
+      }
       setDetailedSlots([]);
+      setDetailedError('Failed to load time slots. Tap to retry.');
     } finally {
       setLoadingDetailed(false);
     }
   };
 
+  // Retry function for summary
+  const retrySummary = () => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const startDate = formatLocalDate(firstDay);
+    const endDate = formatLocalDate(lastDay);
+    
+    setSummaryError(null);
+    setLoadingSummary(true);
+    availabilityApi.getAvailabilitySummary(peerId, startDate, endDate)
+      .then(response => {
+        setSummary(response.summary);
+      })
+      .catch(error => {
+        console.error('Retry failed:', error);
+        setSummaryError('Failed to load availability. Tap to retry.');
+      })
+      .finally(() => {
+        setLoadingSummary(false);
+      });
+  };
+
+  // Retry function for detailed slots
+  const retryDetailedSlots = () => {
+    if (hoveredDate) {
+      fetchDetailedSlots(hoveredDate, selectedDurationTab);
+    }
+  };
+
   const handleDateHover = (date: Date) => {
-    const dateStr = date.toISOString().split('T')[0];
+    const dateStr = formatLocalDate(date);
     setHoveredDate(dateStr);
     fetchDetailedSlots(dateStr, selectedDurationTab);
   };
@@ -154,7 +214,7 @@ export function ImprovedAvailabilityCalendar({
   };
 
   const getDaySummary = (date: Date): AvailabilityDateSummary | undefined => {
-    const dateStr = date.toISOString().split('T')[0];
+    const dateStr = formatLocalDate(date);
     return summary.find((s) => s.date === dateStr);
   };
 
@@ -180,65 +240,77 @@ export function ImprovedAvailabilityCalendar({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 max-w-sm mx-auto">
       <Card>
-        <CardHeader>
+        <CardHeader className="p-3 pb-2">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Calendar className="h-5 w-5" />
-              Select Date & Duration
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Calendar className="h-4 w-4" />
+              Select Date
             </CardTitle>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
               <Button
                 variant="outline"
-                size="sm"
+                size="icon"
+                className="h-7 w-7"
                 onClick={handlePreviousMonth}
               >
-                <ChevronLeft className="h-4 w-4" />
+                <ChevronLeft className="h-3 w-3" />
               </Button>
-              <span className="text-sm font-medium min-w-[140px] text-center">
+              <span className="text-xs font-medium min-w-[100px] text-center">
                 {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
               </span>
               <Button
                 variant="outline"
-                size="sm"
+                size="icon"
+                className="h-7 w-7"
                 onClick={handleNextMonth}
               >
-                <ChevronRight className="h-4 w-4" />
+                <ChevronRight className="h-3 w-3" />
               </Button>
             </div>
           </div>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
-            <Info className="h-4 w-4" />
-            <span>Hover over a date to see available time slots</span>
+          <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-1">
+            <Info className="h-3 w-3" />
+            <span>Hover to see slots</span>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-3 pt-0">
           {loadingSummary ? (
             <div className="space-y-2">
               <Skeleton className="h-8 w-full" />
-              <Skeleton className="h-64 w-full" />
+              <Skeleton className="h-48 w-full" />
+            </div>
+          ) : summaryError ? (
+            <div 
+              className="flex flex-col items-center justify-center py-8 text-center cursor-pointer hover:bg-muted/50 rounded-lg transition-colors"
+              onClick={retrySummary}
+            >
+              <div className="text-destructive text-sm mb-2">⚠️ {summaryError}</div>
+              <Button variant="outline" size="sm" className="text-xs">
+                Retry
+              </Button>
             </div>
           ) : (
             <>
               {/* Day names */}
-              <div className="grid grid-cols-7 gap-1 mb-2">
+              <div className="grid grid-cols-7 gap-0.5 mb-1">
                 {dayNames.map((day) => (
-                  <div key={day} className="text-center text-xs font-medium text-muted-foreground py-2">
+                  <div key={day} className="text-center text-[10px] font-medium text-muted-foreground py-1">
                     {day}
                   </div>
                 ))}
               </div>
 
               {/* Calendar days */}
-              <div className="grid grid-cols-7 gap-1">
+              <div className="grid grid-cols-7 gap-0.5">
                 {days.map((date, index) => {
                   if (!date) {
                     return <div key={`empty-${index}`} className="aspect-square" />;
                   }
 
                   const isPast = date < today;
-                  const isSelected = selectedDate === date.toISOString().split('T')[0];
+                  const isSelected = selectedDate === formatLocalDate(date);
                   const isToday =
                     date.getDate() === today.getDate() &&
                     date.getMonth() === today.getMonth() &&
@@ -256,7 +328,7 @@ export function ImprovedAvailabilityCalendar({
                   return (
                     <Popover
                       key={index}
-                      open={popoverOpen && hoveredDate === date.toISOString().split('T')[0]}
+                      open={popoverOpen && hoveredDate === formatLocalDate(date)}
                       onOpenChange={(open) => {
                         setPopoverOpen(open);
                         if (!open) setHoveredDate(null);
@@ -269,30 +341,30 @@ export function ImprovedAvailabilityCalendar({
                           disabled={isPast}
                           onMouseEnter={() => !isPast && handleDateHover(date)}
                           className={cn(
-                            "relative aspect-square p-2 rounded-md text-sm font-medium transition-colors",
+                            "relative aspect-square p-0 rounded-md text-xs font-medium transition-colors flex flex-col items-center justify-center",
                             isPast
                               ? "text-muted-foreground/30 cursor-not-allowed"
                               : "hover:bg-accent cursor-pointer",
                             isSelected && "bg-primary text-primary-foreground hover:bg-primary/90",
-                            isToday && !isSelected && "border-2 border-primary"
+                            isToday && !isSelected && "border border-primary"
                           )}
                         >
                           <div className="flex flex-col items-center justify-center h-full">
                             <span>{date.getDate()}</span>
                             {!isPast && daySummary && (
-                              <div className="flex gap-0.5 mt-1">
-                                {daySummary.hasSlots['15'] && <div className="w-1 h-1 rounded-full bg-green-500" />}
-                                {daySummary.hasSlots['30'] && <div className="w-1 h-1 rounded-full bg-blue-500" />}
-                                {daySummary.hasSlots['60'] && <div className="w-1 h-1 rounded-full bg-purple-500" />}
-                                {daySummary.hasSlots['120'] && <div className="w-1 h-1 rounded-full bg-orange-500" />}
-                                {!hasAnySlots && <div className="w-1 h-1 rounded-full bg-red-500" />}
+                              <div className="flex gap-0.5 mt-0.5">
+                                {daySummary.hasSlots['15'] && <div className="w-0.5 h-0.5 rounded-full bg-green-500" />}
+                                {daySummary.hasSlots['30'] && <div className="w-0.5 h-0.5 rounded-full bg-blue-500" />}
+                                {daySummary.hasSlots['60'] && <div className="w-0.5 h-0.5 rounded-full bg-purple-500" />}
+                                {daySummary.hasSlots['120'] && <div className="w-0.5 h-0.5 rounded-full bg-orange-500" />}
+                                {!hasAnySlots && <div className="w-0.5 h-0.5 rounded-full bg-red-500" />}
                               </div>
                             )}
                           </div>
                         </button>
                       </PopoverTrigger>
                       {!isPast && (
-                        <PopoverContent className="w-80 p-0" align="start" side="right">
+                        <PopoverContent className="w-72 p-0" align="start" side="right">
                           <div className="p-4">
                             <h3 className="font-semibold mb-2">
                               {date.toLocaleDateString('en-US', {
@@ -301,12 +373,16 @@ export function ImprovedAvailabilityCalendar({
                                 day: 'numeric',
                               })}
                             </h3>
-                            <Tabs>
-                              <TabsList className="grid w-full grid-cols-4">
+                            <div className="w-full">
+                              <div className="grid w-full grid-cols-4 h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground">
                                 {DURATION_OPTIONS.map((opt) => (
-                                  <TabsTrigger
+                                  <button
+                                    type="button"
                                     key={opt.value}
-                                    active={selectedDurationTab === opt.value}
+                                    className={cn(
+                                      "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+                                      selectedDurationTab === opt.value ? "bg-background text-foreground shadow-sm" : "hover:bg-background/50 hover:text-foreground"
+                                    )}
                                     onClick={() => {
                                       setSelectedDurationTab(opt.value);
                                       if (hoveredDate) {
@@ -315,24 +391,58 @@ export function ImprovedAvailabilityCalendar({
                                     }}
                                   >
                                     {opt.label}
-                                  </TabsTrigger>
+                                  </button>
                                 ))}
-                              </TabsList>
-                              <TabsContent className="mt-3">
+                              </div>
+                              <div className="mt-3">
                                 {loadingDetailed ? (
                                     <div className="space-y-2">
                                       {Array.from({ length: 6 }).map((_, i) => (
                                         <Skeleton key={i} className="h-8 w-full" />
                                       ))}
                                     </div>
+                                  ) : detailedError ? (
+                                    <div 
+                                      className="flex flex-col items-center justify-center py-4 text-center cursor-pointer hover:bg-muted/50 rounded-lg transition-colors"
+                                      onClick={retryDetailedSlots}
+                                    >
+                                      <div className="text-destructive text-xs mb-2">⚠️ {detailedError}</div>
+                                      <Button variant="outline" size="sm" className="text-xs">
+                                        Retry
+                                      </Button>
+                                    </div>
                                   ) : detailedSlots.length === 0 ? (
                                     <div className="text-center py-4 text-muted-foreground text-sm">
                                       No slots found
                                     </div>
                                   ) : (
+                                    (() => {
+                                      // Filter past slots if today (use local date comparison)
+                                      const now = new Date();
+                                      const todayStr = formatLocalDate(now);
+                                      const isToday = hoveredDate === todayStr;
+                                      
+                                      const filteredSlots = detailedSlots.filter((slot) => {
+                                        if (!isToday) return true;
+                                        const slotDate = new Date(slot.startTime);
+                                        const bufferMs = 15 * 60 * 1000; // 15 minute buffer
+                                        return slotDate.getTime() >= (now.getTime() + bufferMs);
+                                      });
+
+                                      if (filteredSlots.length === 0) {
+                                        return (
+                                          <div className="text-center py-4 text-muted-foreground text-sm">
+                                            {isToday 
+                                              ? "No future slots available today. Try selecting a different date." 
+                                              : "No slots available for this date"}
+                                          </div>
+                                        );
+                                      }
+
+                                      return (
                                     <div className="space-y-3">
                                       <div className="grid grid-cols-3 gap-2 max-h-64 overflow-y-auto">
-                                        {detailedSlots.map((slot, idx) => {
+                                        {filteredSlots.map((slot, idx) => {
                                           const slotTimeStr = formatSlotTime(slot);
                                           const isSlotSelected =
                                             hoveredDate === selectedDate &&
@@ -377,9 +487,11 @@ export function ImprovedAvailabilityCalendar({
                                         </p>
                                       </div>
                                     </div>
+                                      );
+                                    })()
                                   )}
-                                </TabsContent>
-                            </Tabs>
+                              </div>
+                            </div>
                           </div>
                         </PopoverContent>
                       )}
@@ -389,24 +501,24 @@ export function ImprovedAvailabilityCalendar({
               </div>
 
               {/* Legend */}
-              <div className="mt-4 p-3 bg-muted/30 rounded-lg">
-                <p className="text-xs font-medium mb-2">Duration indicators:</p>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-green-500" />
-                    <span>15 min slots available</span>
+              <div className="mt-2 p-2 bg-muted/30 rounded-lg">
+                <p className="text-[10px] font-medium mb-1">Duration indicators:</p>
+                <div className="grid grid-cols-2 gap-1 text-[10px]">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                    <span>15m avail</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-blue-500" />
-                    <span>30 min slots available</span>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                    <span>30m avail</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-purple-500" />
-                    <span>1 hour slots available</span>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+                    <span>1h avail</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-orange-500" />
-                    <span>2 hour slots available</span>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-1.5 h-1.5 rounded-full bg-orange-500" />
+                    <span>2h avail</span>
                   </div>
                 </div>
               </div>

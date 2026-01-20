@@ -1,4 +1,5 @@
-import { Controller, Get, InternalServerErrorException } from '@nestjs/common';
+import { Controller, Get, InternalServerErrorException, ServiceUnavailableException } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
 
 /**
  * Debug Controller
@@ -8,6 +9,8 @@ import { Controller, Get, InternalServerErrorException } from '@nestjs/common';
  */
 @Controller('debug')
 export class DebugController {
+  constructor(private readonly prisma: PrismaService) {}
+
   /**
    * GET /debug/trigger-500
    * 
@@ -37,5 +40,30 @@ export class DebugController {
       timestamp: new Date().toISOString(),
       message: 'Debug controller is working',
     };
+  }
+
+  /**
+   * GET /debug/db-health
+   *
+   * Checks database connectivity via PrismaService.
+   * Returns 200 when DB is reachable, 503 when not.
+   */
+  @Get('db-health')
+  async dbHealth() {
+    const healthy = await this.prisma.isHealthy();
+    if (healthy) {
+      return {
+        status: 'ok',
+        db: 'up',
+        timestamp: new Date().toISOString(),
+      };
+    }
+
+    throw new ServiceUnavailableException({
+      status: 'error',
+      db: 'down',
+      timestamp: new Date().toISOString(),
+      message: 'Database is not reachable',
+    });
   }
 }
