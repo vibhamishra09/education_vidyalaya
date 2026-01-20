@@ -156,6 +156,19 @@ export class StudyRoomsController {
     return result;
   }
 
+  @Post(':studyRoomId/not-completed')
+  @UseGuards(ClerkAuthGuard)
+  async markNotCompleted(
+    @Param('studyRoomId') studyRoomId: string,
+    @CurrentUser() userId: string,
+  ) {
+    console.log(
+      '⏱️ [StudyRoomsController.markNotCompleted] Endpoint called:',
+      { studyRoomId, userId },
+    );
+    return this.studyRoomsService.markNotCompleted(studyRoomId, userId);
+  }
+
   @Get(':studyRoomId/is-host')
   @UseGuards(ClerkAuthGuard)
   async checkIsHost(

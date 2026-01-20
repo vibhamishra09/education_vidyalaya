@@ -24,12 +24,19 @@ export function SessionRequestCard({
   const { requestedBy, requestedTo, skills = [], date, duration, title } = request;
   const counterpart = variant === 'received' ? requestedBy : requestedTo ?? requestedBy;
 
+  // Check if session has passed (compare actual datetime, not just date)
+  const sessionDate = typeof date === 'string' ? new Date(date) : date;
+  const now = new Date();
+  const hasSessionPassed = sessionDate.getTime() < now.getTime();
+
   // Calculate time remaining using timezone-aware utilities
   const days = getDaysUntil(date);
 
-  const timeRemaining = days > 0
+  const timeRemaining = hasSessionPassed
+    ? 'Session time passed'
+    : days > 0
     ? `${days} day${days > 1 ? 's' : ''} remaining`
-    : 'Session time passed';
+    : 'Today';
 
   // Get formatted date/time in user's timezone
   const sessionTime = getRelativeTimeString(date);

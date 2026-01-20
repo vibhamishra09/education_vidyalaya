@@ -127,6 +127,29 @@ export class ReviewsService {
         throw new NotFoundException('Study room not found');
       }
 
+      // Prevent reviews for NOT_COMPLETED or CANCELLED sessions
+      if (studyRoom.sessionStatus === 'NOT_COMPLETED') {
+        throw new ForbiddenException({
+          code: 'SESSION_NOT_COMPLETED',
+          message: 'Cannot review a session that was not completed',
+        });
+      }
+
+      if (studyRoom.sessionStatus === 'CANCELLED') {
+        throw new ForbiddenException({
+          code: 'SESSION_CANCELLED',
+          message: 'Cannot review a cancelled session',
+        });
+      }
+
+      // Only allow reviews for DONE sessions
+      if (studyRoom.sessionStatus !== 'DONE') {
+        throw new ForbiddenException({
+          code: 'SESSION_NOT_DONE',
+          message: 'Can only review completed sessions',
+        });
+      }
+
       if (studyRoom.createdById === user.id) {
         throw new ForbiddenException(
           'Creators cannot review their own study rooms',
@@ -150,6 +173,29 @@ export class ReviewsService {
 
       if (!peerSession) {
         throw new NotFoundException('Peer session not found');
+      }
+
+      // Prevent reviews for NOT_COMPLETED or CANCELLED sessions
+      if (peerSession.sessionStatus === 'NOT_COMPLETED') {
+        throw new ForbiddenException({
+          code: 'SESSION_NOT_COMPLETED',
+          message: 'Cannot review a session that was not completed',
+        });
+      }
+
+      if (peerSession.sessionStatus === 'CANCELLED') {
+        throw new ForbiddenException({
+          code: 'SESSION_CANCELLED',
+          message: 'Cannot review a cancelled session',
+        });
+      }
+
+      // Only allow reviews for DONE sessions
+      if (peerSession.sessionStatus !== 'DONE') {
+        throw new ForbiddenException({
+          code: 'SESSION_NOT_DONE',
+          message: 'Can only review completed sessions',
+        });
       }
 
       revieweeId =

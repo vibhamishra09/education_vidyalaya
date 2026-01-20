@@ -156,6 +156,21 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 	// Session timer with warnings (only if we have start time and duration)
 	const timerEnabled = !!sessionStartTime && sessionDuration > 0 && !!sessionData
 	
+	// For peer sessions, show moderator controls even if timer isn't configured
+	const showModeratorControls = !!sessionData && (sessionData.sessionType === 'peerSession' || timerEnabled)
+	
+	// Debug logging for timer
+	useEffect(() => {
+		console.log('🕐 [EnhancedVideoRoom] Timer debug:', {
+			sessionData: sessionData ? { id: sessionData.id, date: sessionData.date, duration: sessionData.duration, sessionType: sessionData.sessionType } : null,
+			sessionStartTime: sessionStartTime?.toISOString(),
+			sessionDuration,
+			timerEnabled,
+			showModeratorControls,
+			isHost,
+		})
+	}, [sessionData, sessionStartTime, sessionDuration, timerEnabled, showModeratorControls, isHost])
+	
 	// Session extension hook
 	const {
 		hasExtended,
@@ -248,6 +263,11 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 		showSuccess('Request sent', 'Asked host for permission to enable camera')
 	}, [participantRequestVideo, showSuccess])
 	
+	const handleRequestExtension = useCallback(() => {
+		requestExtension()
+		showSuccess('Extension request sent', 'Your request to extend the session has been sent to the host')
+	}, [requestExtension, showSuccess])
+	
 	// Show confirmation dialog before ending meeting
 	const handleEndMeetingClick = useCallback(() => {
 		setShowEndConfirmation(true)
@@ -292,18 +312,26 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 		
 		// End meeting for all participants via socket
 		endMeetingForAll()
-	}, [sessionData?.id, sessionData?.sessionType, getToken, queryClient, endMeetingForAll])
+		
+		// Fallback: If socket event doesn't trigger redirect within 3 seconds, redirect manually (host only)
+		setTimeout(() => {
+			const redirectUrl = `/session-feedback/${sessionData?.id}?type=${sessionData?.sessionType}&isHost=${isHost}`
+			console.log('🎯 Fallback redirect for host:', redirectUrl)
+			router.push(redirectUrl)
+		}, 3000)
+	}, [sessionData?.id, sessionData?.sessionType, getToken, queryClient, endMeetingForAll, isHost, router])
 	
 	const handleTimeUp = useCallback(async () => {
 		// Set loading state
 		setEndingMeeting(true)
 		
-		// Only host should call the backend to complete the session
+		// Timer expired - auto-complete the session (payment processed, redirect to review)
 		if (sessionData?.id && sessionData?.sessionType && isHost) {
 			try {
 				const authToken = await getToken()
 				
 				if (sessionData.sessionType === 'studyRoom') {
+					// For study rooms, mark as completed
 					const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/study-rooms/${sessionData.id}/complete`, {
 						method: 'POST',
 						headers: {
@@ -315,15 +343,10 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 					if (!response.ok) {
 						console.error('Failed to complete study room:', response.status, await response.text())
 					} else {
-						console.log('✅ Study room completed, streaks updated')
-						// Invalidate queries to refresh UI (streaks + dashboard + achievements)
-						await queryClient.invalidateQueries({ queryKey: streakKeys.current() })
-						await queryClient.invalidateQueries({ queryKey: streakKeys.history(14) })
-						await queryClient.invalidateQueries({ queryKey: dashboardKeys.all })
-						await queryClient.invalidateQueries({ queryKey: achievementKeys.all })
-						await queryClient.invalidateQueries({ queryKey: ['profile'] })
+						console.log('✅ Study room time expired - marked as COMPLETED')
 					}
 				} else if (sessionData.sessionType === 'peerSession') {
+					// For peer sessions, mark as completed (payment processed)
 					const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/peer-sessions/${sessionData.id}/complete`, {
 						method: 'PATCH',
 						headers: {
@@ -335,31 +358,23 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 					if (!response.ok) {
 						console.error('Failed to complete peer session:', response.status, await response.text())
 					} else {
-						console.log('✅ Peer session completed, streaks updated')
-						// Invalidate queries to refresh UI (streaks + dashboard + achievements)
-						await queryClient.invalidateQueries({ queryKey: streakKeys.current() })
-						await queryClient.invalidateQueries({ queryKey: streakKeys.history(14) })
-						await queryClient.invalidateQueries({ queryKey: dashboardKeys.all })
-						await queryClient.invalidateQueries({ queryKey: achievementKeys.all })
-						await queryClient.invalidateQueries({ queryKey: ['profile'] })
+						console.log('✅ Peer session time expired - marked as COMPLETED')
 					}
 				}
+				
+				// Invalidate queries
+				await queryClient.invalidateQueries({ queryKey: streakKeys.current() })
+				await queryClient.invalidateQueries({ queryKey: dashboardKeys.all })
+				await queryClient.invalidateQueries({ queryKey: achievementKeys.all })
 			} catch (error) {
 				console.error('Error completing session:', error)
 			}
-			
-			// Host: Redirect to feedback page
-			console.log('🏠 Host session ended, redirecting to feedback page')
-			router.push(`/session-feedback/${sessionData?.id}?type=${sessionData?.sessionType}&isHost=true`)
-		} else {
-			// Participant: Redirect to feedback page (starts with review)
-			console.log('👤 Participant session ended, redirecting to feedback page')
-			if (sessionData?.id) {
-				router.push(`/session-feedback/${sessionData.id}?type=${sessionData.sessionType}&isHost=false`)
-			} else {
-				router.push('/dashboard')
-			}
 		}
+		
+		// Redirect to session feedback page for review
+		const redirectUrl = `/session-feedback/${sessionData?.id}?type=${sessionData?.sessionType}&isHost=${isHost}`
+		console.log('🎯 Session time up, redirecting to feedback:', redirectUrl)
+		router.push(redirectUrl)
 	}, [sessionData?.id, sessionData?.sessionType, isHost, getToken, queryClient, router])
 
 	const handleWarning = useCallback((minutes: number) => {
@@ -532,6 +547,7 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 					channelId={channelId}
 					onLeave={handleLeave}
 					timerEnabled={timerEnabled}
+					showModeratorControls={showModeratorControls}
 					formattedTime={formattedTime}
 					minutesLeft={minutesLeft}
 					sessionTitle={sessionData?.title as string | undefined}
@@ -631,6 +647,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	channelId,
 	onLeave,
 	timerEnabled,
+	showModeratorControls,
 	formattedTime,
 	minutesLeft,
 	sessionTitle,
@@ -681,6 +698,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	channelId?: string | null
 	onLeave: () => void
 	timerEnabled: boolean
+	showModeratorControls: boolean
 	formattedTime: string
 	minutesLeft: number
 	sessionTitle?: string

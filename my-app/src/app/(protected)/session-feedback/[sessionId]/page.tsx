@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useRouter, useSearchParams, useParams } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,7 @@ import { SessionFeedbackForm } from "@/components/feedback/session-feedback-form
 import { ReviewForm } from "@/components/forms/review-form";
 import { studyRoomsApi, peerSessionsApi } from "@/lib/api";
 import { setAuthToken } from "@/lib/api-client";
-import { SessionFeedbackAnswers, SessionFeedbackSubmission } from "@/types/api.types";
+import { SessionFeedbackAnswers, SessionFeedbackSubmission, PeerSession, StudyRoom } from "@/types/api.types";
 import { toast } from "sonner";
 
 // Flow:
@@ -26,6 +26,12 @@ import { toast } from "sonner";
 // Host: feedback -> complete
 
 type PageStep = "review" | "feedback" | "complete";
+
+interface SessionDetails {
+  title: string;
+  hostName: string;
+  date: string;
+}
 
 export default function SessionFeedbackPage() {
   const router = useRouter();
@@ -40,6 +46,50 @@ export default function SessionFeedbackPage() {
   // For participant: start with review, for host: start with feedback
   const [step, setStep] = useState<PageStep>(isHost ? "feedback" : "review");
   const [loading, setLoading] = useState(false);
+  const [sessionDetails, setSessionDetails] = useState<SessionDetails>({
+    title: "Session",
+    hostName: "Session Host",
+    date: new Date().toISOString(),
+  });
+  const [loadingDetails, setLoadingDetails] = useState(true);
+
+  // Fetch session details to get host name and title
+  useEffect(() => {
+    const fetchSessionDetails = async () => {
+      try {
+        const token = await getToken();
+        if (token) {
+          setAuthToken(token);
+        }
+
+        if (sessionType === "studyRoom") {
+          const data = await studyRoomsApi.getStudyRoomDetails(sessionId) as StudyRoom;
+          setSessionDetails({
+            title: data.title || "Study Room",
+            hostName: data.createdBy?.name || "Session Host",
+            date: typeof data.date === 'string' ? data.date : new Date(data.date).toISOString(),
+          });
+        } else {
+          const data = await peerSessionsApi.getPeerSessionDetails(sessionId) as PeerSession;
+          // For peer sessions, the host is requestedTo (the teacher)
+          setSessionDetails({
+            title: data.title || "Peer Session",
+            hostName: data.requestedTo?.name || "Session Host",
+            date: typeof data.date === 'string' ? data.date : new Date(data.date).toISOString(),
+          });
+        }
+      } catch (error) {
+        console.error("Error fetching session details:", error);
+        // Keep default values on error
+      } finally {
+        setLoadingDetails(false);
+      }
+    };
+
+    if (sessionId) {
+      fetchSessionDetails();
+    }
+  }, [sessionId, sessionType, getToken]);
 
   const handleBackToDashboard = useCallback(() => {
     router.push("/dashboard");
@@ -128,24 +178,23 @@ export default function SessionFeedbackPage() {
       </CardHeader>
       
       <CardContent className="pt-6">
-        <ReviewForm
-          sessionId={sessionId}
-          sessionType={sessionType}
-          sessionTitle="Session"
-          revieweeName="Session Host"
-          sessionDate={new Date().toISOString()}
-          onSuccess={handleReviewSuccess}
-          onCancel={handleReviewSkip}
-        />
+        {loadingDetails ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <ReviewForm
+            sessionId={sessionId}
+            sessionType={sessionType}
+            sessionTitle={sessionDetails.title}
+            revieweeName={sessionDetails.hostName}
+            sessionDate={sessionDetails.date}
+            onSuccess={handleReviewSuccess}
+            onCancel={handleReviewSkip}
+          />
+        )}
         
-        <div className="mt-6 pt-4 border-t border-white/10 flex items-center justify-between">
-          <Button 
-            variant="ghost" 
-            onClick={handleBackToDashboard}
-            className="text-white/50 hover:text-white hover:bg-white/10"
-          >
-            Exit to Dashboard
-          </Button>
+        <div className="mt-6 pt-4 border-t flex items-center justify-end">
           <Button 
             variant="ghost" 
             onClick={handleReviewSkip}
