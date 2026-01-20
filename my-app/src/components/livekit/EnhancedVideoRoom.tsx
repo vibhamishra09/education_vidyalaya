@@ -440,8 +440,8 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 				socket.on('transcript-error', (error) => {
 					console.error('❌ [Transcripts] Server error:', error)
 				})
-			} catch (_err) {
-				console.error('❌ [Transcripts] Failed to connect socket:', _err)
+			} catch (err) {
+				console.error('❌ [Transcripts] Failed to connect socket:', err)
 			}
 		}
 		
@@ -2169,9 +2169,9 @@ const VideoRoomContent = memo(function VideoRoomContent({
 							}
 							
 							await participant.setCameraEnabled(newState)
-						} catch (_err) {
+						} catch (err) {
 							// Show user-friendly error messages
-							const error = _err as Error & { name?: string }
+							const error = err as Error & { name?: string }
 							if (error?.name === 'NotReadableError' || error?.message?.includes('Device in use')) {
 								alert('Camera is being used by another application. Please close other apps using your camera and try again.')
 							} else if (error?.name === 'NotAllowedError' || error?.message?.includes('Permission denied')) {
