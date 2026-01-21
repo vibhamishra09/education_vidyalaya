@@ -119,6 +119,18 @@ export function DebateLiveRoom({
     router.push('/debate-rooms');
   }, [router]);
 
+  const handleRoomConnected = useCallback(() => {
+    console.log('[DebateLiveRoom] Room connected callback triggered!');
+  }, []);
+
+  const handleRoomDisconnected = useCallback(() => {
+    console.log('[DebateLiveRoom] Room disconnected callback triggered!');
+  }, []);
+
+  const handleRoomError = useCallback((error: Error) => {
+    console.error('[DebateLiveRoom] Room error:', error);
+  }, []);
+
   // Debug LiveKit connection params
   useEffect(() => {
     console.log('[DebateLiveRoom] LiveKit connection params:');
@@ -150,18 +162,6 @@ export function DebateLiveRoom({
       </div>
     );
   }
-
-  const handleRoomConnected = useCallback(() => {
-    console.log('[DebateLiveRoom] Room connected callback triggered!');
-  }, []);
-
-  const handleRoomDisconnected = useCallback(() => {
-    console.log('[DebateLiveRoom] Room disconnected callback triggered!');
-  }, []);
-
-  const handleRoomError = useCallback((error: Error) => {
-    console.error('[DebateLiveRoom] Room error:', error);
-  }, []);
 
   return (
     <div className="h-screen w-screen flex flex-col bg-[#202124] overflow-hidden fixed inset-0">
@@ -281,7 +281,7 @@ function DebateLiveContent({
     });
 
     // Listen for new messages
-    socket.on('new-message', (message: any) => {
+    socket.on('new-message', (message: { id: string; senderId: string; senderName: string; content: string; timestamp: string; visibility: 'ALL' | 'MODERATOR' | 'MODERATOR_ONLY' | 'TEAM_FOR' | 'TEAM_AGAINST' }) => {
       console.log('[DebateRoom] Received new message:', message);
       
       // Filter based on user role and team
@@ -310,13 +310,13 @@ function DebateLiveContent({
           if (prev.some(m => m.id === message.id)) return prev;
           return [...prev, {
             id: message.id,
-            senderId: message.sender.clerkId,
-            senderName: message.sender.name,
-            senderAvatar: message.sender.avatar,
+            senderId: message.senderId,
+            senderName: message.senderName,
+            senderAvatar: undefined,
             content: message.content,
-            createdAt: message.createdAt,
+            createdAt: message.timestamp,
             visibility: message.visibility,
-            side: message.side,
+            side: null,
           }];
         });
       }
@@ -365,15 +365,15 @@ function DebateLiveContent({
 
         if (response.ok) {
           const data = await response.json();
-          const formattedMessages = data.messages.map((msg: any) => ({
+          const formattedMessages = data.messages.map((msg: { id: string; sender: { clerkId: string; name: string }; content: string; timestamp: string; createdAt: string; visibility: string; side: string }) => ({
             id: msg.id,
             senderId: msg.sender.clerkId,
             senderName: msg.sender.name,
-            senderAvatar: msg.sender.avatar,
+            senderAvatar: undefined,
             content: msg.content,
             createdAt: msg.createdAt,
-            visibility: msg.visibility,
-            side: msg.side,
+            visibility: msg.visibility as 'ALL' | 'MODERATOR' | 'MODERATOR_ONLY' | 'TEAM_FOR' | 'TEAM_AGAINST',
+            side: msg.side ? (msg.side as DebateSide) : null,
           }));
           setChatMessages(formattedMessages);
           console.log('[DebateRoom] Loaded', formattedMessages.length, 'messages from API');
@@ -595,7 +595,7 @@ function DebateLiveContent({
       room.remoteParticipants.forEach((participant) => {
         participant.audioTrackPublications.forEach((publication) => {
           if (publication.track && 'setVolume' in publication.track) {
-            (publication.track as any).setVolume(enabled ? 1 : 0);
+            (publication.track as { setVolume: (volume: number) => void }).setVolume(enabled ? 1 : 0);
           }
         });
       });
