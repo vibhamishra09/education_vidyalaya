@@ -80,7 +80,7 @@ export function getUserFriendlyErrorMessage(error: unknown): string {
     case 'NETWORK_ERROR':
       return 'Unable to connect to server. Please check your internet connection.';
     case 'INSUFFICIENT_FUNDS':
-      return 'You don\'t have enough coins for this action';
+      return 'You don\'t have enough Webya for this action';
     case 'ROOM_FULL':
       return 'This study room is at capacity';
     case 'ALREADY_REVIEWED':

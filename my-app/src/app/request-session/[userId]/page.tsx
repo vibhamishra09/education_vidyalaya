@@ -299,8 +299,8 @@ export default function RequestSessionPage({
           setError(apiError.response.data.message || 'The selected time slot is not available.');
           toast.error("Time slot unavailable", { description: "The selected time slot is not available." });
         } else if (apiError.response?.data?.code === 'INSUFFICIENT_FUNDS') {
-          setError('You do not have enough AYA tokens to book this session. Please add funds to your wallet.');
-          toast.error("Insufficient funds", { description: "You do not have enough AYA tokens." });
+          setError('You do not have enough Webya tokens to book this session. Please add funds to your wallet.');
+          toast.error("Insufficient funds", { description: "You do not have enough Webya tokens." });
         } else {
           setError(apiError.response?.data?.message || 'Failed to send session request');
           toast.error("Request failed", { description: apiError.response?.data?.message || 'Failed to send session request' });
