@@ -140,6 +140,6 @@ Or error logs for specific achievement checks:
 - [scripts/backfill-achievements.ts](scripts/backfill-achievements.ts) - Backfill script
 - [src/session-moderation/session-moderation.gateway.ts](src/session-moderation/session-moderation.gateway.ts) - WebSocket gateway
 - [src/study-rooms/study-rooms.service.ts](src/study-rooms/study-rooms.service.ts) - Study room service that calls achievements
-
+--
 ## Contact
 For issues or questions about this fix, contact the backend team.

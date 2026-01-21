@@ -309,7 +309,7 @@ function DebateLiveContent({
           };
           
           // Filter messages based on user role
-          const isModerator = userRole === 'moderator';
+          const isModerator = userRole === 'host' || userRole === 'moderator';
           const canSeeMessage = isModerator || 
                                 newMessage.side === 'ALL' || 
                                 newMessage.side === 'MODERATOR' ||
@@ -546,11 +546,11 @@ function DebateLiveContent({
                 {prepCountdown !== null && prepCountdown > 0 && (
                   <PrepCountdown secondsRemaining={prepCountdown} />
                 )}
-                {debateState && debateState.status === DebateStatus.LIVE && (
-                  <DebateTurnTimer
+                {debateState && debateState.status !== DebateStatus.PREP && (
+                  <DebateTurnTimer 
                     turnDurationSeconds={debateState.turnDurationSeconds}
                     turnStartedAt={debateState.turnStartedAt}
-                    isActive={!!debateState.currentSpeakerId}
+                    isActive={debateState.status === DebateStatus.LIVE}
                   />
                 )}
               </div>

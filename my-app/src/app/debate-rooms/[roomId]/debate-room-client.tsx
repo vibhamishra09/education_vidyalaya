@@ -162,9 +162,8 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
       });
       showSuccess('Joined!', `You joined the debate`);
       setSelectedSide(null);
-    } catch (err) {
-      const error = err as Error;
-      showError('Failed to Join', error.message || 'Could not join the debate');
+    } catch (err: unknown) {
+      showError('Failed to Join', err instanceof Error ? err.message : 'Could not join the debate');
     }
   };
 
@@ -173,9 +172,8 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
       await leaveDebateRoom.mutateAsync(roomId);
       showSuccess('Left Debate', 'You have left the debate');
       setShowLeaveDialog(false);
-    } catch (err) {
-      const error = err as Error;
-      showError('Error', error.message || 'Failed to leave debate');
+    } catch (err: unknown) {
+      showError('Error', err instanceof Error ? err.message : 'Failed to leave debate');
     }
   };
 
@@ -185,9 +183,8 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
       showSuccess('Debate Cancelled', 'The debate has been cancelled');
       setShowCancelDialog(false);
       router.push('/debate-rooms');
-    } catch (err) {
-      const error = err as Error;
-      showError('Error', error.message || 'Failed to cancel debate');
+    } catch (err: unknown) {
+      showError('Error', err instanceof Error ? err.message : 'Failed to cancel debate');
     }
   };
 
@@ -195,9 +192,8 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
     try {
       await startPrepPhase.mutateAsync(roomId);
       showSuccess('Prep Phase Started', 'Preparation time has begun!');
-    } catch (err) {
-      const error = err as Error;
-      showError('Error', error.message || 'Failed to start prep phase');
+    } catch (err: unknown) {
+      showError('Error', err instanceof Error ? err.message : 'Failed to start prep phase');
     }
   };
 
@@ -205,9 +201,8 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
     try {
       await generateResults.mutateAsync(roomId);
       showSuccess('Results Generated', 'AI evaluation complete!');
-    } catch (err) {
-      const error = err as Error;
-      showError('Error', error.message || 'Failed to generate results');
+    } catch (err: unknown) {
+      showError('Error', err instanceof Error ? err.message : 'Failed to generate results');
     }
   };
 

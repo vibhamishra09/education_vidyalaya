@@ -12,7 +12,7 @@ import {
   isTrackReference,
   useSpeakingParticipants,
 } from '@livekit/components-react';
-import { Track, RoomOptions, VideoPresets } from 'livekit-client';
+import { Track, RoomOptions, VideoPresets, RemoteParticipant } from 'livekit-client';
 import { io, Socket } from 'socket.io-client';
 import type { TrackReferenceOrPlaceholder } from '@livekit/components-react';
 import '@livekit/components-styles';
@@ -281,7 +281,19 @@ function DebateLiveContent({
     });
 
     // Listen for new messages
-    socket.on('new-message', (message: { id: string; senderId: string; senderName: string; content: string; timestamp: string; visibility: 'ALL' | 'MODERATOR' | 'MODERATOR_ONLY' | 'TEAM_FOR' | 'TEAM_AGAINST' }) => {
+    socket.on('new-message', (message: { 
+      id: string;
+      visibility: string; 
+      senderId: string; 
+      content: string;
+      createdAt: string;
+      side: DebateSide | null;
+      sender: {
+        clerkId: string;
+        name: string;
+        avatar?: string | null;
+      };
+    }) => {
       console.log('[DebateRoom] Received new message:', message);
       
       // Filter based on user role and team
@@ -310,13 +322,13 @@ function DebateLiveContent({
           if (prev.some(m => m.id === message.id)) return prev;
           return [...prev, {
             id: message.id,
-            senderId: message.senderId,
-            senderName: message.senderName,
-            senderAvatar: undefined,
+            senderId: message.sender.clerkId,
+            senderName: message.sender.name,
+            senderAvatar: message.sender.avatar || undefined,
             content: message.content,
-            createdAt: message.timestamp,
-            visibility: message.visibility,
-            side: null,
+            createdAt: message.createdAt,
+            visibility: message.visibility as 'ALL' | 'MODERATOR' | 'MODERATOR_ONLY' | 'TEAM_FOR' | 'TEAM_AGAINST',
+            side: message.side,
           }];
         });
       }
@@ -365,15 +377,22 @@ function DebateLiveContent({
 
         if (response.ok) {
           const data = await response.json();
-          const formattedMessages = data.messages.map((msg: { id: string; sender: { clerkId: string; name: string }; content: string; timestamp: string; createdAt: string; visibility: string; side: string }) => ({
+          const formattedMessages = data.messages.map((msg: { 
+            id: string; 
+            sender: { clerkId: string; name: string; avatar: string | null }; 
+            content: string; 
+            createdAt: string; 
+            visibility: string;
+            side: DebateSide | null;
+          }) => ({
             id: msg.id,
             senderId: msg.sender.clerkId,
             senderName: msg.sender.name,
-            senderAvatar: undefined,
+            senderAvatar: msg.sender.avatar || undefined,
             content: msg.content,
             createdAt: msg.createdAt,
             visibility: msg.visibility as 'ALL' | 'MODERATOR' | 'MODERATOR_ONLY' | 'TEAM_FOR' | 'TEAM_AGAINST',
-            side: msg.side ? (msg.side as DebateSide) : null,
+            side: msg.side,
           }));
           setChatMessages(formattedMessages);
           console.log('[DebateRoom] Loaded', formattedMessages.length, 'messages from API');
