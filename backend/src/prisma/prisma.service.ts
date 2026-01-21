@@ -97,7 +97,7 @@ export class PrismaService
   private withRetryExtension() {
     const logger = this.logger;
 
-    return this.$extends({
+    const client = this.$extends({
       query: {
         $allOperations: async ({ operation, model, args, query }) => {
           // Ensure connection is established before executing any query
@@ -161,6 +161,28 @@ export class PrismaService
         },
       },
     }) as unknown as this;
+
+    // Polyfill lifecycle methods on the extended client so NestJS can call them.
+    // Since we return 'client' from the constructor, NestJS sees 'client' as the service instance.
+    // IMPORTANT: We must bind to the ORIGINAL instance (this) because the extended client
+    // does not have $connect/$disconnect methods or the private properties.
+    Object.assign(client, {
+      onModuleInit: async () => {
+        await this.onModuleInit();
+      },
+      onModuleDestroy: async () => {
+        await this.onModuleDestroy();
+      },
+      startConnectionHealthCheck: () => {
+        this.startConnectionHealthCheck();
+      },
+      isHealthy: async () => {
+        return await this.isHealthy();
+      },
+      logger: this.logger
+    });
+
+    return client;
   }
 
   async onModuleInit() {

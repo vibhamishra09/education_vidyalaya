@@ -97,6 +97,10 @@ export class SessionExtensionGateway
 
         client.data.userId = auth.userId;
         client.data.clerkId = auth.userId;
+        
+        // Emit authenticated event so client knows it can join sessions
+        client.emit('authenticated');
+        
         this.logger.log(
           `🔌 Session Extension WebSocket connected - User: ${auth.userId}, Client: ${client.id}`,
         );

@@ -126,7 +126,7 @@ export function Navigation() {
                   alt="Webyalaya"
                   width={140}
                   height={140}
-                  className="object-contain w-auto h-8 transition-all duration-300 group-hover:scale-105 opacity-95 group-hover:opacity-100"
+                  className="object-contain w-auto h-6 sm:h-8 transition-all duration-300 group-hover:scale-105 opacity-95 group-hover:opacity-100"
                 />
               </Link>
 

@@ -159,18 +159,18 @@ export default function SessionFeedbackPage() {
 
   // Render review step
   const renderReview = () => (
-    <Card className="w-full max-w-lg border-0 shadow-2xl bg-card animate-in fade-in-0 slide-in-from-bottom-4 duration-500">
-      <CardHeader className="relative bg-gradient-to-r from-yellow-500/10 via-orange-500/10 to-transparent pb-4 rounded-t-xl">
+    <Card className="w-full max-w-lg border border-white/10 shadow-2xl bg-[#141414] animate-in fade-in-0 slide-in-from-bottom-4 duration-500">
+      <CardHeader className="relative bg-gradient-to-r from-yellow-500/10 via-orange-500/10 to-transparent pb-4 rounded-t-xl border-b border-white/5">
         <div className="flex items-center gap-4">
           <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-yellow-500 to-orange-500 flex items-center justify-center shadow-lg">
             <Star className="h-7 w-7 text-white" />
           </div>
           <div className="flex-1">
-            <h2 className="text-2xl font-bold flex items-center gap-2">
+            <h2 className="text-2xl font-bold flex items-center gap-2 text-white">
               Leave a Review
               <Sparkles className="h-5 w-5 text-yellow-500" />
             </h2>
-            <p className="text-muted-foreground mt-1">
+            <p className="text-white/60 mt-1">
               Share your experience to help others
             </p>
           </div>
@@ -198,7 +198,7 @@ export default function SessionFeedbackPage() {
           <Button 
             variant="ghost" 
             onClick={handleReviewSkip}
-            className="text-muted-foreground hover:text-foreground gap-1"
+            className="text-white/50 hover:text-white hover:bg-white/10 gap-1"
           >
             Skip for now
             <ArrowRight className="h-4 w-4" />
@@ -225,28 +225,28 @@ export default function SessionFeedbackPage() {
 
   // Render completion step
   const renderComplete = () => (
-    <Card className="w-full max-w-md border-0 shadow-2xl bg-card animate-in fade-in-0 zoom-in-95 duration-500">
+    <Card className="w-full max-w-md border border-white/10 shadow-2xl bg-[#141414] animate-in fade-in-0 zoom-in-95 duration-500">
       <CardContent className="pt-10 pb-8">
         <div className="text-center space-y-6">
           <div className="relative mx-auto w-24 h-24">
-            <div className="absolute inset-0 rounded-full bg-gradient-to-br from-green-400 to-emerald-500 animate-pulse opacity-50" />
-            <div className="absolute inset-2 rounded-full bg-background" />
-            <div className="absolute inset-4 rounded-full bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center">
+            <div className="absolute inset-0 rounded-full bg-gradient-to-br from-[#00DC6E] to-emerald-500 animate-pulse opacity-50" />
+            <div className="absolute inset-2 rounded-full bg-[#141414]" />
+            <div className="absolute inset-4 rounded-full bg-gradient-to-br from-[#00DC6E] to-emerald-500 flex items-center justify-center">
               <PartyPopper className="h-8 w-8 text-white" />
             </div>
           </div>
           
           <div className="space-y-3">
-            <h2 className="text-3xl font-bold flex items-center justify-center gap-2">
+            <h2 className="text-3xl font-bold flex items-center justify-center gap-2 text-white">
               Thank You!
-              <CheckCircle2 className="h-7 w-7 text-green-500" />
+              <CheckCircle2 className="h-7 w-7 text-[#00DC6E]" />
             </h2>
-            <p className="text-muted-foreground text-lg">
+            <p className="text-white/60 text-lg">
               Your feedback helps us build a better learning platform for everyone.
             </p>
           </div>
 
-          <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded-full py-3 px-5 mx-auto w-fit">
+          <div className="flex items-center justify-center gap-2 text-sm text-white/50 bg-white/5 rounded-full py-3 px-5 mx-auto w-fit border border-white/10">
             <Loader2 className="h-4 w-4 animate-spin" />
             Redirecting to dashboard...
           </div>
@@ -270,17 +270,17 @@ export default function SessionFeedbackPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 relative overflow-hidden">
+    <div className="min-h-screen bg-[#09090b] relative overflow-hidden">
       {/* Animated background elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-primary/20 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-blue-500/20 rounded-full blur-3xl animate-pulse delay-1000" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl" />
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-[#00DC6E]/10 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl animate-pulse delay-1000" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-purple-500/5 rounded-full blur-3xl" />
       </div>
 
       {/* Grid pattern overlay */}
       <div 
-        className="absolute inset-0 opacity-5"
+        className="absolute inset-0 opacity-[0.02]"
         style={{
           backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
         }}
@@ -289,8 +289,8 @@ export default function SessionFeedbackPage() {
       {/* Header with branding */}
       <div className="relative z-10 py-6 px-8">
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center">
-            <MessageSquareHeart className="h-5 w-5 text-primary-foreground" />
+          <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-[#00DC6E] to-[#00DC6E]/80 flex items-center justify-center">
+            <MessageSquareHeart className="h-5 w-5 text-white" />
           </div>
           <span className="text-xl font-bold text-white">Webyalaya</span>
         </div>
@@ -302,7 +302,7 @@ export default function SessionFeedbackPage() {
       </div>
 
       {/* Footer text */}
-      <div className="relative z-10 text-center pb-6 text-sm text-slate-400">
+      <div className="relative z-10 text-center pb-6 text-sm text-white/30">
         Your responses are confidential and help us improve the platform
       </div>
     </div>

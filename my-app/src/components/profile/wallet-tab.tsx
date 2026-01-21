@@ -39,7 +39,7 @@ export const WalletTab = memo(function WalletTab({ coins, hourlyRate, isLoading 
                 {isLoading ? (
                   <Skeleton className="h-8 w-24" />
                 ) : (
-                  <p className="text-2xl font-bold">{formatCoins(coins)} AYA</p>
+                  <p className="text-2xl font-bold">{formatCoins(coins)} WEBYA</p>
                 )}
               </div>
               <div className="p-3 bg-yellow-100 rounded-full">
@@ -58,7 +58,7 @@ export const WalletTab = memo(function WalletTab({ coins, hourlyRate, isLoading 
                   <Skeleton className="h-8 w-24" />
                 ) : (
                   <p className="text-2xl font-bold text-green-600">
-                    +{formatCoins(totalEarned)} AYA
+                    +{formatCoins(totalEarned)} WEBYA
                   </p>
                 )}
               </div>
@@ -78,7 +78,7 @@ export const WalletTab = memo(function WalletTab({ coins, hourlyRate, isLoading 
                   <Skeleton className="h-8 w-24" />
                 ) : (
                   <p className="text-2xl font-bold">
-                    {hourlyRate ? <>{formatCoins(hourlyRate)} AYA</> : 'Not set'}
+                    {hourlyRate ? <>{formatCoins(hourlyRate)} WEBYA</> : 'Not set'}
                   </p>
                 )}
               </div>
@@ -172,7 +172,7 @@ export const WalletTab = memo(function WalletTab({ coins, hourlyRate, isLoading 
                       }`}
                     >
                       {transaction.type === 'PAYMENT_MADE' ? '-' : '+'}
-                      {formatCoins(transaction.amount)} AYA
+                      {formatCoins(transaction.amount)} WEBYA
                     </p>
                     <Badge
                       variant="outline"

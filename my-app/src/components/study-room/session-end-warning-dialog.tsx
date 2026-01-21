@@ -1,16 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  Dialog,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogPortal,
-} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Clock, AlertTriangle } from "lucide-react";
-import * as DialogPrimitive from "@radix-ui/react-dialog";
+import { Clock, AlertTriangle, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface SessionEndWarningDialogProps {
@@ -25,76 +17,86 @@ export function SessionEndWarningDialog({
   onClose,
 }: SessionEndWarningDialogProps) {
   const [countdown, setCountdown] = useState(minutesRemaining * 60);
+  const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
-    if (!open) {
-      // Reset countdown when dialog closes
+    if (open) {
+      // Sync countdown with actual remaining time
       setCountdown(minutesRemaining * 60);
-      return;
+      // Trigger animation
+      setTimeout(() => setIsVisible(true), 10);
+    } else {
+      setIsVisible(false);
     }
+  }, [open, minutesRemaining]);
+
+  useEffect(() => {
+    if (!open) return;
 
     const interval = setInterval(() => {
       setCountdown((prev) => Math.max(0, prev - 1));
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [open, minutesRemaining]);
+  }, [open]);
 
   const minutes = Math.floor(countdown / 60);
   const seconds = countdown % 60;
 
+  if (!open) return null;
+
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose?.()}>
-      <DialogPortal>
-        {/* Custom overlay with very high z-index for fullscreen scenarios */}
-        <DialogPrimitive.Overlay
-          className={cn(
-            "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 bg-black/70"
-          )}
-          style={{ zIndex: 10000 }}
-        />
-        <DialogPrimitive.Content
-          className={cn(
-            "fixed top-[50%] left-[50%] translate-x-[-50%] translate-y-[-50%] grid w-full max-w-[90vw] sm:max-w-md gap-4 rounded-lg border p-6 shadow-lg duration-200",
-            "bg-[#1f1f1f] border-white/10 text-white",
-            "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
-          )}
-          style={{ zIndex: 10001 }}
+    <div 
+      className={cn(
+        "fixed top-4 right-4 z-[10001] transition-all duration-300 ease-out",
+        isVisible ? "translate-x-0 opacity-100" : "translate-x-full opacity-0"
+      )}
+    >
+      <div className="bg-[#1a1a1a]/95 backdrop-blur-xl border border-amber-500/30 rounded-2xl shadow-2xl shadow-amber-900/20 p-4 min-w-[280px] max-w-[340px]">
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          className="absolute top-3 right-3 w-6 h-6 flex items-center justify-center rounded-full hover:bg-white/10 text-white/50 hover:text-white transition-colors"
         >
-          <DialogHeader>
-            <div className="flex items-center gap-3 mb-2">
-              <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-full bg-yellow-500/20 flex items-center justify-center flex-shrink-0">
-                <AlertTriangle className="h-5 w-5 sm:h-6 sm:w-6 text-yellow-500" />
-              </div>
-              <DialogTitle className="text-lg sm:text-xl text-white">
-                Session Ending Soon
-              </DialogTitle>
-            </div>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div className="flex items-center justify-center gap-2 text-2xl sm:text-3xl font-bold text-yellow-500 bg-yellow-500/10 rounded-lg py-3">
-              <Clock className="h-6 w-6 sm:h-7 sm:w-7" />
-              <span>
+          <X className="h-4 w-4" />
+        </button>
+
+        <div className="flex items-start gap-3">
+          {/* Warning Icon */}
+          <div className="h-10 w-10 rounded-full bg-amber-500/15 flex items-center justify-center flex-shrink-0 ring-1 ring-amber-500/30">
+            <AlertTriangle className="h-5 w-5 text-amber-500" />
+          </div>
+
+          <div className="flex-1 min-w-0">
+            {/* Title */}
+            <h3 className="text-sm font-semibold text-white mb-1">
+              Session Ending Soon
+            </h3>
+
+            {/* Timer */}
+            <div className="flex items-center gap-2 mb-2">
+              <Clock className="h-4 w-4 text-amber-500" />
+              <span className="text-2xl font-mono font-bold text-amber-500 tabular-nums">
                 {minutes}:{seconds.toString().padStart(2, "0")}
               </span>
             </div>
-            <DialogDescription className="text-sm sm:text-base text-white/80">
-              Your scheduled session time is about to end. The call will automatically disconnect when the timer reaches zero.
-            </DialogDescription>
-            <DialogDescription className="text-xs sm:text-sm text-white/60">
-              Please wrap up your session and save any important notes.
-            </DialogDescription>
+
+            {/* Description */}
+            <p className="text-xs text-white/60 leading-relaxed">
+              Please wrap up your session. The call will end automatically.
+            </p>
           </div>
-          <div className="flex justify-end mt-4">
-            <Button 
-              onClick={onClose}
-              className="bg-yellow-500 hover:bg-yellow-600 text-black font-medium"
-            >
-              I Understand
-            </Button>
-          </div>
-        </DialogPrimitive.Content>
-      </DialogPortal>
-    </Dialog>
+        </div>
+
+        {/* Dismiss Button */}
+        <Button 
+          onClick={onClose}
+          size="sm"
+          className="w-full mt-3 bg-amber-500/20 hover:bg-amber-500/30 text-amber-500 font-medium h-8 rounded-lg border border-amber-500/30 transition-all"
+        >
+          Dismiss
+        </Button>
+      </div>
+    </div>
   );
 }

@@ -16,7 +16,7 @@ export function MessageInput({ onSend, disabled = false }: { onSend: (text: stri
 					setText('')
 				}
 			}}
-			className="flex gap-2 p-2 md:p-3 bg-[#2a2a2a] backdrop-blur-sm"
+			className="flex gap-2 p-3 md:p-4 bg-gradient-to-t from-[#1a1a1a] to-[#1f1f1f] backdrop-blur-sm"
 		>
 			<input
 				value={text}
