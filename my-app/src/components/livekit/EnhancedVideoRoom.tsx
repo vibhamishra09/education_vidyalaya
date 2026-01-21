@@ -8,7 +8,7 @@ import { ChatWidget } from '@/components/chat/ChatWidget'
 import { Button } from '@/components/ui/button'
 import { 
   MessageSquare, X, Users, Maximize2, Minimize2, Video, VideoOff, Mic, MicOff, 
-  Volume2, Clock, MonitorUp, MonitorOff, Grid2X2, Presentation, Pin, 
+  Volume2, VolumeX, Clock, MonitorUp, MonitorOff, Grid2X2, Presentation, Pin, 
   PinOff, User, PictureInPicture2, Camera, CameraOff, Sparkles, Lock, Settings2, 
   PhoneOff, ChevronUp, ChevronLeft, ChevronRight, ShieldCheck, Ban, Aperture, 
   ImageIcon, LayoutGrid, Check, Timer 
@@ -162,26 +162,10 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 	// Session timer with warnings (only if we have start time and duration)
 	const timerEnabled = !!sessionStartTime && sessionDuration > 0 && !!sessionData
 	
-	// For peer sessions, show moderator controls even if timer isn't configured
-	const showModeratorControls = !!sessionData && (sessionData.sessionType === 'peerSession' || timerEnabled)
-	
-	// Debug logging for timer
-	useEffect(() => {
-		console.log('🕐 [EnhancedVideoRoom] Timer debug:', {
-			sessionData: sessionData ? { id: sessionData.id, date: sessionData.date, duration: sessionData.duration, sessionType: sessionData.sessionType } : null,
-			sessionStartTime: sessionStartTime?.toISOString(),
-			sessionDuration,
-			timerEnabled,
-			showModeratorControls,
-			isHost,
-		})
-	}, [sessionData, sessionStartTime, sessionDuration, timerEnabled, showModeratorControls, isHost])
-	
 	// Session extension hook
 	const {
 		hasExtended,
 		extendedEndTime,
-		extensionMinutes,
 		pendingRequest,
 		requestExtension,
 		approveExtension,
@@ -269,11 +253,6 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 		showSuccess('Request sent', 'Asked host for permission to enable camera')
 	}, [participantRequestVideo, showSuccess])
 	
-	const handleRequestExtension = useCallback(() => {
-		requestExtension()
-		showSuccess('Extension request sent', 'Your request to extend the session has been sent to the host')
-	}, [requestExtension, showSuccess])
-	
 	// Show confirmation dialog before ending meeting
 	const handleEndMeetingClick = useCallback(() => {
 		setShowEndConfirmation(true)
@@ -318,26 +297,18 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 		
 		// End meeting for all participants via socket
 		endMeetingForAll()
-		
-		// Fallback: If socket event doesn't trigger redirect within 3 seconds, redirect manually (host only)
-		setTimeout(() => {
-			const redirectUrl = `/session-feedback/${sessionData?.id}?type=${sessionData?.sessionType}&isHost=${isHost}`
-			console.log('🎯 Fallback redirect for host:', redirectUrl)
-			router.push(redirectUrl)
-		}, 3000)
-	}, [sessionData?.id, sessionData?.sessionType, getToken, queryClient, endMeetingForAll, isHost, router])
+	}, [sessionData?.id, sessionData?.sessionType, getToken, queryClient, endMeetingForAll])
 	
 	const handleTimeUp = useCallback(async () => {
 		// Set loading state
 		setEndingMeeting(true)
 		
-		// Timer expired - auto-complete the session (payment processed, redirect to review)
+		// Only host should call the backend to complete the session
 		if (sessionData?.id && sessionData?.sessionType && isHost) {
 			try {
 				const authToken = await getToken()
 				
 				if (sessionData.sessionType === 'studyRoom') {
-					// For study rooms, mark as completed
 					const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/study-rooms/${sessionData.id}/complete`, {
 						method: 'POST',
 						headers: {
@@ -349,10 +320,15 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 					if (!response.ok) {
 						console.error('Failed to complete study room:', response.status, await response.text())
 					} else {
-						console.log('✅ Study room time expired - marked as COMPLETED')
+						console.log('✅ Study room completed, streaks updated')
+						// Invalidate queries to refresh UI (streaks + dashboard + achievements)
+						await queryClient.invalidateQueries({ queryKey: streakKeys.current() })
+						await queryClient.invalidateQueries({ queryKey: streakKeys.history(14) })
+						await queryClient.invalidateQueries({ queryKey: dashboardKeys.all })
+						await queryClient.invalidateQueries({ queryKey: achievementKeys.all })
+						await queryClient.invalidateQueries({ queryKey: ['profile'] })
 					}
 				} else if (sessionData.sessionType === 'peerSession') {
-					// For peer sessions, mark as completed (payment processed)
 					const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/peer-sessions/${sessionData.id}/complete`, {
 						method: 'PATCH',
 						headers: {
@@ -364,23 +340,31 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 					if (!response.ok) {
 						console.error('Failed to complete peer session:', response.status, await response.text())
 					} else {
-						console.log('✅ Peer session time expired - marked as COMPLETED')
+						console.log('✅ Peer session completed, streaks updated')
+						// Invalidate queries to refresh UI (streaks + dashboard + achievements)
+						await queryClient.invalidateQueries({ queryKey: streakKeys.current() })
+						await queryClient.invalidateQueries({ queryKey: streakKeys.history(14) })
+						await queryClient.invalidateQueries({ queryKey: dashboardKeys.all })
+						await queryClient.invalidateQueries({ queryKey: achievementKeys.all })
+						await queryClient.invalidateQueries({ queryKey: ['profile'] })
 					}
 				}
-				
-				// Invalidate queries
-				await queryClient.invalidateQueries({ queryKey: streakKeys.current() })
-				await queryClient.invalidateQueries({ queryKey: dashboardKeys.all })
-				await queryClient.invalidateQueries({ queryKey: achievementKeys.all })
 			} catch (error) {
 				console.error('Error completing session:', error)
 			}
+			
+			// Host: Redirect to feedback page
+			console.log('🏠 Host session ended, redirecting to feedback page')
+			router.push(`/session-feedback/${sessionData?.id}?type=${sessionData?.sessionType}&isHost=true`)
+		} else {
+			// Participant: Redirect to feedback page (starts with review)
+			console.log('👤 Participant session ended, redirecting to feedback page')
+			if (sessionData?.id) {
+				router.push(`/session-feedback/${sessionData.id}?type=${sessionData.sessionType}&isHost=false`)
+			} else {
+				router.push('/dashboard')
+			}
 		}
-		
-		// Redirect to session feedback page for review
-		const redirectUrl = `/session-feedback/${sessionData?.id}?type=${sessionData?.sessionType}&isHost=${isHost}`
-		console.log('🎯 Session time up, redirecting to feedback:', redirectUrl)
-		router.push(redirectUrl)
 	}, [sessionData?.id, sessionData?.sessionType, isHost, getToken, queryClient, router])
 
 	const handleWarning = useCallback((minutes: number) => {
@@ -404,10 +388,10 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 	
 	// Show toast when session is extended
 	useEffect(() => {
-		if (hasExtended && extendedEndTime && extensionMinutes) {
-			showSuccessRef.current('⏱️ Session Extended!', `The session has been extended by ${extensionMinutes} minutes.`)
+		if (hasExtended && extendedEndTime) {
+			showSuccessRef.current('⏱️ Session Extended!', 'The session has been extended by 10 minutes.')
 		}
-	}, [hasExtended, extendedEndTime, extensionMinutes])
+	}, [hasExtended, extendedEndTime])
 
 	// Auto-show chat on desktop, hide on mobile
 	useEffect(() => {
@@ -475,8 +459,8 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 				socket.on('transcript-error', (error) => {
 					console.error('❌ [Transcripts] Server error:', error)
 				})
-			} catch (err) {
-				console.error('❌ [Transcripts] Failed to connect socket:', err)
+			} catch (_err) {
+				console.error('❌ [Transcripts] Failed to connect socket:', _err)
 			}
 		}
 		
@@ -513,6 +497,9 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 	const handleLeave = useCallback(() => {
 		router.back()
 	}, [router])
+
+	// Calculate moderator controls visibility
+	const showModeratorControls = !!sessionData && (sessionData.sessionType === 'peerSession' || timerEnabled)
 
 	// Memoize LiveKit room options to avoid passing a new object every render
 	const roomOptions = useMemo(() => ({
@@ -553,7 +540,6 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 					channelId={channelId}
 					onLeave={handleLeave}
 					timerEnabled={timerEnabled}
-					showModeratorControls={showModeratorControls}
 					formattedTime={formattedTime}
 					minutesLeft={minutesLeft}
 					sessionTitle={sessionData?.title as string | undefined}
@@ -562,6 +548,7 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 					onRequestExtension={requestExtension}
 					onExtendSession={(mins) => approveExtension(currentEndTime, mins)}
 					currentUserId={user?.id}
+					showModeratorControls={showModeratorControls}
 					moderationSocket={moderationSocket}
 					onEndMeeting={handleEndMeetingClick}
 					endingMeeting={endingMeeting}
@@ -653,7 +640,6 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	channelId,
 	onLeave,
 	timerEnabled,
-	showModeratorControls,
 	formattedTime,
 	minutesLeft,
 	sessionTitle,
@@ -662,6 +648,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	onRequestExtension,
 	onExtendSession,
 	currentUserId,
+	showModeratorControls,
 	moderationSocket,
 	onEndMeeting,
 	endingMeeting,
@@ -704,7 +691,6 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	channelId?: string | null
 	onLeave: () => void
 	timerEnabled: boolean
-	showModeratorControls: boolean
 	formattedTime: string
 	minutesLeft: number
 	sessionTitle?: string
@@ -713,6 +699,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	onRequestExtension: (minutes?: number) => void
 	onExtendSession: (minutes?: number) => void
 	currentUserId?: string | null
+	showModeratorControls?: boolean
 	moderationSocket?: Socket | null
 	onEndMeeting?: () => void
 	endingMeeting?: boolean
@@ -747,7 +734,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 }) {
 	const room = useRoomContext()
 	const params = useParams<{ room: string }>()
-	const { showWarning, showSuccess, showInfo, showError } = useToast()
+	const { showWarning } = useToast()
 	
 	// Get participants list for name lookup
 	const allParticipants = useParticipants()
@@ -897,11 +884,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 
 	// Enforce permission locks on initial join and when permissions change
 	// This ensures that when a participant rejoins/refreshes, they respect the locked state
-	const prevPermissionsRef = useRef(permissions)
 	useEffect(() => {
 		if (!localParticipant || isHost) return
-		
-		const prevPermissions = prevPermissionsRef.current
 		
 		// If audio is locked and mic is on, force disable it
 		if (permissions && !permissions.allowAudio && localParticipant.isMicrophoneEnabled) {
@@ -914,40 +898,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			console.log('[permissions] Video is locked, disabling camera')
 			localParticipant.setCameraEnabled(false).catch(() => {})
 		}
-		
-		// Show notifications to participants when permissions change
-		if (permissions && prevPermissions) {
-			// Audio lock changed
-			if (prevPermissions.allowAudio !== permissions.allowAudio) {
-				if (!permissions.allowAudio) {
-					showWarning('🔇 Audio Locked', 'The host has locked audio. You cannot unmute until allowed.')
-				} else {
-					showSuccess('🎤 Audio Unlocked', 'You can now unmute your microphone.')
-				}
-			}
-			
-			// Video lock changed
-			if (prevPermissions.allowVideo !== permissions.allowVideo) {
-				if (!permissions.allowVideo) {
-					showWarning('📷 Video Locked', 'The host has locked video. You cannot enable camera until allowed.')
-				} else {
-					showSuccess('📹 Video Unlocked', 'You can now enable your camera.')
-				}
-			}
-			
-			// Chat lock changed
-			if (prevPermissions.allowChat !== permissions.allowChat) {
-				if (!permissions.allowChat) {
-					showWarning('💬 Chat Locked', 'The host has disabled chat.')
-				} else {
-					showSuccess('💬 Chat Unlocked', 'You can now send messages.')
-				}
-			}
-		}
-		
-		// Update ref for next comparison
-		prevPermissionsRef.current = permissions
-	}, [permissions, localParticipant, isHost, showWarning, showSuccess])
+	}, [permissions, localParticipant, isHost])
 	
 	// Use memoized virtual backgrounds (moved outside with stable ref below)
 	// Access via `VIRTUAL_BACKGROUNDS` constant defined below to avoid re-creating this array each render
@@ -2676,8 +2627,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						</button>
 					</div>
 
-					{/* Extend Session - Only show if timer is enabled AND user is host */}
-					{timerEnabled && isHost && (
+					{/* Extend Session - Only show if timer is enabled */}
+					{timerEnabled && (
 					<div className="relative flex flex-col items-center justify-center group">
 						<button
 						onClick={(e) => {
@@ -2699,24 +2650,16 @@ const VideoRoomContent = memo(function VideoRoomContent({
 							<button
 								key={mins}
 								onClick={() => {
-									if (hasExtended) {
-										showError('Already Extended', 'Session can only be extended once');
-										setShowExtendMenu(false);
-										return;
+									if (isHost) {
+										onExtendSession(mins);
+									} else {
+										onRequestExtension(mins);
 									}
-									// Host directly extends the session
-									onExtendSession(mins);
-									showSuccess('⏱️ Session Extended!', `Session extended by ${mins} minutes`);
 									setShowExtendMenu(false);
 								}}
-								disabled={hasExtended}
-								className={`w-full px-4 py-2.5 text-left text-sm transition-colors flex items-center gap-2 ${
-									hasExtended 
-										? 'text-white/30 cursor-not-allowed' 
-										: 'text-white hover:bg-white/10'
-								}`}
+								className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-white/10 transition-colors flex items-center gap-2"
 							>
-								<Clock className={`w-4 h-4 ${hasExtended ? 'text-white/20' : 'text-white/50'}`} />
+								<Clock className="w-4 h-4 text-white/50" />
 								<span>{mins} minutes</span>
 							</button>
 						))}
@@ -2772,19 +2715,31 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				</Button>
 
 				{/* Background Effects Button - Always visible */}
-			<Button
-				onClick={toggleBackgroundMenu}
-				variant="ghost"
-				size="lg"
-				className={`h-10 w-10 md:h-12 md:w-12 rounded-full transition-all p-0 flex-shrink-0 ${
-					backgroundMode !== 'none'
-						? 'bg-[#00DC6E] hover:bg-[#00b058] text-white' 
-						: 'bg-white/10 hover:bg-white/20 text-white'
-				}`}
-				title="Background effects (Blur/Virtual BG)"
-			>
-				<Sparkles className="h-5 w-5 md:h-6 md:w-6" />
-			</Button>
+				<div className="relative">
+					<Button
+						onClick={() => {
+							// If standard user, just leave
+							if (!isHost) {
+								setShowEndMenu(!showEndMenu)
+							} else {
+								// If host, toggle menu
+								setShowEndMenu(!showEndMenu)
+							}
+						}}
+						className="bg-[#E01E5A] hover:bg-[#C01B4B] text-white font-semibold text-sm h-10 px-5 rounded-xl shadow-lg shadow-red-500/20 hover:shadow-red-500/30 transition-all hover:scale-105"
+						variant="ghost"
+						size="lg"
+						className={`h-10 w-10 md:h-12 md:w-12 rounded-full transition-all p-0 flex-shrink-0 ${
+							backgroundMode !== 'none'
+								? 'bg-[#00DC6E] hover:bg-[#00b058] text-white' 
+								: 'bg-white/10 hover:bg-white/20 text-white'
+						}`}
+						title="Background effects (Blur/Virtual BG)"
+					>
+						<Sparkles className="h-5 w-5 md:h-6 md:w-6" />
+					</Button>
+				</div>
+
 				{/* Mic Toggle */}
 				<Button
 					onClick={async () => {
@@ -2905,9 +2860,60 @@ const VideoRoomContent = memo(function VideoRoomContent({
 									: "Request to extend session by 10 minutes"
 						}
 					>
-					<Clock className="h-4 w-4 md:h-5 md:w-5" />
-					<span className="hidden md:inline">Extend</span>
-				</Button>
+						<Clock className="h-4 w-4 md:h-5 md:w-5" />
+						<span className="hidden md:inline">Extend</span>
+					</Button>
+				)}
+
+				{/* Moderation Buttons - Host only: End meeting button for peer sessions and study rooms */}
+				{isHost && showModeratorControls && (
+					<Button
+						onClick={onEndMeeting}
+						disabled={endingMeeting}
+						variant="ghost"
+						size="lg"
+						className="h-10 px-3 md:h-12 md:px-6 rounded-full bg-[#ea4335] hover:bg-[#d33b2c] text-white font-medium text-xs md:text-base flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+						title="End meeting for all participants"
+					>
+						{endingMeeting ? (
+							<>
+								<div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-1.5" />
+								Ending...
+							</>
+						) : (
+							<>
+								<div className="fixed inset-0 z-[100]" onClick={() => setShowEndMenu(false)} />
+								<div className="absolute right-0 bottom-full mb-3 w-48 bg-[#252525] border border-white/10 rounded-lg shadow-xl z-[101] py-1 animate-in fade-in zoom-in-95 duration-100 overflow-hidden">
+									{isHost && (
+										<button
+											onClick={() => {
+												onEndMeeting?.()
+												setShowEndMenu(false)
+											}}
+											className="w-full px-4 py-3 text-left text-sm text-red-400 hover:bg-red-500/10 hover:text-red-300 flex items-center justify-between group transition-colors"
+										>
+											<span className="font-medium">End Meeting for All</span>
+										</button>
+									)}
+									{isHost && <div className="h-px bg-white/10 w-full" />}
+									<button
+										onClick={() => {
+											onLeave()
+											setShowEndMenu(false)
+										}}
+										className="w-full px-4 py-3 text-left text-sm text-white hover:bg-white/10 flex items-center justify-between group transition-colors"
+									>
+										<span className="font-medium">Leave Meeting</span>
+									</button>
+								</div>
+							</>
+						)}
+					</Button>
+				)}
+			</div>
+			</div>
+
+			{/* Unified Sidebar - Tabbed Interface */}
 			{(showChat || showParticipants) && (
 				<>
 					{/* Mobile Overlay Backdrop */}
@@ -2997,56 +3003,32 @@ const VideoRoomContent = memo(function VideoRoomContent({
 											</div>
 											
 											<div className="grid grid-cols-3 gap-2">
-												{/* Mute All / Unmute All Toggle */}
+												{/* Mute All */}
 												<Button
 													onClick={() => {
-														const isCurrentlyLocked = permissions?.allowAudio === false
-														if (isCurrentlyLocked) {
-															onUnmuteAll?.()
-															onLockAudio?.(false)
-															showSuccess('Audio Unlocked', 'Participants can now unmute their microphones')
-														} else {
-															onMuteAll?.()
-															onLockAudio?.(true)
-															showSuccess('Audio Locked', 'All participants have been muted')
-														}
+														onMuteAll?.()
+														onLockAudio?.(true)
 													}}
 													variant="ghost"
-													className={`flex flex-col items-center justify-center h-auto py-2 gap-1 rounded-lg border transition-all ${
-														permissions?.allowAudio === false
-															? 'bg-red-500/10 text-red-500 border-red-500/20 hover:bg-red-500/20' 
-															: 'bg-white/5 text-white/70 border-white/5 hover:bg-white/10 hover:text-white'
-													}`}
-													title={permissions?.allowAudio === false ? 'Unlock audio for all participants' : 'Mute all and lock audio'}
+													className="flex flex-col items-center justify-center h-auto py-2 gap-1 bg-white/5 hover:bg-white/10 text-white/70 hover:text-white rounded-lg border border-white/5 hover:border-white/20 transition-all"
+													title="Mute all and lock audio"
 												>
-													{permissions?.allowAudio === false ? <Lock className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
-													<span className="text-[10px] font-medium">{permissions?.allowAudio === false ? 'Unlock Audio' : 'Mute All'}</span>
+													<MicOff className="h-4 w-4" />
+													<span className="text-[10px] font-medium">Mute All</span>
 												</Button>
 
-												{/* Stop Video / Enable Video Toggle */}
+												{/* Stop Video */}
 												<Button
 													onClick={() => {
-														const isCurrentlyLocked = permissions?.allowVideo === false
-														if (isCurrentlyLocked) {
-															onEnableVideoAll?.()
-															onLockVideo?.(false)
-															showSuccess('Video Unlocked', 'Participants can now enable their cameras')
-														} else {
-															onDisableVideoAll?.()
-															onLockVideo?.(true)
-															showSuccess('Video Locked', 'All participant cameras have been disabled')
-														}
+														onDisableVideoAll?.()
+														onLockVideo?.(true)
 													}}
 													variant="ghost"
-													className={`flex flex-col items-center justify-center h-auto py-2 gap-1 rounded-lg border transition-all ${
-														permissions?.allowVideo === false
-															? 'bg-red-500/10 text-red-500 border-red-500/20 hover:bg-red-500/20' 
-															: 'bg-white/5 text-white/70 border-white/5 hover:bg-white/10 hover:text-white'
-													}`}
-													title={permissions?.allowVideo === false ? 'Unlock video for all participants' : 'Disable all video and lock'}
+													className="flex flex-col items-center justify-center h-auto py-2 gap-1 bg-white/5 hover:bg-white/10 text-white/70 hover:text-white rounded-lg border border-white/5 hover:border-white/20 transition-all"
+													title="Disable all video and lock"
 												>
-													{permissions?.allowVideo === false ? <Lock className="h-4 w-4" /> : <CameraOff className="h-4 w-4" />}
-													<span className="text-[10px] font-medium">{permissions?.allowVideo === false ? 'Unlock Video' : 'Stop Video'}</span>
+													<CameraOff className="h-4 w-4" />
+													<span className="text-[10px] font-medium">Stop Video</span>
 												</Button>
 
 												{/* Lock Chat */}
@@ -3056,11 +3038,9 @@ const VideoRoomContent = memo(function VideoRoomContent({
 														if (isCurrentlyDisabled) {
 															onToggleChat?.(false)
 															onLockChat?.(false)
-															showSuccess('Chat Unlocked', 'Participants can now send messages')
 														} else {
 															onToggleChat?.(true)
 															onLockChat?.(true)
-															showSuccess('Chat Locked', 'Participants can no longer send messages')
 														}
 													}}
 													variant="ghost"
