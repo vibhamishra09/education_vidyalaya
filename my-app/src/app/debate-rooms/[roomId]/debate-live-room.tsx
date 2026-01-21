@@ -12,7 +12,7 @@ import {
   isTrackReference,
   useSpeakingParticipants,
 } from '@livekit/components-react';
-import { Track, RoomOptions, VideoPresets } from 'livekit-client';
+import { Track, RoomOptions, VideoPresets, RemoteParticipant } from 'livekit-client';
 import { io, Socket } from 'socket.io-client';
 import type { TrackReferenceOrPlaceholder } from '@livekit/components-react';
 import '@livekit/components-styles';
@@ -119,6 +119,18 @@ export function DebateLiveRoom({
     router.push('/debate-rooms');
   }, [router]);
 
+  const handleRoomConnected = useCallback(() => {
+    console.log('[DebateLiveRoom] Room connected callback triggered!');
+  }, []);
+
+  const handleRoomDisconnected = useCallback(() => {
+    console.log('[DebateLiveRoom] Room disconnected callback triggered!');
+  }, []);
+
+  const handleRoomError = useCallback((error: Error) => {
+    console.error('[DebateLiveRoom] Room error:', error);
+  }, []);
+
   // Debug LiveKit connection params
   useEffect(() => {
     console.log('[DebateLiveRoom] LiveKit connection params:');
@@ -150,18 +162,6 @@ export function DebateLiveRoom({
       </div>
     );
   }
-
-  const handleRoomConnected = useCallback(() => {
-    console.log('[DebateLiveRoom] Room connected callback triggered!');
-  }, []);
-
-  const handleRoomDisconnected = useCallback(() => {
-    console.log('[DebateLiveRoom] Room disconnected callback triggered!');
-  }, []);
-
-  const handleRoomError = useCallback((error: Error) => {
-    console.error('[DebateLiveRoom] Room error:', error);
-  }, []);
 
   return (
     <div className="h-screen w-screen flex flex-col bg-[#202124] overflow-hidden fixed inset-0">
@@ -281,7 +281,19 @@ function DebateLiveContent({
     });
 
     // Listen for new messages
-    socket.on('new-message', (message: any) => {
+    socket.on('new-message', (message: { 
+      id: string;
+      visibility: string; 
+      senderId: string; 
+      content: string;
+      createdAt: string;
+      side: DebateSide | null;
+      sender: {
+        clerkId: string;
+        name: string;
+        avatar?: string | null;
+      };
+    }) => {
       console.log('[DebateRoom] Received new message:', message);
       
       // Filter based on user role and team
@@ -312,10 +324,10 @@ function DebateLiveContent({
             id: message.id,
             senderId: message.sender.clerkId,
             senderName: message.sender.name,
-            senderAvatar: message.sender.avatar,
+            senderAvatar: message.sender.avatar || undefined,
             content: message.content,
             createdAt: message.createdAt,
-            visibility: message.visibility,
+            visibility: message.visibility as 'ALL' | 'MODERATOR' | 'MODERATOR_ONLY' | 'TEAM_FOR' | 'TEAM_AGAINST',
             side: message.side,
           }];
         });
@@ -365,14 +377,21 @@ function DebateLiveContent({
 
         if (response.ok) {
           const data = await response.json();
-          const formattedMessages = data.messages.map((msg: any) => ({
+          const formattedMessages = data.messages.map((msg: { 
+            id: string; 
+            sender: { clerkId: string; name: string; avatar: string | null }; 
+            content: string; 
+            createdAt: string; 
+            visibility: string;
+            side: DebateSide | null;
+          }) => ({
             id: msg.id,
             senderId: msg.sender.clerkId,
             senderName: msg.sender.name,
-            senderAvatar: msg.sender.avatar,
+            senderAvatar: msg.sender.avatar || undefined,
             content: msg.content,
             createdAt: msg.createdAt,
-            visibility: msg.visibility,
+            visibility: msg.visibility as 'ALL' | 'MODERATOR' | 'MODERATOR_ONLY' | 'TEAM_FOR' | 'TEAM_AGAINST',
             side: msg.side,
           }));
           setChatMessages(formattedMessages);
@@ -595,7 +614,7 @@ function DebateLiveContent({
       room.remoteParticipants.forEach((participant) => {
         participant.audioTrackPublications.forEach((publication) => {
           if (publication.track && 'setVolume' in publication.track) {
-            (publication.track as any).setVolume(enabled ? 1 : 0);
+            (publication.track as { setVolume: (volume: number) => void }).setVolume(enabled ? 1 : 0);
           }
         });
       });
