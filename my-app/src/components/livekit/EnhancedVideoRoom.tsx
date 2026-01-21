@@ -475,8 +475,8 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 				socket.on('transcript-error', (error) => {
 					console.error('❌ [Transcripts] Server error:', error)
 				})
-			} catch (_err) {
-				console.error('❌ [Transcripts] Failed to connect socket:', _err)
+			} catch (err) {
+				console.error('❌ [Transcripts] Failed to connect socket:', err)
 			}
 		}
 		
@@ -2727,6 +2727,51 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				</div>
 			{/* RIGHT: End Meeting - Single Button with Dropdown */}
 			<div className="flex items-center justify-end">
+				
+				{/* Video Toggle - Use local participant state directly */}
+				<Button
+					onClick={async () => {
+						try {
+							const participant = room?.localParticipant
+							if (!participant) return
+							
+							const newState = !participant.isCameraEnabled
+							
+							// Check permission lock before enabling (non-hosts only)
+							if (newState && !isHost && permissions && !permissions.allowVideo) {
+								// Locked - send request to host
+								participantRequestVideo?.()
+								return
+							}
+							
+							await participant.setCameraEnabled(newState)
+						} catch (err) {
+							// Show user-friendly error messages
+							const error = err as Error & { name?: string }
+							if (error?.name === 'NotReadableError' || error?.message?.includes('Device in use')) {
+								alert('Camera is being used by another application. Please close other apps using your camera and try again.')
+							} else if (error?.name === 'NotAllowedError' || error?.message?.includes('Permission denied')) {
+								alert('Camera access was denied. Please allow camera permissions in your browser settings.')
+							} else if (error?.name === 'NotFoundError') {
+								alert('No camera found. Please connect a camera and try again.')
+							} else {
+								alert(`Could not access camera: ${error?.message || 'Unknown error'}`)
+							}
+						}
+					}}
+					variant="ghost"
+					size="lg"
+					className={`h-10 w-10 md:h-12 md:w-12 rounded-full transition-all p-0 flex-shrink-0 ${
+						(room?.localParticipant?.isCameraEnabled ?? isCameraEnabled)
+							? 'bg-white/10 hover:bg-white/20 text-white' 
+							: 'bg-[#ea4335] hover:bg-[#d33b2c] text-white'
+					}`}
+					title={(room?.localParticipant?.isCameraEnabled ?? isCameraEnabled) ? "Turn off camera" : "Turn on camera"}
+				>
+					{(room?.localParticipant?.isCameraEnabled ?? isCameraEnabled) ? <Video className="h-5 w-5 md:h-6 md:w-6" /> : <VideoOff className="h-5 w-5 md:h-6 md:w-6" />}
+				</Button>
+
+				{/* Background Effects Button - Always visible */}
 				<div className="relative">
 					<Button
 						onClick={() => {
@@ -2739,10 +2784,160 @@ const VideoRoomContent = memo(function VideoRoomContent({
 							}
 						}}
 						className="bg-[#E01E5A] hover:bg-[#C01B4B] text-white font-semibold text-sm h-10 px-5 rounded-xl shadow-lg shadow-red-500/20 hover:shadow-red-500/30 transition-all hover:scale-105"
+						variant="ghost"
+						size="lg"
+						className={`h-10 w-10 md:h-12 md:w-12 rounded-full transition-all p-0 flex-shrink-0 ${
+							backgroundMode !== 'none'
+								? 'bg-[#00DC6E] hover:bg-[#00b058] text-white' 
+								: 'bg-white/10 hover:bg-white/20 text-white'
+						}`}
+						title="Background effects (Blur/Virtual BG)"
+					>
+						<Sparkles className="h-5 w-5 md:h-6 md:w-6" />
+					</Button>
+				</div>
+
+				{/* Mic Toggle */}
+				<Button
+					onClick={async () => {
+						try {
+							const participant = room?.localParticipant
+							if (!participant) return
+							
+							const newState = !participant.isMicrophoneEnabled
+							
+							// Check permission lock before enabling (non-hosts only)
+							if (newState && !isHost && permissions && !permissions.allowAudio) {
+								// Locked - send request to host
+								participantRequestAudio?.()
+								return
+							}
+							
+							await participant.setMicrophoneEnabled(newState)
+						} catch {
+							// Mic toggle failed silently
+						}
+					}}
+					variant="ghost"
+					size="lg"
+					className={`h-10 w-10 md:h-12 md:w-12 rounded-full transition-all p-0 flex-shrink-0 ${
+						(room?.localParticipant?.isMicrophoneEnabled ?? isMicrophoneEnabled)
+							? 'bg-white/10 hover:bg-white/20 text-white' 
+							: 'bg-[#ea4335] hover:bg-[#d33b2c] text-white'
+					}`}
+					title={(room?.localParticipant?.isMicrophoneEnabled ?? isMicrophoneEnabled) ? "Turn off microphone" : "Turn on microphone"}
+				>
+					{(room?.localParticipant?.isMicrophoneEnabled ?? isMicrophoneEnabled) ? <Mic className="h-5 w-5 md:h-6 md:w-6" /> : <MicOff className="h-5 w-5 md:h-6 md:w-6" />}
+				</Button>
+
+				{/* Audio Output Toggle - Hidden on mobile */}
+				<Button
+					onClick={toggleAudio}
+					variant="ghost"
+					size="lg"
+					className={`h-10 w-10 md:h-12 md:w-12 rounded-full transition-all p-0 hidden md:flex flex-shrink-0 ${
+						isAudioEnabled 
+							? 'bg-white/10 hover:bg-white/20 text-white' 
+							: 'bg-white/5 hover:bg-white/10 text-white/50'
+					}`}
+					title={isAudioEnabled ? "Mute all" : "Unmute all"}
+				>
+					{isAudioEnabled ? <Volume2 className="h-5 w-5 md:h-6 md:w-6" /> : <VolumeX className="h-5 w-5 md:h-6 md:w-6" />}
+				</Button>
+
+				{/* Screen Share Toggle */}
+				<Button
+					onClick={async () => {
+						try {
+							const newState = !isScreenShareEnabled
+							await localParticipant?.setScreenShareEnabled(newState)
+						} catch {
+							// Screen share toggle failed silently
+						}
+					}}
+					variant="ghost"
+					size="lg"
+					className={`h-10 w-10 md:h-12 md:w-12 rounded-full transition-all p-0 hidden md:flex flex-shrink-0 ${
+						isScreenShareEnabled 
+							? 'bg-[#00DC6E] hover:bg-[#00b058] text-white' 
+							: 'bg-white/10 hover:bg-white/20 text-white'
+					}`}
+					title={isScreenShareEnabled ? "Stop sharing" : "Share screen"}
+				>
+					{isScreenShareEnabled ? <MonitorOff className="h-5 w-5 md:h-6 md:w-6" /> : <MonitorUp className="h-5 w-5 md:h-6 md:w-6" />}
+				</Button>
+
+				{/* Fullscreen Toggle - Visible on all devices */}
+				<Button
+					onClick={toggleFullscreen}
+					variant="ghost"
+					size="lg"
+					className={`h-10 w-10 md:h-12 md:w-12 rounded-full transition-all p-0 flex-shrink-0 ${
+						isFullscreen 
+							? 'bg-white/20 text-white' 
+							: 'bg-white/10 hover:bg-white/20 text-white'
+					}`}
+					title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+				>
+					{isFullscreen ? <Minimize2 className="h-5 w-5 md:h-6 md:w-6" /> : <Maximize2 className="h-5 w-5 md:h-6 md:w-6" />}
+				</Button>
+
+				{/* Native PiP Mode - Floats over desktop like Google Meet */}
+				<Button
+					onClick={togglePiP}
+					variant="ghost"
+					size="lg"
+					className={`h-10 w-10 md:h-12 md:w-12 rounded-full transition-all p-0 flex-shrink-0 ${
+						isPiPActive 
+							? 'bg-[#00DC6E] hover:bg-[#00b058] text-white' 
+							: 'bg-white/10 hover:bg-white/20 text-white'
+					}`}
+					title={isPiPActive ? "Exit Picture-in-Picture" : "Picture-in-Picture (floats over desktop)"}
+				>
+					<PictureInPicture2 className="h-5 w-5 md:h-6 md:w-6" />
+				</Button>
+
+				{/* Session Extension Button - Only show when timer is enabled */}
+				{timerEnabled && (
+					<Button
+						onClick={isHost ? onExtendSession : () => onRequestExtension()}
+						variant="ghost"
+						size="lg"
+						disabled={hasExtended}
+						className={`h-10 px-3 md:h-12 md:px-4 rounded-full transition-all flex-shrink-0 flex items-center gap-1.5 ${
+							hasExtended
+								? 'bg-white/5 text-white/40 cursor-not-allowed'
+								: 'bg-white/10 hover:bg-white/20 text-white'
+						}`}
+						title={
+							hasExtended 
+								? "Session already extended" 
+								: isHost 
+									? "Extend session by 10 minutes" 
+									: "Request to extend session by 10 minutes"
+						}
 					>
 						End
 					</Button>
 						{showEndMenu && (
+				)}
+
+				{/* Moderation Buttons - Host only: End meeting button for peer sessions and study rooms */}
+				{isHost && showModeratorControls && (
+					<Button
+						onClick={onEndMeeting}
+						disabled={endingMeeting}
+						variant="ghost"
+						size="lg"
+						className="h-10 px-3 md:h-12 md:px-6 rounded-full bg-[#ea4335] hover:bg-[#d33b2c] text-white font-medium text-xs md:text-base flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+						title="End meeting for all participants"
+					>
+						{endingMeeting ? (
+							<>
+								<div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-1.5" />
+								Ending...
+							</>
+						) : (
 							<>
 								<div className="fixed inset-0 z-[100]" onClick={() => setShowEndMenu(false)} />
 								<div className="absolute right-0 bottom-full mb-3 w-48 bg-[#252525] border border-white/10 rounded-lg shadow-xl z-[101] py-1 animate-in fade-in zoom-in-95 duration-100 overflow-hidden">

@@ -9,3 +9,5 @@ export * from './use-push-notifications';
 export * from './use-browse';
 export * from './use-dashboard';
 export * from './use-local-storage';
+export * from './use-debate-rooms';
+export * from './use-debate-socket';

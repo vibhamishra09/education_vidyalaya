@@ -264,24 +264,42 @@ export default function PeerSessionPage({
                         )}
                      </div>
                 </div>
+              </div>
 
-                <p className="text-lg text-muted-foreground leading-relaxed max-w-3xl">
-                  {session.description || "No additional details provided."}
-                </p>
-            </div>
-        </div>
+              {/* Action Buttons */}
+              <div className="flex gap-2">
+                {canAccept && (
+                  <Button 
+                    size="lg" 
+                    onClick={() => handleStatusUpdate(SessionStatus.UPCOMING)}
+                    disabled={isUpdating}
+                    className="bg-green-600 hover:bg-green-700"
+                  >
+                    {isUpdating ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <CheckCircle className="h-4 w-4 mr-2" />
+                    )}
+                    Accept Session
+                  </Button>
+                )}
 
-        <div className="h-px bg-border/50 mb-16" />
-
-        {/* Details Grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-y-10 gap-x-8 mb-16">
-            {/* Date */}
-             <div className="space-y-1">
-               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Date</span>
-               <div className="flex items-center gap-2 text-foreground font-medium">
-                  <Calendar className="h-4 w-4 text-muted-foreground" />
-                  {formattedDate}
-               </div>
+                {canCancelSession && (
+                  <Button 
+                    size="lg" 
+                    variant="destructive"
+                    onClick={() => handleStatusUpdate(SessionStatus.CANCELLED)}
+                    disabled={isUpdating}
+                  >
+                    {isUpdating ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <XCircle className="h-4 w-4 mr-2" />
+                    )}
+                    Cancel Session
+                  </Button>
+                )}
+              </div>
             </div>
 
             {/* Time */}
@@ -338,6 +356,55 @@ export default function PeerSessionPage({
              </div>
           </div>
         )}
+              )}
+            </div>
+
+            <div className="mt-6">
+              <p className="text-sm font-medium mb-2">Topics:</p>
+              <div className="flex flex-wrap gap-2">
+                {session.skills.map((skill, index) => (
+                  <Badge key={index} variant="secondary">
+                    {skill.name}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+      {/* Live Session (LiveKit) - Only show for participants */}
+      {(session.sessionStatus === SessionStatus.UPCOMING || session.sessionStatus === SessionStatus.ONGOING) && isParticipant && (
+        <>
+          <Card className="mb-8">
+            <CardHeader>
+              <CardTitle>Live Session</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-3">
+                {canJoinVideoCall ? (
+                  <Link href={`/rooms/${liveRoomName}`}>
+                    <Button className="bg-blue-600 hover:bg-blue-700">
+                      Join Live Session
+                    </Button>
+                  </Link>
+                ) : (
+                  <div className="space-y-2">
+                    <Button 
+                      className="bg-blue-600 hover:bg-blue-700" 
+                      disabled
+                    >
+                      Join Live Session
+                    </Button>
+                    <p className="text-sm text-muted-foreground">
+                      Video call will be available 5 minutes before the scheduled start time.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </>
+      )}
 
         {/* Participants Row */}
         <div className="mb-16">
@@ -438,6 +505,20 @@ export default function PeerSessionPage({
                 This session has been cancelled. Any payments have been refunded.
               </p>
           </div>
+        )}
+
+        {session.sessionStatus === SessionStatus.NOT_COMPLETED && (
+          <Card className="mb-8 border-orange-200 bg-orange-50">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-2 text-orange-800">
+                <AlertCircle className="h-5 w-5" />
+                <p className="font-medium">Session Not Completed</p>
+              </div>
+              <p className="text-orange-700 mt-2">
+                This session was not completed properly. Any payments have been refunded.
+              </p>
+            </CardContent>
+          </Card>
         )}
 
         {/* Reviews Section */}

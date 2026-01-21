@@ -23,6 +23,8 @@ import { StreaksModule } from './streaks/streaks.module';
 import { AchievementsModule } from './achievements/achievements.module';
 import { TranscriptsModule } from './transcripts/transcripts.module';
 import { DebugModule } from './debug/debug.module';
+import { DebateRoomsModule } from './debate-rooms/debate-rooms.module';
+import { DebateChatModule } from './debate-chat/debate-chat.module';
 import { SessionExtensionModule } from './session-extension/session-extension.module';
 import { SessionModerationModule } from './session-moderation/session-moderation.module';
 import { LoggingInterceptor } from './logging.interceptor';
@@ -56,6 +58,8 @@ import { LoggingInterceptor } from './logging.interceptor';
     AchievementsModule,
     TranscriptsModule,
     DebugModule,
+    DebateRoomsModule,
+    DebateChatModule,
     SessionExtensionModule,
     SessionModerationModule,
   ],
