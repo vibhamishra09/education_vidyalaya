@@ -13,7 +13,7 @@ import {
   useSpeakingParticipants,
   useDataChannel,
 } from '@livekit/components-react';
-import { Track, RoomOptions, VideoPresets, RoomEvent, DataPacket_Kind } from 'livekit-client';
+import { Track, RoomOptions, VideoPresets, RoomEvent, DataPacket_Kind, RemoteParticipant } from 'livekit-client';
 import type { TrackReferenceOrPlaceholder } from '@livekit/components-react';
 import '@livekit/components-styles';
 import { Button } from '@/components/ui/button';
@@ -111,6 +111,18 @@ export function DebateLiveRoom({
     router.push('/debate-rooms');
   }, [router]);
 
+  const handleRoomConnected = useCallback(() => {
+    console.log('[DebateLiveRoom] Room connected callback triggered!');
+  }, []);
+
+  const handleRoomDisconnected = useCallback(() => {
+    console.log('[DebateLiveRoom] Room disconnected callback triggered!');
+  }, []);
+
+  const handleRoomError = useCallback((error: Error) => {
+    console.error('[DebateLiveRoom] Room error:', error);
+  }, []);
+
   // Debug LiveKit connection params
   useEffect(() => {
     console.log('[DebateLiveRoom] LiveKit connection params:');
@@ -144,18 +156,6 @@ export function DebateLiveRoom({
       </div>
     );
   }
-
-  const handleRoomConnected = useCallback(() => {
-    console.log('[DebateLiveRoom] Room connected callback triggered!');
-  }, []);
-
-  const handleRoomDisconnected = useCallback(() => {
-    console.log('[DebateLiveRoom] Room disconnected callback triggered!');
-  }, []);
-
-  const handleRoomError = useCallback((error: Error) => {
-    console.error('[DebateLiveRoom] Room error:', error);
-  }, []);
 
   return (
     <div className="h-screen w-screen flex flex-col bg-[#202124] overflow-hidden fixed inset-0">
@@ -290,8 +290,8 @@ function DebateLiveContent({
 
     const handleDataReceived = (
       payload: Uint8Array,
-      participant?: any,
-      kind?: DataPacket_Kind
+      participant?: RemoteParticipant,
+      _kind?: DataPacket_Kind
     ) => {
       const decoder = new TextDecoder();
       const text = decoder.decode(payload);
@@ -309,7 +309,7 @@ function DebateLiveContent({
           };
           
           // Filter messages based on user role
-          const isModerator = userRole === 'MODERATOR';
+          const isModerator = userRole === 'host' || userRole === 'moderator';
           const canSeeMessage = isModerator || 
                                 newMessage.side === 'ALL' || 
                                 newMessage.side === 'MODERATOR' ||
@@ -337,7 +337,7 @@ function DebateLiveContent({
     if (!room || !localParticipant || !chatInput.trim()) return;
 
     try {
-      const isModerator = userRole === 'MODERATOR';
+      const isModerator = userRole === 'moderator';
       const message: ChatMessage = {
         id: Date.now().toString(),
         senderId: localParticipant.identity,
@@ -394,7 +394,7 @@ function DebateLiveContent({
       room.remoteParticipants.forEach((participant) => {
         participant.audioTrackPublications.forEach((publication) => {
           if (publication.track && 'setVolume' in publication.track) {
-            (publication.track as any).setVolume(enabled ? 1 : 0);
+            (publication.track as { setVolume: (volume: number) => void }).setVolume(enabled ? 1 : 0);
           }
         });
       });
@@ -417,10 +417,10 @@ function DebateLiveContent({
   // Get moderators from debate room
   const moderators = useMemo(() => {
     return debateRoom.moderators.map(m => ({
-      userId: m.userId,
+      userId: m.user.id,
       clerkId: m.user.clerkId,
       name: m.user.name,
-      avatarUrl: m.user.avatarUrl,
+      avatarUrl: m.user.avatar,
     }));
   }, [debateRoom.moderators]);
 
@@ -453,7 +453,7 @@ function DebateLiveContent({
     return cameraTracks.find(t => t.participant.identity === speaking.identity);
   }, [speakingParticipants, cameraTracks]);
 
-  const isModerator = userRole === 'MODERATOR';
+  const isModerator = userRole === 'moderator';
   const isPrepPhase = debateRoom.status === DebateStatus.PREP;
 
   return (
@@ -469,7 +469,7 @@ function DebateLiveContent({
               </Badge>
               {debateState && (
                 <span className="text-sm text-gray-400">
-                  Turn: {debateState.currentTurn + 1}
+                  Turn: {debateState.currentTurnIndex + 1}
                 </span>
               )}
             </div>
@@ -544,10 +544,14 @@ function DebateLiveContent({
               <div className="flex flex-col items-center justify-center px-6">
                 <div className="text-6xl font-bold text-white opacity-50">VS</div>
                 {prepCountdown !== null && prepCountdown > 0 && (
-                  <PrepCountdown countdown={prepCountdown} />
+                  <PrepCountdown secondsRemaining={prepCountdown} />
                 )}
-                {debateState && (
-                  <DebateTurnTimer debateState={debateState} />
+                {debateState && debateState.status !== DebateStatus.PREP && (
+                  <DebateTurnTimer 
+                    turnDurationSeconds={debateState.turnDurationSeconds}
+                    turnStartedAt={debateState.turnStartedAt}
+                    isActive={debateState.status === DebateStatus.LIVE}
+                  />
                 )}
               </div>
 
@@ -655,7 +659,7 @@ function DebateLiveContent({
                     {debateRoom.teams.find(t => t.side === DebateSide.FOR)?.participants.map((p, idx) => (
                       <div key={idx} className="flex items-center gap-3 p-2 bg-green-900/10 rounded-lg border border-green-500/20">
                         <Avatar className="h-8 w-8">
-                          <AvatarImage src={p.user.avatarUrl || undefined} />
+                          <AvatarImage src={p.user.avatar || undefined} />
                           <AvatarFallback>{p.user.name?.[0] || 'U'}</AvatarFallback>
                         </Avatar>
                         <span className="text-sm text-white">{p.user.name}</span>
@@ -674,7 +678,7 @@ function DebateLiveContent({
                     {debateRoom.teams.find(t => t.side === DebateSide.AGAINST)?.participants.map((p, idx) => (
                       <div key={idx} className="flex items-center gap-3 p-2 bg-red-900/10 rounded-lg border border-red-500/20">
                         <Avatar className="h-8 w-8">
-                          <AvatarImage src={p.user.avatarUrl || undefined} />
+                          <AvatarImage src={p.user.avatar || undefined} />
                           <AvatarFallback>{p.user.name?.[0] || 'U'}</AvatarFallback>
                         </Avatar>
                         <span className="text-sm text-white">{p.user.name}</span>
