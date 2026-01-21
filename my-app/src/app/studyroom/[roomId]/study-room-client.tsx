@@ -212,7 +212,7 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
                   {role === "learner" && (
                     <Badge variant="outline" className="rounded-full px-3 py-0.5">Enrolled</Badge>
                   )}
-                  {room.skills && room.skills.map((skill: any) => {
+                  {room.skills && room.skills.map((skill: string | { id?: string; name?: string; skill?: { id?: string; name?: string } }) => {
                     const skillName = typeof skill === 'string' ? skill : (skill.name || skill.skill?.name);
                     const skillKey = typeof skill === 'string' ? skill : (skill.id || skill.skill?.id || Math.random());
                     

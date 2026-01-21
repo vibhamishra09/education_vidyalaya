@@ -75,6 +75,10 @@ export default function RequestSessionPage({
     setFormData(initialFormData);
   }, [clearForm, setFormData]);
 
+  // Memoize minDate to prevent hydration errors (Date value must be consistent between server and client)
+  // Must be called before any conditional returns
+  const minDate = useMemo(() => new Date().toISOString().split("T")[0], []);
+
   useEffect(() => {
     const fetchData = async () => {
       // Wait for Clerk to load
@@ -225,9 +229,6 @@ export default function RequestSessionPage({
   const costPerHour = peer?.hourlyRate ? (typeof peer.hourlyRate === 'string' ? parseFloat(peer.hourlyRate) : peer.hourlyRate) : 0;
   const calculatedCost = peer?.hourlyRate ? (parseInt(formData.duration) / 60) * costPerHour : 0;
 
-  // Memoize minDate to prevent hydration errors (Date value must be consistent between server and client)
-  const minDate = useMemo(() => new Date().toISOString().split("T")[0], []);
-
   const toggleSkill = (skillId: string) => {
     const newSkills = formData.skills.includes(skillId)
       ? formData.skills.filter((id) => id !== skillId)
@@ -299,8 +300,8 @@ export default function RequestSessionPage({
           setError(apiError.response.data.message || 'The selected time slot is not available.');
           toast.error("Time slot unavailable", { description: "The selected time slot is not available." });
         } else if (apiError.response?.data?.code === 'INSUFFICIENT_FUNDS') {
-          setError('You do not have enough Webya tokens to book this session. Please add funds to your wallet.');
-          toast.error("Insufficient funds", { description: "You do not have enough Webya tokens." });
+          setError('You do not have enough WEBYA tokens to book this session. Please add funds to your wallet.');
+          toast.error("Insufficient funds", { description: "You do not have enough WEBYA tokens." });
         } else {
           setError(apiError.response?.data?.message || 'Failed to send session request');
           toast.error("Request failed", { description: apiError.response?.data?.message || 'Failed to send session request' });

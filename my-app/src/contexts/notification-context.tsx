@@ -62,11 +62,12 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
       setUnreadCount(response.unreadCount);
       setHasMore(response.pagination.hasMore);
       setCurrentPage(page);
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const error = err as { message?: string; response?: { data?: unknown; status?: number } };
       console.error('Error fetching notifications:', {
-        message: err.message,
-        response: err.response?.data,
-        status: err.response?.status
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
       });
       // Only set error on the first attempt, silently fail on subsequent background refreshes
       if (!append && page === 1) {
