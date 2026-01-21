@@ -14,6 +14,7 @@ async function bootstrap() {
       .map((url) => url.trim())
       .filter(Boolean) || [];
   const defaultUrls = [
+    'https://webyalaya-main-3pav6whkp-debanshu-ghoshs-projects.vercel.app',
     'https://www.webyalaya.com',
     'https://webyalaya.com',
     'https://webyalaya-next.vercel.app',
