@@ -24,7 +24,6 @@ import { useToast } from "@/contexts/toast-context";
 import Link from "next/link";
 import { SessionStatus } from "@/types";
 import { ReviewsSection } from "@/components/reviews/reviews-section";
-import { ChatWidget } from "@/components/chat/ChatWidget";
 import { formatCoins } from "@/lib/utils/coin-format";
 import { ShareButton } from "@/components/share/share-button";
 
@@ -97,7 +96,7 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
       if (error && typeof error === 'object' && 'response' in error) {
         const apiError = error as { response: { data: { code: string; message: string } } };
         if (apiError.response?.data?.code === 'INSUFFICIENT_COINS') {
-          showError("Insufficient AYA", apiError.response.data.message);
+          showError("Insufficient WEBYA", apiError.response.data.message);
         } else if (apiError.response?.data?.code === 'ROOM_FULL') {
           showError("Room Full", apiError.response.data.message);
         } else {
@@ -171,273 +170,237 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
   const liveRoomName = `studyroom-${roomId}`;
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-background selection:bg-primary/10 selection:text-primary">
       <Navigation />
 
-      <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="flex-1 container mx-auto px-4 py-12 max-w-4xl">
         {/* Back Button */}
-        <Link href="/browse">
-          <Button variant="ghost" className="mb-6">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back
-          </Button>
+        <Link href="/browse" className="inline-flex items-center text-sm font-medium text-muted-foreground hover:text-foreground mb-12 transition-colors group">
+          <ArrowLeft className="h-4 w-4 mr-2 group-hover:-translate-x-1 transition-transform" />
+          Back to Browse
         </Link>
 
-        {/* Study Room Header */}
-        <Card className="mb-8">
-          <CardContent className="pt-6">
-            <div className="flex items-start justify-between gap-4 mb-4">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-2">
-                  <h1 className="text-3xl font-bold">{room.title}</h1>
-                  {role === "teacher" && (
-                    <Badge variant="default">Teacher</Badge>
-                  )}
-                  {role === "learner" && (
-                    <Badge variant="secondary">Enrolled</Badge>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <Badge
+        {/* Header Section */}
+        <div className="space-y-8 mb-16">
+           <div className="space-y-6">
+              <div className="flex flex-wrap items-center gap-3">
+                 {/* Status Badge */}
+                   <Badge
                     variant={
                       room.sessionStatus === SessionStatus.ONGOING
                         ? "destructive"
-                        : "outline"
+                        : "secondary"
                     }
+                    className="rounded-full px-3 py-0.5 font-medium"
                   >
-                    {room.sessionStatus === SessionStatus.ONGOING
-                      ? "Live Now"
-                      : room.sessionStatus}
-                  </Badge>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <ShareButton
-                  url={`${typeof window !== "undefined" ? window.location.origin : process.env.NEXT_PUBLIC_BASE_URL || ""}/studyroom/${roomId}`}
-                  title={room.title}
-                  description={room.description || ""}
-                  variant="outline"
-                  size="lg"
-                />
-                {role === "empty" && !isFull && (
-                  <Button 
-                    size="lg" 
-                    onClick={handleJoinRoom}
-                    disabled={isJoining}
-                  >
-                    {isJoining ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Joining...
-                      </>
+                    {room.sessionStatus === SessionStatus.ONGOING ? (
+                      <span className="flex items-center gap-2">
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-current opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-current"></span>
+                        </span>
+                        Live Now
+                      </span>
                     ) : (
-                      <>
-                        <Coins className="h-4 w-4 mr-2" />
-                        Join Room ({formatCoins(room.joiningFee)} AYA tokens)
-                      </>
+                      "Upcoming"
                     )}
-                  </Button>
-                )}
-                {isFull && role === "empty" && (
-                  <Button size="lg" disabled>
-                    Room Full
-                  </Button>
-                )}
-              </div>
-            </div>
-
-            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
-              <div className="flex items-center gap-2">
-                <Calendar className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <p className="text-sm text-muted-foreground">Date</p>
-                  <p className="font-medium">{formattedDate}</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <Clock className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <p className="text-sm text-muted-foreground">Time</p>
-                  <p className="font-medium">
-                    {formattedTime} ({room.duration} min)
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <Users className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <p className="text-sm text-muted-foreground">Participants</p>
-                  <p className="font-medium">
-                    {room.participantCount || 0} / {room.maxParticipants}
-                  </p>
-                </div>
-              </div>
-
-              <Link 
-                href={`/profile/${room.createdBy.id}`}
-                className="flex items-center gap-2 hover:bg-muted/50 rounded-lg p-2 -m-2 transition-colors group"
-              >
-                <Avatar className="h-10 w-10 ring-2 ring-transparent group-hover:ring-primary/20 transition-all">
-                  <AvatarImage
-                    src={room.createdBy.avatar}
-                    alt={room.createdBy.name}
-                  />
-                  <AvatarFallback>
-                    {room.createdBy.name.charAt(0)}
-                  </AvatarFallback>
-                </Avatar>
-                <div>
-                  <p className="text-sm text-muted-foreground">Teacher</p>
-                  <p className="font-medium group-hover:text-primary transition-colors">{room.createdBy.name}</p>
-                </div>
-              </Link>
-
-              {room.gmeetLink && room.gmeetLink !== "https://meet.google.com/your-meeting-code" && (
-                <div className="flex items-center gap-2">
-                  <ExternalLink className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm text-muted-foreground">Meeting Link</p>
-                    <a 
-                      href={room.gmeetLink} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="font-medium text-blue-600 hover:text-blue-800 underline"
-                    >
-                      Join Meeting
-                    </a>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="mt-6">
-              <p className="text-sm font-medium mb-2">Topics:</p>
-              <div className="flex flex-wrap gap-2">
-                {room.skills.map((skill, index) => (
-                  <Badge key={index} variant="secondary">
-                    {typeof skill === 'string' ? skill : skill.name}
                   </Badge>
-                ))}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+                  
+                  {role === "teacher" && (
+                    <Badge variant="default" className="rounded-full px-3 py-0.5">Teacher</Badge>
+                  )}
+                  {role === "learner" && (
+                    <Badge variant="outline" className="rounded-full px-3 py-0.5">Enrolled</Badge>
+                  )}
+                  {room.skills && room.skills.map((skill: string | { id?: string; name?: string; skill?: { id?: string; name?: string } }) => {
+                    const skillName = typeof skill === 'string' ? skill : (skill.name || skill.skill?.name);
+                    const skillKey = typeof skill === 'string' ? skill : (skill.id || skill.skill?.id || Math.random());
+                    
+                    if (!skillName) return null;
 
-      {/* Live Session (LiveKit) */}
+                    return (
+                      <Badge key={skillKey} variant="secondary" className="bg-muted text-muted-foreground hover:bg-muted/80 rounded-full px-3 py-0.5">
+                        {skillName}
+                      </Badge>
+                    );
+                  })}
+              </div>
+
+              <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-foreground leading-tight">
+                  {room.title}
+              </h1>
+              
+              {room.description && (
+                  <p className="text-lg text-muted-foreground leading-relaxed max-w-2xl">
+                    {room.description}
+                  </p>
+              )}
+           </div>
+
+           {/* Action Buttons */}
+           <div className="flex flex-wrap items-center gap-4 pt-2">
+              {role === "empty" && !isFull && (
+                <Button 
+                  size="lg" 
+                  onClick={handleJoinRoom}
+                  disabled={isJoining}
+                  className="rounded-full px-8 h-12 text-base font-medium"
+                >
+                  {isJoining ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Joining
+                    </>
+                  ) : (
+                    <>
+                      Join for {formatCoins(room.joiningFee)} WEBYA
+                    </>
+                  )}
+                </Button>
+              )}
+              
+              {isFull && role === "empty" && (
+                <Button size="lg" disabled variant="secondary" className="rounded-full px-8 h-12">
+                  Room Full
+                </Button>
+              )}
+
+              <ShareButton
+                url={`${typeof window !== "undefined" ? window.location.origin : process.env.NEXT_PUBLIC_BASE_URL || ""}/studyroom/${roomId}`}
+                title={room.title}
+                description={room.description || ""}
+                variant="outline"
+                className="rounded-full h-12 px-6 border-muted-foreground/20 hover:bg-muted/50 transition-colors"
+              />
+           </div>
+        </div>
+        
+        <div className="h-px bg-border/50 mb-16" />
+
+        {/* Details Grid */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-y-10 gap-x-8 mb-16">
+            
+            {/* Date */}
+            <div className="space-y-1">
+               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                 Date
+               </span>
+               <div className="flex items-center gap-2 text-foreground font-medium">
+                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                  {formattedDate}
+               </div>
+            </div>
+
+            {/* Time */}
+            <div className="space-y-1">
+               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                 Time
+               </span>
+               <div className="flex items-center gap-2 text-foreground font-medium">
+                  <Clock className="h-4 w-4 text-muted-foreground" />
+                  {formattedTime} <span className="text-muted-foreground font-normal text-sm">({room.duration} min)</span>
+               </div>
+            </div>
+
+            {/* Participants */}
+            <div className="space-y-1">
+               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                 Participants
+               </span>
+               <div className="flex items-center gap-2 text-foreground font-medium">
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                  {room.participantCount || 0} / {room.maxParticipants}
+               </div>
+            </div>
+
+            {/* Host */}
+            <div className="space-y-1">
+               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                 Host
+               </span>
+               <Link href={`/profile/${room.createdBy.id}`} className="flex items-center gap-2 group w-max">
+                 <Avatar className="h-5 w-5 border border-border">
+                    <AvatarImage src={room.createdBy.avatar} />
+                    <AvatarFallback className="text-[10px]">{room.createdBy.name.charAt(0)}</AvatarFallback>
+                 </Avatar>
+                 <span className="font-medium text-foreground group-hover:underline decoration-1 underline-offset-4 decoration-muted-foreground">{room.createdBy.name}</span>
+               </Link>
+            </div>
+        </div>
+
+        {/* External Link */}
+        {room.gmeetLink && room.gmeetLink !== "https://meet.google.com/your-meeting-code" && (
+            <div className="mb-16 p-4 rounded-lg bg-muted/30 border border-border/50 inline-block">
+                 <a 
+                    href={room.gmeetLink} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-sm font-medium hover:text-primary transition-colors"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    Join via Google Meet
+                  </a>
+            </div>
+        )}
+
+      {/* Live Session CTA */}
       {(room.sessionStatus === SessionStatus.UPCOMING || room.sessionStatus === SessionStatus.ONGOING) && (role === "teacher" || role === "learner") && (
-        <>
-          <Card className="mb-8">
-            <CardHeader>
-              <CardTitle>Live Session</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-3">
-                {canJoinVideoCall ? (
-                  <Link href={`/rooms/${liveRoomName}`}>
-                    <Button className="bg-blue-600 hover:bg-blue-700">
-                      Join Study Room
+        <div className="rounded-2xl border border-border bg-card p-8 flex flex-col md:flex-row items-center justify-between gap-8 mb-16 shadow-sm">
+            <div className="space-y-2 text-center md:text-left">
+               <h3 className="text-xl font-semibold tracking-tight">
+                  {canJoinVideoCall ? "The classroom is open" : "Waiting to start"}
+               </h3>
+               <p className="text-muted-foreground max-w-md">
+                   {canJoinVideoCall 
+                       ? "Jump in to collaborate with your peers using high-quality video and audio." 
+                       : "The virtual classroom will open 5 minutes before the scheduled start time."}
+               </p>
+            </div>
+            {canJoinVideoCall ? (
+                  <Link href={`/rooms/${liveRoomName}`} className="w-full md:w-auto">
+                    <Button size="lg" className="w-full md:w-auto px-8 rounded-full h-12 shadow-sm">
+                      Enter Classroom
+                      <ArrowLeft className="h-4 w-4 ml-2 rotate-180" />
                     </Button>
                   </Link>
                 ) : (
-                  <div className="space-y-2">
-                    <Button 
-                      className="bg-blue-600 hover:bg-blue-700" 
-                      disabled
-                    >
-                      Join Study Room
-                    </Button>
-                    <p className="text-sm text-muted-foreground">
-                      Video call will be available 5 minutes before the scheduled start time.
-                    </p>
-                  </div>
+                  <Button disabled size="lg" variant="secondary" className="w-full md:w-auto px-8 rounded-full h-12 bg-muted text-muted-foreground opacity-50">
+                    <Clock className="h-4 w-4 mr-2" />
+                    Opens Soon
+                  </Button>
                 )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Chat Widget - Only show when session is UPCOMING (not during live call) */}
-          {room.sessionStatus === SessionStatus.UPCOMING && (role === "teacher" || role === "learner") && (
-            <Card className="mb-8">
-              <CardHeader>
-                <CardTitle>Chat</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="h-[500px]">
-                  <ChatWidget channelId={room.chatChannelId} />
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </>
+        </div>
       )}
 
-        {/* Description */}
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle>Description</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground font-tagline">
-              {room.description || "No description provided."}
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Summary & Reviews (only for concluded sessions) */}
-        {room.sessionStatus === SessionStatus.DONE && (
-          <div className="space-y-8">
-            {/* AI Summary */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Session Summary</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="prose prose-sm max-w-none">
-                  <p className="text-muted-foreground mb-4 font-tagline">
-                    This session covered advanced React hooks including useState,
-                    useEffect, and useContext. We explored best practices for
-                    custom hooks and discussed common pitfalls to avoid.
-                  </p>
-                  <h4 className="font-semibold mb-2">Key Points:</h4>
-                  <ul className="list-disc list-inside space-y-1 text-muted-foreground font-tagline">
-                    <li>Understanding the rules of hooks</li>
-                    <li>Creating custom hooks for reusable logic</li>
-                    <li>Performance optimization with useMemo and useCallback</li>
-                    <li>Context API for state management</li>
-                  </ul>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Reviews */}
-            <ReviewsSection 
-              sessionId={roomId} 
-              showTitle={true}
-            />
-            
-            {/* Review Submission Button */}
-            <Card>
-              <CardContent className="pt-6">
-                <div className="text-center">
-                  <p className="text-muted-foreground mb-4">
-                    Share your experience and help others learn
-                  </p>
-                  <Link href={`/submit-review/${roomId}?type=studyRoom`}>
-                    <Button>
-                      Leave a Review
-                    </Button>
-                  </Link>
-                </div>
-              </CardContent>
-            </Card>
+      {/* Reviews etc */}
+       {room.sessionStatus === SessionStatus.DONE && (
+          <div className="space-y-16">
+             <div className="pt-8 border-t border-border/50">
+                <h3 className="text-xl font-semibold mb-6 tracking-tight">Session Summary</h3>
+                 <div className="prose prose-slate dark:prose-invert max-w-none text-muted-foreground leading-relaxed">
+                    <p>This session has ended. A summary of the key topics covered will appear here shortly.</p>
+                 </div>
+             </div>
+             
+             <div className="pt-8 border-t border-border/50">
+                <ReviewsSection sessionId={roomId} showTitle={true} />
+                {role === 'learner' && (
+                 <div className="mt-10 p-8 rounded-2xl bg-muted/30 border border-dashed border-border text-center">
+                    <p className="text-lg font-medium mb-4 text-foreground">
+                      How was your learning experience?
+                    </p>
+                    <Link href={`/submit-review/${roomId}?type=studyRoom`}>
+                      <Button variant="outline" className="rounded-full px-6">
+                        Write a Review
+                      </Button>
+                    </Link>
+                 </div>
+              )}
+             </div>
           </div>
-        )}
-      </main>
+       )}
 
+      </main>
       <Footer />
     </div>
   );

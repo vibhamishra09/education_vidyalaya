@@ -160,7 +160,7 @@ export default function RoomPage() {
 
 	if (loading) {
 		return (
-			<div className="h-screen w-screen flex items-center justify-center bg-black">
+			<div className="fixed inset-0 flex items-center justify-center bg-black z-50">
 				<div className="text-center text-white">
 					<Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
 					<p>Connecting to video call...</p>
@@ -183,11 +183,14 @@ export default function RoomPage() {
 	if (sessionEnded) {
 		const isNotCompleted = sessionData?.sessionStatus === 'NOT_COMPLETED';
 		return (
-			<div className="h-screen w-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800">
-				<div className="text-center max-w-md mx-auto p-8">
+			<div className="h-screen w-screen flex items-center justify-center bg-[#0a0a0a] relative overflow-hidden">
+				{/* Background decoration */}
+				<div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-red-500/10 rounded-full blur-[100px] pointer-events-none" />
+				
+				<div className="relative z-10 text-center max-w-md mx-auto p-8 rounded-3xl bg-[#141414]/80 backdrop-blur-xl border border-white/10 shadow-2xl animate-in fade-in zoom-in-95 duration-300">
 					<div className="flex justify-center mb-6">
-						<div className="h-20 w-20 rounded-full bg-red-500/20 flex items-center justify-center ring-2 ring-red-500/30">
-							<XCircle className="h-10 w-10 text-red-400" />
+						<div className="h-20 w-20 rounded-full bg-red-500/10 flex items-center justify-center ring-1 ring-red-500/30 shadow-[0_0_20px_rgba(239,68,68,0.2)]">
+							<XCircle className="h-10 w-10 text-red-500" />
 						</div>
 					</div>
 					<h1 className="text-2xl font-bold text-white mb-3">
@@ -199,10 +202,11 @@ export default function RoomPage() {
 							: `This ${sessionData?.sessionType === 'studyRoom' ? 'study room' : 'peer session'} has already been completed. You cannot join a session that has ended.`
 						}
 					</p>
+					
 					<div className="flex flex-col gap-3">
 						<Button 
 							onClick={() => router.push('/dashboard')}
-							className="w-full bg-primary hover:bg-primary/90"
+							className="w-full bg-[#E01E5A] hover:bg-[#C01B4B] text-white font-medium h-11 rounded-xl shadow-lg shadow-red-900/20 transition-all hover:scale-[1.02]"
 						>
 							Go to Dashboard
 						</Button>
@@ -211,7 +215,7 @@ export default function RoomPage() {
 							<Button 
 								variant="outline"
 								onClick={() => router.push(`/session-feedback/${sessionData.id}?type=${sessionData.sessionType}&isHost=false`)}
-								className="w-full border-white/20 text-white hover:bg-white/10"
+								className="w-full h-11 border-white/10 bg-white/5 text-white hover:bg-white/10 hover:text-white rounded-xl transition-all hover:scale-[1.02]"
 							>
 								Leave Feedback
 							</Button>

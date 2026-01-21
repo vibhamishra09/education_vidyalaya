@@ -12,7 +12,7 @@ export class StreaksService {
    * @param sessionDate Date of the session
    * @param duration Duration in minutes
    * @param role 'learner' or 'teacher'
-   * @param coinsEarned Optional coins earned from the session
+   * @param coinsEarned Optional WEBYA earned from the session
    */
   async updateUserActivity(
     userId: string,

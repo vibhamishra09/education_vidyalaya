@@ -72,7 +72,7 @@ function StarRating({ rating, inverted = false }: { rating: number, inverted?: b
       {Array.from({ length: 5 }).map((_, i) => (
         <Star
           key={i}
-          className={`h-4 w-4 ${
+          className={`h-3 w-3 sm:h-4 sm:w-4 ${
             i < rating
               ? "fill-yellow-400 text-yellow-400"
               : inverted 
@@ -164,9 +164,9 @@ export function TestimonialsSlider() {
                     
                     {/* The Blue Ribbon Wrapper */}
                     <div className="relative">
-                      <div className="relative z-10 flex items-center gap-3 rounded-r-2xl rounded-tl-sm bg-[#2b6cb0] py-2.5 pl-6 pr-8 text-white shadow-md">
-                        <span className="text-xl font-bold tracking-tight">{currentTestimonial.name}</span>
-                        <div className="h-5 w-px bg-white/30" />
+                      <div className="relative z-10 flex items-center gap-2 sm:gap-3 rounded-r-2xl rounded-tl-sm bg-[#2b6cb0] py-2 sm:py-2.5 pl-4 sm:pl-6 pr-6 sm:pr-8 text-white shadow-md">
+                        <span className="text-lg sm:text-xl font-bold tracking-tight">{currentTestimonial.name}</span>
+                        <div className="h-4 sm:h-5 w-px bg-white/30" />
                         <StarRating rating={currentTestimonial.rating} inverted={true} />
                       </div>
                       {/* Darker Fold Tail - anchored to the ribbon wrapper */}
@@ -182,8 +182,8 @@ export function TestimonialsSlider() {
                   </div>
 
                   {/* Avatar Overlay */}
-                  <div className="absolute -right-2 -top-14 sm:-right-8 sm:-top-16 z-30">
-                    <Avatar className="h-32 w-32 ring-8 ring-background shadow-xl bg-muted">
+                  <div className="absolute right-4 -top-10 sm:right-8 sm:-top-16 z-30">
+                    <Avatar className="h-24 w-24 sm:h-32 sm:w-32 ring-4 sm:ring-8 ring-background shadow-xl bg-muted">
                       <AvatarImage
                         src={currentTestimonial.avatar}
                         alt={currentTestimonial.name}

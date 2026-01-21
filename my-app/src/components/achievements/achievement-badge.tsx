@@ -185,7 +185,7 @@ export function AchievementBadge({
               <div className="flex items-center gap-1.5 pt-2 border-t border-border">
                 <span className="text-yellow-500 text-xs">✨</span>
                 <span className="text-xs font-medium text-yellow-600 dark:text-yellow-400">
-                  +{formatCoins(achievement.coins)} AYA
+                  +{formatCoins(achievement.coins)} WEBYA
                 </span>
               </div>
             )}

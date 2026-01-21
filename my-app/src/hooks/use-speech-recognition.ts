@@ -162,8 +162,6 @@ export function useSpeechRecognition({
 
     // Handle errors
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      console.error('🚨 [SpeechRecognition] Error:', event.error);
-      
       // Don't treat these as fatal errors
       if (event.error === 'no-speech') {
         console.log('⏸️  [SpeechRecognition] No speech detected, continuing...');
@@ -175,8 +173,15 @@ export function useSpeechRecognition({
         return;
       }
 
-      // Only set error for actual problems
-      if (event.error !== 'network' && event.error !== 'not-allowed') {
+      // Network errors are common and not actionable - just log quietly
+      if (event.error === 'network') {
+        console.log('🌐 [SpeechRecognition] Network error (expected in some environments)');
+        return;
+      }
+
+      // Only log and set error for actual problems
+      if (event.error !== 'not-allowed') {
+        console.error('🚨 [SpeechRecognition] Error:', event.error);
         setError(`Speech recognition error: ${event.error}`);
       }
     };

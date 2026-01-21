@@ -78,7 +78,7 @@ export const metadata: Metadata = {
     default: "Webyalaya - Peer to Peer Learning Platform",
     template: "%s | Webyalaya",
   },
-  description: "Connect with peers to learn and teach. Join study rooms, host sessions, earn AYA coins, and grow together in a collaborative learning community. Free peer-to-peer education platform.",
+  description: "Connect with peers to learn and teach. Join study rooms, host sessions, earn WEBYA, and grow together in a collaborative learning community. Free peer-to-peer education platform.",
   keywords: [
     "peer learning",
     "online tutoring",
@@ -92,7 +92,7 @@ export const metadata: Metadata = {
     "tutoring platform",
     "skill exchange",
     "knowledge sharing",
-    "AYA coins",
+    "WEBYA",
     "webyalaya",
   ],
   authors: [{ name: "Webyalaya Team" }],
@@ -240,6 +240,7 @@ export default function RootLayout({
           <link rel="dns-prefetch" href="https://api.dicebear.com" />
         </head>
         <body
+          suppressHydrationWarning={true}
           className={`${inter.variable} ${harabara.variable} ${gotham.variable} relative min-h-screen bg-background text-foreground antialiased font-sans pb-16 md:pb-0`}
         >
           <BackgroundGradient />

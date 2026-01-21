@@ -1,10 +1,10 @@
 "use client";
 
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Users, Play, Loader2, Star } from "lucide-react";
+import { Users, Loader2, Share2, Play, Calendar } from "lucide-react";
 import { motion } from "framer-motion";
 import { ShareButton } from "@/components/share/share-button";
 import { cn } from "@/lib/utils";
@@ -24,8 +24,6 @@ interface StudyRoomCardProps {
   host?: {
     name: string;
     avatar?: string;
-    rating?: number;
-    reviewCount?: number;
   };
   actionLabel?: string;
   actionVariant?: ButtonVariant;
@@ -39,7 +37,7 @@ export function StudyRoomCard({
   status,
   category = "General",
   title,
-  description = "",
+  description,
   participants,
   host,
   actionLabel,
@@ -49,109 +47,142 @@ export function StudyRoomCard({
   actionLoading = false,
 }: StudyRoomCardProps) {
   const statusIsLive = status === "live";
-  const categoryLabel = category || "General";
   const participantCurrent = participants?.current ?? 0;
   const participantMax = participants?.max ?? 0;
   const hostInitial = host?.name?.charAt(0) || "U";
-  const hasHostRating = typeof host?.rating === "number" && (host?.reviewCount ?? 0) > 0;
-  const statusLabel = statusIsLive ? "Live" : "Upcoming";
+
+  // Dynamic Theme Colors based on Status
+  const theme = statusIsLive
+    ? {
+        border: "border-red-200 dark:border-red-900",
+        hoverBorder: "hover:border-red-300 dark:hover:border-red-800",
+        gradient: "from-card to-red-50/50 dark:to-red-950/20",
+        badge: "bg-red-500/10 text-red-700 border border-red-500/20 dark:text-red-400",
+        titleHover: "group-hover:text-red-700 dark:group-hover:text-red-400",
+        avatarBorder: "border-red-200 dark:border-red-900",
+        avatarFallback: "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300",
+        // Glassy Red Style matching the "Join 2,000+" structure but in Red
+        button: "bg-red-500/10 text-red-700 hover:bg-red-500/20 border border-red-500/20 dark:text-red-400 shadow-sm",
+        iconColor: "text-red-600 dark:text-red-400"
+      }
+    : {
+        border: "border-green-200 dark:border-green-900",
+        hoverBorder: "hover:border-green-300 dark:hover:border-green-800",
+        gradient: "from-card to-green-50/50 dark:to-green-950/20",
+        badge: "bg-green-500/10 text-green-700 border border-green-500/20 dark:text-green-400",
+        titleHover: "group-hover:text-green-700 dark:group-hover:text-green-400",
+        avatarBorder: "border-green-200 dark:border-green-900",
+        avatarFallback: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
+        // Exact match for "Join 2,000+" style (Green-500 glassy)
+        button: "bg-green-500/10 text-green-700 hover:bg-green-500/20 border border-green-500/20 dark:text-green-400 shadow-sm",
+        iconColor: "text-green-600 dark:text-green-400"
+      };
 
   return (
     <motion.div
-      whileHover={{ y: -3 }}
+      whileHover={{ y: -4, scale: 1.01 }}
       transition={{ duration: 0.2 }}
-      className="h-full"
+      className="h-full group"
     >
-      <Card className="h-full flex flex-col bg-background/50 backdrop-blur-sm ring-1 ring-black/5 shadow-sm transition-all duration-200 hover:shadow-lg hover:ring-black/10">
-        {/* Header with status badge and category */}
-        <div className="relative flex items-center justify-between gap-3 border-b border-black/5 px-5 py-4 sm:px-6 sm:py-5">
-          <Badge
-            variant={statusIsLive ? "default" : "secondary"}
-            className={cn(
-              "flex items-center gap-1 shadow-sm whitespace-nowrap",
-              statusIsLive && "animate-pulse"
-            )}
-          >
-            {statusLabel}
+      <Card className={cn(
+        "h-full flex flex-col p-4 bg-gradient-to-br transition-all duration-300 border shadow-sm hover:shadow-lg",
+        theme.gradient,
+        theme.border,
+        theme.hoverBorder
+      )}>
+        
+        {/* Header: Category Badge & Status */}
+        <div className="flex items-center justify-between mb-3">
+          <Badge variant="secondary" className={cn(
+            "text-xs font-bold px-2 py-0.5 transition-colors uppercase tracking-wider rounded-lg border-0",
+            theme.badge
+          )}>
+            {category}
           </Badge>
-          <Badge variant="outline" className="text-xs whitespace-nowrap">{categoryLabel}</Badge>
+          
+          <div className={cn("flex items-center gap-2", theme.iconColor)}>
+            <span className="relative flex h-2 w-2">
+              {statusIsLive && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>}
+              <span className={cn("relative inline-flex rounded-full h-2 w-2", statusIsLive ? "bg-red-500" : "bg-emerald-500")}></span>
+            </span>
+            <span className="text-[11px] font-extrabold tracking-widest uppercase">
+              {statusIsLive ? "LIVE" : "SCHEDULED"}
+            </span>
+          </div>
         </div>
 
-        {/* Main content */}
-        <CardContent className="flex-1 flex flex-col gap-4 px-5 py-4 sm:px-6 sm:py-5">
-          {/* Title and description */}
-          <div className="space-y-1">
-            <h3 className="font-bold text-base sm:text-lg leading-snug line-clamp-2 text-foreground">{title}</h3>
-            <p className="text-xs sm:text-sm text-muted-foreground line-clamp-2">
-              {description || "No description provided."}
+        {/* Main Content: Title & Description */}
+        <div className="flex-1 space-y-1.5 mb-4">
+          <h3 className={cn("text-2xl font-bold leading-tight text-foreground tracking-tight transition-colors line-clamp-2", theme.titleHover)}>
+            {title}
+          </h3>
+          {description && (
+            <p className="text-sm text-muted-foreground leading-relaxed line-clamp-1">
+              {description}
             </p>
-          </div>
+          )}
+        </div>
 
-          {/* Host info section */}
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <Avatar className="h-10 w-10 ring-1 ring-black/10">
+        {/* Footer: Host, Participants & Actions */}
+        <div className="flex flex-wrap gap-y-3 items-center justify-between pt-3 border-t border-dashed border-border/60 mt-auto">
+          
+          {/* Host & Participant Info */}
+          <div className="flex flex-col gap-1.5">
+             {/* Host */}
+            <div className="flex items-center gap-2">
+              <Avatar className={cn("h-7 w-7 border transition-colors", theme.avatarBorder)}>
                 <AvatarImage src={host?.avatar} />
-                <AvatarFallback className="font-semibold">{hostInitial}</AvatarFallback>
+                <AvatarFallback className={cn("text-xs font-bold", theme.avatarFallback)}>
+                    {hostInitial}
+                </AvatarFallback>
               </Avatar>
-              <div className="flex flex-col gap-0.5">
-                <span className="text-sm font-semibold leading-tight text-foreground">
-                  {host?.name || "Unknown Host"}
-                </span>
-                {hasHostRating && (
-                  <div className="flex items-center gap-1">
-                    <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
-                    <span className="text-xs font-semibold text-foreground">{host?.rating?.toFixed(1)}</span>
-                  </div>
-                )}
-              </div>
+              <span className="text-sm font-semibold text-muted-foreground truncate max-w-[100px]">
+                {host?.name}
+              </span>
             </div>
-            <div className="flex flex-col items-end gap-1">
-              <div className="flex items-center gap-1.5 rounded-full bg-muted/60 px-2.5 py-1">
-                <Users className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-xs font-semibold text-muted-foreground">
-                  {participantCurrent}/{participantMax}
-                </span>
-              </div>
-            </div>
+             
+             {/* Participants */}
+             {participants && (
+                <div className="flex items-center gap-1.5 text-muted-foreground/80">
+                  <Users className="h-3.5 w-3.5" />
+                  <span className="text-xs font-bold tabular-nums">
+                    {participantCurrent}/{participantMax} joined
+                  </span>
+                </div>
+             )}
           </div>
 
-          {/* Action buttons */}
-          <div className="flex gap-2 pt-2">
-            <ShareButton
-              url={`${typeof window !== "undefined" ? window.location.origin : process.env.NEXT_PUBLIC_BASE_URL || ""}/studyroom/${roomId}`}
-              title={title}
-              description={description}
-              variant="outline"
-              size="sm"
-              className="flex-1 rounded-lg text-xs"
-            />
+          {/* Actions: Share & CTA Button */}
+          <div className="flex items-center gap-2">
+             <ShareButton
+                url={`${typeof window !== "undefined" ? window.location.origin : ""}/studyroom/${roomId}`}
+                title={title}
+                description={description}
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all"
+             />
+            
             <Button
-              type="button"
-              className="flex-1 rounded-lg text-xs font-semibold"
-              variant={actionVariant ?? (statusIsLive ? "default" : "outline")}
-              size="sm"
+              className={cn(
+                "h-9 pl-3 pr-4 text-xs font-bold rounded-full shadow-md transition-all",
+                actionVariant ? "" : theme.button
+              )}
+              variant={actionVariant || "default"}
               onClick={onAction}
               disabled={actionDisabled || actionLoading}
             >
               {actionLoading ? (
-                <>
                   <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                  Working...
-                </>
-              ) : actionLabel ? (
-                actionLabel
               ) : statusIsLive ? (
-                <>
-                  <Play className="h-3.5 w-3.5 mr-1.5" />
-                  Join Live
-                </>
+                  <Play className="h-3.5 w-3.5 mr-1.5 fill-current" />
               ) : (
-                "Register"
+                  <Calendar className="h-3.5 w-3.5 mr-1.5" />
               )}
+              {actionLoading ? "Wait" : (actionLabel || (statusIsLive ? "Join" : "View"))}
             </Button>
           </div>
-        </CardContent>
+        </div>
       </Card>
     </motion.div>
   );
