@@ -223,7 +223,7 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
                     )}
 
                     <div className="flex flex-wrap gap-1.5">
-                        {room.skills && room.skills.map((skill: any) => {
+                        {room.skills && room.skills.map((skill: string | { id?: string; name?: string; skill?: { id?: string; name?: string } }) => {
                             const skillName = typeof skill === 'string' ? skill : (skill.name || skill.skill?.name);
                             const skillKey = typeof skill === 'string' ? skill : (skill.id || skill.skill?.id || Math.random());
                             if (!skillName) return null;
