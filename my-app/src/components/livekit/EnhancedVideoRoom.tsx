@@ -2878,8 +2878,6 @@ const VideoRoomContent = memo(function VideoRoomContent({
 															: 'bg-white/5 text-white/70 border-white/5 hover:bg-white/10 hover:text-white'
 													}`}
 													title={permissions?.allowAudio === false ? 'Unlock audio for all participants' : 'Mute all and lock audio'}
-													className="flex flex-col items-center justify-center h-auto py-2 gap-1 bg-white/5 hover:bg-white/10 text-white/70 hover:text-white rounded-lg border border-white/5 hover:border-white/20 transition-all"
-													title="Mute all and lock audio"
 												>
 													<MicOff className="h-4 w-4" />
 													<span className="text-[10px] font-medium">Mute All</span>

@@ -300,7 +300,6 @@ export default function PeerSessionPage({
                   </Button>
                 )}
               </div>
-            </div>
 
             {/* Time */}
             <div className="space-y-1">
@@ -356,10 +355,8 @@ export default function PeerSessionPage({
              </div>
           </div>
         )}
-              )}
-            </div>
 
-            <div className="mt-6">
+        <div className="mt-6">
               <p className="text-sm font-medium mb-2">Topics:</p>
               <div className="flex flex-wrap gap-2">
                 {session.skills.map((skill, index) => (
@@ -368,9 +365,7 @@ export default function PeerSessionPage({
                   </Badge>
                 ))}
               </div>
-            </div>
-          </CardContent>
-        </Card>
+        </div>
 
       {/* Live Session (LiveKit) - Only show for participants */}
       {(session.sessionStatus === SessionStatus.UPCOMING || session.sessionStatus === SessionStatus.ONGOING) && isParticipant && (
