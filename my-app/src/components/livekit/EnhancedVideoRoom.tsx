@@ -2670,49 +2670,6 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				</div>
 			{/* RIGHT: End Meeting - Single Button with Dropdown */}
 			<div className="flex items-center justify-end">
-				
-				{/* Video Toggle - Use local participant state directly */}
-				<Button
-					onClick={async () => {
-						try {
-							const participant = room?.localParticipant
-							if (!participant) return
-							
-							const newState = !participant.isCameraEnabled
-							
-							// Check permission lock before enabling (non-hosts only)
-							if (newState && !isHost && permissions && !permissions.allowVideo) {
-								// Locked - send request to host
-								participantRequestVideo?.()
-								return
-							}
-							
-							await participant.setCameraEnabled(newState)
-						} catch (err) {
-							// Show user-friendly error messages
-							const error = err as Error & { name?: string }
-							if (error?.name === 'NotReadableError' || error?.message?.includes('Device in use')) {
-								alert('Camera is being used by another application. Please close other apps using your camera and try again.')
-							} else if (error?.name === 'NotAllowedError' || error?.message?.includes('Permission denied')) {
-								alert('Camera access was denied. Please allow camera permissions in your browser settings.')
-							} else if (error?.name === 'NotFoundError') {
-								alert('No camera found. Please connect a camera and try again.')
-							} else {
-								alert(`Could not access camera: ${error?.message || 'Unknown error'}`)
-							}
-						}
-					}}
-					variant="ghost"
-					size="lg"
-					className={`h-10 w-10 md:h-12 md:w-12 rounded-full transition-all p-0 flex-shrink-0 ${
-						(room?.localParticipant?.isCameraEnabled ?? isCameraEnabled)
-							? 'bg-white/10 hover:bg-white/20 text-white' 
-							: 'bg-[#ea4335] hover:bg-[#d33b2c] text-white'
-					}`}
-					title={(room?.localParticipant?.isCameraEnabled ?? isCameraEnabled) ? "Turn off camera" : "Turn on camera"}
-				>
-					{(room?.localParticipant?.isCameraEnabled ?? isCameraEnabled) ? <Video className="h-5 w-5 md:h-6 md:w-6" /> : <VideoOff className="h-5 w-5 md:h-6 md:w-6" />}
-				</Button>
 
 				{/* Background Effects Button - Always visible */}
 				<div className="relative">
