@@ -28,15 +28,15 @@ services:
       - '3002:3000'
     environment:
       - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_PASSWORD=WebyalayaAdmin123@
       - GF_USERS_ALLOW_SIGN_UP=false
-      - GF_SERVER_ROOT_URL=http://localhost:3002
+      - GF_SERVER_ROOT_URL=www.be.webyalaya.com
       # SMTP Configuration for Gmail
       - GF_SMTP_ENABLED=true
       - GF_SMTP_HOST=smtp.gmail.com:587
-      - GF_SMTP_USER=_your_gmail_username_@
-      - GF_SMTP_PASSWORD=_your_gmail_app_password_
-      - GF_SMTP_FROM_ADDRESS=_your_email_address_
+      - GF_SMTP_USER=ssachin919@gmail.com
+      - GF_SMTP_PASSWORD=rmwd uzog brzn atav
+      - GF_SMTP_FROM_ADDRESS=ssachin919@gmail.com
       - GF_SMTP_FROM_NAME=Webyalaya Monitoring
       - GF_SMTP_SKIP_VERIFY=false
       # Alerting Configuration
