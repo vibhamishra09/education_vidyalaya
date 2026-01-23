@@ -6,7 +6,7 @@ services:
     container_name: webyalaya-prometheus
     restart: unless-stopped
     ports:
-      - '9090:9090'
+      - '${PROMETHEUS_PORT:-9090}:9090'
     volumes:
       - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus-data:/prometheus
@@ -25,23 +25,23 @@ services:
     container_name: webyalaya-grafana
     restart: unless-stopped
     ports:
-      - '3002:3000'
+      - '${GRAFANA_PORT:-3002}:3000'
     environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=WebyalayaAdmin123@
-      - GF_USERS_ALLOW_SIGN_UP=false
-      - GF_SERVER_ROOT_URL=www.be.webyalaya.com
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+      - GF_USERS_ALLOW_SIGN_UP=${GRAFANA_ALLOW_SIGNUP:-false}
+      - GF_SERVER_ROOT_URL=${GRAFANA_ROOT_URL}
       # SMTP Configuration for Gmail
-      - GF_SMTP_ENABLED=true
-      - GF_SMTP_HOST=smtp.gmail.com:587
-      - GF_SMTP_USER=ssachin919@gmail.com
-      - GF_SMTP_PASSWORD=rmwd uzog brzn atav
-      - GF_SMTP_FROM_ADDRESS=ssachin919@gmail.com
-      - GF_SMTP_FROM_NAME=Webyalaya Monitoring
-      - GF_SMTP_SKIP_VERIFY=false
+      - GF_SMTP_ENABLED=${SMTP_ENABLED:-true}
+      - GF_SMTP_HOST=${SMTP_HOST:-smtp.gmail.com:587}
+      - GF_SMTP_USER=${SMTP_USER}
+      - GF_SMTP_PASSWORD=${SMTP_PASSWORD}
+      - GF_SMTP_FROM_ADDRESS=${SMTP_FROM_ADDRESS}
+      - GF_SMTP_FROM_NAME=${SMTP_FROM_NAME:-Webyalaya Monitoring}
+      - GF_SMTP_SKIP_VERIFY=${SMTP_SKIP_VERIFY:-false}
       # Alerting Configuration
-      - GF_ALERTING_ENABLED=true
-      - GF_UNIFIED_ALERTING_ENABLED=true
+      - GF_ALERTING_ENABLED=${GRAFANA_ALERTING_ENABLED:-true}
+      - GF_UNIFIED_ALERTING_ENABLED=${GRAFANA_UNIFIED_ALERTING:-true}
     volumes:
       - grafana-data:/var/lib/grafana
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
