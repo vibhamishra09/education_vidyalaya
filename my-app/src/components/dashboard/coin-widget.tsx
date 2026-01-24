@@ -24,7 +24,7 @@ export function CoinWidget({ coins = 0, isLoading = false }: CoinWidgetProps) {
     <Card>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-lg">WEBYA Balance</CardTitle>
+          <CardTitle className="text-lg">WEBYA Coins</CardTitle>
           <Link href="/profile?tab=wallet">
             <Button variant="ghost" size="sm">
               View All

@@ -222,7 +222,7 @@ export function HomeClient() {
               <div className="mb-5 sm:mb-6">
                 <h2 className="text-3xl sm:text-4xl font-bold tracking-tight mb-2">Debate Rooms</h2>
                 <p className="text-sm sm:text-base text-muted-foreground font-tagline">
-                  Engage in structured peer-to-peer debates
+                  Engage in meaningful conversations. Broaden your perspective.
                 </p>
               </div>
             </FadeIn>
