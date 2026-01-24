@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Facebook, Instagram, Linkedin, Twitter, Youtube } from "lucide-react";
+import { Facebook, Instagram, Linkedin, Youtube } from "lucide-react";
 
 export function Footer() {
   // Landing site URL for Terms and Privacy Policy
@@ -8,10 +8,9 @@ export function Footer() {
   
   const socialLinks = [
     { icon: Linkedin, label: "LinkedIn", url: "https://www.linkedin.com/company/webyalaya/?viewAsMember=true" },
-    { icon: Twitter, label: "Twitter", url: "https://www.humitra.com" },
-    { icon: Facebook, label: "Facebook", url: "https://www.humitra.com" },
-    { icon: Instagram, label: "Instagram", url: "https://www.humitra.com" },
-    { icon: Youtube, label: "YouTube", url: "https://www.humitra.com" },
+    { icon: Facebook, label: "Facebook", url: "https://facebook.com/webyalaya" },
+    { icon: Instagram, label: "Instagram", url: "https://www.instagram.com/webyalaya" },
+    { icon: Youtube, label: "YouTube", url: "http://www.youtube.com/@webyalaya" },
   ];
 
   return (
@@ -30,7 +29,7 @@ export function Footer() {
               />
             </Link>
             <p className="hidden md:block max-w-xs text-xs leading-snug text-muted-foreground">
-              A trusted peer-to-peer learning experience with enterprise-grade polish.
+              Made by Indians. Loved by Learners
             </p>
           </div>
 
@@ -48,17 +47,13 @@ export function Footer() {
             </Link>
             <Link
               className="hover:text-foreground transition-colors"
-              href={`${landingSiteUrl}/terms-of-use`}
-              target="_blank"
-              rel="noopener noreferrer"
+              href="/terms-of-use"
             >
               Terms of Use
             </Link>
             <Link
               className="hover:text-foreground transition-colors"
-              href={`${landingSiteUrl}/privacy-policy`}
-              target="_blank"
-              rel="noopener noreferrer"
+              href="/privacy-policy"
             >
               Privacy Policy
             </Link>
