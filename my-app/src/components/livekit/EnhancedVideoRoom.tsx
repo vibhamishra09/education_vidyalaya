@@ -1552,19 +1552,19 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			{/* Main Video Area - Centered and full width always (overlays used for sidebars) */}
 			<div className={`flex-1 flex flex-col transition-all duration-300 ease-in-out overflow-hidden relative ${(showChat || showParticipants) ? 'md:mr-96' : ''}`}>
 				{/* Zoom-Style Top Info Bar - Centered */}
-				<div className={`absolute left-0 right-0 h-auto flex items-center justify-center pointer-events-none z-30 select-none transition-all duration-300 ${isUserActive ? 'top-4 opacity-100' : 'top-[-60px] opacity-0'}`}>
-					<div className="bg-[#1a1a1a]/90 backdrop-blur-md px-4 py-1.5 rounded-full flex items-center gap-4 border border-white/10 pointer-events-auto shadow-lg hover:bg-[#252525]/95 transition-all">
+				<div className={`absolute left-2 right-2 md:left-0 md:right-0 h-auto flex items-center justify-center pointer-events-none z-30 select-none transition-all duration-300 ${isUserActive ? 'top-2 md:top-4 opacity-100' : 'top-[-60px] opacity-0'}`}>
+					<div className="bg-[#1a1a1a]/90 backdrop-blur-md px-2 md:px-4 py-1.5 rounded-full flex items-center gap-2 md:gap-4 border border-white/10 pointer-events-auto shadow-lg hover:bg-[#252525]/95 transition-all">
 						{/* Meeting Info */}
-						<div className="flex items-center gap-2">
+						<div className="flex items-center gap-1.5 md:gap-2">
 							<div className="text-[#00DC6E]">
-								<ShieldCheck className="h-4 w-4" />
+								<ShieldCheck className="h-3 w-3 md:h-4 md:w-4" />
 							</div>
-							<div className="flex items-center gap-2">
-								<span className="text-white text-xs font-semibold tracking-wide">
+							<div className="flex items-center gap-1.5 md:gap-2">
+								<span className="text-white text-[10px] md:text-xs font-semibold tracking-wide truncate max-w-[120px] md:max-w-none">
 									{sessionTitle || 'Webyalaya Meeting'}
 								</span>
 								<div className="w-px h-3 bg-white/10" />
-								<span className="text-white/50 text-[10px] md:text-xs font-mono">
+								<span className="text-white/50 text-[9px] md:text-xs font-mono whitespace-nowrap">
 									{formattedTime}
 								</span>
 							</div>
@@ -1574,10 +1574,10 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						<div className="relative">
 							<button
 								onClick={() => setIsViewMenuOpen(!isViewMenuOpen)}
-								className="h-6 w-6 flex items-center justify-center rounded-full hover:bg-white/10 text-white/70 hover:text-white transition-colors"
+								className="h-5 w-5 md:h-6 md:w-6 flex items-center justify-center rounded-full hover:bg-white/10 text-white/70 hover:text-white transition-colors"
 								title="Change View"
 							>
-								<LayoutGrid className="h-3.5 w-3.5" />
+								<LayoutGrid className="h-3 w-3 md:h-3.5 md:w-3.5" />
 							</button>
 
 							{/* View Menu Dropdown */}
@@ -1959,6 +1959,42 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						cursor: pointer;
 						transition: all 0.2s ease;
 						flex-shrink: 0;
+					}
+					
+					@media (max-width: 768px) {
+						.focus-thumbnail {
+							width: 120px;
+							min-width: 120px;
+							gap: 4px;
+						}
+						
+						.focus-thumbnails {
+							gap: 8px !important;
+							padding: 4px 40px !important;
+						}
+						
+						.focus-thumbnails-wrapper {
+							min-height: 100px !important;
+							padding: 6px 0 !important;
+						}
+					}
+					
+					@media (max-width: 768px) {
+						.focus-thumbnail {
+							width: 120px;
+							min-width: 120px;
+							gap: 4px;
+						}
+						
+						.focus-thumbnails {
+							gap: 8px;
+							padding: 4px 40px;
+						}
+						
+						.focus-thumbnails-wrapper {
+							min-height: 100px;
+							padding: 6px 0;
+						}
 					}
 					
 					.focus-thumbnail-video-container {
@@ -2516,25 +2552,25 @@ const VideoRoomContent = memo(function VideoRoomContent({
 											</div>
 											
 											{/* Bottom bar with name and audio/video status - NOW BELOW THE VIDEO */}
-											<div className="flex items-center justify-between px-2 pt-1 h-8 shrink-0">
-												<span className="text-white text-sm font-medium truncate max-w-[65%]">
+											<div className="flex items-center justify-between px-2 pt-1 h-8 md:h-8 shrink-0">
+												<span className="text-white text-xs md:text-sm font-medium truncate max-w-[65%]">
 													{isLocal ? 'You' : (track.participant.name || track.participant.identity)}
 												</span>
-												<div className="flex items-center gap-1.5">
+												<div className="flex items-center gap-1 md:gap-1.5">
 													{/* Mic status icon */}
 													{isMuted ? (
-														<div className="w-6 h-6 rounded-full bg-sky-500 flex items-center justify-center" title="Muted">
-															<MicOff className="h-3.5 w-3.5 text-white" />
+														<div className="w-6 h-6 md:w-6 md:h-6 rounded-full bg-sky-500 flex items-center justify-center" title="Muted">
+															<MicOff className="h-3 w-3 md:h-3.5 md:w-3.5 text-white" />
 														</div>
 													) : (
-														<div className="w-6 h-6 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center" title="Unmuted">
-															<Mic className="h-3.5 w-3.5 text-white" />
+														<div className="w-6 h-6 md:w-6 md:h-6 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center" title="Unmuted">
+															<Mic className="h-3 w-3 md:h-3.5 md:w-3.5 text-white" />
 														</div>
 													)}
 													{/* Video status icon */}
 													{isVideoOff && (
-														<div className="w-6 h-6 rounded-full bg-sky-500 flex items-center justify-center" title="Camera off">
-															<VideoOff className="h-3.5 w-3.5 text-white" />
+														<div className="w-6 h-6 md:w-6 md:h-6 rounded-full bg-sky-500 flex items-center justify-center" title="Camera off">
+															<VideoOff className="h-3 w-3 md:h-3.5 md:w-3.5 text-white" />
 														</div>
 													)}
 												</div>
@@ -2551,13 +2587,13 @@ const VideoRoomContent = memo(function VideoRoomContent({
 
 			{/* Zoom-Style Bottom Control Bar - Floating Island */}
 			<div 
-				className={`fixed left-4 right-4 md:left-1/2 md:-translate-x-1/2 md:w-fit md:min-w-[500px] flex items-center justify-between px-4 py-3 bg-[#141414]/90 backdrop-blur-xl border border-white/10 shadow-2xl z-[50] transition-all duration-300 rounded-2xl gap-4 md:gap-8 ${isUserActive ? 'bottom-6 opacity-100' : 'bottom-[-100px] opacity-0'}`} 
+				className={`fixed left-2 right-2 md:left-1/2 md:-translate-x-1/2 md:w-fit md:min-w-[500px] flex items-center justify-between px-2 md:px-4 py-2 md:py-3 bg-[#141414]/90 backdrop-blur-xl border border-white/10 shadow-2xl z-[50] transition-all duration-300 rounded-xl md:rounded-2xl gap-1 md:gap-8 ${isUserActive ? 'bottom-3 md:bottom-6 opacity-100' : 'bottom-[-100px] opacity-0'}`} 
 			>
 				{/* LEFT: Audio/Video Controls - Horizontal Group */}
-				<div className="flex items-center gap-2 md:gap-3">
+				<div className="flex items-center gap-1 md:gap-3">
 					{/* Audio Button Stack */}
 					<div className="flex flex-col items-center justify-center group relative">
-						<div className="flex items-center bg-white/5 rounded-xl p-1 border border-white/5">
+						<div className="flex items-center bg-white/5 rounded-lg md:rounded-xl p-0.5 md:p-1 border border-white/5">
 							<button
 								onClick={async () => {
 									try {
@@ -2572,17 +2608,17 @@ const VideoRoomContent = memo(function VideoRoomContent({
 										await participant.setMicrophoneEnabled(newState)
 									} catch {}
 								}}
-								className={`h-10 w-10 flex items-center justify-center rounded-lg hover:bg-sky-500/20 transition-colors ${(room?.localParticipant?.isMicrophoneEnabled ?? isMicrophoneEnabled) ? 'text-white hover:text-sky-400' : 'bg-sky-500/10 text-sky-500 hover:text-sky-400'}`}
+								className={`h-11 w-11 md:h-10 md:w-10 flex items-center justify-center rounded-lg hover:bg-sky-500/20 active:scale-95 transition-all ${(room?.localParticipant?.isMicrophoneEnabled ?? isMicrophoneEnabled) ? 'text-white hover:text-sky-400' : 'bg-sky-500/10 text-sky-500 hover:text-sky-400'}`}
 								title="Toggle Microphone"
 							>
-								{(room?.localParticipant?.isMicrophoneEnabled ?? isMicrophoneEnabled) ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />}
+								{(room?.localParticipant?.isMicrophoneEnabled ?? isMicrophoneEnabled) ? <Mic className="h-5 w-5 md:h-5 md:w-5" /> : <MicOff className="h-5 w-5 md:h-5 md:w-5" />}
 							</button>
 						</div>
 					</div>
 
 					{/* Video Button Stack */}
 					<div className="flex flex-col items-center justify-center group relative">
-						<div className="flex items-center bg-white/5 rounded-xl p-1 border border-white/5">
+						<div className="flex items-center bg-white/5 rounded-lg md:rounded-xl p-0.5 md:p-1 border border-white/5">
 							<button
 								onClick={async () => {
 									try {
@@ -2596,15 +2632,15 @@ const VideoRoomContent = memo(function VideoRoomContent({
 										await participant.setCameraEnabled(newState)
 									} catch (_err) {}
 								}}
-								className={`h-10 w-10 flex items-center justify-center rounded-lg hover:bg-sky-500/20 transition-colors ${(room?.localParticipant?.isCameraEnabled ?? isCameraEnabled) ? 'text-white hover:text-sky-400' : 'bg-sky-500/10 text-sky-500 hover:text-sky-400'}`}
+								className={`h-11 w-11 md:h-10 md:w-10 flex items-center justify-center rounded-lg hover:bg-sky-500/20 active:scale-95 transition-all ${(room?.localParticipant?.isCameraEnabled ?? isCameraEnabled) ? 'text-white hover:text-sky-400' : 'bg-sky-500/10 text-sky-500 hover:text-sky-400'}`}
 								title="Toggle Camera"
 							>
-								{(room?.localParticipant?.isCameraEnabled ?? isCameraEnabled) ? <Video className="h-5 w-5" /> : <VideoOff className="h-5 w-5" />}
+								{(room?.localParticipant?.isCameraEnabled ?? isCameraEnabled) ? <Video className="h-5 w-5 md:h-5 md:w-5" /> : <VideoOff className="h-5 w-5 md:h-5 md:w-5" />}
 							</button>
-							<div className="w-px h-6 bg-white/10 mx-1" />
+							<div className="hidden md:block w-px h-6 bg-white/10 mx-1" />
 							<button 
 								onClick={() => setShowBackgroundMenu(!showBackgroundMenu)}
-								className="h-10 w-6 flex items-center justify-center rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+								className="hidden md:flex h-10 w-6 items-center justify-center rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
 								title="Video Settings"
 							>
 								<ChevronUp className="h-3 w-3 text-white/70" />
@@ -2614,7 +2650,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				</div>
 
 				{/* CENTER: Main Controls */}
-				<div className="flex items-center gap-2 md:gap-3 flex-1 justify-center">
+				<div className="flex items-center gap-1 md:gap-3 flex-1 justify-center">
 					
 					{/* Share Screen */}
 					<div className="hidden md:flex flex-col items-center justify-center group">
@@ -2625,10 +2661,10 @@ const VideoRoomContent = memo(function VideoRoomContent({
 									await localParticipant?.setScreenShareEnabled(newState)
 								} catch {}
 							}}
-							className={`h-11 w-11 flex items-center justify-center rounded-xl hover:bg-sky-500/20 transition-all ${isScreenShareEnabled ? 'bg-sky-500/20 text-sky-400' : 'text-white/80 hover:text-sky-400'}`}
+							className={`h-9 w-9 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl hover:bg-sky-500/20 transition-all ${isScreenShareEnabled ? 'bg-sky-500/20 text-sky-400' : 'text-white/80 hover:text-sky-400'}`}
 							title="Share Screen"
 						>
-							{isScreenShareEnabled ? <MonitorOff className="h-5 w-5 font-bold" /> : <MonitorUp className="h-5 w-5" />}
+							{isScreenShareEnabled ? <MonitorOff className="h-4 w-4 md:h-5 md:w-5 font-bold" /> : <MonitorUp className="h-4 w-4 md:h-5 md:w-5" />}
 						</button>
 					</div>
 
@@ -2639,10 +2675,10 @@ const VideoRoomContent = memo(function VideoRoomContent({
 								if (!showChat) setShowParticipants(false)
 								setShowChat(!showChat)
 							}}
-							className={`h-11 w-11 flex items-center justify-center rounded-xl hover:bg-sky-500/20 transition-all relative ${showChat ? 'bg-sky-500/20 text-sky-400' : 'text-white/80 hover:text-sky-400'}`}
+							className={`h-11 w-11 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl hover:bg-sky-500/20 active:scale-95 transition-all relative ${showChat ? 'bg-sky-500/20 text-sky-400' : 'text-white/80 hover:text-sky-400'}`}
 							title="Chat"
 						>
-							<MessageSquare className="h-5 w-5" />
+							<MessageSquare className="h-5 w-5 md:h-5 md:w-5" />
 						</button>
 					</div>
 
@@ -2653,12 +2689,12 @@ const VideoRoomContent = memo(function VideoRoomContent({
 								if (!showParticipants) setShowChat(false)
 								setShowParticipants(!showParticipants)
 							}}
-							className={`h-11 w-11 flex items-center justify-center rounded-xl hover:bg-sky-500/20 transition-all relative ${showParticipants ? 'bg-sky-500/20 text-sky-400' : 'text-white/80 hover:text-sky-400'}`}
+							className={`h-11 w-11 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl hover:bg-sky-500/20 active:scale-95 transition-all relative ${showParticipants ? 'bg-sky-500/20 text-sky-400' : 'text-white/80 hover:text-sky-400'}`}
 							title="Participants"
 						>
-							<Users className="h-5 w-5" />
+							<Users className="h-5 w-5 md:h-5 md:w-5" />
 							{allParticipants && allParticipants.length > 0 && (
-								<span className="absolute -top-1 -right-1 bg-sky-500 text-white text-[9px] font-bold px-1.5 rounded-full min-w-[16px] h-[16px] flex items-center justify-center border-2 border-[#141414]">
+								<span className="absolute -top-1 -right-1 bg-sky-500 text-white text-[8px] md:text-[9px] font-bold px-1 md:px-1.5 rounded-full min-w-[14px] md:min-w-[16px] h-[14px] md:h-[16px] flex items-center justify-center border-2 border-[#141414]">
 									{allParticipants.length}
 								</span>
 							)}
@@ -2669,25 +2705,25 @@ const VideoRoomContent = memo(function VideoRoomContent({
 					<div className="hidden md:flex flex-col items-center justify-center group">
 						<button
 							onClick={togglePiP}
-							className={`h-11 w-11 flex items-center justify-center rounded-xl hover:bg-sky-500/20 transition-all ${isPiPActive ? 'bg-sky-500/20 text-sky-400' : 'text-white/80 hover:text-sky-400'}`}
+							className={`h-9 w-9 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl hover:bg-sky-500/20 transition-all ${isPiPActive ? 'bg-sky-500/20 text-sky-400' : 'text-white/80 hover:text-sky-400'}`}
 							title="Picture in Picture"
 						>
-							<PictureInPicture2 className="h-5 w-5" />
+							<PictureInPicture2 className="h-4 w-4 md:h-5 md:w-5" />
 						</button>
 					</div>
 
 					{/* Extend Session - Only show if timer is enabled AND user is host */}
 					{timerEnabled && isHost && (
-					<div className="relative flex flex-col items-center justify-center group">
+					<div className="hidden md:flex relative flex-col items-center justify-center group">
 						<button
 						onClick={(e) => {
 							e.stopPropagation();
 							setShowExtendMenu(!showExtendMenu);
 						}}
-						className="h-11 w-11 flex items-center justify-center rounded-xl hover:bg-white/10 transition-all text-white/80 hover:text-white"
+						className="h-9 w-9 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl hover:bg-white/10 transition-all text-white/80 hover:text-white"
 						title="Extend Session"
 					>
-						<Timer className="h-5 w-5" />
+						<Timer className="h-4 w-4 md:h-5 md:w-5" />
 					</button>
 					
 							{showExtendMenu && (
@@ -2731,16 +2767,16 @@ const VideoRoomContent = memo(function VideoRoomContent({
 					<Button
 						onClick={() => setShowEndMenu(!showEndMenu)}
 						className={`
-							h-11 px-6 rounded-xl font-semibold text-sm transition-all duration-200
-							flex items-center gap-2 shadow-lg
+							h-11 md:h-11 px-4 md:px-6 rounded-lg md:rounded-xl font-semibold text-xs md:text-sm transition-all duration-200
+							flex items-center gap-1.5 md:gap-2 shadow-lg active:scale-95
 							${showEndMenu 
 								? 'bg-red-600 text-white shadow-red-600/20 scale-105' 
 								: 'bg-[#252525] text-red-500 hover:bg-red-600 hover:text-white hover:shadow-red-600/20 hover:scale-105 border border-white/5 hover:border-transparent'
 							}
 						`}
 					>
-						<PhoneOff className="h-4 w-4" />
-						<span>End</span>
+						<PhoneOff className="h-4 w-4 md:h-4 md:w-4" />
+						<span className="hidden sm:inline">End</span>
 					</Button>
 
 					{showEndMenu && (
@@ -2792,7 +2828,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				<>
 					{/* Mobile Overlay Backdrop */}
 					<div
-						className="fixed inset-0 bg-black/40 z-40 md:hidden"
+						className="fixed inset-0 bg-black/60 z-40 md:hidden"
 						onClick={() => {
 							setShowChat(false)
 							setShowParticipants(false)
@@ -2800,26 +2836,26 @@ const VideoRoomContent = memo(function VideoRoomContent({
 					/>
 					
 					{/* Sidebar Container */}
-					<div className="fixed md:absolute right-0 top-0 bottom-0 w-full md:w-80 bg-[#1a1a1a]/95 backdrop-blur-md border-l border-white/10 z-[60] shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
+					<div className="fixed md:absolute right-0 top-0 bottom-0 w-full sm:w-[85%] md:w-96 bg-[#1a1a1a]/95 md:bg-[#1a1a1a]/95 backdrop-blur-md border-l border-white/10 z-[60] shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
 						{/* Drag handle for mobile */}
 						<div className="md:hidden flex justify-center py-2 relative z-10">
 							<div className="w-10 h-1 bg-white/30 rounded-full" />
 						</div>
 
 						{/* Sidebar Header */}
-						<div className="h-16 bg-gradient-to-b from-[#1a1a1a] to-[#1a1a1a]/95 border-b border-white/10 flex items-center justify-between px-6 flex-shrink-0">
-							<div className="flex items-center gap-3">
+						<div className="h-14 md:h-16 bg-gradient-to-b from-[#1a1a1a] to-[#1a1a1a]/95 border-b border-white/10 flex items-center justify-between px-4 md:px-6 flex-shrink-0">
+							<div className="flex items-center gap-2 md:gap-3">
 								{showChat ? (
 									<>
-										<MessageSquare className="h-5 w-5 text-sky-400" />
-										<span className="text-white font-semibold text-lg">Chat</span>
+										<MessageSquare className="h-4 w-4 md:h-5 md:w-5 text-sky-400" />
+										<span className="text-white font-semibold text-base md:text-lg">Chat</span>
 									</>
 								) : (
 									<>
-										<Users className="h-5 w-5 text-sky-400" />
-										<span className="text-white font-semibold text-lg">Participants</span>
+										<Users className="h-4 w-4 md:h-5 md:w-5 text-sky-400" />
+										<span className="text-white font-semibold text-base md:text-lg">Participants</span>
 										{allParticipants && allParticipants.length > 0 && (
-											<span className="bg-white/10 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+											<span className="bg-white/10 text-white text-[10px] md:text-xs font-bold px-1.5 md:px-2 py-0.5 rounded-full">
 												{allParticipants.length}
 											</span>
 										)}
@@ -2833,9 +2869,9 @@ const VideoRoomContent = memo(function VideoRoomContent({
 									setShowChat(false)
 									setShowParticipants(false)
 								}}
-								className="h-8 w-8 p-0 text-white/60 hover:text-white hover:bg-white/10 rounded-full"
+								className="h-7 w-7 md:h-8 md:w-8 p-0 text-white/60 hover:text-white hover:bg-white/10 rounded-full"
 							>
-								<X className="h-4 w-4" />
+								<X className="h-3.5 w-3.5 md:h-4 md:w-4" />
 							</Button>
 						</div>
 
@@ -2990,9 +3026,9 @@ const VideoRoomContent = memo(function VideoRoomContent({
 
 		{/* Background Effects Popup - Floating Panel */}
 		{showBackgroundMenu && (
-			<div className="fixed bottom-24 left-4 md:left-[140px] z-[50] animate-in slide-in-from-bottom-5 zoom-in-95 fade-in duration-200">
+			<div className="fixed bottom-20 left-1/2 -translate-x-1/2 md:left-[140px] md:translate-x-0 z-[50] animate-in slide-in-from-bottom-5 zoom-in-95 fade-in duration-200">
 				{/* Popup card */}
-				<div className="bg-[#1a1a1a]/95 backdrop-blur-2xl rounded-2xl shadow-2xl border border-white/10 w-[300px] overflow-hidden">
+				<div className="bg-[#1a1a1a]/95 backdrop-blur-2xl rounded-xl md:rounded-2xl shadow-2xl border border-white/10 w-[280px] md:w-[300px] overflow-hidden">
 					{/* Header */}
 					<div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-white/5">
 						<div className="flex items-center gap-2">
@@ -3327,8 +3363,8 @@ function ParticipantList({
 									)}
 								</div>
 							) : (
-								/* Standard Controls (Show on hover if host, otherwise show status) */
-								<div className={`flex items-center gap-1 ${canControl ? 'opacity-0 group-hover:opacity-100 transition-opacity duration-200' : 'opacity-100'}`}>
+								/* Standard Controls (Always visible) */
+								<div className="flex items-center gap-1 opacity-100">
 									{/* Video Indicator/Toggle */}
 									<button
 										onClick={() => {
@@ -3342,10 +3378,10 @@ function ParticipantList({
 										disabled={!canControl}
 										className={`p-2 rounded-lg transition-all ${
 											isCamOn 
-												? 'text-white/40 hover:text-white hover:bg-white/10' 
-												: 'text-sky-500/50 hover:text-sky-500 hover:bg-sky-500/10'
-										} ${!canControl && 'cursor-default pointer-events-none'}`}
-										title={canControl ? (isCamOn ? 'Disable Video' : 'Request Video') : ''}
+												? 'text-white/60 hover:text-white hover:bg-white/10' 
+												: 'text-sky-500/70 hover:text-sky-500 hover:bg-sky-500/10'
+										} ${!canControl && 'cursor-default'}`}
+										title={canControl ? (isCamOn ? 'Disable Video' : 'Request Video') : (isCamOn ? 'Camera On' : 'Camera Off')}
 									>
 										{isCamOn ? <Video className="h-4 w-4" /> : <VideoOff className="h-4 w-4" />}
 									</button>
@@ -3363,10 +3399,10 @@ function ParticipantList({
 										disabled={!canControl}
 										className={`p-2 rounded-lg transition-all ${
 											isMicOn 
-												? 'text-white/40 hover:text-white hover:bg-white/10' 
-												: 'text-sky-500/50 hover:text-sky-500 hover:bg-sky-500/10'
-										} ${!canControl && 'cursor-default pointer-events-none'}`}
-										title={canControl ? (isMicOn ? 'Mute' : 'Request to Unmute') : ''}
+												? 'text-white/60 hover:text-white hover:bg-white/10' 
+												: 'text-sky-500/70 hover:text-sky-500 hover:bg-sky-500/10'
+										} ${!canControl && 'cursor-default'}`}
+										title={canControl ? (isMicOn ? 'Mute' : 'Request to Unmute') : (isMicOn ? 'Mic On' : 'Mic Off')}
 									>
 										{isMicOn ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
 									</button>
