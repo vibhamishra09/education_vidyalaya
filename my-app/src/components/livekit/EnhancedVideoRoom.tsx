@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react'
-import { LiveKitRoom, useParticipants, useRoomContext, useTracks, RoomAudioRenderer, useSpeakingParticipants, VideoTrack, useLocalParticipant, isTrackReference } from '@livekit/components-react'
+import { LiveKitRoom, useParticipants, useTracks, RoomAudioRenderer, useSpeakingParticipants, VideoTrack, useLocalParticipant, isTrackReference } from '@livekit/components-react'
 import { Track, RoomOptions, VideoPresets, LocalVideoTrack } from 'livekit-client'
 import '@livekit/components-styles'
 import { BackgroundProcessor, BackgroundBlur, VirtualBackground, BackgroundOptions } from '@livekit/track-processors'
@@ -745,7 +745,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	pendingParticipantRequests?: ParticipantPermissionRequest[]
 	clearParticipantRequest?: (userId: string, type: 'audio' | 'video') => void
 }) {
-	const room = useRoomContext()
+	// const room = useRoomContext() - Removed to avoid race conditions, using localParticipant hook instead
 	const params = useParams<{ room: string }>()
 	const { showWarning, showSuccess, showInfo, showError } = useToast()
 	
@@ -1033,36 +1033,26 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		
 		// Priority 2: Pinned participant
 		if (pinnedParticipantId && !activeScreenShare) {
-			if (room?.localParticipant?.identity === pinnedParticipantId) {
-				return room.localParticipant
-			}
-			const pinned = Array.from(room?.remoteParticipants.values() || []).find(
-				p => p.identity === pinnedParticipantId
-			)
+			const pinned = allParticipants.find(p => p.identity === pinnedParticipantId)
 			if (pinned) return pinned
 		}
 		
 		// Priority 3: Debounced speaking participant (requires sustained speaking)
 		if (debouncedSpeakerId && !activeScreenShare) {
-			if (room?.localParticipant?.identity === debouncedSpeakerId) {
-				return room.localParticipant
-			}
-			const speaker = Array.from(room?.remoteParticipants.values() || []).find(
-				p => p.identity === debouncedSpeakerId
-			)
+			const speaker = allParticipants.find(p => p.identity === debouncedSpeakerId)
 			if (speaker) return speaker
 		}
 		
 		// Priority 4: Host or first remote
-		if (room?.localParticipant) {
+		if (localParticipant) {
 			if (isHost) {
-				return room.localParticipant
+				return localParticipant
 			}
-			const remotes = Array.from(room.remoteParticipants.values())
-			return remotes[0] || room.localParticipant
+			const firstRemote = allParticipants.find(p => !p.isLocal)
+			return firstRemote || localParticipant
 		}
 		return null
-	}, [debouncedSpeakerId, room, isHost, pinnedParticipantId, activeScreenShare])
+	}, [debouncedSpeakerId, localParticipant, allParticipants, isHost, pinnedParticipantId, activeScreenShare])
 	
 	// Handle clicking on a thumbnail to focus/pin that participant
 	const handleThumbnailClick = useCallback((participantId: string) => {
@@ -1316,18 +1306,18 @@ const VideoRoomContent = memo(function VideoRoomContent({
 
 	const toggleAudio = () => {
 		// Toggle audio output (mute/unmute all remote audio)
-		if (room) {
+		
 			const enabled = !isAudioEnabled
 			setIsAudioEnabled(enabled)
 			// Mute/unmute all remote audio tracks by setting volume
-			room.remoteParticipants.forEach((participant) => {
+			allParticipants.forEach((participant) => {
+				if (participant.isLocal) return
 				participant.audioTrackPublications.forEach((publication) => {
 					if (publication.track && 'setVolume' in publication.track) {
 						(publication.track as unknown as { setVolume: (volume: number) => void }).setVolume(enabled ? 1 : 0)
 					}
 				})
 			})
-		}
 	}
 
 	const toggleFullscreen = () => {
@@ -2597,45 +2587,44 @@ const VideoRoomContent = memo(function VideoRoomContent({
 							<button
 								onClick={async () => {
 									try {
-										const participant = room?.localParticipant
-										if (!participant) return
+										if (!localParticipant) return
 										
-										const newState = !participant.isMicrophoneEnabled
+										const newState = !localParticipant.isMicrophoneEnabled
 											if (newState && !isHost && permissions && !permissions.allowAudio) {
 											participantRequestAudio?.()
 											return
 										}
-										await participant.setMicrophoneEnabled(newState)
+										await localParticipant.setMicrophoneEnabled(newState)
 									} catch {}
 								}}
-								className={`h-11 w-11 md:h-10 md:w-10 flex items-center justify-center rounded-lg hover:bg-sky-500/20 active:scale-95 transition-all ${(room?.localParticipant?.isMicrophoneEnabled ?? isMicrophoneEnabled) ? 'text-white hover:text-sky-400' : 'bg-sky-500/10 text-sky-500 hover:text-sky-400'}`}
+								className={`h-11 w-11 md:h-10 md:w-10 flex items-center justify-center rounded-lg hover:bg-sky-500/20 active:scale-95 transition-all ${(isMicrophoneEnabled) ? 'text-white hover:text-sky-400' : 'bg-sky-500/10 text-sky-500 hover:text-sky-400'}`}
 								title="Toggle Microphone"
 							>
-								{(room?.localParticipant?.isMicrophoneEnabled ?? isMicrophoneEnabled) ? <Mic className="h-5 w-5 md:h-5 md:w-5" /> : <MicOff className="h-5 w-5 md:h-5 md:w-5" />}
+								{(isMicrophoneEnabled) ? <Mic className="h-5 w-5 md:h-5 md:w-5" /> : <MicOff className="h-5 w-5 md:h-5 md:w-5" />}
 							</button>
 						</div>
 					</div>
 
-					{/* Video Button Stack */}
+			{/* Video Button Stack */}
 					<div className="flex flex-col items-center justify-center group relative">
 						<div className="flex items-center bg-white/5 rounded-lg md:rounded-xl p-0.5 md:p-1 border border-white/5">
 							<button
 								onClick={async () => {
 									try {
-										const participant = room?.localParticipant
-										if (!participant) return
-										const newState = !participant.isCameraEnabled
+										if (!localParticipant) return
+										
+										const newState = !localParticipant.isCameraEnabled
 										if (newState && !isHost && permissions && !permissions.allowVideo) {
 											participantRequestVideo?.()
 											return
 										}
-										await participant.setCameraEnabled(newState)
+										await localParticipant.setCameraEnabled(newState)
 									} catch (_err) {}
 								}}
-								className={`h-11 w-11 md:h-10 md:w-10 flex items-center justify-center rounded-lg hover:bg-sky-500/20 active:scale-95 transition-all ${(room?.localParticipant?.isCameraEnabled ?? isCameraEnabled) ? 'text-white hover:text-sky-400' : 'bg-sky-500/10 text-sky-500 hover:text-sky-400'}`}
+								className={`h-11 w-11 md:h-10 md:w-10 flex items-center justify-center rounded-lg hover:bg-sky-500/20 active:scale-95 transition-all ${(isCameraEnabled) ? 'text-white hover:text-sky-400' : 'bg-sky-500/10 text-sky-500 hover:text-sky-400'}`}
 								title="Toggle Camera"
 							>
-								{(room?.localParticipant?.isCameraEnabled ?? isCameraEnabled) ? <Video className="h-5 w-5 md:h-5 md:w-5" /> : <VideoOff className="h-5 w-5 md:h-5 md:w-5" />}
+								{(isCameraEnabled) ? <Video className="h-5 w-5 md:h-5 md:w-5" /> : <VideoOff className="h-5 w-5 md:h-5 md:w-5" />}
 							</button>
 							<div className="hidden md:block w-px h-6 bg-white/10 mx-1" />
 							<button 
