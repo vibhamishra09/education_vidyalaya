@@ -745,7 +745,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	pendingParticipantRequests?: ParticipantPermissionRequest[]
 	clearParticipantRequest?: (userId: string, type: 'audio' | 'video') => void
 }) {
-	// const room = useRoomContext() - Removed to avoid race conditions, using localParticipant hook instead
+	// Room context removed to avoid race conditions, using localParticipant hook instead
 	const params = useParams<{ room: string }>()
 	const { showWarning, showSuccess, showInfo, showError } = useToast()
 	
