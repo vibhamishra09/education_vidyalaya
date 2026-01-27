@@ -1,8 +1,22 @@
+// Sentry must be imported and initialized before anything else
+import * as Sentry from '@sentry/nestjs';
+import { nodeProfilingIntegration } from '@sentry/profiling-node';
+
+// Initialize Sentry
+Sentry.init({
+  dsn: process.env.SENTRY_DSN,
+  integrations: [nodeProfilingIntegration()],
+  tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
+  profilesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
+  environment: process.env.NODE_ENV || 'development',
+});
+
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { redisClient } from './redis/redis.provider';
+import { SentryInterceptor, SentryExceptionFilter } from './common/sentry';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -39,6 +53,11 @@ async function bootstrap() {
   });
 
   console.log('🌐 CORS enabled for origins:', allowedOrigins);
+
+  // Sentry error tracking
+  app.useGlobalFilters(new SentryExceptionFilter());
+  app.useGlobalInterceptors(new SentryInterceptor());
+  console.log('🔍 Sentry error tracking enabled');
 
   // Enable validation
   app.useGlobalPipes(

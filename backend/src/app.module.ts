@@ -28,6 +28,7 @@ import { DebateChatModule } from './debate-chat/debate-chat.module';
 import { SessionExtensionModule } from './session-extension/session-extension.module';
 import { SessionModerationModule } from './session-moderation/session-moderation.module';
 import { LoggingInterceptor } from './logging.interceptor';
+import { SentryModule } from './common/sentry';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { LoggingInterceptor } from './logging.interceptor';
         enabled: true,
       },
     }),
+    SentryModule.forRoot(),
     PrismaModule,
     UsersModule,
     SkillsModule,
