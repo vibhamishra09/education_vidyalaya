@@ -165,17 +165,7 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 	// For peer sessions, show moderator controls even if timer isn't configured
 	const showModeratorControls = !!sessionData && (sessionData.sessionType === 'peerSession' || timerEnabled)
 	
-	// Debug logging for timer
-	useEffect(() => {
-		console.log('🕐 [EnhancedVideoRoom] Timer debug:', {
-			sessionData: sessionData ? { id: sessionData.id, date: sessionData.date, duration: sessionData.duration, sessionType: sessionData.sessionType } : null,
-			sessionStartTime: sessionStartTime?.toISOString(),
-			sessionDuration,
-			timerEnabled,
-			showModeratorControls,
-			isHost,
-		})
-	}, [sessionData, sessionStartTime, sessionDuration, timerEnabled, showModeratorControls, isHost])
+	// Timer debug logging removed
 	
 	// Session extension hook
 	const {
@@ -312,7 +302,7 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 				await queryClient.invalidateQueries({ queryKey: dashboardKeys.all })
 				await queryClient.invalidateQueries({ queryKey: achievementKeys.all })
 			} catch (error) {
-				console.error('Error completing session:', error)
+				// Error completing session
 			}
 		}
 		
@@ -322,7 +312,6 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 		// Fallback: If socket event doesn't trigger redirect within 3 seconds, redirect manually (host only)
 		setTimeout(() => {
 			const redirectUrl = `/session-feedback/${sessionData?.id}?type=${sessionData?.sessionType}&isHost=${isHost}`
-			console.log('🎯 Fallback redirect for host:', redirectUrl)
 			router.push(redirectUrl)
 		}, 3000)
 	}, [sessionData?.id, sessionData?.sessionType, getToken, queryClient, endMeetingForAll, isHost, router])
@@ -347,9 +336,7 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 					})
 					
 					if (!response.ok) {
-						console.error('Failed to complete study room:', response.status, await response.text())
-					} else {
-						console.log('✅ Study room time expired - marked as COMPLETED')
+						// Failed to complete study room
 					}
 				} else if (sessionData.sessionType === 'peerSession') {
 					// For peer sessions, mark as completed (payment processed)
@@ -362,9 +349,7 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 					})
 					
 					if (!response.ok) {
-						console.error('Failed to complete peer session:', response.status, await response.text())
-					} else {
-						console.log('✅ Peer session time expired - marked as COMPLETED')
+						// Failed to complete peer session
 					}
 				}
 				
@@ -373,13 +358,12 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 				await queryClient.invalidateQueries({ queryKey: dashboardKeys.all })
 				await queryClient.invalidateQueries({ queryKey: achievementKeys.all })
 			} catch (error) {
-				console.error('Error completing session:', error)
+				// Error completing session
 			}
 		}
 		
 		// Redirect to session feedback page for review
 		const redirectUrl = `/session-feedback/${sessionData?.id}?type=${sessionData?.sessionType}&isHost=${isHost}`
-		console.log('🎯 Session time up, redirecting to feedback:', redirectUrl)
 		router.push(redirectUrl)
 	}, [sessionData?.id, sessionData?.sessionType, isHost, getToken, queryClient, router])
 
@@ -436,9 +420,6 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 				if (!authToken) return
 				
 				const url = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:3001'
-				console.log('🔌 [Transcripts] Connecting to WebSocket endpoint:', url)
-				console.log('🔌 [Transcripts] Session ID:', sessionData?.id)
-				console.log('🔌 [Transcripts] User ID:', user?.id)
 				
 				socket = io(url, {
 					transports: ['websocket'],
@@ -449,34 +430,27 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 				})
 				
 				socket.on('connect', () => {
-					console.log('✅ [Transcripts] Socket connected successfully!')
-					console.log('🎤 [Transcripts] Speech recognition will now start')
 					setTranscriptSocket(socket) // Set socket only after successful connection
 				})
 				
 				socket.on('connect_error', (err: Error) => {
-					console.error('🚨 [Transcripts] Socket connection failed!')
-					console.error('🚨 [Transcripts] Error details:', err.message)
-					console.error('🚨 [Transcripts] Check if backend is running on:', url)
 					setTranscriptSocket(null) // Clear socket on connection error
 				})
 				
 				socket.on('disconnect', (reason) => {
-					console.log('🔌 [Transcripts] Socket disconnected:', reason)
-					console.log('⏸️  [Transcripts] Speech recognition paused')
 					setTranscriptSocket(null) // Clear socket on disconnect
 				})
 				
 				// Add transcript-specific event handlers
 				socket.on('transcript-received', (data) => {
-					console.log('📝 [Transcripts] Server acknowledged transcript:', data.text?.substring(0, 50))
+					// Server acknowledged transcript
 				})
 				
 				socket.on('transcript-error', (error) => {
-					console.error('❌ [Transcripts] Server error:', error)
+					// Server error
 				})
 			} catch (_err) {
-				console.error('❌ [Transcripts] Failed to connect socket:', _err)
+				// Failed to connect socket
 			}
 		}
 		
@@ -486,7 +460,6 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 			socketConnectingRef.current = false
 			if (socket) {
 				socket.disconnect()
-				console.log('🛑 [Transcripts] Socket disconnected')
 			}
 			setTranscriptSocket(null)
 		}
@@ -500,15 +473,7 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 		enabled: !!sessionData?.id && !!user && !!transcriptSocket,
 	})
 	
-	// Log speech recognition status
-	useEffect(() => {
-		if (isListening) {
-			console.log('🎤 [SpeechRecognition] Listening...')
-		}
-		if (speechError) {
-			console.error('🚨 [SpeechRecognition] Error:', speechError)
-		}
-	}, [isListening, speechError])
+	// Speech recognition status logging removed
 
 	const handleLeave = useCallback(() => {
 		router.back()
@@ -857,7 +822,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 					)
 				}
 			} catch (err) {
-				console.warn('Error applying mute action:', err)
+				// Error applying mute action
 			}
 		}
 
@@ -882,7 +847,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 					)
 				}
 			} catch (err) {
-				console.warn('Error applying video action:', err)
+				// Error applying video action
 			}
 		}
 
@@ -905,13 +870,11 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		
 		// If audio is locked and mic is on, force disable it
 		if (permissions && !permissions.allowAudio && localParticipant.isMicrophoneEnabled) {
-			console.log('[permissions] Audio is locked, disabling microphone')
 			localParticipant.setMicrophoneEnabled(false).catch(() => {})
 		}
 		
 		// If video is locked and camera is on, force disable it
 		if (permissions && !permissions.allowVideo && localParticipant.isCameraEnabled) {
-			console.log('[permissions] Video is locked, disabling camera')
 			localParticipant.setCameraEnabled(false).catch(() => {})
 		}
 		
@@ -1087,21 +1050,18 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	const applyBackgroundEffect = useCallback(async (mode: 'none' | 'blur' | 'virtual', intensity?: number) => {
 		// Prevent concurrent applications which cause flickering
 		if (isApplyingEffectRef.current) {
-			console.log('⏳ Effect application already in progress, skipping...')
 			return
 		}
 		
 		isApplyingEffectRef.current = true
-		console.log('🎨 Applying background effect:', mode, intensity ? `with intensity ${intensity}` : '')
 		
 		try {
 			// CRITICAL: Access localParticipant from ref, not from closure
 			const participant = localParticipantRef.current
 			
-			// Check if camera is enabled
-			if (!participant?.isCameraEnabled) {
-				console.warn('⚠️ Camera is not enabled')
-				alert('Please turn on your camera first to use background effects')
+		// Check if camera is enabled
+		if (!participant?.isCameraEnabled) {
+			alert('Please turn on your camera first to use background effects')
 				return
 			}
 			
@@ -1111,10 +1071,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			)
 			const localVideoTrack = videoPublication?.track as LocalVideoTrack | undefined
 			
-			console.log('📹 Video track found:', !!localVideoTrack)
-			
 			if (!localVideoTrack) {
-				console.error('❌ No local video track found')
 				alert('Could not find video track. Please ensure your camera is working.')
 				return
 			}
@@ -1126,28 +1083,22 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			// OPTIMIZATION: If processor already exists, use switchTo for smooth transitions
 			// This avoids destroying and recreating the processor which causes flickering
 			if (processorRef.current) {
-				console.log('🔄 Processor exists, using switchTo for smooth transition...')
 				if (mode === 'blur') {
 					await processorRef.current.switchTo({ mode: 'background-blur', blurRadius })
 					if (intensity !== undefined) setBlurAmount(intensity)
-					console.log('✅ Switched to background blur')
 				} else if (mode === 'virtual') {
 					const selectedBg = VIRTUAL_BACKGROUNDS[currentSelectedBg]
 					await processorRef.current.switchTo({ 
 						mode: 'virtual-background', 
 						imagePath: selectedBg.url
 					})
-					console.log('✅ Switched to virtual background:', selectedBg.name)
 				} else {
 					// Mode is 'none' - remove processor
-					console.log('🧹 Removing processor...')
 					await localVideoTrack.stopProcessor()
 					processorRef.current = null
-					console.log('✅ Background effect removed')
 				}
 			} else if (mode !== 'none') {
 				// Only create new processor if one doesn't exist
-				console.log('🆕 No existing processor, creating new BackgroundProcessor...')
 				
 				let processor: ReturnType<typeof BackgroundProcessor>
 				
@@ -1172,14 +1123,10 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				if (mode === 'blur' && intensity !== undefined) {
 					setBlurAmount(intensity)
 				}
-				
-				console.log('✅ BackgroundProcessor applied successfully')
 			}
 			
 			setBackgroundMode(mode)
-			console.log('✅ Background mode set to:', mode)
 		} catch (err) {
-			console.error('❌ Failed to apply background effect:', err)
 			const error = err as Error
 			alert(`Failed to apply background effect: ${error.message}\n\nTip: Make sure you have good lighting and your browser supports this feature.`)
 		} finally {
@@ -1195,12 +1142,10 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		if (!processorRef.current || backgroundModeRef.current !== 'blur') return
 		
 		try {
-			console.log(`🎚️ Updating blur radius to ${newRadius}...`)
 			// Use switchTo for smooth radius update without recreating the processor
 			await processorRef.current.switchTo({ mode: 'background-blur', blurRadius: newRadius })
-			console.log('✅ Blur radius updated smoothly')
 		} catch (err) {
-			console.error('❌ Failed to update blur radius:', err)
+			// Failed to update blur radius
 		}
 	}, [])
 	
@@ -1236,7 +1181,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			if (processorRef.current) {
 				const localVideoTrack = localParticipant?.videoTrackPublications.values().next().value?.track as LocalVideoTrack | undefined
 				if (localVideoTrack) {
-					localVideoTrack.stopProcessor().catch(console.error)
+					localVideoTrack.stopProcessor().catch(() => {})
 				}
 			}
 		}
@@ -1379,7 +1324,6 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		try {
 			// Check if PiP is supported
 			if (!document.pictureInPictureEnabled) {
-				console.warn('Picture-in-Picture is not supported in this browser')
 				return
 			}
 			
@@ -1474,7 +1418,6 @@ const VideoRoomContent = memo(function VideoRoomContent({
 							setIsPiPActive(true)
 							pipVideoRef.current = videoElement // Store original ref for tracking
 						} catch (err) {
-							console.error('Failed to start mirrored PiP:', err)
 							// Fallback to standard
 							await videoElement.requestPictureInPicture()
 							setIsPiPActive(true)
@@ -1487,11 +1430,9 @@ const VideoRoomContent = memo(function VideoRoomContent({
 					setIsPiPActive(true)
 					pipVideoRef.current = videoElement
 				}
-			} else {
-				console.warn('No video element found for PiP')
 			}
 		} catch (error) {
-			console.error('Error toggling PiP:', error)
+			// Error toggling PiP
 		}
 	}, [])
 	
@@ -1511,7 +1452,6 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						pipVideoRef.current = videoElement
 					} catch (error) {
 						// User may have denied PiP permission, silently fail
-						console.log('Auto PiP not available:', error)
 					}
 				}
 			}
@@ -3428,7 +3368,6 @@ function PermissionRequestModal({
 			}
 			onAccept()
 		} catch (err) {
-			console.error('Failed to enable device:', err)
 			onDeny()
 		}
 	}

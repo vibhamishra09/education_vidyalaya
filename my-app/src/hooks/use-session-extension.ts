@@ -55,7 +55,6 @@ export function useSessionExtension({
     const connectSocket = () => {
       try {
         const url = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:3001';
-        console.log('🔌 [Extension] Connecting to WebSocket:', url);
 
         socketInstance = io(url, {
           transports: ['websocket'],
@@ -66,30 +65,25 @@ export function useSessionExtension({
         });
 
         socketInstance.on('connect', () => {
-          console.log('✅ [Extension] Socket connected, waiting for methods...');
           setIsConnected(true);
           setSocket(socketInstance);
         });
 
         socketInstance.on('authenticated', () => {
-          console.log('🔐 [Extension] Authenticated');
           // Join the session room only after auth confirmation
           socketInstance?.emit('join-session', { sessionId, sessionType });
         });
 
         socketInstance.on('disconnect', (reason) => {
-          console.log('🔌 [Extension] Socket disconnected:', reason);
           setIsConnected(false);
         });
 
         socketInstance.on('connect_error', (err) => {
-          console.error('🚨 [Extension] Connection error:', err.message);
           setError('Failed to connect to extension service');
         });
 
         // Handle extension state updates
         socketInstance.on('extension-state', (data: { hasExtended: boolean; newEndTime?: number }) => {
-          console.log('📡 [Extension] State received:', data);
           setHasExtended(data.hasExtended);
           if (data.newEndTime) {
             setExtendedEndTime(data.newEndTime);
@@ -98,7 +92,6 @@ export function useSessionExtension({
 
         // Handle extension request (for host)
         socketInstance.on('extension-requested', (data: { requestedBy: { userId: string; name: string }; timestamp: number }) => {
-          console.log('📨 [Extension] Request received from:', data.requestedBy.name);
           if (isHost) {
             setPendingRequest({
               userId: data.requestedBy.userId,
@@ -110,7 +103,6 @@ export function useSessionExtension({
 
         // Handle session extended event
         socketInstance.on('session-extended', (data: { newEndTime: number; hasExtended: boolean; extensionMinutes: number }) => {
-          console.log('✅ [Extension] Session extended! New end time:', new Date(data.newEndTime).toISOString());
           setHasExtended(data.hasExtended);
           setExtendedEndTime(data.newEndTime);
           setExtensionMinutes(data.extensionMinutes);
@@ -119,17 +111,15 @@ export function useSessionExtension({
 
         // Handle extension request sent confirmation
         socketInstance.on('extension-request-sent', (data: { message: string }) => {
-          console.log('📤 [Extension] Request sent:', data.message);
+          // Request sent confirmation
         });
 
         // Handle errors
         socketInstance.on('extension-error', (data: { message: string }) => {
-          console.error('❌ [Extension] Error:', data.message);
           setError(data.message);
         });
 
       } catch (err) {
-        console.error('❌ [Extension] Failed to connect:', err);
         setError('Failed to initialize extension service');
       }
     };
@@ -140,7 +130,6 @@ export function useSessionExtension({
       socketConnectingRef.current = false;
       if (socketInstance) {
         socketInstance.disconnect();
-        console.log('🛑 [Extension] Socket disconnected');
       }
       setSocket(null);
       setIsConnected(false);
@@ -159,7 +148,6 @@ export function useSessionExtension({
       return;
     }
 
-    console.log(`📤 [Extension] Sending request for ${minutes} minutes...`);
     socket.emit('request-extension', { sessionId, sessionType, extensionMinutes: minutes });
   }, [socket, sessionId, sessionType, hasExtended]);
 
@@ -175,7 +163,6 @@ export function useSessionExtension({
       return;
     }
 
-    console.log(`✅ [Extension] Approving extension for ${minutes} minutes...`);
     socket.emit('extend-session', {
       sessionId,
       sessionType,

@@ -119,7 +119,6 @@ export function useSpeechRecognition({
               isFinal: true,
             });
 
-            console.log(`🎤 [SpeechRecognition] Sent FINAL transcript: "${transcript}"`);
             lastSentTextRef.current = transcript;
             lastSentTimeRef.current = now;
           }
@@ -151,7 +150,6 @@ export function useSpeechRecognition({
               isFinal: false,
             });
 
-            console.log(`🎤 [SpeechRecognition] Sent interim transcript: "${transcript.substring(0, 50)}${transcript.length > 50 ? '...' : ''}"`); 
             lastSentTextRef.current = transcript;
             lastSentTimeRef.current = Date.now();
             sendTimeoutRef.current = null;
@@ -164,45 +162,38 @@ export function useSpeechRecognition({
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       // Don't treat these as fatal errors
       if (event.error === 'no-speech') {
-        console.log('⏸️  [SpeechRecognition] No speech detected, continuing...');
         return;
       }
       
       if (event.error === 'aborted') {
-        console.log('🔄 [SpeechRecognition] Recognition aborted (likely due to restart), ignoring...');
         return;
       }
 
-      // Network errors are common and not actionable - just log quietly
+      // Network errors are common and not actionable
       if (event.error === 'network') {
-        console.log('🌐 [SpeechRecognition] Network error (expected in some environments)');
         return;
       }
 
-      // Only log and set error for actual problems
+      // Only set error for actual problems
       if (event.error !== 'not-allowed') {
-        console.error('🚨 [SpeechRecognition] Error:', event.error);
         setError(`Speech recognition error: ${event.error}`);
       }
     };
 
     // Auto-restart when recognition stops
     recognition.onend = () => {
-      console.log('🔄 [SpeechRecognition] Recognition ended');
       setIsListening(false);
 
       // Restart if still enabled and recognition is still the current one
       if (shouldRestartRef.current && enabled && callId && userId && socket?.connected && recognitionRef.current === recognition) {
-        console.log('🔄 [SpeechRecognition] Auto-restarting...');
         setTimeout(() => {
           // Double-check we should still restart
           if (shouldRestartRef.current && recognitionRef.current === recognition) {
             try {
               recognition.start();
               setIsListening(true);
-              console.log('✅ [SpeechRecognition] Restarted successfully');
             } catch (err) {
-              console.error('❌ [SpeechRecognition] Failed to restart:', err);
+              // Failed to restart
             }
           }
         }, 200); // Slightly longer delay to prevent rapid restarts
@@ -213,15 +204,12 @@ export function useSpeechRecognition({
     try {
       // Double-check if already listening to prevent 'aborted' error
       if (recognitionRef.current && recognitionRef.current !== recognition) {
-        console.log('🛑 [SpeechRecognition] Stopping previous recognition before starting new one');
         recognitionRef.current.stop();
       }
       
       recognition.start();
       setIsListening(true);
-      console.log('🎤 [SpeechRecognition] Started listening');
     } catch (err) {
-      console.error('❌ [SpeechRecognition] Failed to start:', err);
       // Don't set error for InvalidStateError (usually means already started)
       if (!(err as Error).toString().includes('InvalidStateError')) {
         setError('Failed to start speech recognition');
@@ -241,9 +229,8 @@ export function useSpeechRecognition({
       if (recognitionRef.current) {
         try {
           recognitionRef.current.stop();
-          console.log('🛑 [SpeechRecognition] Stopped listening');
         } catch (err) {
-          console.error('Error stopping recognition:', err);
+          // Error stopping recognition
         }
         recognitionRef.current = null;
       }

@@ -136,7 +136,6 @@ export function useDebateSocket({
         });
 
         newSocket.on('connect', () => {
-          console.log('✅ [DebateSocket] Connected to debate namespace');
           if (mounted) {
             setIsConnected(true);
             socketRef.current = newSocket;
@@ -145,20 +144,17 @@ export function useDebateSocket({
         });
 
         newSocket.on('disconnect', (reason) => {
-          console.log('🔌 [DebateSocket] Disconnected:', reason);
           if (mounted) {
             setIsConnected(false);
           }
         });
 
         newSocket.on('connect_error', (err) => {
-          console.error('🚨 [DebateSocket] Connection error:', err.message);
           callbacksRef.current.onError?.(`Connection failed: ${err.message}`);
         });
 
         // Debate events
         newSocket.on('debate:state_sync', (state: DebateState) => {
-          console.log('📊 [DebateSocket] State sync:', state.status);
           if (mounted) {
             setDebateState(state);
             callbacksRef.current.onStateSync?.(state);
@@ -166,7 +162,6 @@ export function useDebateSocket({
         });
 
         newSocket.on('debate:turn_started', (event: TurnStartedEvent) => {
-          console.log('🎤 [DebateSocket] Turn started:', event.participantName);
           callbacksRef.current.onTurnStarted?.(event);
           // Update local state
           if (mounted) {
@@ -184,7 +179,6 @@ export function useDebateSocket({
         });
 
         newSocket.on('debate:turn_ended', (event: TurnEndedEvent) => {
-          console.log('⏹️ [DebateSocket] Turn ended');
           callbacksRef.current.onTurnEnded?.(event);
           if (mounted) {
             setBuzzerQueue([]); // Clear buzzer queue on turn end
@@ -192,7 +186,6 @@ export function useDebateSocket({
         });
 
         newSocket.on('debate:prep_countdown', (event: PrepCountdownEvent) => {
-          console.log('⏳ [DebateSocket] Prep countdown:', event.secondsRemaining);
           if (mounted) {
             setPrepCountdown(event.secondsRemaining);
           }
@@ -200,7 +193,6 @@ export function useDebateSocket({
         });
 
         newSocket.on('debate:buzzer_pressed', (event: BuzzerPressedEvent) => {
-          console.log('🔔 [DebateSocket] Buzzer pressed:', event.participantName);
           if (mounted) {
             setBuzzerQueue((prev) => [...prev, event]);
           }
@@ -208,7 +200,6 @@ export function useDebateSocket({
         });
 
         newSocket.on('debate:team_chat', (message: TeamChatMessage) => {
-          console.log('💬 [DebateSocket] Team chat:', message.participantName);
           if (mounted) {
             setTeamChatMessages((prev) => [...prev, message]);
           }
@@ -216,7 +207,6 @@ export function useDebateSocket({
         });
 
         newSocket.on('debate:ended', (event: DebateEndedEvent) => {
-          console.log('🏁 [DebateSocket] Debate ended:', event.reason);
           if (mounted) {
             setDebateState((prev) =>
               prev ? { ...prev, status: DebateStatus.ENDED } : prev
@@ -228,26 +218,23 @@ export function useDebateSocket({
         });
 
         newSocket.on('debate:participant_joined', (event: ParticipantJoinedEvent) => {
-          console.log('👋 [DebateSocket] Participant joined:', event.name);
           callbacksRef.current.onParticipantJoined?.(event);
           // Refetch room details
           queryClient.invalidateQueries({ queryKey: debateRoomKeys.detail(roomId) });
         });
 
         newSocket.on('debate:participant_left', (event: ParticipantLeftEvent) => {
-          console.log('👋 [DebateSocket] Participant left:', event.userId);
           callbacksRef.current.onParticipantLeft?.(event);
           // Refetch room details
           queryClient.invalidateQueries({ queryKey: debateRoomKeys.detail(roomId) });
         });
 
         newSocket.on('debate:error', (error: { message: string }) => {
-          console.error('❌ [DebateSocket] Error:', error.message);
           callbacksRef.current.onError?.(error.message);
         });
 
       } catch (err) {
-        console.error('❌ [DebateSocket] Failed to connect:', err);
+        // Connection failed
       } finally {
         connectingRef.current = false;
       }
@@ -270,21 +257,18 @@ export function useDebateSocket({
   // Actions
   const joinRoom = useCallback(() => {
     if (socket && isConnected) {
-      console.log('🚪 [DebateSocket] Joining room:', roomId);
       socket.emit('debate:join_room', { roomId });
     }
   }, [socket, isConnected, roomId]);
 
   const leaveRoom = useCallback(() => {
     if (socket && isConnected) {
-      console.log('🚪 [DebateSocket] Leaving room:', roomId);
       socket.emit('debate:leave_room', { roomId });
     }
   }, [socket, isConnected, roomId]);
 
   const pressBuzzer = useCallback(() => {
     if (socket && isConnected) {
-      console.log('🔔 [DebateSocket] Pressing buzzer');
       socket.emit('debate:buzzer', { roomId });
     }
   }, [socket, isConnected, roomId]);
@@ -292,7 +276,6 @@ export function useDebateSocket({
   const sendTeamChat = useCallback(
     (message: string) => {
       if (socket && isConnected && message.trim()) {
-        console.log('💬 [DebateSocket] Sending team chat');
         socket.emit('debate:team_chat', { roomId, message: message.trim() });
       }
     },
@@ -316,7 +299,6 @@ export function useDebateSocket({
   // Moderator actions
   const advanceTurn = useCallback(() => {
     if (socket && isConnected) {
-      console.log('⏭️ [DebateSocket] Advancing turn');
       socket.emit('debate:advance_turn', { roomId });
     }
   }, [socket, isConnected, roomId]);
@@ -324,7 +306,6 @@ export function useDebateSocket({
   const endDebate = useCallback(
     (reason?: string) => {
       if (socket && isConnected) {
-        console.log('🏁 [DebateSocket] Ending debate');
         socket.emit('debate:end', { roomId, reason });
       }
     },

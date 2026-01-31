@@ -47,7 +47,6 @@ export function SkillInput({
       setAvailableSkills(skills);
       setSkillsLoaded(true);
     } catch (error) {
-      console.error('Error fetching skills:', error);
       // Fallback to empty array if API fails
       setAvailableSkills([]);
     } finally {
@@ -102,7 +101,7 @@ export function SkillInput({
         );
         return;
       }
-      console.error(`Error creating skill "${normalizedSkill}":`, error);
+      // Error creating skill
     }
   }, []);
 
