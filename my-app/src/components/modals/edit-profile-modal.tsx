@@ -324,7 +324,6 @@ export function EditProfileModal({
           setUsernameError('Username is already taken');
         }
       } catch (err) {
-        console.error('Error checking username:', err);
         setUsernameError('Failed to check username availability');
         setUsernameAvailable(false);
       } finally {
@@ -360,7 +359,6 @@ export function EditProfileModal({
       const fileUrl = await uploadFile(file, 'avatar');
       setAvatar(fileUrl);
     } catch (error) {
-      console.error('Error uploading avatar:', error);
       setError('Failed to upload image. Please try again.');
     } finally {
       setUploadingAvatar(false);
@@ -446,7 +444,6 @@ export function EditProfileModal({
       onUserUpdate(response.user);
       onClose();
     } catch (err) {
-      console.error('Error updating profile:', err);
       setError('Failed to update profile. Please try again.');
     } finally {
       setLoading(false);

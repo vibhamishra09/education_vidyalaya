@@ -63,8 +63,6 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
       setHasMore(response.pagination.hasMore);
       setCurrentPage(page);
     } catch (err: unknown) {
-      console.error('Error fetching notifications:', err);
-      
       // Only set error on the first attempt, silently fail on subsequent background refreshes
       if (!append && page === 1) {
         setError('Failed to load notifications');
@@ -96,7 +94,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
         return updated;
       });
     } catch (err) {
-      console.error('Error marking notification as read:', err);
+      // Error marking notification as read
     }
   };
 
@@ -108,7 +106,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
       );
       setUnreadCount(0);
     } catch (err) {
-      console.error('Error marking all notifications as read:', err);
+      // Error marking all notifications as read
     }
   };
 
@@ -130,7 +128,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
         return updated;
       });
     } catch (err) {
-      console.error('Error marking notifications as read:', err);
+      // Error marking notifications as read
     }
   };
 

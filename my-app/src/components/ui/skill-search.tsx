@@ -48,7 +48,7 @@ export function SkillSearch({
       setSuggestions(skills);
       setShowSuggestions(true);
     } catch (error) {
-      console.error("Error fetching suggestions:", error);
+      // Error fetching suggestions
     } finally {
       setIsLoading(false);
     }
