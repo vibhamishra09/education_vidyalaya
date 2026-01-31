@@ -1,0 +1,597 @@
+{
+	"info": {
+		"_postman_id": "1ea3d9d8-8d74-4a4e-994b-4f696cca1108",
+		"name": "webyalaya: Website API Testing",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "49599803",
+		"_collection_link": "https://vtusharkumar2-8364566.postman.co/workspace/Tushar-V's-Workspace~8887c8d2-13e8-4fe6-878e-9110ac163507/collection/49599803-1ea3d9d8-8d74-4a4e-994b-4f696cca1108?action=share&source=collection_link&creator=49599803"
+	},
+	"item": [
+		{
+			"name": "https://app.webyalaya.com/Health Check – Basic Availability",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {\r",
+							"    pm.response.to.have.status(200);\r",
+							"});\r",
+							"\r",
+							"pm.test(\"Response time is acceptable\", function () {\r",
+							"    pm.expect(pm.response.responseTime).to.be.below(3000);\r",
+							"});\r",
+							"\r",
+							"pm.test(\"Response is not empty\", function () {\r",
+							"    pm.expect(pm.response.text()).to.not.be.empty;\r",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://be.test.webyalaya.com",
+					"protocol": "https",
+					"host": [
+						"be",
+						"test",
+						"webyalaya",
+						"com"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "https://be.test.webyalaya.com/api/stats/platform",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {\r",
+							"    pm.response.to.have.status(200);\r",
+							"});\r",
+							"\r",
+							"pm.test(\"Response is JSON\", function () {\r",
+							"    pm.response.to.be.json;\r",
+							"});\r",
+							"\r",
+							"pm.test(\"Platform stats keys exist\", function () {\r",
+							"    const res = pm.response.json();\r",
+							"    pm.expect(res).to.have.property(\"usersOnboarded\");\r",
+							"    pm.expect(res).to.have.property(\"studyRoomsHosted\");\r",
+							"    pm.expect(res).to.have.property(\"sessionsCompleted\");\r",
+							"    pm.expect(res).to.have.property(\"learningHours\");\r",
+							"    pm.expect(res).to.have.property(\"reviewsGiven\");\r",
+							"});\r",
+							"\r",
+							"pm.test(\"All stats values are numbers\", function () {\r",
+							"    const res = pm.response.json();\r",
+							"    Object.values(res).forEach(value => {\r",
+							"        pm.expect(value).to.be.a(\"number\");\r",
+							"    });\r",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://be.test.webyalaya.com/api/stats/platform",
+					"protocol": "https",
+					"host": [
+						"be",
+						"test",
+						"webyalaya",
+						"com"
+					],
+					"path": [
+						"api",
+						"stats",
+						"platform"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GET Check Username – Unauthorized (No Token)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Unauthorized access is blocked\", function () {\r",
+							"    pm.response.to.have.status(401);\r",
+							"});\r",
+							"\r",
+							"pm.test(\"Error message is returned\", function () {\r",
+							"    const res = pm.response.json();\r",
+							"    pm.expect(res).to.have.property(\"message\");\r",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://be.test.webyalaya.com/api/users/check-username",
+					"protocol": "https",
+					"host": [
+						"be",
+						"test",
+						"webyalaya",
+						"com"
+					],
+					"path": [
+						"api",
+						"users",
+						"check-username"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Webyalaya studyroom Api testing",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"API responded (not server error)\", function () {\r",
+							"    pm.expect(pm.response.code).to.not.equal(500);\r",
+							"});\r",
+							"\r",
+							"pm.test(\"Response received\", function () {\r",
+							"    pm.expect(pm.response.text()).to.not.be.empty;\r",
+							"});\r",
+							"\r",
+							"pm.test(\"Response is JSON\", function () {\r",
+							"    pm.response.to.be.json;\r",
+							"});\r",
+							"\r",
+							"pm.test(\"Response is array or object\", function () {\r",
+							"    const res = pm.response.json();\r",
+							"    pm.expect(res).to.satisfy(r => Array.isArray(r) || typeof r === \"object\");\r",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://be.test.webyalaya.com/api/study-rooms",
+					"protocol": "https",
+					"host": [
+						"be",
+						"test",
+						"webyalaya",
+						"com"
+					],
+					"path": [
+						"api",
+						"study-rooms"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GET User Skills – Initial Test",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"User not found handled correctly\", function () {\r",
+							"    pm.response.to.have.status(404);\r",
+							"});\r",
+							""
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://be.test.webyalaya.com/api/users/1/skills",
+					"protocol": "https",
+					"host": [
+						"be",
+						"test",
+						"webyalaya",
+						"com"
+					],
+					"path": [
+						"api",
+						"users",
+						"1",
+						"skills"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GET Notifications – Unauthorized",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"//Confirms notifications are private\r",
+							"pm.test(\"Unauthorized access blocked\", function () {\r",
+							"    pm.response.to.have.status(401);\r",
+							"});\r",
+							"\r",
+							"//Checks if error message is returned\r",
+							"pm.test(\"Error message returned\", function () {\r",
+							"    pm.expect(pm.response.text()).to.not.be.empty;\r",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://be.test.webyalaya.com/api/notifications",
+					"protocol": "https",
+					"host": [
+						"be",
+						"test",
+						"webyalaya",
+						"com"
+					],
+					"path": [
+						"api",
+						"notifications"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GET Current Streak – Unauthorized",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Protected streak API blocks unauthenticated access\", function () {\r",
+							"    pm.response.to.have.status(401);\r",
+							"});\r",
+							"\r",
+							"pm.test(\"Unauthorized error message returned\", function () {\r",
+							"    pm.expect(pm.response.text()).to.not.be.empty;\r",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://be.test.webyalaya.com/api/streaks/current",
+					"protocol": "https",
+					"host": [
+						"be",
+						"test",
+						"webyalaya",
+						"com"
+					],
+					"path": [
+						"api",
+						"streaks",
+						"current"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GET Studyroom tab positive test",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200 for valid tab\", function () {\r",
+							"  pm.response.to.have.status(200);\r",
+							"});\r",
+							"\r",
+							"pm.test(\"Response is JSON\", function () {\r",
+							"  pm.response.to.be.json;\r",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://be.test.webyalaya.com/api/browse?tab=studyRooms",
+					"protocol": "https",
+					"host": [
+						"be",
+						"test",
+						"webyalaya",
+						"com"
+					],
+					"path": [
+						"api",
+						"browse"
+					],
+					"query": [
+						{
+							"key": "tab",
+							"value": "studyRooms"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GET browse studyroom/peers negative test",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Invalid tab returns 400\", function () {\r",
+							"  pm.response.to.have.status(400);\r",
+							"});\r",
+							"\r",
+							"pm.test(\"Validation message is returned\", function () {\r",
+							"  const res = pm.response.json();\r",
+							"  pm.expect(res.message[0]).to.include(\"tab must be one of\");\r",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://be.test.webyalaya.com/api/browse?tab=random",
+					"protocol": "https",
+					"host": [
+						"be",
+						"test",
+						"webyalaya",
+						"com"
+					],
+					"path": [
+						"api",
+						"browse"
+					],
+					"query": [
+						{
+							"key": "tab",
+							"value": "random"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GET Peers tab positive test",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200 for valid tab\", function () {\r",
+							"  pm.response.to.have.status(200);\r",
+							"});\r",
+							"\r",
+							"pm.test(\"Response is JSON\", function () {\r",
+							"  pm.response.to.be.json;\r",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://be.test.webyalaya.com/api/browse?tab=peers",
+					"protocol": "https",
+					"host": [
+						"be",
+						"test",
+						"webyalaya",
+						"com"
+					],
+					"path": [
+						"api",
+						"browse"
+					],
+					"query": [
+						{
+							"key": "tab",
+							"value": "peers"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GET Dashboard – Protected",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Dashboard API is protected\", function () {\r",
+							"  pm.expect(pm.response.code).to.equal(401);\r",
+							"});\r",
+							"\r",
+							"pm.test(\"Unauthorized message returned\", function () {\r",
+							"  pm.expect(pm.response.text()).to.not.be.empty;\r",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://be.test.webyalaya.com/api/dashboard",
+					"protocol": "https",
+					"host": [
+						"be",
+						"test",
+						"webyalaya",
+						"com"
+					],
+					"path": [
+						"api",
+						"dashboard"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GET Achievements – Protected",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Achievements API requires auth\", function () {\r",
+							"  pm.expect(pm.response.code).to.equal(401);\r",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://be.test.webyalaya.com/api/achievements",
+					"protocol": "https",
+					"host": [
+						"be",
+						"test",
+						"webyalaya",
+						"com"
+					],
+					"path": [
+						"api",
+						"achievements"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GET Reviews – Public List API",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {\r",
+							"  pm.response.to.have.status(200);\r",
+							"});\r",
+							"\r",
+							"pm.test(\"Response is JSON\", function () {\r",
+							"  pm.response.to.be.json;\r",
+							"});\r",
+							"\r",
+							"pm.test(\"Review object has required fields\", function () {\r",
+							"  const res = pm.response.json();\r",
+							"  if (res.length > 0) {\r",
+							"    pm.expect(res[0]).to.have.property(\"id\");\r",
+							"    pm.expect(res[0]).to.have.property(\"rating\");\r",
+							"  }\r",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://be.test.webyalaya.com/api/reviews",
+					"protocol": "https",
+					"host": [
+						"be",
+						"test",
+						"webyalaya",
+						"com"
+					],
+					"path": [
+						"api",
+						"reviews"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}
