@@ -18,10 +18,11 @@ interface UseSessionExtensionProps {
 interface UseSessionExtensionReturn {
   hasExtended: boolean;
   extendedEndTime: number | null;
+  extensionMinutes: number | null;
   isConnected: boolean;
   pendingRequest: ExtensionRequest | null;
-  requestExtension: () => void;
-  approveExtension: (currentEndTime: number) => void;
+  requestExtension: (minutes?: number) => void;
+  approveExtension: (currentEndTime: number, minutes?: number) => void;
   dismissRequest: () => void;
   error: string | null;
 }
@@ -37,6 +38,7 @@ export function useSessionExtension({
   const [isConnected, setIsConnected] = useState(false);
   const [hasExtended, setHasExtended] = useState(false);
   const [extendedEndTime, setExtendedEndTime] = useState<number | null>(null);
+  const [extensionMinutes, setExtensionMinutes] = useState<number | null>(null);
   const [pendingRequest, setPendingRequest] = useState<ExtensionRequest | null>(null);
   const [error, setError] = useState<string | null>(null);
   const socketConnectingRef = useRef(false);
@@ -64,11 +66,14 @@ export function useSessionExtension({
         });
 
         socketInstance.on('connect', () => {
-          console.log('✅ [Extension] Socket connected');
+          console.log('✅ [Extension] Socket connected, waiting for methods...');
           setIsConnected(true);
           setSocket(socketInstance);
+        });
 
-          // Join the session room
+        socketInstance.on('authenticated', () => {
+          console.log('🔐 [Extension] Authenticated');
+          // Join the session room only after auth confirmation
           socketInstance?.emit('join-session', { sessionId, sessionType });
         });
 
@@ -108,6 +113,7 @@ export function useSessionExtension({
           console.log('✅ [Extension] Session extended! New end time:', new Date(data.newEndTime).toISOString());
           setHasExtended(data.hasExtended);
           setExtendedEndTime(data.newEndTime);
+          setExtensionMinutes(data.extensionMinutes);
           setPendingRequest(null);
         });
 
@@ -142,7 +148,7 @@ export function useSessionExtension({
   }, [sessionId, sessionType, token, enabled, isHost]);
 
   // Request extension (for participants)
-  const requestExtension = useCallback(() => {
+  const requestExtension = useCallback((minutes: number = 10) => {
     if (!socket || !sessionId || !sessionType) {
       setError('Not connected to extension service');
       return;
@@ -153,12 +159,12 @@ export function useSessionExtension({
       return;
     }
 
-    console.log('📤 [Extension] Sending request...');
-    socket.emit('request-extension', { sessionId, sessionType });
+    console.log(`📤 [Extension] Sending request for ${minutes} minutes...`);
+    socket.emit('request-extension', { sessionId, sessionType, extensionMinutes: minutes });
   }, [socket, sessionId, sessionType, hasExtended]);
 
   // Approve extension (for host)
-  const approveExtension = useCallback((currentEndTime: number) => {
+  const approveExtension = useCallback((currentEndTime: number, minutes: number = 10) => {
     if (!socket || !sessionId || !sessionType) {
       setError('Not connected to extension service');
       return;
@@ -169,12 +175,12 @@ export function useSessionExtension({
       return;
     }
 
-    console.log('✅ [Extension] Approving extension...');
+    console.log(`✅ [Extension] Approving extension for ${minutes} minutes...`);
     socket.emit('extend-session', {
       sessionId,
       sessionType,
       currentEndTime,
-      extensionMinutes: 10,
+      extensionMinutes: minutes,
     });
   }, [socket, sessionId, sessionType, hasExtended]);
 
@@ -186,6 +192,7 @@ export function useSessionExtension({
   return {
     hasExtended,
     extendedEndTime,
+    extensionMinutes,
     isConnected,
     pendingRequest,
     requestExtension,

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Bell, X, AlertCircle } from "lucide-react";
+import { Bell, AlertCircle } from "lucide-react";
 import { usePushNotifications } from "@/hooks";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUser } from "@clerk/nextjs";
@@ -86,54 +86,49 @@ export function PushNotificationPrompt() {
           transition={{ duration: 0.3 }}
           className="fixed bottom-4 right-4 z-50 max-w-md"
         >
-          <Card className="shadow-lg border-2">
+          <Card className="rounded-[20px] border border-border/40 shadow-2xl shadow-primary/10 bg-white dark:bg-card w-[360px]">
             <CardContent className="p-4">
-              <div className="flex items-start gap-3">
-                <div className="flex-shrink-0 mt-0.5">
-                  <div className="bg-primary/10 rounded-full p-2">
-                    <Bell className="h-5 w-5 text-primary" />
-                  </div>
+              <div className="flex items-start gap-4">
+                <div className="bg-primary/10 rounded-full p-2.5 flex-shrink-0 mt-0.5">
+                  <Bell className="h-5 w-5 text-primary" strokeWidth={2.5} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-sm mb-1">
+                  <h3 className="font-bold text-sm tracking-tight text-foreground">
                     Enable Push Notifications
                   </h3>
-                  <p className="text-xs text-muted-foreground mb-3">
-                    Get notified about session requests, reminders, and reviews
-                    so you never miss important updates.
+                  <p className="text-xs text-muted-foreground leading-relaxed mt-1 mb-3">
+                    Get notified about session requests, reminders, and reviews.
                   </p>
+                  
                   {error && (
                     <div className="flex items-center gap-2 text-xs text-destructive mb-3">
                       <AlertCircle className="h-3 w-3" />
                       <span>{error}</span>
                     </div>
                   )}
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      onClick={handleEnable}
-                      disabled={isLoading}
-                      className="flex-1"
-                    >
-                      {isLoading ? "Enabling..." : "Enable"}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
+
+                  <div className="flex items-center gap-3">
+                    <button
                       onClick={handleDismiss}
                       disabled={isLoading}
+                      className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors px-2"
                     >
                       Not Now
-                    </Button>
+                    </button>
+                    
+                    <button
+                      onClick={handleEnable}
+                      disabled={isLoading}
+                      className="flex-1 flex items-center justify-center gap-2 h-10 rounded-full bg-green-500/10 border border-green-500/20 text-green-700 dark:text-green-400 text-sm font-bold hover:bg-green-500/20 transition-all shadow-sm"
+                    >
+                      <span className="relative flex h-2.5 w-2.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
+                      </span>
+                      {isLoading ? "Enabling..." : "Enable"}
+                    </button>
                   </div>
                 </div>
-                <button
-                  onClick={handleDismiss}
-                  className="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors"
-                  disabled={isLoading}
-                >
-                  <X className="h-4 w-4" />
-                </button>
               </div>
             </CardContent>
           </Card>

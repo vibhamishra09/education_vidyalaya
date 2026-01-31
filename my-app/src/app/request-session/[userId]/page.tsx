@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState, useEffect, useCallback } from "react";
+import { use, useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { Navigation } from "@/components/layout/navigation";
 import { Footer } from "@/components/layout/footer";
@@ -74,6 +74,10 @@ export default function RequestSessionPage({
     clearForm();
     setFormData(initialFormData);
   }, [clearForm, setFormData]);
+
+  // Memoize minDate to prevent hydration errors (Date value must be consistent between server and client)
+  // Must be called before any conditional returns
+  const minDate = useMemo(() => new Date().toISOString().split("T")[0], []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -168,7 +172,7 @@ export default function RequestSessionPage({
   // Show loading while Clerk is initializing
   if (!isLoaded) {
     return (
-      <div className="min-h-screen flex flex-col">
+      <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950">
         <Navigation />
         <main className="flex-1 container mx-auto px-4 py-8">
           <div className="flex items-center justify-center min-h-[400px]">
@@ -185,7 +189,7 @@ export default function RequestSessionPage({
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col">
+      <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950">
         <Navigation />
         <main className="flex-1 container mx-auto px-4 py-8">
           <div className="flex items-center justify-center min-h-[400px]">
@@ -202,7 +206,7 @@ export default function RequestSessionPage({
 
   if (error || !peer || !currentUser) {
     return (
-      <div className="min-h-screen flex flex-col">
+      <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950">
         <Navigation />
         <main className="flex-1 container mx-auto px-4 py-8">
           <div className="text-center">
@@ -296,8 +300,8 @@ export default function RequestSessionPage({
           setError(apiError.response.data.message || 'The selected time slot is not available.');
           toast.error("Time slot unavailable", { description: "The selected time slot is not available." });
         } else if (apiError.response?.data?.code === 'INSUFFICIENT_FUNDS') {
-          setError('You do not have enough AYA tokens to book this session. Please add funds to your wallet.');
-          toast.error("Insufficient funds", { description: "You do not have enough AYA tokens." });
+          setError('You do not have enough WEBYA tokens to book this session. Please add funds to your wallet.');
+          toast.error("Insufficient funds", { description: "You do not have enough WEBYA tokens." });
         } else {
           setError(apiError.response?.data?.message || 'Failed to send session request');
           toast.error("Request failed", { description: apiError.response?.data?.message || 'Failed to send session request' });
@@ -313,7 +317,7 @@ export default function RequestSessionPage({
   };
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950">
       <Navigation />
 
       <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -354,7 +358,7 @@ export default function RequestSessionPage({
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Form */}
           <div className="lg:col-span-2">
-            <Card>
+            <Card className="shadow-sm border-border/60">
               <CardHeader>
                 <CardTitle>Session Details</CardTitle>
               </CardHeader>
@@ -493,7 +497,7 @@ export default function RequestSessionPage({
                           value={formData.date}
                           onChange={(e) => updateField("date", e.target.value)}
                           required
-                          min={new Date().toISOString().split("T")[0]}
+                          min={minDate}
                           disabled={isSelfRequest}
                         />
                       </div>
@@ -627,7 +631,7 @@ export default function RequestSessionPage({
 
           {/* Summary Sidebar */}
           <div className="lg:col-span-1">
-            <Card className="sticky top-8">
+            <Card className="sticky top-8 shadow-sm border-border/60">
               <CardHeader>
                 <CardTitle>Summary</CardTitle>
               </CardHeader>
@@ -642,7 +646,7 @@ export default function RequestSessionPage({
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Rate</span>
                     <span className="font-medium">
-                      {peer?.hourlyRate ? <>{formatCoins(costPerHour)} AYA/hour</> : 'Not set'}
+                      {peer?.hourlyRate ? <>{formatCoins(costPerHour)} WEBYA/hour</> : 'Not set'}
                     </span>
                   </div>
                   <div className="border-t pt-2 mt-2">
@@ -651,7 +655,7 @@ export default function RequestSessionPage({
                       <div className="flex items-center gap-1">
                         <Coins className="h-4 w-4 text-yellow-600" />
                         <span className="font-semibold">
-                          {peer?.hourlyRate ? <>{formatCoins(calculatedCost)} AYA</> : 'N/A'}
+                          {peer?.hourlyRate ? <>{formatCoins(calculatedCost)} WEBYA</> : 'N/A'}
                         </span>
                       </div>
                     </div>
@@ -665,7 +669,7 @@ export default function RequestSessionPage({
                     </span>
                     <div className="flex items-center gap-1">
                       <Coins className="h-4 w-4 text-yellow-600" />
-                      <span className="font-medium">{formatCoins(typeof currentUser.coins === 'string' ? parseFloat(currentUser.coins) : currentUser.coins)} AYA</span>
+                      <span className="font-medium">{formatCoins(typeof currentUser.coins === 'string' ? parseFloat(currentUser.coins) : currentUser.coins)} WEBYA</span>
                     </div>
                   </div>
 

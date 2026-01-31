@@ -15,9 +15,9 @@ import type { Notification } from "@/types/api.types";
 
 export function NotificationsClient() {
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-muted/5">
       <Navigation />
-      <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10">
+      <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12 max-w-5xl">
         <NotificationsContent />
       </main>
       <Footer />
@@ -124,114 +124,139 @@ function NotificationsContent() {
   const showEmptyState = !isLoading && notifications.length === 0 && !error;
 
   return (
-    <Card>
-      <CardHeader className="space-y-4">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <CardTitle className="text-2xl font-bold">Notifications Center</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              {unreadCount > 0 ? `${unreadCount} unread notification${unreadCount > 1 ? "s" : ""}` : "You're all caught up"}
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button variant={allVisibleSelected ? "default" : "outline"} size="sm" disabled={notifications.length === 0} onClick={selectAll}>
-              {allVisibleSelected ? "All Selected" : "Select All"}
-            </Button>
-            <Button variant="outline" size="sm" disabled={notifications.length === 0} onClick={selectUnread}>
-              Select Unread
-            </Button>
-            <Button variant="ghost" size="sm" disabled={!hasSelection} onClick={clearSelection}>
-              Clear
-            </Button>
-          </div>
+    <div className="space-y-8">
+      {/* Header Section */}
+      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+        <div className="space-y-1">
+          <h1 className="text-3xl font-extrabold tracking-tight lg:text-4xl text-foreground">
+            Notifications Center
+          </h1>
+          <p className="text-muted-foreground text-sm sm:text-base max-w-2xl leading-relaxed">
+            {unreadCount > 0 
+              ? `You have ${unreadCount} unread notification${unreadCount > 1 ? "s" : ""}` 
+              : "You're all caught up with your updates"}
+          </p>
         </div>
-        {hasSelection && (
-          <div className="text-xs sm:text-sm text-muted-foreground">
-            {selectedIds.size} selected · {selectedUnreadIds.length} unread selected
-          </div>
-        )}
-      </CardHeader>
-      <CardContent className="space-y-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="text-sm text-muted-foreground">
-            {isLoading ? "Fetching notifications..." : `${notifications.length} shown`}
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              disabled={selectedUnreadIds.length === 0 || bulkLoading}
-              onClick={handleBulkMarkRead}
-            >
-              {bulkLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Mark Selected as Read
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={!unreadCount || markAllLoading}
-              onClick={handleMarkAll}
-            >
-              {markAllLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Mark All as Read
-            </Button>
-          </div>
+        
+        {/* Bulk Actions Toolbar */}
+        <div className="flex flex-wrap items-center gap-2 bg-background/60 backdrop-blur-sm p-1.5 rounded-2xl border border-border/40 shadow-sm">
+           <Button 
+             variant={allVisibleSelected ? "default" : "ghost"} 
+             size="sm" 
+             className={cn("h-8 rounded-xl text-xs font-medium", allVisibleSelected ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "")}
+             disabled={notifications.length === 0} 
+             onClick={selectAll}
+           >
+             All
+           </Button>
+           <Button 
+             variant="ghost" 
+             size="sm" 
+             className="h-8 rounded-xl text-xs font-medium hover:bg-emerald-50 hover:text-emerald-700"
+             disabled={notifications.length === 0} 
+             onClick={selectUnread}
+           >
+             Unread
+           </Button>
+           {hasSelection && (
+             <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-8 rounded-xl text-xs font-medium text-muted-foreground hover:text-destructive"
+                onClick={clearSelection}
+             >
+               Clear ({selectedIds.size})
+             </Button>
+           )}
         </div>
+      </div>
 
-        {isLoading && (
-          <div className="flex items-center gap-2 text-muted-foreground text-sm">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Loading notifications...
-          </div>
-        )}
-
-        {error && (
-          <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-            {error}
-          </div>
-        )}
-
-        {showEmptyState && (
-          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-muted p-10 text-center">
-            <Inbox className="mb-4 h-10 w-10 text-muted-foreground" />
-            <h2 className="text-lg font-semibold">No notifications yet</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              We&apos;ll keep this space updated whenever something needs your attention.
-            </p>
-          </div>
-        )}
-
-        <div className="space-y-4">
-          {notifications.map((notification) => (
-            <NotificationRow
-              key={notification.id}
-              notification={notification}
-              isSelected={selectedIds.has(notification.id)}
-              onToggleSelect={() => toggleSelection(notification.id)}
-              onMarkRead={() => handleSingleMark(notification.id)}
-            />
-          ))}
+      {/* Action Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-dashed border-border/60">
+        <div className="text-sm font-medium text-muted-foreground">
+          {isLoading ? (
+             <div className="flex items-center gap-2">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <span>Syncing...</span>
+             </div>
+          ) : (
+             <span>{notifications.length} notifications</span>
+          )}
         </div>
-
-        {hasMore && (
+        
+        <div className="flex flex-wrap gap-2">
           <Button
             variant="outline"
-            className="w-full"
-            onClick={loadMoreNotifications}
-            disabled={isLoadingMore}
+            size="sm"
+            className="h-9 rounded-xl border-emerald-200/50 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300/50 transition-all text-xs"
+            disabled={selectedUnreadIds.length === 0 || bulkLoading}
+            onClick={handleBulkMarkRead}
           >
-            {isLoadingMore ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Loading more
-              </>
-            ) : (
-              "Load More"
-            )}
+            {bulkLoading && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+            Mark Selected Read
           </Button>
-        )}
-      </CardContent>
-    </Card>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-9 rounded-xl text-xs hover:bg-emerald-50 hover:text-emerald-700 transition-all"
+            disabled={!unreadCount || markAllLoading}
+            onClick={handleMarkAll}
+          >
+            {markAllLoading && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+            Mark All Read
+          </Button>
+        </div>
+      </div>
+
+      {error && (
+        <div className="rounded-2xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive flex items-center gap-2">
+          <div className="h-1.5 w-1.5 rounded-full bg-destructive" />
+          {error}
+        </div>
+      )}
+
+      {showEmptyState && (
+        <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-border/60 bg-white/50 p-12 text-center min-h-[300px]">
+          <div className="h-16 w-16 rounded-2xl bg-emerald-100/50 flex items-center justify-center mb-4">
+             <Inbox className="h-8 w-8 text-emerald-600/50" />
+          </div>
+          <h2 className="text-xl font-bold text-foreground">No notifications yet</h2>
+          <p className="mt-2 text-sm text-muted-foreground max-w-sm mx-auto leading-relaxed">
+            We&apos;ll keep this space updated whenever something needs your attention.
+          </p>
+        </div>
+      )}
+
+      <div className="space-y-3">
+        {notifications.map((notification) => (
+          <NotificationRow
+            key={notification.id}
+            notification={notification}
+            isSelected={selectedIds.has(notification.id)}
+            onToggleSelect={() => toggleSelection(notification.id)}
+            onMarkRead={() => handleSingleMark(notification.id)}
+          />
+        ))}
+      </div>
+
+      {hasMore && (
+        <Button
+          variant="outline"
+          className="w-full h-11 rounded-2xl border-dashed border-border hover:bg-muted/50 text-muted-foreground"
+          onClick={loadMoreNotifications}
+          disabled={isLoadingMore}
+        >
+          {isLoadingMore ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Loading more
+            </>
+          ) : (
+            "Load More History"
+          )}
+        </Button>
+      )}
+    </div>
   );
 }
 
@@ -250,59 +275,87 @@ function NotificationRow({ notification, isSelected, onToggleSelect, onMarkRead 
     minute: "2-digit",
   });
   const notificationLink = getNotificationLink(notification);
+  const isUnread = !notification.viewed;
 
   return (
     <div
       className={cn(
-        "flex flex-col gap-4 rounded-xl border p-4 transition-colors md:flex-row md:items-center",
-        notification.viewed ? "bg-background" : "bg-muted/40 border-primary/40"
+        "group relative flex flex-col gap-4 rounded-2xl p-4 transition-all duration-300 md:flex-row md:items-center border",
+        isUnread
+          ? "bg-gradient-to-r from-emerald-50/40 to-white/60 border-emerald-100/60 shadow-sm hover:shadow-md hover:border-emerald-200/60"
+          : "bg-white/40 border-transparent hover:border-border/40 hover:bg-white/60"
       )}
     >
-      <div className="flex flex-1 items-start gap-3">
-        <input
-          type="checkbox"
-          className="mt-1 h-4 w-4 cursor-pointer rounded border border-muted-foreground bg-background accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          aria-label="Select notification"
-          checked={isSelected}
-          onChange={onToggleSelect}
-        />
-        <div className="flex-1 min-w-0 space-y-2">
+        {isUnread && (
+            <div className="absolute left-0 top-4 bottom-4 w-1 rounded-r-full bg-emerald-500" />
+        )}
+
+      <div className="flex flex-1 items-start gap-4 pl-2">
+        <div className="pt-1">
+            <input
+            type="checkbox"
+            className="h-4 w-4 cursor-pointer rounded border-muted-foreground/30 bg-transparent text-emerald-600 focus:ring-emerald-500/20"
+            aria-label="Select notification"
+            checked={isSelected}
+            onChange={onToggleSelect}
+            />
+        </div>
+        
+        <div className="flex-1 min-w-0 space-y-1.5">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant={notification.notifType === "URGENT" ? "destructive" : "outline"}>
+            <Badge 
+                variant={notification.notifType === "URGENT" ? "destructive" : "secondary"}
+                className={cn(
+                    "rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider",
+                    notification.notifType !== "URGENT" && "bg-emerald-100/50 text-emerald-700"
+                )}
+            >
               {notification.notifType === "URGENT" ? "Urgent" : "Update"}
             </Badge>
-            {!notification.viewed && (
-              <Badge variant="secondary" className="uppercase text-[10px]">
-                Unread
+            {isUnread && (
+              <Badge variant="outline" className="border-emerald-200 text-emerald-600 text-[10px] uppercase tracking-wider bg-emerald-50/50">
+                New
               </Badge>
             )}
+            <span className="text-[10px] text-muted-foreground ml-auto sm:ml-0 font-medium tracking-tight bg-background/50 px-2 py-0.5 rounded-full border border-border/50">
+                {formattedDate}
+            </span>
           </div>
-          <div className={cn("text-sm sm:text-base", !notification.viewed && "font-semibold")}>
+          
+          <div className={cn("text-sm sm:text-base leading-relaxed pr-4", isUnread ? "font-semibold text-foreground" : "text-muted-foreground/90")}>
             {notification.message}
           </div>
-          <div className="text-xs text-muted-foreground">{formattedDate}</div>
         </div>
       </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <Button variant="ghost" size="sm" asChild>
+      
+      <div className="flex flex-row items-center gap-2 pl-10 md:pl-0">
+        <Button 
+            variant="ghost" 
+            size="sm" 
+            className="h-8 rounded-lg text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 text-xs font-semibold"
+            asChild
+        >
           <Link
             href={notificationLink}
             onClick={() => {
-              if (!notification.viewed) {
+              if (isUnread) {
                 void onMarkRead();
               }
             }}
           >
-            View details
+            View Details
           </Link>
         </Button>
-        {!notification.viewed ? (
-          <Button size="sm" variant="outline" onClick={() => void onMarkRead()}>
-            <CheckCircle2 className="mr-2 h-4 w-4" />
-            Mark as Read
+        {isUnread && (
+          <Button 
+            size="sm" 
+            variant="ghost" 
+            onClick={() => void onMarkRead()}
+            className="h-8 w-8 p-0 rounded-full hover:bg-emerald-50 text-emerald-600"
+            title="Mark as read"
+          >
+            <CheckCircle2 className="h-4 w-4" />
           </Button>
-        ) : (
-          <span className="text-xs text-muted-foreground">Read</span>
         )}
       </div>
     </div>

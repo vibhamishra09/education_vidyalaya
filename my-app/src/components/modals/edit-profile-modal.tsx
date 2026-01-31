@@ -241,7 +241,7 @@ export function EditProfileModal({
   const [school, setSchool] = useState(user.school || "");
   const [hourlyRate, setHourlyRate] = useState<number | string>(
     user.hourlyRate ? (typeof user.hourlyRate === 'number' ? user.hourlyRate : parseFloat(user.hourlyRate)) : ""
-  ); // AYA value
+  ); // WEBYA value
   const [hasSkills, setHasSkills] = useState<string[]>(user.hasSkills || []);
   const [wantSkills, setWantSkills] = useState<string[]>(user.wantSkills || []);
   
@@ -263,7 +263,7 @@ export function EditProfileModal({
     setSchool(user.school || "");
     setHourlyRate(
       user.hourlyRate ? (typeof user.hourlyRate === 'number' ? user.hourlyRate : parseFloat(user.hourlyRate)) : ""
-    ); // AYA value
+    ); // WEBYA value
     setHasSkills(user.hasSkills || []);
     setWantSkills(user.wantSkills || []);
     setSocialLinks(user.socialLinks || []);
@@ -404,7 +404,7 @@ export function EditProfileModal({
       if (hourlyRate !== "" && hourlyRate !== null && hourlyRate !== undefined) {
         const numValue = typeof hourlyRate === 'number' ? hourlyRate : parseFloat(String(hourlyRate));
         if (!isNaN(numValue)) {
-          hourlyRateValue = numValue; // AYA value - no conversion needed
+          hourlyRateValue = numValue; // WEBYA value - no conversion needed
         }
       }
       
@@ -588,7 +588,7 @@ export function EditProfileModal({
 
           {/* Hourly Rate */}
           <div className="space-y-2">
-            <Label htmlFor="hourlyRate">Hourly Rate (<span className="text-xs">m</span>AYA)</Label>
+            <Label htmlFor="hourlyRate">Hourly Rate (WEBYA)</Label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">🪙</span>
               <Input
@@ -611,7 +611,7 @@ export function EditProfileModal({
               />
             </div>
             <p className="text-xs text-muted-foreground">
-              Set your hourly rate in AYA tokens for teaching sessions. Leave empty or 0 to not display a rate.
+              Set your hourly rate in WEBYA for teaching sessions. Leave empty or 0 to not display a rate.
             </p>
           </div>
 

@@ -163,16 +163,19 @@ export function ChatWidget({ channelId, className = '', chatDisabled = false }: 
 				})
 				
 				s.on('error', (data: { code?: string; message?: string }) => {
-					console.error('🚨 [Chat] Socket error:', data)
+					// Only log if there's actual error data
+					if (data && (data.code || data.message)) {
+						console.error('🚨 [Chat] Socket error:', data)
+					}
 					if (isMounted) {
 						// Handle specific error codes
-						if (data.code === 'CHAT_DISABLED') {
+						if (data?.code === 'CHAT_DISABLED') {
 							// Don't show error - chatDisabled prop will handle the UI
 							console.log('ℹ️ [Chat] Chat is disabled by host')
-						} else if (data.code === 'RECONNECTING') {
+						} else if (data?.code === 'RECONNECTING') {
 							// Normal reconnection, don't show error
 							console.log('🔄 [Chat] Reconnecting...')
-						} else {
+						} else if (data?.message) {
 							setError(data.message || 'Connection error')
 						}
 					}

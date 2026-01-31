@@ -169,7 +169,7 @@ export function SessionFeedbackForm({
     
     return (
       <div className="space-y-4">
-        <Label className="text-base font-medium">{label}</Label>
+        <Label className="text-base font-medium text-white">{label}</Label>
         <div className="flex flex-wrap gap-2 justify-center">
           {Array.from({ length: max - min + 1 }, (_, i) => min + i).map((num) => (
             <button
@@ -181,17 +181,17 @@ export function SessionFeedbackForm({
               className={cn(
                 "w-11 h-11 rounded-xl font-semibold transition-all duration-200 border-2",
                 value === num
-                  ? "bg-gradient-to-br from-primary to-primary/80 text-primary-foreground border-primary shadow-lg scale-110"
+                  ? "bg-gradient-to-br from-[#00DC6E] to-[#00DC6E]/80 text-white border-[#00DC6E] shadow-lg scale-110"
                   : currentHover !== null && num <= currentHover
-                    ? "bg-primary/20 border-primary/50 scale-105"
-                    : "bg-background/50 border-border hover:border-primary/50 hover:scale-105"
+                    ? "bg-[#00DC6E]/20 border-[#00DC6E]/50 scale-105 text-white"
+                    : "bg-white/5 border-white/20 hover:border-[#00DC6E]/50 hover:scale-105 text-white"
               )}
             >
               {num}
             </button>
           ))}
         </div>
-        <div className="flex justify-between text-xs text-muted-foreground px-2">
+        <div className="flex justify-between text-xs text-white/50 px-2">
           <span>👎 Not at all</span>
           <span>👍 Extremely</span>
         </div>
@@ -205,7 +205,7 @@ export function SessionFeedbackForm({
     label: string
   ) => (
     <div className="space-y-3">
-      <Label className="text-base font-medium">{label}</Label>
+      <Label className="text-base font-medium text-white">{label}</Label>
       <div className="grid gap-2">
         {options.map((option) => (
           <button
@@ -215,21 +215,21 @@ export function SessionFeedbackForm({
             className={cn(
               "flex items-center gap-3 w-full p-3 rounded-xl border-2 text-left transition-all duration-200",
               answers[field] === option
-                ? "bg-gradient-to-r from-primary/15 to-primary/5 border-primary shadow-sm"
-                : "bg-background/50 border-border hover:border-primary/50 hover:bg-muted/30"
+                ? "bg-gradient-to-r from-[#00DC6E]/15 to-[#00DC6E]/5 border-[#00DC6E] shadow-sm"
+                : "bg-white/5 border-white/20 hover:border-[#00DC6E]/50 hover:bg-white/10"
             )}
           >
             <div className={cn(
               "w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all",
               answers[field] === option
-                ? "border-primary bg-primary"
-                : "border-muted-foreground/40"
+                ? "border-[#00DC6E] bg-[#00DC6E]"
+                : "border-white/40"
             )}>
               {answers[field] === option && (
-                <Check className="w-3 h-3 text-primary-foreground" />
+                <Check className="w-3 h-3 text-white" />
               )}
             </div>
-            <span className="text-sm font-medium">{option}</span>
+            <span className="text-sm font-medium text-white">{option}</span>
           </button>
         ))}
       </div>
@@ -243,7 +243,7 @@ export function SessionFeedbackForm({
     type: "input" | "textarea" = "textarea"
   ) => (
     <div className="space-y-2">
-      <Label htmlFor={String(field)} className="text-base font-medium">{label}</Label>
+      <Label htmlFor={String(field)} className="text-base font-medium text-white">{label}</Label>
       {type === "textarea" ? (
         <Textarea
           id={String(field)}
@@ -251,7 +251,7 @@ export function SessionFeedbackForm({
           onChange={(e) => updateAnswer(field, e.target.value as SessionFeedbackAnswers[typeof field])}
           placeholder={placeholder}
           rows={3}
-          className="bg-background/50 border-2 rounded-xl resize-none focus:border-primary transition-colors"
+          className="bg-white/5 border-2 border-white/20 rounded-xl resize-none focus:border-[#00DC6E] transition-colors text-white placeholder:text-white/40"
         />
       ) : (
         <Input
@@ -259,7 +259,7 @@ export function SessionFeedbackForm({
           value={(answers[field] as string) || ""}
           onChange={(e) => updateAnswer(field, e.target.value as SessionFeedbackAnswers[typeof field])}
           placeholder={placeholder}
-          className="bg-background/50 border-2 rounded-xl focus:border-primary transition-colors"
+          className="bg-white/5 border-2 border-white/20 rounded-xl focus:border-[#00DC6E] transition-colors text-white placeholder:text-white/40"
         />
       )}
     </div>
@@ -271,7 +271,7 @@ export function SessionFeedbackForm({
     placeholder: string
   ) => (
     <div className="space-y-2">
-      <Label htmlFor={String(field)} className="text-base font-medium">{label}</Label>
+      <Label htmlFor={String(field)} className="text-base font-medium text-white">{label}</Label>
       <Input
         id={String(field)}
         type="number"
@@ -279,7 +279,7 @@ export function SessionFeedbackForm({
         value={(answers[field] as number) || ""}
         onChange={(e) => updateAnswer(field, parseInt(e.target.value) || undefined as SessionFeedbackAnswers[typeof field])}
         placeholder={placeholder}
-        className="bg-background/50 border-2 rounded-xl focus:border-primary transition-colors max-w-[200px]"
+        className="bg-white/5 border-2 border-white/20 rounded-xl focus:border-[#00DC6E] transition-colors max-w-[200px] text-white placeholder:text-white/40"
       />
     </div>
   );
@@ -293,7 +293,7 @@ export function SessionFeedbackForm({
     
     return (
       <div className="space-y-3">
-        <Label className="text-base font-medium">{label}</Label>
+        <Label className="text-base font-medium text-white">{label}</Label>
         <div className="grid gap-2">
           {options.map((option) => {
             const isSelected = selected.includes(option);
@@ -311,21 +311,21 @@ export function SessionFeedbackForm({
                 className={cn(
                   "flex items-center gap-3 w-full p-3 rounded-xl border-2 text-left transition-all duration-200",
                   isSelected
-                    ? "bg-gradient-to-r from-primary/15 to-primary/5 border-primary shadow-sm"
-                    : "bg-background/50 border-border hover:border-primary/50 hover:bg-muted/30"
+                    ? "bg-gradient-to-r from-[#00DC6E]/15 to-[#00DC6E]/5 border-[#00DC6E] shadow-sm"
+                    : "bg-white/5 border-white/20 hover:border-[#00DC6E]/50 hover:bg-white/10"
                 )}
               >
                 <div className={cn(
                   "w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all",
                   isSelected
-                    ? "border-primary bg-primary"
-                    : "border-muted-foreground/40"
+                    ? "border-[#00DC6E] bg-[#00DC6E]"
+                    : "border-white/40"
                 )}>
                   {isSelected && (
-                    <Check className="w-3 h-3 text-primary-foreground" />
+                    <Check className="w-3 h-3 text-white" />
                   )}
                 </div>
-                <span className="text-sm font-medium">{option}</span>
+                <span className="text-sm font-medium text-white">{option}</span>
               </button>
             );
           })}
@@ -563,14 +563,14 @@ export function SessionFeedbackForm({
   };
 
   return (
-    <Card className="border-0 shadow-2xl bg-background/95 backdrop-blur overflow-hidden">
+    <Card className="border border-white/10 shadow-2xl bg-[#141414] overflow-hidden">
       {/* Header */}
-      <CardHeader className="relative pb-4 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
+      <CardHeader className="relative pb-4 bg-gradient-to-r from-[#00DC6E]/10 via-[#00DC6E]/5 to-transparent border-b border-white/5">
         {onBackToDashboard && (
           <Button
             variant="ghost"
             size="icon"
-            className="absolute right-4 top-4 text-muted-foreground hover:text-foreground"
+            className="absolute right-4 top-4 text-white/50 hover:text-white hover:bg-white/10"
             onClick={onBackToDashboard}
           >
             <X className="h-5 w-5" />
@@ -578,15 +578,15 @@ export function SessionFeedbackForm({
         )}
         
         <div className="flex items-center gap-4">
-          <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-lg">
-            <MessageSquareHeart className="h-7 w-7 text-primary-foreground" />
+          <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-[#00DC6E] to-[#00DC6E]/80 flex items-center justify-center shadow-lg">
+            <MessageSquareHeart className="h-7 w-7 text-white" />
           </div>
           <div className="flex-1">
             <div className="flex items-center gap-2">
-              <h2 className="text-2xl font-bold">Help Shape Webyalaya</h2>
+              <h2 className="text-2xl font-bold text-white">Help Shape Webyalaya</h2>
               <Sparkles className="h-5 w-5 text-yellow-500" />
             </div>
-            <p className="text-muted-foreground mt-1">
+            <p className="text-white/60 mt-1">
               Your feedback directly shapes our platform&apos;s future
             </p>
           </div>
@@ -597,15 +597,15 @@ export function SessionFeedbackForm({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="text-2xl">{currentGroupData.icon}</span>
-              <span className="font-semibold">{currentGroupData.title}</span>
+              <span className="font-semibold text-white">{currentGroupData.title}</span>
             </div>
-            <span className="text-sm text-muted-foreground bg-muted px-3 py-1 rounded-full">
+            <span className="text-sm text-white/60 bg-white/10 px-3 py-1 rounded-full">
               {currentGroup + 1} of {totalGroups}
             </span>
           </div>
-          <div className="h-2 bg-muted rounded-full overflow-hidden">
+          <div className="h-2 bg-white/10 rounded-full overflow-hidden">
             <div 
-              className="h-full bg-gradient-to-r from-primary to-primary/70 transition-all duration-500 ease-out rounded-full"
+              className="h-full bg-gradient-to-r from-[#00DC6E] to-[#00DC6E]/70 transition-all duration-500 ease-out rounded-full"
               style={{ width: `${progress}%` }}
             />
           </div>
@@ -619,13 +619,13 @@ export function SessionFeedbackForm({
         </div>
 
         {/* Navigation */}
-        <div className="flex items-center justify-between mt-8 pt-6 border-t">
+        <div className="flex items-center justify-between mt-8 pt-6 border-t border-white/10">
           <div className="flex items-center gap-2">
             <Button
               variant="ghost"
               onClick={handlePrevious}
               disabled={currentGroup === 0}
-              className="gap-1"
+              className="gap-1 text-white/70 hover:text-white hover:bg-white/10 disabled:text-white/30"
             >
               <ChevronLeft className="h-4 w-4" />
               Previous
@@ -634,7 +634,7 @@ export function SessionFeedbackForm({
               <Button 
                 variant="ghost" 
                 onClick={onBackToDashboard}
-                className="text-muted-foreground hover:text-foreground"
+                className="text-white/50 hover:text-white hover:bg-white/10"
               >
                 Exit to Dashboard
               </Button>
@@ -645,13 +645,13 @@ export function SessionFeedbackForm({
             <Button 
               variant="ghost" 
               onClick={handleSkipPage} 
-              className="text-muted-foreground hover:text-foreground"
+              className="text-white/50 hover:text-white hover:bg-white/10"
             >
               Skip this section
             </Button>
 
             {currentGroup < totalGroups - 1 ? (
-              <Button onClick={handleNext} className="gap-1 px-6">
+              <Button onClick={handleNext} className="gap-1 px-6 bg-[#00DC6E] hover:bg-[#00DC6E]/90 text-white">
                 Next
                 <ChevronRight className="h-4 w-4" />
               </Button>
@@ -659,7 +659,7 @@ export function SessionFeedbackForm({
               <Button 
                 onClick={handleSubmit} 
                 disabled={loading}
-                className="gap-2 px-6 bg-gradient-to-r from-primary to-primary/80"
+                className="gap-2 px-6 bg-gradient-to-r from-[#00DC6E] to-[#00DC6E]/80 hover:from-[#00DC6E]/90 hover:to-[#00DC6E]/70 text-white"
               >
                 {loading ? (
                   <>

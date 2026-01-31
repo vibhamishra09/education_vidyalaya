@@ -75,7 +75,7 @@ export function DashboardClient() {
        name: "Total Earnings",
        value: "0",
        icon: "coins",
-       description: "Coins earned"
+       description: "WEBYA earned"
     },
     {
        name: "Average Rating",
@@ -311,12 +311,7 @@ export function DashboardClient() {
                 </div>
              </div>
 
-             {/* Achievements - Moved from right side */}
-             <div className="pt-2">
-                 <AchievementShowcaseConnected showProgress={true} />
-             </div>
-
-            {/* Sessions List */}
+             {/* Sessions List */}
             <div className="space-y-4">
               <div className="pl-1">
                 <h3 className="font-semibold text-lg">Your Sessions</h3>
@@ -438,6 +433,11 @@ export function DashboardClient() {
                 </div>
               );
             })()}
+
+             {/* Achievements - Moved from right side */}
+             <div className="pt-2">
+                 <AchievementShowcaseConnected showProgress={true} />
+             </div>
 
              {/* Charts */}
              <div className="">
