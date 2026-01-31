@@ -1,13 +1,17 @@
 name: Deploy
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'backend/**'
-      - 'my-app/**'
-      - '.github/workflows/deploy.yml'
+  # DEPRECATED: Automatic deployments disabled
+  # Automatic deployments on push to main branch have been deprecated.
+  # Use workflow_dispatch to manually trigger deployments if needed.
+  # push:
+  #   branches:
+  #     - main
+  #   paths:
+  #     - 'backend/**'
+  #     - 'my-app/**'
+  #     - '.github/workflows/deploy.yml'
+  workflow_dispatch: # Manual trigger only
 
 env:
   AWS_REGION: us-west-2

@@ -1,13 +1,17 @@
 name: Deploy (Test)
 
 on:
-  push:
-    branches:
-      - test
-    paths:
-      - 'backend/**'
-      - 'my-app/**'
-      - '.github/workflows/deploy-test.yml'
+  # DEPRECATED: Automatic deployments disabled
+  # Automatic deployments on push to test branch have been deprecated.
+  # Use workflow_dispatch to manually trigger deployments if needed.
+  # push:
+  #   branches:
+  #     - test
+  #   paths:
+  #     - 'backend/**'
+  #     - 'my-app/**'
+  #     - '.github/workflows/deploy-test.yml'
+  workflow_dispatch: # Manual trigger only
 
 env:
   AWS_REGION: us-west-2
