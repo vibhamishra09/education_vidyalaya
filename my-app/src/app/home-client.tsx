@@ -68,7 +68,7 @@ export function HomeClient() {
           const errorMessage = apiError.response?.data?.message;
 
           if (errorCode === "INSUFFICIENT_COINS") {
-            showError("Not enough WEBYA", errorMessage ?? "You do not have enough WEBYA to join this study room.");
+            showError("Not enough Coins", errorMessage ?? "You do not have enough Coins to join this study room.");
           } else if (errorCode === "ROOM_FULL") {
             showError("Room is full", errorMessage ?? "This study room has reached maximum capacity.");
           } else {
@@ -191,6 +191,8 @@ export function HomeClient() {
                         }
                         title={room.title}
                         description={room.description || ""}
+                        date={room.date}
+                        duration={room.duration}
                         participants={{
                           current: room.participantCount || 0,
                           max: room.maxParticipants,

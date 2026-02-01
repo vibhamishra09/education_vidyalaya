@@ -7,19 +7,19 @@ import { Sparkles } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "How It Works",
-  description: "Learn how Webyalaya works. Create study rooms, send peer requests, understand WEBYA, and start your collaborative learning journey in minutes.",
+  description: "Learn how Webyalaya works. Create study rooms, send peer requests, understand Webya, and start your collaborative learning journey in minutes.",
   keywords: [
     "how webyalaya works",
     "create study room",
     "peer request",
-    "WEBYA explained",
+    "Webya explained",
     "peer learning guide",
     "online tutoring tutorial",
     "study room tutorial",
   ],
   openGraph: {
     title: "How It Works | Webyalaya",
-    description: "A simple guide to creating study rooms, sending peer requests, and using WEBYA on Webyalaya.",
+    description: "A simple guide to creating study rooms, sending peer requests, and using Webya on Webyalaya.",
     url: "/how-it-works",
     type: "article",
     images: [
@@ -65,10 +65,10 @@ const jsonLd = {
     },
     {
       "@type": "Question",
-      "name": "What is WEBYA?",
+      "name": "What is Webya?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "WEBYA is the virtual currency on Webyalaya. Earn WEBYA by hosting sessions, completing streaks, or finishing challenges. Spend WEBYA to join premium rooms, send highlighted peer requests, or unlock add-ons.",
+        "text": "Webya is the virtual currency on Webyalaya. Earn Webya by hosting sessions, completing streaks, or finishing challenges. Spend Webya to join premium rooms, send highlighted peer requests, or unlock add-ons.",
       },
     },
   ],

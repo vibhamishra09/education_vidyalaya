@@ -359,7 +359,7 @@ export class ReviewsService {
           // Notify the teacher that payment has been released
           await this.notificationsService.createAndPushNotification(
             peerSession.requestedToId,
-            `Payment of ${Number(payment.amountReceived).toFixed(2)} WEBYA has been released from escrow for your session with ${peerSession.requestedBy.name}`,
+            `Payment of ${Number(payment.amountReceived).toFixed(2)} Coins has been released from escrow for your session with ${peerSession.requestedBy.name}`,
             'Payment Released',
             NotifType.NORMAL,
             {
@@ -407,7 +407,7 @@ export class ReviewsService {
           // Notify the creator that payment has been released
           await this.notificationsService.createAndPushNotification(
             studyRoom.createdById,
-            `Payment of ${Number(learnerPayment.amountReceived).toFixed(2)} WEBYA has been released from escrow for your study room "${studyRoom.title}"`,
+            `Payment of ${Number(learnerPayment.amountReceived).toFixed(2)} Coins has been released from escrow for your study room "${studyRoom.title}"`,
             'Payment Released',
             NotifType.NORMAL,
             {

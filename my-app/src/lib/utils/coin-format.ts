@@ -3,9 +3,9 @@
  */
 
 /**
- * Formats WEBYA coin value for display - shows actual value with up to 2 decimal places
+ * Formats Webya Coins value for display - shows actual value with up to 2 decimal places
  * No conversion is done - displays the raw value as stored
- * @param coins - The WEBYA coin value to format
+ * @param coins - The Webya Coins value to format
  * @returns Formatted string with up to 2 decimal places
  */
 export function formatCoins(coins: number | string | null | undefined): string {
@@ -33,7 +33,7 @@ export function formatCoins(coins: number | string | null | undefined): string {
 }
 
 /**
- * @deprecated Use formatCoins instead - there is no WEBYA conversion
+ * @deprecated Use formatCoins instead - there is no Coins conversion
  * This function now just calls formatCoins for backward compatibility
  */
 export function formatMaya(coins: number | string | null | undefined): string {
