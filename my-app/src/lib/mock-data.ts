@@ -328,7 +328,7 @@ export const mockMetrics: MetricCard[] = [
     icon: 'book',
   },
   {
-    name: 'WEBYA Earned',
+    name: 'Coins Earned',
     value: 450,
     description: 'Total earnings',
     icon: 'coins',

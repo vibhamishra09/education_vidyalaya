@@ -37,6 +37,14 @@ export function Footer() {
             aria-label="Footer"
             className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground"
           >
+            <span className="whitespace-nowrap">© {new Date().getFullYear()} Humitra Pvt Ltd. All rights reserved.</span>
+            <span className="hidden sm:inline text-muted-foreground/60">•</span>
+            <Link
+              className="hover:text-foreground transition-colors"
+              href="/about"
+            >
+              About
+            </Link>
             <Link
               className="hover:text-foreground transition-colors"
               href={`${landingSiteUrl}/careers`}
@@ -57,8 +65,6 @@ export function Footer() {
             >
               Privacy Policy
             </Link>
-            <span className="hidden sm:inline text-muted-foreground/60">•</span>
-            <span className="whitespace-nowrap">© {new Date().getFullYear()} Humitra Pvt Ltd. All rights reserved.</span>
           </nav>
 
           <div className="flex items-center gap-1">

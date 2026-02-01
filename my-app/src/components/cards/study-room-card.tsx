@@ -4,10 +4,11 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Users, Loader2, Share2, Play, Calendar } from "lucide-react";
+import { Users, Loader2, Share2, Play, Calendar, Clock } from "lucide-react";
 import { motion } from "framer-motion";
 import { ShareButton } from "@/components/share/share-button";
 import { cn } from "@/lib/utils";
+import { getRelativeTimeString } from "@/lib/utils/date-time";
 
 type ButtonVariant = "default" | "outline" | "secondary" | "ghost" | "destructive" | "link";
 
@@ -17,6 +18,8 @@ interface StudyRoomCardProps {
   category?: string;
   title: string;
   description?: string;
+  date?: Date | string;
+  duration?: number;
   participants?: {
     current: number;
     max: number;
@@ -38,6 +41,8 @@ export function StudyRoomCard({
   category = "General",
   title,
   description,
+  date,
+  duration,
   participants,
   host,
   actionLabel,
@@ -50,6 +55,9 @@ export function StudyRoomCard({
   const participantCurrent = participants?.current ?? 0;
   const participantMax = participants?.max ?? 0;
   const hostInitial = host?.name?.charAt(0) || "U";
+
+  // Format date/time if available
+  const formattedDateTime = date ? getRelativeTimeString(date) : null;
 
   // Dynamic Theme Colors based on Status
   const theme = statusIsLive
@@ -120,6 +128,25 @@ export function StudyRoomCard({
             <p className="text-sm text-muted-foreground leading-relaxed line-clamp-1">
               {description}
             </p>
+          )}
+          {/* Date & Time Display */}
+          {formattedDateTime && (
+            <div className="flex flex-wrap items-center gap-2 pt-2">
+              <div className="flex items-center gap-1.5 bg-secondary/30 px-2.5 py-1 rounded-md border border-secondary/50">
+                <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-xs font-medium text-muted-foreground">
+                  {formattedDateTime}
+                </span>
+              </div>
+              {duration && (
+                <div className="flex items-center gap-1.5 bg-secondary/30 px-2.5 py-1 rounded-md border border-secondary/50">
+                  <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {duration} min
+                  </span>
+                </div>
+              )}
+            </div>
           )}
         </div>
 

@@ -11,7 +11,7 @@ export const metadata: Metadata = {
     "learning preferences",
     "session history",
     "wallet",
-    "WEBYA balance",
+    "Coins balance",
   ],
   openGraph: {
     title: "My Profile | Webyalaya",

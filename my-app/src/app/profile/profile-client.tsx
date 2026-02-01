@@ -193,14 +193,14 @@ function ProfileContent() {
                       <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-700 shadow-sm">
                         <Coins className="h-4 w-4 text-emerald-600" />
                         <span className="font-bold">{formatCoins(currentUser.coins)}</span>
-                        <span className="text-xs opacity-70">WEBYA</span>
+                        <span className="text-xs opacity-70">Coins</span>
                       </div>
 
                       {currentUser.hourlyRate && (
                         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-sky-50 border border-sky-100 text-sky-700 shadow-sm">
                           <Coins className="h-4 w-4 text-sky-600" />
                           <span className="font-bold">{formatCoins(currentUser.hourlyRate)}</span>
-                          <span className="text-xs opacity-70">WEBYA/hr</span>
+                          <span className="text-xs opacity-70">Coins/hr</span>
                         </div>
                       )}
 

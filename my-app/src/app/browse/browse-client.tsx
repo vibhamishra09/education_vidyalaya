@@ -222,6 +222,8 @@ function BrowsePageContent() {
                         status={room.sessionStatus === 'ONGOING' ? 'live' : 'scheduled'}
                         title={room.title}
                         description={room.description}
+                        date={room.date}
+                        duration={room.duration}
                         participants={{
                           current: room.participantCount,
                           max: room.maxParticipants
@@ -430,6 +432,8 @@ function BrowsePageContent() {
                           status={room.sessionStatus === 'ONGOING' ? 'live' : 'scheduled'}
                           title={room.title}
                           description={room.description}
+                          date={room.date}
+                          duration={room.duration}
                           participants={{
                             current: room.participantCount,
                             max: room.maxParticipants
