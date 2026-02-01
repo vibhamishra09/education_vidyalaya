@@ -41,16 +41,16 @@ const FEATURES = {
     href: "/browse?tab=peers"
   },
   "webya-coins": {
-    label: "WEBYA",
+    label: "Coins",
     title: "Earn rewards for your learning journey.",
     description: "Our virtual currency system rewards you for being an active and helpful member of the community. Invest in your learning growth.",
     points: [
-      "Earn by helping: Get WEBYA for hosting study rooms or teaching peers.",
+      "Earn by helping: Get Coins for hosting study rooms or teaching peers.",
       "Daily rewards: Login bonuses and streak milestones boost your wallet.",
-      "Spend wisely: Use WEBYA to highlight your requests or join premium rooms.",
+      "Spend wisely: Use Coins to highlight your requests or join premium rooms.",
       "Transparent wallet: Track every earning and spending transaction easily."
     ],
-    image: "https://placehold.co/800x500/fff7ed/ea580c?text=WEBYA+Demo",
+    image: "https://placehold.co/800x500/fff7ed/ea580c?text=Webya+Demo",
     cta: "Check Wallet",
     href: "/profile?tab=wallet"
   },
@@ -72,6 +72,8 @@ const FEATURES = {
 
 export function HowItWorksClient() {
   const [activeTab, setActiveTab] = useState<FeatureTab>("study-rooms");
+  // Toggle this to show/hide the demo video/image section
+  const SHOW_DEMO = false;
 
   return (
     <div className="flex flex-col items-center">
@@ -104,10 +106,16 @@ export function HowItWorksClient() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.3 }}
-            className="grid lg:grid-cols-2 gap-12 items-center"
+            className={cn(
+              "gap-12 items-center",
+              SHOW_DEMO ? "grid lg:grid-cols-2" : "max-w-3xl mx-auto text-center"
+            )}
           >
             {/* Left Column: Text */}
-            <div className="space-y-8 order-2 lg:order-1">
+            <div className={cn(
+              "space-y-8",
+              SHOW_DEMO ? "order-2 lg:order-1" : "flex flex-col items-center"
+            )}>
               <div className="space-y-4">
                 <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-foreground">
                   {FEATURES[activeTab].title}
@@ -117,7 +125,10 @@ export function HowItWorksClient() {
                 </p>
               </div>
 
-              <ul className="space-y-4">
+              <ul className={cn(
+                "space-y-4",
+                !SHOW_DEMO && "inline-block text-left"
+              )}>
                 {FEATURES[activeTab].points.map((point, index) => (
                   <motion.li 
                     key={index}
@@ -143,6 +154,7 @@ export function HowItWorksClient() {
             </div>
 
             {/* Right Column: Image */}
+            {SHOW_DEMO && (
             <div className="relative order-1 lg:order-2">
               <div className="relative rounded-2xl overflow-hidden shadow-2xl border bg-muted aspect-[4/3] group">
                  {/* Decorative background behind image */}
@@ -173,6 +185,7 @@ export function HowItWorksClient() {
                  </div>
               </div>
             </div>
+            )}
           </motion.div>
         </AnimatePresence>
       </div>

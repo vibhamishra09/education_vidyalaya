@@ -43,10 +43,31 @@ export function HeroSection() {
               </span>
             </h1>
             
-            <p className="text-lg sm:text-xl text-slate-600 dark:text-slate-400 max-w-2xl mx-auto leading-relaxed">
-              The world&apos;s first decentralized learning hub. Join study rooms, 
-              host sessions, and turn your knowledge into community value.
-            </p>
+            <div className="text-lg sm:text-xl text-slate-600 dark:text-slate-400 max-w-3xl mx-auto leading-relaxed space-y-6">
+              <p className="font-medium">
+                Welcome to a community-led learning platform where you don&apos;t just watch content — you <span className="text-slate-900 dark:text-slate-200 font-semibold">talk, practice, debate,</span> and <span className="text-slate-900 dark:text-slate-200 font-semibold">grow</span> through real conversations.
+              </p>
+              
+              <p className="text-base italic opacity-90">
+                Because real learning and growth happens, when we do it together.
+              </p>
+            
+              <div className="pt-4 space-y-3">
+                <p className="font-bold text-slate-900 dark:text-white text-xl">
+                  Teach what you know. Learn what you want.
+                </p>
+                
+                <div className="flex flex-wrap justify-center gap-2 text-sm sm:text-base font-medium text-slate-700 dark:text-slate-300">
+                  <span className="px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-full">Join study rooms</span>
+                  <span className="hidden sm:inline text-slate-300 dark:text-slate-600">•</span>
+                  <span className="px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-full">Host live sessions</span>
+                  <span className="hidden sm:inline text-slate-300 dark:text-slate-600">•</span>
+                  <span className="px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-full">Participate in Debates</span>
+                  <span className="hidden sm:inline text-slate-300 dark:text-slate-600">•</span>
+                  <span className="px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-full">Learn with each other</span>
+                </div>
+              </div>
+            </div>
           </motion.div>
 
           {/* 4. Functional Search Bar */}

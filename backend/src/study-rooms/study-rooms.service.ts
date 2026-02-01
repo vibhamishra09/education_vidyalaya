@@ -892,7 +892,7 @@ export class StudyRoomsService {
     ) {
       throw new BadRequestException({
         code: 'INSUFFICIENT_COINS',
-        message: `You need ${parseFloat(studyRoom.joiningFee.toString()).toFixed(2)} WEBYA to join this study room. You have ${parseFloat(user.coins.toString()).toFixed(2)} WEBYA.`,
+        message: `You need ${parseFloat(studyRoom.joiningFee.toString()).toFixed(2)} Coins to join this study room. You have ${parseFloat(user.coins.toString()).toFixed(2)} Coins.`,
       });
     }
 

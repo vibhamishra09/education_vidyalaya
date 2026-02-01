@@ -321,34 +321,11 @@ export default function PrivacyPolicyPage() {
               </ul>
             </section>
 
-            <section>
-              <h3 className="text-xl font-semibold text-foreground mb-3">
-                11. Children & Minors
-              </h3>
-              <p>
-                Webyalaya permits access to the Platform by users below 18 years
-                of age only with the consent and supervision of a parent or
-                legal guardian, in accordance with the Digital Personal Data
-                Protection Act, 2023.
-              </p>
-              <p className="mt-2">
-                Webyalaya does not knowingly engage in behavioral tracking,
-                profiling, or targeted advertising directed at children.
-                Personal Data of children is processed strictly for lawful
-                purposes related to learning and platform safety, with enhanced
-                safeguards.
-              </p>
-              <p className="mt-2">
-                Webyalaya may implement age-appropriate access controls, topic
-                restrictions, or moderation levels in Debate Rooms involving
-                minors. Certain topics may be restricted or moderated more
-                strictly for users below 18 years of age.
-              </p>
-            </section>
+            {/* Section 11 (Children & Minors) removed as requested */}
 
             <section>
               <h3 className="text-xl font-semibold text-foreground mb-3">
-                12. Content Neutrality Disclaimer
+                11. Content Neutrality Disclaimer
               </h3>
               <p>
                 Webyalaya acts as a neutral technology platform facilitating
@@ -366,7 +343,7 @@ export default function PrivacyPolicyPage() {
 
             <section>
               <h3 className="text-xl font-semibold text-foreground mb-3">
-                13. AI Ethics & Transparency
+                12. AI Ethics & Transparency
               </h3>
               <p>
                 Webyalaya uses AI responsibly to assist learning through
@@ -383,7 +360,7 @@ export default function PrivacyPolicyPage() {
 
             <section>
               <h3 className="text-xl font-semibold text-foreground mb-3">
-                14. Changes to This Policy
+                13. Changes to This Policy
               </h3>
               <p>
                 We may update this Privacy Policy periodically. Continued use of
@@ -393,7 +370,7 @@ export default function PrivacyPolicyPage() {
 
             <section>
               <h3 className="text-xl font-semibold text-foreground mb-3">
-                15. Grievance Redressal
+                14. Grievance Redressal
               </h3>
               <p>
                 In accordance with the Information Technology Act and applicable
@@ -417,7 +394,7 @@ export default function PrivacyPolicyPage() {
 
             <section>
               <h3 className="text-xl font-semibold text-foreground mb-3">
-                16. Contact Information
+                15. Contact Information
               </h3>
               <div className="bg-muted p-4 rounded-lg space-y-2">
                  <p>

@@ -2,35 +2,63 @@
 
 ## 📦 What's Included
 
-This monitoring solution provides **automatic endpoint discovery**, **real-time metrics**, and **instant email alerts** for your NestJS backend.
+This monitoring solution provides **automatic endpoint discovery**, **real-time metrics**, **error tracking**, and **instant alerts** for your NestJS backend.
 
 ---
 
 ## ✅ Implementation Complete
 
-### Part 1: NestJS Code ✅
+### Part 1: Metrics & Visualization ✅
 - ✨ **Global Interceptor**: [src/logging.interceptor.ts](../src/logging.interceptor.ts)
 - ⚙️ **Module Configuration**: [src/app.module.ts](../src/app.module.ts)
-- 📊 **Metrics**: Histogram tracking for all HTTP requests
+- 📊 **Prometheus Metrics**: Histogram tracking for all HTTP requests
+- 📈 **Grafana Dashboards**: Real-time visualization
 - 🔄 **Auto-Discovery**: New endpoints tracked automatically
 
-### Part 2: Docker & SMTP ✅
-- 🐳 **Docker Compose**: [docker-compose.monitoring.yml](../docker-compose.monitoring.yml)
-- 📧 **Gmail SMTP**: Configured for debanshughosh685@gmail.com
-- 🔐 **Security**: App password required (see setup)
-- 🚀 **Ready to Run**: Just add your password and start
+### Part 2: Error Tracking ✅
+- 🐛 **Sentry Integration**: [src/common/sentry/](../src/common/sentry/)
+- 📊 **Error Reporting**: Automatic 5xx error capture
+- 🔍 **Performance Monitoring**: Request tracing and profiling
+- 🎯 **Smart Filtering**: Only critical errors reported
+- 🔒 **Privacy**: Sensitive data automatically filtered
 
-### Part 3: Grafana Setup ✅
-- 📊 **Dashboard JSON**: [grafana/dashboards/api-health-dashboard.json](./grafana/dashboards/api-health-dashboard.json)
-- 🔍 **PromQL Queries**: Ready for health table and alerts
-- 📧 **Email Alerts**: Configuration for instant 500 error notifications
-- 📚 **Documentation**: Complete guides and troubleshooting
+### Part 3: Infrastructure ✅
+- 🐳 **Docker Compose**: [docker-compose.monitoring.yml](../docker-compose.monitoring.yml)
+- 📧 **Gmail SMTP**: Configured for email alerts
+- 🔐 **Security**: App password required (see setup)
+- 🚀 **Ready to Run**: Just add credentials and start
+
+### Part 4: Documentation ✅
+- 📚 **Setup Guides**: Complete step-by-step instructions
+- 🎯 **Quick Starts**: 5-minute setup guides
+- 🔧 **Troubleshooting**: Common issues and solutions
+- 📊 **Best Practices**: Optimization and usage tips
 
 ---
 
-## 🚀 Quick Start (5 Minutes)
+## 🚀 Quick Start (10 Minutes)
 
-### 1. Generate Google App Password
+### Prerequisites
+- Docker and Docker Compose installed
+- Sentry account (free tier available)
+- Google account for email alerts
+
+### 1. Set Up Sentry (5 minutes)
+
+**Get your Sentry DSN:**
+1. Go to [sentry.io](https://sentry.io) and sign up
+2. Create new project: **Node.js** → **NestJS**
+3. Copy your DSN (looks like: `https://abc@sentry.io/123`)
+
+**Add to `.env`:**
+```bash
+SENTRY_DSN="https://your-dsn@sentry.io/project-id"
+NODE_ENV="development"
+```
+
+See [SENTRY_QUICKSTART.md](./SENTRY_QUICKSTART.md) for details.
+
+### 2. Generate Google App Password (2 minutes)
 
 **Required for email alerts:**
 
@@ -39,7 +67,7 @@ This monitoring solution provides **automatic endpoint discovery**, **real-time 
 3. Create app password for "Grafana Monitoring"
 4. Copy the 16-character password
 
-### 2. Configure SMTP
+### 3. Configure SMTP (1 minute)
 
 Edit [docker-compose.monitoring.yml](../docker-compose.monitoring.yml):
 
@@ -47,7 +75,7 @@ Edit [docker-compose.monitoring.yml](../docker-compose.monitoring.yml):
 - GF_SMTP_PASSWORD=your_google_app_password_here  # ⬅️ Replace this
 ```
 
-### 3. Start Everything
+### 4. Start Everything (2 minutes)
 
 ```bash
 # Terminal 1: Start monitoring stack
@@ -58,17 +86,33 @@ docker-compose -f docker-compose.monitoring.yml up -d
 pnpm start:dev
 ```
 
-### 4. Verify Setup
+### 5. Verify Setup
 
 ```bash
 # Check metrics endpoint
 curl http://localhost:3001/metrics | grep http_request_duration_seconds
+
+# Check Sentry initialization
+# Look for: "✅ Sentry initialized for environment: development"
 
 # Access Grafana
 # Open: http://localhost:3002 (admin/admin)
 
 # Access Prometheus
 # Open: http://localhost:9090
+
+# Access Sentry
+# Open: https://sentry.io
+```
+
+### 6. Test Error Tracking
+
+```bash
+# Trigger a test error
+curl http://localhost:3001/debug/test-error
+
+# Check Sentry dashboard
+# Should see the error appear within seconds
 ```
 
 ### 5. Configure Grafana (First Time Only)
@@ -99,6 +143,40 @@ curl http://localhost:3001/metrics | grep http_request_duration_seconds
 5. Evaluation: 1m
 6. Contact: Email - Debanshu
 7. Save
+
+---
+
+## 🎯 Complete Monitoring Stack
+
+### Three Layers of Monitoring
+
+```
+┌───────────────────────────────────────────────────┐
+│           Your NestJS Application                 │
+│  (/metrics endpoint + Sentry SDK)                │
+└─────┬──────────────────┬────────────────┬────────┘
+      │                  │                │
+      ▼                  ▼                ▼
+┌──────────┐      ┌──────────┐    ┌──────────┐
+│Prometheus│      │ Grafana  │    │  Sentry  │
+│(Metrics) │──────│(Dashboards)    │ (Errors) │
+└──────────┘      └──────────┘    └──────────┘
+```
+
+### When to Use Each Tool
+
+| Tool | Purpose | Best For |
+|------|---------|----------|
+| **Prometheus** | Metrics collection | System health, request rates |
+| **Grafana** | Visualization | Dashboards, trends, alerts |
+| **Sentry** | Error tracking | Debug errors, stack traces |
+
+### Typical Investigation Flow
+
+1. **Grafana** alerts you to an error spike
+2. **Prometheus** shows which endpoints are affected
+3. **Sentry** provides error details and stack traces
+4. You fix the bug! 🐛 → ✅
 
 ---
 
@@ -151,25 +229,18 @@ Labels:
 
 ## 📚 Documentation
 
-### Quick Start
-📄 **[QUICKSTART.md](./QUICKSTART.md)**
-- 5-minute setup guide
-- Copy-paste commands
-- Verification checklist
+### Quick Start Guides
+📄 **[QUICKSTART.md](./QUICKSTART.md)** - Prometheus & Grafana (5 minutes)
+📄 **[SENTRY_QUICKSTART.md](./SENTRY_QUICKSTART.md)** - Sentry setup (5 minutes)
 
-### Detailed Setup
-📄 **[GRAFANA_SETUP_GUIDE.md](./GRAFANA_SETUP_GUIDE.md)**
-- Complete PromQL queries
-- Dashboard configuration
-- Alert rule setup
-- Advanced queries (P95, P99, Top 10)
-- Troubleshooting guide
+### Complete Setup Guides
+📄 **[GRAFANA_SETUP_GUIDE.md](./GRAFANA_SETUP_GUIDE.md)** - Grafana configuration & alerts
+📄 **[SENTRY_SETUP_GUIDE.md](./SENTRY_SETUP_GUIDE.md)** - Complete Sentry integration
 
-### Implementation Details
-📄 **[IMPLEMENTATION_SUMMARY.md](./IMPLEMENTATION_SUMMARY.md)**
-- Architecture overview
-- Files created/modified
-- Feature list
+### Overview & Best Practices
+📄 **[COMPLETE_MONITORING_STACK.md](./COMPLETE_MONITORING_STACK.md)** - Full monitoring overview
+📄 **[SENTRY_INTEGRATION_COMPLETE.md](./SENTRY_INTEGRATION_COMPLETE.md)** - Sentry integration summary
+📄 **[IMPLEMENTATION_SUMMARY.md](./IMPLEMENTATION_SUMMARY.md)** - Architecture & features
 - Security notes
 - Next steps
 

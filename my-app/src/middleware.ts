@@ -8,6 +8,7 @@ const isPublicRoute = createRouteMatcher([
   '/sign-up(.*)',
   '/browse',
   '/how-it-works',
+  '/about',
 ]);
 const isApiRoute = createRouteMatcher(['/api(.*)']);
 

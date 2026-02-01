@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Users, Play, Calendar, Star } from "lucide-react";
+import { Users, Play, Calendar, Star, Clock } from "lucide-react";
 import { motion } from "framer-motion";
 import { StudyRoomCard, SessionStatus } from "@/types/api.types";
 import { getRelativeTimeString } from "@/lib/utils/date-time";
@@ -72,9 +72,17 @@ export function StudyRoomCardBrowse({ studyRoom }: StudyRoomCardBrowseProps) {
           <CardContent className="flex-1 flex flex-col justify-end space-y-4">
             {/* Date and Time */}
             {!isDone && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Calendar className="h-4 w-4" />
-                <span className="font-medium">{formattedDateTime}</span>
+              <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                <div className="flex items-center gap-1.5 bg-secondary/30 px-2.5 py-1 rounded-md border border-secondary/50">
+                  <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="font-medium text-xs text-muted-foreground">{formattedDateTime}</span>
+                </div>
+                {studyRoom.duration && (
+                  <div className="flex items-center gap-1.5 bg-secondary/30 px-2.5 py-1 rounded-md border border-secondary/50">
+                    <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="font-medium text-xs text-muted-foreground">{studyRoom.duration} min</span>
+                  </div>
+                )}
               </div>
             )}
 

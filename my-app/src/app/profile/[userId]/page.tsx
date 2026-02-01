@@ -319,6 +319,8 @@ export default function PublicProfilePage({
                     category={typeof room.skills[0] === 'string' ? room.skills[0] : room.skills[0]?.name || "General"}
                     title={room.title}
                     description={room.description || ""}
+                    date={room.date}
+                    duration={room.duration}
                     participants={{
                       current: room.participantCount,
                       max: room.maxParticipants
