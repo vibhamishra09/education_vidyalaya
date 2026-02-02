@@ -28,7 +28,7 @@ export function Footer() {
                 priority={false}
               />
             </Link>
-            <p className="hidden md:block max-w-xs text-xs leading-snug text-muted-foreground">
+            <p className="max-w-xs text-xs leading-snug text-muted-foreground">
               Made by Indians. Loved by Learners
             </p>
           </div>
