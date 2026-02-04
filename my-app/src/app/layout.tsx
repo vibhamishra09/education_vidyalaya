@@ -14,6 +14,8 @@ import { PushNotificationPrompt } from "@/components/notifications/push-notifica
 import { PushNotificationListener } from "@/components/notifications/push-notification-listener";
 import { HiddenSignInButton } from "@/components/auth/hidden-sign-in-button";
 import { ServiceWorkerRegistration } from "@/components/pwa/service-worker-registration";
+import { InstallPrompt } from "@/components/pwa/install-prompt";
+import { UpdateNotification } from "@/components/pwa/update-notification";
 import { BackgroundGradient } from "@/components/ui/background-gradient";
 import "./globals.css";
 
@@ -259,6 +261,8 @@ export default function RootLayout({
                     <HiddenSignInButton />
                   </Suspense>
                   <ServiceWorkerRegistration />
+                  <InstallPrompt />
+                  <UpdateNotification />
                   <Toaster position="top-center" richColors closeButton duration={4000} />
                 </AchievementNotificationProvider>
               </ToastProvider>
