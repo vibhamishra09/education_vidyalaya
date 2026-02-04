@@ -5,7 +5,7 @@ export async function generateMetadata({
 }: {
   params: Promise<{ channelId: string }>;
 }): Promise<Metadata> {
-  const { channelId } = await params;
+  await params; // Channel ID not needed for metadata
 
   return {
     title: `Chat Channel | Webyalaya`,

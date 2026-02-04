@@ -64,7 +64,8 @@ export function InstallPrompt() {
     // Check if app is already installed (for iOS)
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     const isInStandaloneMode = 
-      ("standalone" in window.navigator && (window.navigator as any).standalone) ||
+      ("standalone" in window.navigator && 
+        (window.navigator as Navigator & { standalone?: boolean }).standalone) ||
       window.matchMedia("(display-mode: standalone)").matches;
 
     if (isIOS && !isInStandaloneMode) {
