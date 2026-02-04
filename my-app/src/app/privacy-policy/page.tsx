@@ -1,6 +1,48 @@
+import type { Metadata } from "next";
 import { Footer } from "@/components/layout/footer";
 import { Navigation } from "@/components/layout/navigation";
 import { Suspense } from "react";
+
+export const metadata: Metadata = {
+  title: "Privacy Policy | Webyalaya",
+  description: "Read Webyalaya's Privacy Policy. Learn how we collect, use, store, and protect your personal information on our peer-to-peer learning platform. Compliant with Indian data protection laws.",
+  keywords: [
+    "privacy policy",
+    "data protection",
+    "user privacy",
+    "data security",
+    "personal information",
+    "webyalaya privacy",
+    "Indian data protection",
+    "IT Act compliance",
+  ],
+  openGraph: {
+    title: "Privacy Policy | Webyalaya",
+    description: "Learn how Webyalaya protects your privacy and handles your personal information.",
+    url: "/privacy-policy",
+    type: "website",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Webyalaya Privacy Policy",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary",
+    title: "Privacy Policy | Webyalaya",
+    description: "Learn how Webyalaya protects your privacy and handles your personal information.",
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
+  alternates: {
+    canonical: "/privacy-policy",
+  },
+};
 
 export default function PrivacyPolicyPage() {
   return (

@@ -161,11 +161,12 @@ export const metadata: Metadata = {
   // Icons
   icons: {
     icon: [
-      { url: "/favicon.ico", sizes: "any" },
+      { url: "/webyalaya-main-logo.svg", sizes: "any", type: "image/svg+xml" },
+      { url: "/favicon.png", sizes: "32x32", type: "image/png" },
       { url: "/icons/icon-192x192.png", sizes: "192x192", type: "image/png" },
       { url: "/icons/icon-512x512.png", sizes: "512x512", type: "image/png" },
     ],
-    shortcut: "/favicon.ico",
+    shortcut: "/webyalaya-main-logo.svg",
     apple: [
       { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
     ],
@@ -229,7 +230,8 @@ export default function RootLayout({
           <meta name="msapplication-tap-highlight" content="no" />
           
           {/* Explicit favicon to override defaults / cache issues */}
-          <link rel="icon" href="/webyalaya-main-logo.svg?v=2" />
+          <link rel="icon" type="image/svg+xml" href="/webyalaya-main-logo.svg?v=3" />
+          <link rel="alternate icon" type="image/png" href="/favicon.png?v=3" />
           <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
           
           {/* Preconnect for performance */}
