@@ -4,7 +4,44 @@ import { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "About Webyalaya | Peer-to-Peer Learning Platform",
-  description: "Webyalaya is designed to make learning social again. Instead of learning alone, you learn with peers. Join a community where knowledge flows both ways.",
+  description: "Webyalaya is designed to make learning social again. Instead of learning alone, you learn with peers. Join a community where knowledge flows both ways. Learn about our mission to make education collaborative, accessible, and engaging.",
+  keywords: [
+    "about webyalaya",
+    "peer learning platform",
+    "collaborative learning",
+    "social learning",
+    "education mission",
+    "learning community",
+    "knowledge sharing",
+    "peer education",
+  ],
+  openGraph: {
+    title: "About Webyalaya | Peer-to-Peer Learning Platform",
+    description: "Webyalaya is designed to make learning social again. Instead of learning alone, you learn with peers. Join a community where knowledge flows both ways.",
+    url: "/about",
+    type: "website",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "About Webyalaya - Peer-to-Peer Learning Platform",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "About Webyalaya | Peer-to-Peer Learning Platform",
+    description: "Webyalaya is designed to make learning social again. Instead of learning alone, you learn with peers.",
+    images: ["/og-image.png"],
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
+  alternates: {
+    canonical: "/about",
+  },
 };
 
 export default function AboutPage() {

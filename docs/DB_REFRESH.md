@@ -7,3 +7,20 @@ export NEW="postgresql://neondb_owner:npg_hWQ2CDLROx6S@ep-square-frost-ahpe2sw8-
 docker run --rm -i -e OLD="$OLD" postgres:17 bash -c 'pg_dump --format=custom --no-owner --no-acl "$OLD" > /tmp/neon.dump && cat /tmp/neon.dump' > neon.dump 
 
 docker run --rm -i -e NEW="$NEW" -v ${PWD}:/data postgres:17 bash -c 'pg_restore --clean --no-owner --no-acl -d "$NEW"' < neon.dump
+
+
+----------------------------------------
+Migrate NEON to AZURE FLEXIBLE SERVER POSTGRES
+----------------------------------------
+
+pg_dump "$env:NEON_CONNECTION_STRING" --format=custom --no-owner --no-acl --file neon.dump  
+
+pg_restore -h webyalaya-pg.postgres.database.azure.com -p 5432 -U webyalaya -d webyalaya_prod --no-owner --no-privileges --jobs=4 neon.dump
+
+
+
+
+
+
+
+

@@ -1,6 +1,48 @@
+import type { Metadata } from "next";
 import { Footer } from "@/components/layout/footer";
 import { Navigation } from "@/components/layout/navigation";
 import { Suspense } from "react";
+
+export const metadata: Metadata = {
+  title: "Terms & Conditions | Webyalaya",
+  description: "Read Webyalaya's Terms & Conditions. Understand the rules, responsibilities, and guidelines for using our peer-to-peer learning platform. Learn about acceptable use, content rights, and platform policies.",
+  keywords: [
+    "terms and conditions",
+    "terms of service",
+    "user agreement",
+    "platform rules",
+    "acceptable use policy",
+    "webyalaya terms",
+    "legal terms",
+    "service agreement",
+  ],
+  openGraph: {
+    title: "Terms & Conditions | Webyalaya",
+    description: "Read the terms and conditions for using Webyalaya's peer-to-peer learning platform.",
+    url: "/terms-of-use",
+    type: "website",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Webyalaya Terms & Conditions",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary",
+    title: "Terms & Conditions | Webyalaya",
+    description: "Read the terms and conditions for using Webyalaya's peer-to-peer learning platform.",
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
+  alternates: {
+    canonical: "/terms-of-use",
+  },
+};
 
 export default function TermsOfUsePage() {
   return (

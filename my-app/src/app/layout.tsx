@@ -14,6 +14,8 @@ import { PushNotificationPrompt } from "@/components/notifications/push-notifica
 import { PushNotificationListener } from "@/components/notifications/push-notification-listener";
 import { HiddenSignInButton } from "@/components/auth/hidden-sign-in-button";
 import { ServiceWorkerRegistration } from "@/components/pwa/service-worker-registration";
+import { InstallPrompt } from "@/components/pwa/install-prompt";
+import { UpdateNotification } from "@/components/pwa/update-notification";
 import { BackgroundGradient } from "@/components/ui/background-gradient";
 import "./globals.css";
 
@@ -161,11 +163,12 @@ export const metadata: Metadata = {
   // Icons
   icons: {
     icon: [
-      { url: "/favicon.ico", sizes: "any" },
+      { url: "/webyalaya-main-logo.svg", sizes: "any", type: "image/svg+xml" },
+      { url: "/favicon.png", sizes: "32x32", type: "image/png" },
       { url: "/icons/icon-192x192.png", sizes: "192x192", type: "image/png" },
       { url: "/icons/icon-512x512.png", sizes: "512x512", type: "image/png" },
     ],
-    shortcut: "/favicon.ico",
+    shortcut: "/webyalaya-main-logo.svg",
     apple: [
       { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
     ],
@@ -229,7 +232,8 @@ export default function RootLayout({
           <meta name="msapplication-tap-highlight" content="no" />
           
           {/* Explicit favicon to override defaults / cache issues */}
-          <link rel="icon" href="/webyalaya-main-logo.svg?v=2" />
+          <link rel="icon" type="image/svg+xml" href="/webyalaya-main-logo.svg?v=3" />
+          <link rel="alternate icon" type="image/png" href="/favicon.png?v=3" />
           <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
           
           {/* Preconnect for performance */}
@@ -257,6 +261,8 @@ export default function RootLayout({
                     <HiddenSignInButton />
                   </Suspense>
                   <ServiceWorkerRegistration />
+                  <InstallPrompt />
+                  <UpdateNotification />
                   <Toaster position="top-center" richColors closeButton duration={4000} />
                 </AchievementNotificationProvider>
               </ToastProvider>
