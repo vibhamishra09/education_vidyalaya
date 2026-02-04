@@ -266,6 +266,7 @@ export interface StudyRoomCard {
   id: string;
   title: string;
   description?: string;
+  imageUrl?: string;
   sessionStatus: SessionStatus;
   date: Date | string;
   duration: number;
@@ -291,6 +292,7 @@ export interface StudyRoom extends StudyRoomCard {
 export interface CreateStudyRoomDto {
   title: string;
   description?: string;
+  imageUrl?: string;
   skills: string[];
   date: string;
   time: string;
@@ -304,6 +306,7 @@ export interface CreateStudyRoomDto {
 export interface UpdateStudyRoomDto {
   title?: string;
   description?: string;
+  imageUrl?: string;
   skills?: string[];
   date?: string;
   time?: string;

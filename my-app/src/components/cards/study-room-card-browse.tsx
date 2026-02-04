@@ -132,6 +132,7 @@ export function StudyRoomCardBrowse({ studyRoom }: StudyRoomCardBrowseProps) {
                 url={`${typeof window !== "undefined" ? window.location.origin : process.env.NEXT_PUBLIC_BASE_URL || ""}/studyroom/${studyRoom.id}`}
                 title={studyRoom.title}
                 description={studyRoom.description || ""}
+                image={studyRoom.imageUrl}
                 variant="outline"
                 size="default"
                 className="flex-1"

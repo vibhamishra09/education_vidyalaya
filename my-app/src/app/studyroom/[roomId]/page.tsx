@@ -12,6 +12,7 @@ interface StudyRoomData {
   id: string;
   title: string;
   description?: string;
+  imageUrl?: string;
   date: string;
   duration: number;
   maxParticipants: number;
@@ -87,7 +88,10 @@ export async function generateMetadata({
 
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://webyalaya.com";
   const pageUrl = `${baseUrl}/studyroom/${roomId}`;
-  const ogImageUrl = `${baseUrl}/api/og/studyroom/${roomId}`;
+  const generatedOgImageUrl = `${baseUrl}/api/og/studyroom/${roomId}`;
+  
+  // Use study room image if available, otherwise fallback to generated OG image
+  const ogImageUrl = room.imageUrl || generatedOgImageUrl;
 
   return {
     title: `${room.title} | Study Room - Webyalaya`,

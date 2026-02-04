@@ -361,6 +361,7 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
                                     url={`${typeof window !== "undefined" ? window.location.origin : process.env.NEXT_PUBLIC_BASE_URL || ""}/studyroom/${roomId}`}
                                     title={room.title}
                                     description={room.description || ""}
+                                    image={room.imageUrl}
                                     variant="outline"
                                     className="w-full rounded-lg h-9 hover:bg-primary/5 text-xs text-green-600 border-green-200/50 hover:text-green-700"
                                 />

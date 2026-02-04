@@ -18,6 +18,7 @@ interface StudyRoomCardProps {
   category?: string;
   title: string;
   description?: string;
+  imageUrl?: string;
   date?: Date | string;
   duration?: number;
   participants?: {
@@ -41,6 +42,7 @@ export function StudyRoomCard({
   category = "General",
   title,
   description,
+  imageUrl,
   date,
   duration,
   participants,
@@ -185,6 +187,7 @@ export function StudyRoomCard({
                 url={`${typeof window !== "undefined" ? window.location.origin : ""}/studyroom/${roomId}`}
                 title={title}
                 description={description}
+                image={imageUrl}
                 variant="ghost"
                 size="icon"
                 className="h-9 w-9 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all"
