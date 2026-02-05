@@ -12,14 +12,19 @@ Sentry.init({
 });
 
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { redisClient } from './redis/redis.provider';
 import { SentryInterceptor, SentryExceptionFilter } from './common/sentry';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    bufferLogs: true,
+  });
+  
+  // Use NestJS Logger - automatically uses Pino when LoggerModule is imported
+  const logger = new Logger('Bootstrap');
 
   // Enable CORS
   // Merge environment variable URLs with hardcoded defaults
@@ -52,12 +57,12 @@ async function bootstrap() {
     credentials: true,
   });
 
-  console.log('🌐 CORS enabled for origins:', allowedOrigins);
+  logger.log(`🌐 CORS enabled for origins: ${JSON.stringify(allowedOrigins)}`);
 
   // Sentry error tracking
   app.useGlobalFilters(new SentryExceptionFilter());
   app.useGlobalInterceptors(new SentryInterceptor());
-  console.log('🔍 Sentry error tracking enabled');
+  logger.log('🔍 Sentry error tracking enabled');
 
   // Enable validation
   app.useGlobalPipes(
@@ -82,8 +87,8 @@ async function bootstrap() {
   const port = process.env.PORT || 3001;
   await app.listen(port);
 
-  console.log(`🚀 Application is running on: http://localhost:${port}`);
-  console.log(`📚 API Documentation: http://localhost:${port}/api/docs`);
+  logger.log(`🚀 Application is running on: http://localhost:${port}`);
+  logger.log(`📚 API Documentation: http://localhost:${port}/api/docs`);
 
   // Graceful shutdown - disconnect Redis on app close
   app.enableShutdownHooks();
