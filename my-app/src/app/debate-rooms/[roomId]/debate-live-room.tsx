@@ -12,7 +12,7 @@ import {
   isTrackReference,
   useSpeakingParticipants,
 } from '@livekit/components-react';
-import { Track, RoomOptions, VideoPresets, RemoteParticipant } from 'livekit-client';
+import { Track, RoomOptions, VideoPresets, RemoteParticipant, createLocalScreenTracks } from 'livekit-client';
 import { io, Socket } from 'socket.io-client';
 import type { TrackReferenceOrPlaceholder } from '@livekit/components-react';
 import '@livekit/components-styles';
@@ -425,6 +425,30 @@ function DebateLiveContent({
   const screenShareTracks = useTracks(
     [{ source: Track.Source.ScreenShare, withPlaceholder: false }]
   );
+  
+  // #region agent log
+  // Get all tracks to check for screen share audio
+  const debugAllTracks = useTracks([], { onlySubscribed: false })
+  
+  // Log screen share tracks for debugging audio
+  useEffect(() => {
+    if (screenShareTracks.length > 0) {
+      const track = screenShareTracks[0]
+      const trackInfo = {
+        kind: track.publication?.track?.kind,
+        source: track.source,
+        isMuted: track.publication?.isMuted,
+        participantId: track.participant.identity,
+      }
+      fetch('http://127.0.0.1:7244/ingest/d6208dbe-815f-4534-a4cc-4028b2570455',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'debate-live-room.tsx:432',message:'Screen share video track detected',data:trackInfo,timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{})
+      
+      // Check all tracks from the same participant for audio
+      const participantTracks = debugAllTracks.filter(t => t.participant.identity === track.participant.identity)
+      const audioTracks = participantTracks.filter(t => t.publication?.track?.kind === 'audio')
+      fetch('http://127.0.0.1:7244/ingest/d6208dbe-815f-4534-a4cc-4028b2570455',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'debate-live-room.tsx:440',message:'All tracks from screen share participant',data:{participantId:track.participant.identity,allTracksCount:participantTracks.length,audioTracksCount:audioTracks.length,tracks:participantTracks.map(t => ({kind:t.publication?.track?.kind,source:t.source,isMuted:t.publication?.isMuted}))},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{})
+    }
+  }, [screenShareTracks, debugAllTracks])
+  // #endregion
 
   // Track room connection state
   useEffect(() => {
@@ -1426,11 +1450,42 @@ function DebateLiveContent({
         <Button
           onClick={async () => {
             try {
+              // #region agent log
               const participant = room?.localParticipant;
               if (!participant) return;
               const newState = !participant.isScreenShareEnabled;
-              await participant.setScreenShareEnabled(newState);
+              const audioOption = newState ? { audio: true } : undefined
+              const browserInfo = { userAgent: navigator.userAgent, platform: navigator.platform }
+              fetch('http://127.0.0.1:7244/ingest/d6208dbe-815f-4534-a4cc-4028b2570455',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'debate-live-room.tsx:1457',message:'setScreenShareEnabled called',data:{newState,hasAudioOption:!!audioOption,audioOption,browserInfo},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'A'})}).catch(()=>{})
+              // #endregion
+              if (newState && audioOption) {
+                // Try with explicit audio capture options
+                const optionsWithAudio = { 
+                  audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true,
+                  } as any
+                }
+                fetch('http://127.0.0.1:7244/ingest/d6208dbe-815f-4534-a4cc-4028b2570455',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'debate-live-room.tsx:1465',message:'Trying setScreenShareEnabled with detailed audio options',data:{optionsWithAudio},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'A'})}).catch(()=>{})
+                await participant.setScreenShareEnabled(newState, optionsWithAudio);
+              } else {
+                await participant.setScreenShareEnabled(newState, audioOption);
+              }
+              // #region agent log
+              setTimeout(() => {
+                if (participant) {
+                  const tracks = Array.from(participant.trackPublications.values())
+                  const screenShareTracks = tracks.filter(t => t.source === Track.Source.ScreenShare)
+                  const audioTracks = tracks.filter(t => t.kind === 'audio')
+                  fetch('http://127.0.0.1:7244/ingest/d6208dbe-815f-4534-a4cc-4028b2570455',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'debate-live-room.tsx:1438',message:'After setScreenShareEnabled - track check',data:{screenShareCount:screenShareTracks.length,audioTrackCount:audioTracks.length,screenShareTracks:screenShareTracks.map(t => ({kind:t.kind,source:t.source,isMuted:t.isMuted})),allTracks:tracks.map(t => ({kind:t.kind,source:t.source}))},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{})
+                }
+              }, 1000)
+              // #endregion
             } catch (err) {
+              // #region agent log
+              fetch('http://127.0.0.1:7244/ingest/d6208dbe-815f-4534-a4cc-4028b2570455',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'debate-live-room.tsx:1446',message:'setScreenShareEnabled error',data:{error:String(err)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{})
+              // #endregion
               console.error('[DebateRoom] Screen share error:', err);
             }
           }}
