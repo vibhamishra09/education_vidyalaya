@@ -20,7 +20,7 @@ import {
   ArrowLeft, Users, Loader2, Coins, CheckCircle2, AlertCircle,
   RotateCcw, Sparkles, Calendar, Video, Layers, 
   Banknote, Plus,
-  Clock 
+  Clock, Upload, X, Image as ImageIcon
 } from "lucide-react";
 import { CreateStudyRoomDto, StudyRoom } from "@/types/api.types";
 import { ShareButton } from "@/components/share/share-button";
@@ -30,10 +30,13 @@ import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
+import { uploadFile, validateImageFile } from "@/lib/upload";
+import { setAuthToken } from "@/lib/api-client";
 
 interface StudyRoomFormData {
   title: string;
   description: string;
+  imageUrl?: string;
   skills: string[];
   date: string;
   time: string;
@@ -75,6 +78,8 @@ export function CreateStudyRoomClient() {
   const [createdRoom, setCreatedRoom] = useState<StudyRoom | null>(null);
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   // Sync instant room time
   useEffect(() => {
@@ -88,10 +93,73 @@ export function CreateStudyRoomClient() {
     }
   }, [isInstantRoom, setFormData]);
 
+  // Load image preview from persisted form data
+  useEffect(() => {
+    if (formData.imageUrl && !imagePreview) {
+      setImagePreview(formData.imageUrl);
+    }
+  }, [formData.imageUrl, imagePreview]);
+
+  // Cleanup image preview URL on unmount
+  useEffect(() => {
+    return () => {
+      if (imagePreview && imagePreview.startsWith('blob:')) {
+        URL.revokeObjectURL(imagePreview);
+      }
+    };
+  }, [imagePreview]);
+
   const handleClearForm = useCallback(() => {
     clearForm();
     setFormData(initialFormData);
+    setImagePreview(null);
   }, [clearForm, setFormData]);
+
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file
+    const validation = validateImageFile(file);
+    if (!validation.valid) {
+      setError(validation.error || 'Invalid file');
+      return;
+    }
+
+    setUploadingImage(true);
+    setError(null);
+    
+    try {
+      // Get auth token
+      const token = await getToken();
+      if (token) {
+        setAuthToken(token);
+      }
+
+      // Create preview
+      const previewUrl = URL.createObjectURL(file);
+      setImagePreview(previewUrl);
+
+      // Upload file
+      const fileUrl = await uploadFile(file, 'document');
+      updateField("imageUrl", fileUrl);
+    } catch (error) {
+      setError('Failed to upload image. Please try again.');
+      setImagePreview(null);
+    } finally {
+      setUploadingImage(false);
+      // Reset input
+      event.target.value = '';
+    }
+  };
+
+  const handleRemoveImage = () => {
+    if (imagePreview && imagePreview.startsWith('blob:')) {
+      URL.revokeObjectURL(imagePreview);
+    }
+    setImagePreview(null);
+    updateField("imageUrl", undefined);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -121,6 +189,7 @@ export function CreateStudyRoomClient() {
     const createData: CreateStudyRoomDto = {
       title: formData.title,
       description: formData.description || undefined,
+      imageUrl: formData.imageUrl || undefined,
       skills: formData.skills,
       date: formData.date,
       time: formData.time,
@@ -256,6 +325,82 @@ export function CreateStudyRoomClient() {
                         rows={4}
                         className="resize-none bg-background/50 focus:bg-background transition-colors"
                       />
+                    </div>
+
+                    {/* Image Upload */}
+                    <div className="space-y-2">
+                      <Label className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
+                        Cover Image <span className="text-[10px] normal-case bg-muted px-1.5 rounded-sm">Optional</span>
+                      </Label>
+                      <div className="space-y-3">
+                        {imagePreview || formData.imageUrl ? (
+                          <div className="relative group">
+                            <div className="relative w-full h-48 rounded-lg overflow-hidden border-2 border-border bg-muted/50">
+                              <img
+                                src={imagePreview || formData.imageUrl}
+                                alt="Study room preview"
+                                className="w-full h-full object-cover"
+                              />
+                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
+                              <Button
+                                type="button"
+                                variant="destructive"
+                                size="sm"
+                                onClick={handleRemoveImage}
+                                className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                                disabled={uploadingImage}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Image will be used in social media previews when sharing
+                            </p>
+                          </div>
+                        ) : (
+                          <label>
+                            <input
+                              type="file"
+                              accept="image/jpeg,image/jpg,image/png,image/webp,image/gif"
+                              onChange={handleImageUpload}
+                              className="hidden"
+                              disabled={uploadingImage}
+                            />
+                            <div className="border-2 border-dashed border-muted rounded-lg p-8 text-center hover:border-primary/50 hover:bg-muted/30 transition-all cursor-pointer">
+                              {uploadingImage ? (
+                                <div className="flex flex-col items-center gap-2">
+                                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                                  <p className="text-sm text-muted-foreground">Uploading...</p>
+                                </div>
+                              ) : (
+                                <div className="flex flex-col items-center gap-2">
+                                  <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+                                    <ImageIcon className="h-6 w-6 text-primary" />
+                                  </div>
+                                  <div>
+                                    <p className="text-sm font-medium">Upload cover image</p>
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                      JPEG, PNG, WebP, or GIF (max 5MB)
+                                    </p>
+                                  </div>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="mt-2"
+                                    asChild
+                                  >
+                                    <span>
+                                      <Upload className="h-4 w-4 mr-2" />
+                                      Choose Image
+                                    </span>
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
+                          </label>
+                        )}
+                      </div>
                     </div>
 
                     <div className="space-y-2">
