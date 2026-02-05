@@ -926,6 +926,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		[{ source: Track.Source.ScreenShare, withPlaceholder: false }]
 	)
 	
+	
 	// Debounced speaking detection - only switch focus after sustained speaking (1.5 seconds)
 	const [debouncedSpeakerId, setDebouncedSpeakerId] = useState<string | null>(null)
 	const speakingTimerRef = useRef<NodeJS.Timeout | null>(null)
@@ -2587,7 +2588,19 @@ const VideoRoomContent = memo(function VideoRoomContent({
 							onClick={async () => {
 								try {
 									const newState = !isScreenShareEnabled
-									await localParticipant?.setScreenShareEnabled(newState)
+									if (newState) {
+										// Enable screen share with audio capture
+										const optionsWithAudio = { 
+											audio: {
+												echoCancellation: true,
+												noiseSuppression: true,
+												autoGainControl: true,
+											}
+										}
+										await localParticipant?.setScreenShareEnabled(newState, optionsWithAudio)
+									} else {
+										await localParticipant?.setScreenShareEnabled(newState)
+									}
 								} catch {}
 							}}
 							className={`h-9 w-9 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl hover:bg-sky-500/20 transition-all ${isScreenShareEnabled ? 'bg-sky-500/20 text-sky-400' : 'text-white/80 hover:text-sky-400'}`}
