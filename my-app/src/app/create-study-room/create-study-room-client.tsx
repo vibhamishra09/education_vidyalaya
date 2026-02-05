@@ -60,7 +60,7 @@ const initialFormData: StudyRoomFormData = {
 
 export function CreateStudyRoomClient() {
   const router = useRouter();
-  const { isLoaded: isAuthLoaded } = useAuth();
+  const { isLoaded: isAuthLoaded, getToken } = useAuth();
   const createStudyRoomMutation = useCreateStudyRoom();
 
   const { formData, setFormData, updateField, clearForm, hasStoredData } = useFormPersistence<StudyRoomFormData>(
