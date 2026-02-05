@@ -30,7 +30,7 @@ export class StudyRoomsController {
 
     this.logger.log({
       message: isHomePageRequest
-        ? '🏠 [HomePage] Study rooms API called (trending)'
+        ? '🏠 [HomePage] Study rooms API called (trending-new)'
         : '📚 [StudyRooms] Study rooms API called',
       endpoint: '/api/study-rooms',
       query: {
