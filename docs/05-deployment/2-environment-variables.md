@@ -78,10 +78,12 @@ The backend runs as a Docker container on AWS ECS. Environment variables are con
 |----------|-------------|---------|----------|
 | `PORT` | Port the application listens on | `3000` or `3001` | ⚠️ Optional* |
 | `NODE_ENV` | Node.js environment | `production`, `development`, `test` | ⚠️ Optional* |
+| `LOG_LEVEL` | Logging level for Pino logger | `debug`, `info`, `warn`, `error` | ⚠️ Optional* |
 
 **Note:** 
 - Default `PORT` is `3001` if not specified
 - `NODE_ENV` defaults to `development` if not set
+- Default `LOG_LEVEL` is `debug` if not specified. In production, consider using `info` or `warn` to reduce log volume
 
 ---
 
@@ -314,6 +316,7 @@ TODO: verify if this should be https or wss.
 - [ ] `VAPID_PRIVATE_KEY` - Push notification private key (optional)
 - [ ] `RESEND_API_KEY` - Resend API key for email notifications (optional)
 - [ ] `PORT` - Application port (optional, defaults to 3001)
+- [ ] `LOG_LEVEL` - Logging level (optional, defaults to debug)
 
 ### Frontend Checklist
 - [ ] `NEXT_PUBLIC_API_URL` - Backend API URL

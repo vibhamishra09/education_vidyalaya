@@ -29,12 +29,14 @@ import { SessionExtensionModule } from './session-extension/session-extension.mo
 import { SessionModerationModule } from './session-moderation/session-moderation.module';
 import { LoggingInterceptor } from './logging.interceptor';
 import { SentryModule } from './common/sentry';
+import { LoggerModule } from './common/logger';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    LoggerModule,
     PrometheusModule.register({
       path: '/metrics',
       defaultMetrics: {
