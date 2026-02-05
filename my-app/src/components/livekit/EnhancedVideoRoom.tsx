@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react'
 import { LiveKitRoom, useParticipants, useTracks, RoomAudioRenderer, useSpeakingParticipants, VideoTrack, useLocalParticipant, isTrackReference } from '@livekit/components-react'
-import { Track, RoomOptions, VideoPresets, LocalVideoTrack } from 'livekit-client'
+import { Track, RoomOptions, VideoPresets, LocalVideoTrack, createLocalScreenTracks } from 'livekit-client'
 import '@livekit/components-styles'
 import { BackgroundProcessor, BackgroundBlur, VirtualBackground, BackgroundOptions } from '@livekit/track-processors'
 import { ChatWidget } from '@/components/chat/ChatWidget'
@@ -925,6 +925,30 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	const screenShareTracks = useTracks(
 		[{ source: Track.Source.ScreenShare, withPlaceholder: false }]
 	)
+	
+	// #region agent log
+	// Get all tracks to check for screen share audio
+	const allTracks = useTracks([], { onlySubscribed: false })
+	
+	// Log screen share tracks for debugging audio
+	useEffect(() => {
+		if (screenShareTracks.length > 0) {
+			const track = screenShareTracks[0]
+			const trackInfo = {
+				kind: track.publication?.track?.kind,
+				source: track.source,
+				isMuted: track.publication?.isMuted,
+				participantId: track.participant.identity,
+			}
+			fetch('http://127.0.0.1:7244/ingest/d6208dbe-815f-4534-a4cc-4028b2570455',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'EnhancedVideoRoom.tsx:940',message:'Screen share video track detected',data:trackInfo,timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{})
+			
+			// Check all tracks from the same participant for audio
+			const participantTracks = allTracks.filter(t => t.participant.identity === track.participant.identity)
+			const audioTracks = participantTracks.filter(t => t.publication?.track?.kind === 'audio')
+			fetch('http://127.0.0.1:7244/ingest/d6208dbe-815f-4534-a4cc-4028b2570455',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'EnhancedVideoRoom.tsx:948',message:'All tracks from screen share participant',data:{participantId:track.participant.identity,allTracksCount:participantTracks.length,audioTracksCount:audioTracks.length,tracks:participantTracks.map(t => ({kind:t.publication?.track?.kind,source:t.source,isMuted:t.publication?.isMuted}))},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{})
+		}
+	}, [screenShareTracks, allTracks])
+	// #endregion
 	
 	// Debounced speaking detection - only switch focus after sustained speaking (1.5 seconds)
 	const [debouncedSpeakerId, setDebouncedSpeakerId] = useState<string | null>(null)
@@ -2586,9 +2610,41 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						<button
 							onClick={async () => {
 								try {
+									// #region agent log
 									const newState = !isScreenShareEnabled
-									await localParticipant?.setScreenShareEnabled(newState)
-								} catch {}
+									const audioOption = newState ? { audio: true } : undefined
+									const browserInfo = { userAgent: navigator.userAgent, platform: navigator.platform }
+									fetch('http://127.0.0.1:7244/ingest/d6208dbe-815f-4534-a4cc-4028b2570455',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'EnhancedVideoRoom.tsx:2614',message:'setScreenShareEnabled called',data:{newState,hasAudioOption:!!audioOption,audioOption,browserInfo},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'A'})}).catch(()=>{})
+									// #endregion
+									if (newState && audioOption) {
+										// Try with explicit audio capture options
+										const optionsWithAudio: { audio: { echoCancellation: boolean; noiseSuppression: boolean; autoGainControl: boolean } } = { 
+											audio: {
+												echoCancellation: true,
+												noiseSuppression: true,
+												autoGainControl: true,
+											}
+										}
+										fetch('http://127.0.0.1:7244/ingest/d6208dbe-815f-4534-a4cc-4028b2570455',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'EnhancedVideoRoom.tsx:2622',message:'Trying setScreenShareEnabled with detailed audio options',data:{optionsWithAudio},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'A'})}).catch(()=>{})
+										await localParticipant?.setScreenShareEnabled(newState, optionsWithAudio)
+									} else {
+										await localParticipant?.setScreenShareEnabled(newState, audioOption)
+									}
+									// #region agent log
+									setTimeout(() => {
+										if (localParticipant) {
+											const tracks = Array.from(localParticipant.trackPublications.values())
+											const screenShareTracks = tracks.filter(t => t.source === Track.Source.ScreenShare)
+											const audioTracks = tracks.filter(t => t.kind === 'audio')
+											fetch('http://127.0.0.1:7244/ingest/d6208dbe-815f-4534-a4cc-4028b2570455',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'EnhancedVideoRoom.tsx:2594',message:'After setScreenShareEnabled - track check',data:{screenShareCount:screenShareTracks.length,audioTrackCount:audioTracks.length,screenShareTracks:screenShareTracks.map(t => ({kind:t.kind,source:t.source,isMuted:t.isMuted})),allTracks:tracks.map(t => ({kind:t.kind,source:t.source}))},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{})
+										}
+									}, 1000)
+									// #endregion
+								} catch (err) {
+									// #region agent log
+									fetch('http://127.0.0.1:7244/ingest/d6208dbe-815f-4534-a4cc-4028b2570455',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'EnhancedVideoRoom.tsx:2600',message:'setScreenShareEnabled error',data:{error:String(err)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{})
+									// #endregion
+								}
 							}}
 							className={`h-9 w-9 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl hover:bg-sky-500/20 transition-all ${isScreenShareEnabled ? 'bg-sky-500/20 text-sky-400' : 'text-white/80 hover:text-sky-400'}`}
 							title="Share Screen"
