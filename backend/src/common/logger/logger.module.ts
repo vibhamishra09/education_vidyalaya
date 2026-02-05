@@ -8,15 +8,22 @@ import { ConfigService } from '@nestjs/config';
     PinoLoggerModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => {
-        const isDevelopment = configService.get<string>('NODE_ENV') !== 'production';
+        const nodeEnv = configService.get<string>('NODE_ENV', 'development');
+        const isDevelopment = nodeEnv !== 'production';
         const logLevel = configService.get<string>('LOG_LEVEL', 'debug');
+        
+        // Check if we're in a TTY environment (terminal) or not (like CloudWatch)
+        const isTTY = process.stdout.isTTY === true;
+        // Use pretty printing only in development AND when in a TTY
+        const usePretty = isDevelopment && isTTY;
 
-        return {
-          pinoHttp: {
-            level: logLevel,
-            // Use pretty printing in development, JSON in production
-            transport: isDevelopment
-              ? {
+        // Base Pino configuration - shared between HTTP and application logging
+        const basePinoConfig = {
+          level: logLevel,
+          // Use pretty printing only in development TTY, JSON everywhere else
+          ...(usePretty
+            ? {
+                transport: {
                   target: 'pino-pretty',
                   options: {
                     colorize: true,
@@ -24,8 +31,25 @@ import { ConfigService } from '@nestjs/config';
                     translateTime: 'SYS:standard',
                     ignore: 'pid,hostname',
                   },
-                }
-              : undefined,
+                },
+              }
+            : {
+                // Pure JSON output: no colorization, no formatting
+                // This ensures clean JSON in CloudWatch and production
+                formatters: {
+                  level: (label: string) => {
+                    return { level: label };
+                  },
+                },
+              }),
+        };
+
+        return {
+          // Use the same Pino instance for both HTTP and application logging
+          ...basePinoConfig,
+          // HTTP request logging configuration
+          pinoHttp: {
+            ...basePinoConfig,
             // Structured logging configuration
             serializers: {
               req: (req) => ({
