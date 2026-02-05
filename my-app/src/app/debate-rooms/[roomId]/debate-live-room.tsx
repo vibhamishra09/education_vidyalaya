@@ -1460,12 +1460,12 @@ function DebateLiveContent({
               // #endregion
               if (newState && audioOption) {
                 // Try with explicit audio capture options
-                const optionsWithAudio = { 
+                const optionsWithAudio: { audio: { echoCancellation: boolean; noiseSuppression: boolean; autoGainControl: boolean } } = { 
                   audio: {
                     echoCancellation: true,
                     noiseSuppression: true,
                     autoGainControl: true,
-                  } as any
+                  }
                 }
                 fetch('http://127.0.0.1:7244/ingest/d6208dbe-815f-4534-a4cc-4028b2570455',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'debate-live-room.tsx:1465',message:'Trying setScreenShareEnabled with detailed audio options',data:{optionsWithAudio},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'A'})}).catch(()=>{})
                 await participant.setScreenShareEnabled(newState, optionsWithAudio);
