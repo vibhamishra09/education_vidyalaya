@@ -425,6 +425,7 @@ function DebateLiveContent({
   const screenShareTracks = useTracks(
     [{ source: Track.Source.ScreenShare, withPlaceholder: false }]
   );
+  
 
   // Track room connection state
   useEffect(() => {
@@ -1429,7 +1430,19 @@ function DebateLiveContent({
               const participant = room?.localParticipant;
               if (!participant) return;
               const newState = !participant.isScreenShareEnabled;
-              await participant.setScreenShareEnabled(newState);
+              if (newState) {
+                // Enable screen share with audio capture
+                const optionsWithAudio = { 
+                  audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true,
+                  }
+                };
+                await participant.setScreenShareEnabled(newState, optionsWithAudio);
+              } else {
+                await participant.setScreenShareEnabled(newState);
+              }
             } catch (err) {
               console.error('[DebateRoom] Screen share error:', err);
             }
