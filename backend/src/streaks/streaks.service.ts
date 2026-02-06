@@ -289,14 +289,11 @@ export class StreaksService {
 
   /**
    * Get user's current streak data
-   * @param userId User ID
+   * @param userId User ID (database ID, not Clerk ID)
    * @returns Streak information
    */
   async getUserStreak(userId: string) {
-    console.log(
-      '🔍 [StreaksService.getUserStreak] Fetching streak for userId:',
-      userId,
-    );
+    // userId is already the database ID from dashboard service
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
