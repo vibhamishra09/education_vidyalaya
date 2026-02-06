@@ -1188,24 +1188,108 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		}
 	}, [localParticipant])
 	
-	// Sort camera tracks: local participant first, then speaking, then others
+	// Stable ordering system: Maintain positions for visible participants
+	// Only reorder when participants join/leave, not when speaking status changes
+	const stableOrderRef = useRef<string[]>([])
+	const previousParticipantIdsRef = useRef<Set<string>>(new Set())
+	
+	// Update stable order when participants join/leave (not on speaking status changes)
+	useEffect(() => {
+		const currentParticipantIds = new Set(
+			cameraTracks.map(track => track.participant.identity)
+		)
+		
+		// Check if participants have actually joined or left (not just speaking status changed)
+		const participantIdsChanged = 
+			currentParticipantIds.size !== previousParticipantIdsRef.current.size ||
+			[...currentParticipantIds].some(id => !previousParticipantIdsRef.current.has(id)) ||
+			[...previousParticipantIdsRef.current].some(id => !currentParticipantIds.has(id))
+		
+		if (participantIdsChanged) {
+			// Find local participant identity
+			const localParticipantId = cameraTracks.find(t => t.participant.isLocal)?.participant.identity
+			
+			// Get current stable order
+			const currentStableOrder = [...stableOrderRef.current]
+			
+			// Identify new participants (not in stable order)
+			const newParticipantIds = [...currentParticipantIds].filter(
+				id => !currentStableOrder.includes(id) && id !== localParticipantId
+			)
+			
+			// Remove participants who left
+			const updatedOrder = currentStableOrder.filter(id => currentParticipantIds.has(id))
+			
+			// If this is the first time (empty stable order), initialize with all current participants
+			if (currentStableOrder.length === 0 && currentParticipantIds.size > 0) {
+				// Initialize: local first, then others
+				if (localParticipantId) {
+					const others = [...currentParticipantIds].filter(id => id !== localParticipantId)
+					stableOrderRef.current = [localParticipantId, ...others]
+				} else {
+					stableOrderRef.current = [...currentParticipantIds]
+				}
+			} else {
+				// Insert new participants right after local participant
+				if (localParticipantId && updatedOrder.includes(localParticipantId)) {
+					const localIndex = updatedOrder.indexOf(localParticipantId)
+					updatedOrder.splice(localIndex + 1, 0, ...newParticipantIds)
+				} else if (localParticipantId) {
+					// If local participant is not in order yet, add it first, then new participants
+					updatedOrder.unshift(localParticipantId, ...newParticipantIds)
+				} else {
+					// No local participant, just append new ones
+					updatedOrder.push(...newParticipantIds)
+				}
+				
+				// Ensure local participant is always first if it exists
+				if (localParticipantId && updatedOrder[0] !== localParticipantId) {
+					const localIndex = updatedOrder.indexOf(localParticipantId)
+					if (localIndex > 0) {
+						updatedOrder.splice(localIndex, 1)
+						updatedOrder.unshift(localParticipantId)
+					}
+				}
+				
+				// Update stable order
+				stableOrderRef.current = updatedOrder
+			}
+			
+			// Update previous participant IDs for next comparison
+			previousParticipantIdsRef.current = new Set(currentParticipantIds)
+		}
+	}, [cameraTracks])
+	
+	// Sort camera tracks using stable order: local participant first, then stable order of others
 	const sortedCameraTracks = useMemo(() => {
-		return [...cameraTracks].sort((a, b) => {
-			const aIsLocal = a.participant.isLocal
-			const bIsLocal = b.participant.isLocal
-			const aIsSpeaking = a.participant.isSpeaking
-			const bIsSpeaking = b.participant.isSpeaking
+		if (cameraTracks.length === 0) return []
+		
+		// Find local participant
+		const localTrack = cameraTracks.find(t => t.participant.isLocal)
+		const otherTracks = cameraTracks.filter(t => !t.participant.isLocal)
+		
+		// Sort other tracks according to stable order
+		const sortedOthers = [...otherTracks].sort((a, b) => {
+			const stableOrder = stableOrderRef.current
+			const aIndex = stableOrder.indexOf(a.participant.identity)
+			const bIndex = stableOrder.indexOf(b.participant.identity)
 			
-			// Local participant always first
-			if (aIsLocal && !bIsLocal) return -1
-			if (!aIsLocal && bIsLocal) return 1
+			// If both are in stable order, maintain their relative positions
+			if (aIndex !== -1 && bIndex !== -1) {
+				return aIndex - bIndex
+			}
 			
-			// Speaking participants next
-			if (aIsSpeaking && !bIsSpeaking) return -1
-			if (!aIsSpeaking && bIsSpeaking) return 1
+			// If only one is in stable order, prioritize it
+			if (aIndex !== -1) return -1
+			if (bIndex !== -1) return 1
 			
-			return 0
+			// If neither is in stable order (edge case - should be handled by useEffect)
+			// Use identity as fallback for consistent ordering
+			return a.participant.identity.localeCompare(b.participant.identity)
 		})
+		
+		// Return local first, then sorted others
+		return localTrack ? [localTrack, ...sortedOthers] : sortedOthers
 	}, [cameraTracks])
 
 	// Separate focused track from other tracks
