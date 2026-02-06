@@ -1214,6 +1214,7 @@ export class DebateRoomsService {
       identity: user.clerkId, // Use clerkId for consistency with frontend
       name: user.name,
       metadata: JSON.stringify({
+        avatar: user.avatar || null, // Include avatar URL for profile picture display
         isModerator: isMod,
         debateRoomId: roomId,
         userId: user.id, // Include database ID in metadata for reference

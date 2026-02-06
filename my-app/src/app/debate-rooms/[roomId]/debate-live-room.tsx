@@ -1522,6 +1522,17 @@ function TeamVideoGrid({ tracks, teamColor, currentSpeakerId }: TeamVideoGridPro
         const isSpeaking = trackRef.participant.isSpeaking;
         const isCurrentSpeaker = currentSpeakerId === trackRef.participant.identity;
 
+        // Extract avatar from participant metadata
+        let avatarUrl: string | undefined = undefined;
+        if (trackRef.participant.metadata) {
+          try {
+            const metadata = JSON.parse(trackRef.participant.metadata);
+            avatarUrl = metadata.avatar || undefined;
+          } catch (e) {
+            // Silently handle parsing errors
+          }
+        }
+
         return (
           <div
             key={trackRef.participant.identity}
@@ -1534,7 +1545,7 @@ function TeamVideoGrid({ tracks, teamColor, currentSpeakerId }: TeamVideoGridPro
             {/* Avatar placeholder - always visible as background */}
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-800 z-[1]">
               <Avatar className="w-20 h-20 md:w-24 md:h-24 border-4 border-gray-700">
-                <AvatarImage src={undefined} />
+                <AvatarImage src={avatarUrl} />
                 <AvatarFallback className="bg-gray-700 text-white text-2xl">
                   {(isLocal ? 'You' : (trackRef.participant.name || trackRef.participant.identity)).charAt(0).toUpperCase()}
                 </AvatarFallback>
