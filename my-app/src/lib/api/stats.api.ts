@@ -6,6 +6,7 @@ export interface PlatformStats {
   sessionsCompleted: number;
   learningHours: number;
   reviewsGiven: number;
+  averageRating?: number;
 }
 
 export const statsApi = {

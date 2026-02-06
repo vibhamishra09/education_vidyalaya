@@ -55,8 +55,8 @@ export class AppService {
         },
       });
 
-      // Calculate total learning hours from completed sessions
-      const [studyRoomHours, peerSessionHours] = await Promise.all([
+      // Calculate total learning hours from completed sessions and average rating
+      const [studyRoomHours, peerSessionHours, reviewStats] = await Promise.all([
         this.prisma.studyRoom.aggregate({
           where: { sessionStatus: SessionStatus.DONE },
           _sum: { duration: true },
@@ -65,12 +65,21 @@ export class AppService {
           where: { sessionStatus: SessionStatus.DONE },
           _sum: { duration: true },
         }),
+        // Calculate average rating from all reviews
+        this.prisma.review.aggregate({
+          _avg: { rating: true },
+        }),
       ]);
 
       const totalMinutes =
         (studyRoomHours._sum.duration || 0) +
         (peerSessionHours._sum.duration || 0);
       const totalHours = Math.round(totalMinutes / 60);
+
+      // Calculate average rating, defaulting to 0 if no reviews exist
+      const averageRating = reviewStats._avg.rating
+        ? Number(reviewStats._avg.rating.toFixed(1))
+        : 0;
 
       const dbDuration = Date.now() - dbStartTime;
       this.logger.debug({
@@ -82,6 +91,7 @@ export class AppService {
           totalMinutes,
           totalHours,
         },
+        averageRating,
       });
 
       const result = {
@@ -90,6 +100,7 @@ export class AppService {
         sessionsCompleted: completedStudyRooms + completedPeerSessions,
         learningHours: totalHours,
         reviewsGiven: totalReviews,
+        averageRating,
       };
 
       return result;
