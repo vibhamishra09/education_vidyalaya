@@ -45,7 +45,7 @@ export function HeroSection() {
             
             <div className="text-lg sm:text-xl text-slate-600 dark:text-slate-400 max-w-3xl mx-auto leading-relaxed space-y-6">
               <p className="font-medium">
-                Welcome to a community-led learning platform where you don&apos;t just watch content — you <span className="text-slate-900 dark:text-slate-200 font-semibold">talk, practice, debate,</span> and <span className="text-slate-900 dark:text-slate-200 font-semibold">grow</span> through real conversations.
+                Welcome to a community-led learning platform where you don&apos;t just watch content, you <span className="text-slate-900 dark:text-slate-200 font-semibold">talk, practice, debate,</span> and <span className="text-slate-900 dark:text-slate-200 font-semibold">grow</span> through real conversations.
               </p>
               
               <p className="text-base italic opacity-90">
