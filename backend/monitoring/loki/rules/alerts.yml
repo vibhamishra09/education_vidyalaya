@@ -1,0 +1,33 @@
+groups:
+  - name: webyalaya_log_alerts
+    interval: 30s
+    rules:
+      - alert: HighErrorRate
+        expr: |
+          sum(rate({service="webyalaya-backend"} | json | level="error" [5m])) > 10
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value }} errors/sec"
+
+      - alert: DatabaseConnectionErrors
+        expr: |
+          count_over_time({service="webyalaya-backend"} | json | msg=~".*database.*connection.*" [5m]) > 5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Database connection errors detected"
+          description: "Multiple database connection errors in the last 5 minutes"
+
+      - alert: HighWarningRate
+        expr: |
+          sum(rate({service="webyalaya-backend"} | json | level="warn" [5m])) > 50
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High warning rate detected"
+          description: "Warning rate is {{ $value }} warnings/sec"
