@@ -23,7 +23,7 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: "https",
-        hostname: "webyalaya-test-media.s3.us-west-2.amazonaws.com",
+        hostname: "webyalaya-test-media-namaste.s3.us-west-2.amazonaws.com",
       },
     ],
     dangerouslyAllowSVG: true,
