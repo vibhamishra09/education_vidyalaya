@@ -14,7 +14,6 @@ export class DashboardController {
     @CurrentUser() userId: string,
     @Query() query: DashboardQueryDto,
   ) {
-    console.log('query', query);
     return this.dashboardService.getDashboardData(
       userId,
       query.includeMetrics ? true : false,
