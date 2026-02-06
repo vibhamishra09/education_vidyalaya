@@ -1,6 +1,19 @@
 version: '3.8'
 
 services:
+  loki:
+    image: grafana/loki:latest
+    container_name: webyalaya-loki
+    restart: unless-stopped
+    ports:
+      - '${LOKI_PORT:-3100}:3100'
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - ./monitoring/loki/loki-config.yml:/etc/loki/local-config.yaml
+      - loki-data:/loki
+    networks:
+      - monitoring
+
   prometheus:
     image: prom/prometheus:latest
     container_name: webyalaya-prometheus
@@ -48,12 +61,14 @@ services:
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
     depends_on:
       - prometheus
+      - loki
     networks:
       - monitoring
 
 volumes:
   prometheus-data:
   grafana-data:
+  loki-data:
 
 networks:
   monitoring:

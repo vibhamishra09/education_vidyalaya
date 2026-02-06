@@ -1,6 +1,7 @@
 import { Global, Module } from '@nestjs/common';
 import { LoggerModule as PinoLoggerModule } from 'nestjs-pino';
 import { ConfigService } from '@nestjs/config';
+import pino from 'pino';
 
 @Global()
 @Module({
@@ -17,32 +18,83 @@ import { ConfigService } from '@nestjs/config';
         // Use pretty printing only in development AND when in a TTY
         const usePretty = isDevelopment && isTTY;
 
+        // Loki configuration
+        const lokiEnabled = configService.get<string>('LOKI_ENABLED', 'false') === 'true';
+        const lokiHost = configService.get<string>('LOKI_HOST', 'http://localhost:3100');
+        const lokiBatchSize = parseInt(configService.get<string>('LOKI_BATCH_SIZE', '100'), 10);
+        const lokiBatchInterval = parseInt(configService.get<string>('LOKI_BATCH_INTERVAL', '5000'), 10);
+
         // Base Pino configuration - shared between HTTP and application logging
-        const basePinoConfig = {
+        let basePinoConfig: any = {
           level: logLevel,
-          // Use pretty printing only in development TTY, JSON everywhere else
-          ...(usePretty
-            ? {
-                transport: {
-                  target: 'pino-pretty',
-                  options: {
-                    colorize: true,
-                    singleLine: false,
-                    translateTime: 'SYS:standard',
-                    ignore: 'pid,hostname',
-                  },
-                },
-              }
-            : {
-                // Pure JSON output: no colorization, no formatting
-                // This ensures clean JSON in CloudWatch and production
-                formatters: {
-                  level: (label: string) => {
-                    return { level: label };
-                  },
-                },
-              }),
         };
+
+        // Configure transport based on environment and Loki settings
+        if (lokiEnabled) {
+          // When Loki is enabled, use multi-destination transport
+          // nestjs-pino supports multiple transports via targets array
+          basePinoConfig.transport = {
+            targets: [
+              // Loki transport
+              {
+                target: 'pino-loki',
+                level: logLevel,
+                options: {
+                  host: lokiHost,
+                  labels: {
+                    service: 'webyalaya-backend',
+                    environment: nodeEnv,
+                  },
+                  silenceErrors: false, // Log transport errors for debugging
+                },
+              },
+              // Console transport (pretty in dev, JSON in prod)
+              ...(usePretty
+                ? [
+                    {
+                      target: 'pino-pretty',
+                      level: logLevel,
+                      options: {
+                        colorize: true,
+                        singleLine: false,
+                        translateTime: 'SYS:standard',
+                        ignore: 'pid,hostname',
+                      },
+                    },
+                  ]
+                : [
+                    {
+                      target: 'pino/file',
+                      level: logLevel,
+                      options: {
+                        destination: 1, // stdout
+                      },
+                    },
+                  ]),
+            ],
+          };
+        } else {
+          // When Loki is disabled, use standard transport configuration
+          if (usePretty) {
+            basePinoConfig.transport = {
+              target: 'pino-pretty',
+              options: {
+                colorize: true,
+                singleLine: false,
+                translateTime: 'SYS:standard',
+                ignore: 'pid,hostname',
+              },
+            };
+          } else {
+            // Pure JSON output: no colorization, no formatting
+            // This ensures clean JSON in CloudWatch and production
+            basePinoConfig.formatters = {
+              level: (label: string) => {
+                return { level: label };
+              },
+            };
+          }
+        }
 
         return {
           // Use the same Pino instance for both HTTP and application logging
