@@ -39,6 +39,12 @@ export function Footer() {
           >
             <Link
               className="hover:text-foreground transition-colors"
+              href="/about"
+            >
+              About
+            </Link>
+            <Link
+              className="hover:text-foreground transition-colors"
               href={`${landingSiteUrl}/careers`}
               target="_blank"
               rel="noopener noreferrer"

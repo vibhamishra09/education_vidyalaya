@@ -50,12 +50,13 @@ export function UserDropdown({ user, signOut }: UserDropdownProps) {
   };
 
   return (
-    <div className="relative" ref={dropdownRef}>
+    <div className="relative shrink-0" ref={dropdownRef}>
       <button
-        className="flex items-center gap-2 p-1 hover:bg-muted rounded-full transition-colors"
+        className="flex items-center gap-2 p-1 hover:bg-muted rounded-full transition-colors shrink-0"
         onClick={() => setIsOpen(!isOpen)}
+        aria-label="User menu"
       >
-        <Avatar className="h-8 w-8 cursor-pointer hover:ring-2 ring-primary transition-all">
+        <Avatar className="h-7 w-7 sm:h-8 sm:w-8 cursor-pointer hover:ring-2 ring-primary transition-all">
           <AvatarImage 
             src={currentUserData?.user?.avatar || user?.imageUrl} 
             alt={currentUserData?.user?.name || user?.fullName || user?.firstName || "User"} 
@@ -81,7 +82,7 @@ export function UserDropdown({ user, signOut }: UserDropdownProps) {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -10, scale: 0.95 }}
               transition={{ duration: 0.2 }}
-              className="absolute right-0 mt-2 w-64 z-50"
+              className="fixed left-1/2 -translate-x-1/2 top-16 w-[calc(100vw-2rem)] max-w-64 z-50 sm:absolute sm:left-auto sm:translate-x-0 sm:right-0 sm:top-auto sm:mt-2 sm:w-64"
               onClick={(e) => e.stopPropagation()}
             >
               <Card className="shadow-lg">
