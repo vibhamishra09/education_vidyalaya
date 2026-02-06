@@ -15,26 +15,67 @@ function CountUp({ end, duration = 2, suffix = "" }: CountUpProps) {
   const [count, setCount] = useState(0);
   const ref = useRef<HTMLSpanElement>(null);
   const isInView = useInView(ref, { once: true, margin: "-100px" });
+  const animationRef = useRef<number | null>(null);
+  const previousEndRef = useRef<number>(end);
 
   useEffect(() => {
-    if (!isInView) return;
+    // If not in view yet, just set the value without animation
+    if (!isInView) {
+      setCount(end);
+      previousEndRef.current = end;
+      return;
+    }
 
-    let startTime: number;
-    let animationFrame: number;
+    // If end hasn't changed, don't re-animate
+    if (previousEndRef.current === end) {
+      return;
+    }
+
+    // Cancel any existing animation
+    if (animationRef.current !== null) {
+      cancelAnimationFrame(animationRef.current);
+    }
+
+    // Start from the previous end value (or 0 if this is the first time)
+    const startValue = previousEndRef.current;
+    previousEndRef.current = end;
+
+    // If end is 0, just set it directly
+    if (end === 0) {
+      setCount(0);
+      return;
+    }
+
+    // Start animation from startValue to end
+    setCount(startValue);
+
+    let startTime: number | null = null;
 
     const animate = (timestamp: number) => {
-      if (!startTime) startTime = timestamp;
-      const progress = Math.min((timestamp - startTime) / (duration * 1000), 1);
+      if (startTime === null) startTime = timestamp;
+      const elapsed = timestamp - startTime;
+      const progress = Math.min(elapsed / (duration * 1000), 1);
       const easeOutQuart = 1 - Math.pow(1 - progress, 4);
-      setCount(Math.floor(easeOutQuart * end));
+      const newCount = Math.floor(startValue + easeOutQuart * (end - startValue));
+      setCount(newCount);
 
       if (progress < 1) {
-        animationFrame = requestAnimationFrame(animate);
+        animationRef.current = requestAnimationFrame(animate);
+      } else {
+        // Ensure we end at exactly the target value
+        setCount(end);
+        animationRef.current = null;
       }
     };
 
-    animationFrame = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(animationFrame);
+    animationRef.current = requestAnimationFrame(animate);
+
+    return () => {
+      if (animationRef.current !== null) {
+        cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
+      }
+    };
   }, [end, duration, isInView]);
 
   return (
@@ -103,47 +144,32 @@ function StatCard({ icon, value, label, suffix, showRating = false, rating }: St
   );
 }
 
-const MIN_STATS = {
-  usersOnboarded: 145,
-  studyRoomsHosted: 85,
-  sessionsCompleted: 230,
-  learningHours: 520,
-  reviewsGiven: 2640,
-};
-
 export function PlatformStats() {
   const { data: stats } = usePlatformStats();
-
-  const displayStats = {
-    usersOnboarded: Math.max(stats?.usersOnboarded ?? 0, MIN_STATS.usersOnboarded),
-    studyRoomsHosted: Math.max(stats?.studyRoomsHosted ?? 0, MIN_STATS.studyRoomsHosted),
-    learningHours: Math.max(stats?.learningHours ?? 0, MIN_STATS.learningHours),
-    reviewsGiven: Math.max(stats?.reviewsGiven ?? 0, MIN_STATS.reviewsGiven),
-  };
 
   const allStats = [
     {
       icon: <Users className="w-6 h-6" />,
-      value: displayStats.usersOnboarded,
+      value: stats?.usersOnboarded ?? 0,
       label: "Learners",
     },
     {
       icon: <BookOpen className="w-6 h-6" />,
-      value: displayStats.studyRoomsHosted,
+      value: stats?.studyRoomsHosted ?? 0,
       label: "Study Rooms",
     },
     {
       icon: <Clock className="w-6 h-6" />,
-      value: displayStats.learningHours,
+      value: stats?.learningHours ?? 0,
       label: "Hours Spent",
       suffix: "+",
     },
     {
       icon: <Star className="w-6 h-6" />,
-      value: displayStats.reviewsGiven,
-      label: "Reviews", // Changed label back to Reviews, but keeping rating logic
-      showRating: true,
-      rating: 4.8,
+      value: stats?.reviewsGiven ?? 0,
+      label: "Reviews",
+      showRating: stats?.averageRating !== undefined && stats.averageRating > 0,
+      rating: stats?.averageRating,
     },
   ];
 
