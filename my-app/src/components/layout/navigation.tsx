@@ -117,16 +117,16 @@ export function Navigation() {
               : "bg-background/50 shadow-md translate-y-1"
           )}
         >
-          <div className="flex h-14 items-center justify-between px-4 sm:px-6">
+          <div className="flex h-14 items-center justify-between px-3 sm:px-4 md:px-6">
             {/* Left: logo + links */}
-            <div className="flex items-center gap-6">
+            <div className="flex items-center gap-3 sm:gap-6 min-w-0 flex-1">
               <Link href="/" className="flex items-center gap-2 relative group shrink-0">
                 <Image
                   src="/webyalaya-main-logo.svg"
                   alt="Webyalaya"
                   width={140}
                   height={140}
-                  className="object-contain w-auto h-6 sm:h-8 transition-all duration-300 group-hover:scale-105 opacity-95 group-hover:opacity-100"
+                  className="object-contain w-auto h-5 sm:h-6 md:h-8 transition-all duration-300 group-hover:scale-105 opacity-95 group-hover:opacity-100"
                 />
               </Link>
 
@@ -154,7 +154,7 @@ export function Navigation() {
             </div>
 
             {/* Right: auth or signed-in controls */}
-            <div className="hidden md:flex items-center gap-3">
+            <div className="hidden md:flex items-center gap-3 shrink-0">
               {isSignedIn ? (
                 <>
                   <CoinDropdown coins={userCoins} isLoading={isUserLoading} />
@@ -170,7 +170,7 @@ export function Navigation() {
             </div>
 
             {/* Mobile: utilities + menu toggle */}
-            <div className="md:hidden flex items-center gap-3">
+            <div className="md:hidden flex items-center gap-1.5 sm:gap-2 shrink-0">
               {isSignedIn && (
                 <>
                   <CoinDropdown coins={userCoins} isLoading={isUserLoading} />
@@ -182,18 +182,18 @@ export function Navigation() {
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="rounded-full h-10 w-10 text-muted-foreground hover:text-foreground hover:bg-white/10"
+                className="rounded-full h-9 w-9 sm:h-10 sm:w-10 text-muted-foreground hover:text-foreground hover:bg-white/10 shrink-0"
                 onClick={() => setIsMobileMenuOpen((v) => !v)}
                 aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
               >
-                {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+                {isMobileMenuOpen ? <X className="h-4 w-4 sm:h-5 sm:w-5" /> : <Menu className="h-4 w-4 sm:h-5 sm:w-5" />}
               </Button>
             </div>
           </div>
 
           {/* Mobile panel */}
           {isMobileMenuOpen && (
-            <div id="mobile-nav" className="md:hidden border-t border-white/10 px-4 pb-5 pt-2 animate-in slide-in-from-top-2 fade-in-20">
+            <div id="mobile-nav" className="md:hidden border-t border-white/10 px-3 sm:px-4 pb-4 sm:pb-5 pt-2 animate-in slide-in-from-top-2 fade-in-20">
               <nav className="flex flex-col gap-2 mt-2" aria-label="Mobile">
                 {links.map((link) => {
                   const isActive = pathname === link.href;

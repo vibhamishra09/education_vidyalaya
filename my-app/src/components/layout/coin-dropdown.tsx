@@ -45,12 +45,16 @@ export function CoinDropdown({ coins = 0, isLoading = false }: CoinDropdownProps
   return (
     <div className="relative" ref={dropdownRef}>
       <div
-        className="flex items-center gap-1 px-3 py-1 bg-muted rounded-full cursor-pointer hover:bg-muted/80 transition-colors"
+        className="flex items-center gap-1 px-2 sm:px-3 py-1 bg-muted rounded-full cursor-pointer hover:bg-muted/80 transition-colors shrink-0"
         onClick={() => setIsOpen(!isOpen)}
+        title={isLoading ? 'Loading...' : `${formatCoins(displayCoins)} Coins`}
       >
-        <Coins className="h-4 w-4 text-yellow-600" />
-        <span className="text-sm font-medium">
-          {isLoading ? '...' : formatCoins(displayCoins)} Coins
+        <Coins className="h-4 w-4 text-yellow-600 shrink-0" />
+        <span className="text-xs sm:text-sm font-medium whitespace-nowrap hidden min-[400px]:inline">
+          {isLoading ? '...' : `${formatCoins(displayCoins)} Coins`}
+        </span>
+        <span className="text-xs font-medium whitespace-nowrap min-[400px]:hidden">
+          {isLoading ? '...' : formatCoins(displayCoins)}
         </span>
       </div>
 
