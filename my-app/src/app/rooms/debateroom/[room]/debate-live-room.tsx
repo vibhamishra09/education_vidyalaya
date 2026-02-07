@@ -126,7 +126,7 @@ export function DebateLiveRoom({
   const router = useRouter();
 
   const handleLeave = useCallback(async () => {
-    router.push('/debate-rooms');
+    router.push('/debateroom');
   }, [router]);
 
   const handleRoomConnected = useCallback(() => {

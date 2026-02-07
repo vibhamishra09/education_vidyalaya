@@ -228,7 +228,7 @@ export function HomeClient() {
                     Engage in meaningful conversations. Broaden your perspective.
                   </p>
                 </div>
-                <Button variant="ghost" className="hover:bg-muted/50" onClick={() => router.push("/debate-rooms")}>
+                <Button variant="ghost" className="hover:bg-muted/50" onClick={() => router.push("/debateroom")}>
                   View All
                 </Button>
               </div>
