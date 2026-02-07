@@ -150,6 +150,7 @@ export class DebateRoomsService {
     status?: DebateStatus,
     page: number = 1,
     limit: number = 10,
+    trending?: boolean,
   ) {
     const where: Prisma.DebateRoomWhereInput = {};
 
@@ -164,14 +165,33 @@ export class DebateRoomsService {
       where.status = status;
     }
 
+    // For trending, show scheduled debates in the future
+    if (trending) {
+      where.scheduledAt = {
+        gte: new Date(), // Only future scheduled debates
+      };
+      // Also ensure status is WAITING for trending
+      where.status = DebateStatus.WAITING;
+    }
+
     const skip = (page - 1) * limit;
+
+    // Determine orderBy based on trending
+    let orderBy: Prisma.DebateRoomOrderByWithRelationInput;
+    if (trending) {
+      // For trending, order by scheduledAt (upcoming first)
+      orderBy = { scheduledAt: 'asc' };
+    } else {
+      // Default: order by creation date (newest first)
+      orderBy = { createdAt: 'desc' };
+    }
 
     const [rooms, total] = await Promise.all([
       this.prisma.debateRoom.findMany({
         where,
         skip,
         take: limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy,
         include: this.getDebateRoomInclude(),
       }),
       this.prisma.debateRoom.count({ where }),

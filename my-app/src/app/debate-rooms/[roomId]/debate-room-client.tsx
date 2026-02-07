@@ -463,6 +463,32 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
               </Card>
             )}
 
+            {/* Enter Debate Room Button (for LIVE/PREP) */}
+            {(room.status === DebateStatus.LIVE || room.status === DebateStatus.PREP) && livekitData && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Enter Debate Room</CardTitle>
+                  <CardDescription>
+                    {room.status === DebateStatus.PREP 
+                      ? 'Preparation phase is active. Join to prepare with your team.'
+                      : 'The debate is live. Join to participate or watch.'}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button
+                    className="w-full font-semibold text-sm h-10 shadow-md shadow-primary/20 transition-all hover:scale-[1.01] active:scale-[0.99] rounded-lg bg-green-600 hover:bg-green-700 text-white"
+                    onClick={() => {
+                      // Force refetch to trigger Live Debate View
+                      refetch();
+                    }}
+                  >
+                    <Play className="h-3.5 w-3.5 mr-2" />
+                    Enter Debate Room
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Teams Display */}
             {room.status === DebateStatus.WAITING && (
               <DebateTeamsDisplay

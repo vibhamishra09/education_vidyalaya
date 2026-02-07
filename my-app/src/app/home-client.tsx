@@ -35,6 +35,7 @@ export function HomeClient() {
     trending: true,
   });
 
+  // Get trending debate rooms (scheduled for future)
   const { data: debateRoomsData, isLoading: debateRoomsLoading, error: debateRoomsError } = useDebateRooms({
     limit: 4,
     status: DebateStatus.WAITING,

@@ -35,9 +35,28 @@ export function DebateRoomCard({
   const router = useRouter();
   const requireAuth = useRequireAuth();
   
-  // Determine status
-  const statusIsLive = room.status === DebateStatus.LIVE || room.status === DebateStatus.PREP;
-  const statusIsEnded = room.status === DebateStatus.ENDED || room.status === DebateStatus.PROCESSED;
+  // Map status to display labels
+  const getStatusDisplay = () => {
+    switch (room.status) {
+      case DebateStatus.CANCELLED:
+        return { label: 'CANCELLED', isLive: false, isEnded: true, isCancelled: true };
+      case DebateStatus.WAITING:
+        return { label: 'SCHEDULED', isLive: false, isEnded: false, isCancelled: false };
+      case DebateStatus.PREP:
+      case DebateStatus.LIVE:
+        return { label: 'LIVE', isLive: true, isEnded: false, isCancelled: false };
+      case DebateStatus.PROCESSED:
+      case DebateStatus.ENDED:
+        return { label: 'ENDED', isLive: false, isEnded: true, isCancelled: false };
+      default:
+        return { label: 'OPEN', isLive: false, isEnded: false, isCancelled: false };
+    }
+  };
+
+  const statusDisplay = getStatusDisplay();
+  const statusIsLive = statusDisplay.isLive;
+  const statusIsEnded = statusDisplay.isEnded;
+  const statusIsCancelled = statusDisplay.isCancelled;
   
   // Calculate participant counts
   const forTeam = room.teams.find(t => t.side === 'FOR');
@@ -56,7 +75,19 @@ export function DebateRoomCard({
   const prizePool = (room as any).prizePool || null;
 
   // Dynamic Theme Colors based on Status
-  const theme = statusIsLive
+  const theme = statusIsCancelled
+    ? {
+        border: "border-red-200 dark:border-red-900",
+        hoverBorder: "hover:border-red-300 dark:hover:border-red-800",
+        gradient: "from-card to-red-50/50 dark:to-red-950/20",
+        badge: "bg-red-500/10 text-red-700 border border-red-500/20 dark:text-red-400",
+        titleHover: "group-hover:text-red-700 dark:group-hover:text-red-400",
+        avatarBorder: "border-red-200 dark:border-red-900",
+        avatarFallback: "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300",
+        button: "bg-red-500/10 text-red-700 hover:bg-red-500/20 border border-red-500/20 dark:text-red-400 shadow-sm",
+        iconColor: "text-red-600 dark:text-red-400"
+      }
+    : statusIsLive
     ? {
         border: "border-red-200 dark:border-red-900",
         hoverBorder: "hover:border-red-300 dark:hover:border-red-800",
@@ -92,7 +123,16 @@ export function DebateRoomCard({
         iconColor: "text-green-600 dark:text-green-400"
       };
 
-  const handleDefaultAction = () => {
+  const handleCardClick = (e: React.MouseEvent) => {
+    // Don't navigate if clicking on button or share button
+    if ((e.target as HTMLElement).closest('button')) {
+      return;
+    }
+    router.push(`/debate-rooms/${room.id}`);
+  };
+
+  const handleDefaultAction = (e: React.MouseEvent) => {
+    e.stopPropagation();
     if (onAction) {
       onAction();
     } else {
@@ -108,12 +148,15 @@ export function DebateRoomCard({
       transition={{ duration: 0.2 }}
       className="h-full group"
     >
-      <Card className={cn(
-        "h-full flex flex-col p-4 bg-gradient-to-br transition-all duration-300 border shadow-sm hover:shadow-lg",
-        theme.gradient,
-        theme.border,
-        theme.hoverBorder
-      )}>
+      <Card 
+        className={cn(
+          "h-full flex flex-col p-4 bg-gradient-to-br transition-all duration-300 border shadow-sm hover:shadow-lg cursor-pointer",
+          theme.gradient,
+          theme.border,
+          theme.hoverBorder
+        )}
+        onClick={handleCardClick}
+      >
         
         {/* Header: Category Badge & Status */}
         <div className="flex items-center justify-between mb-3">
@@ -134,7 +177,7 @@ export function DebateRoomCard({
               )}></span>
             </span>
             <span className="text-[11px] font-extrabold tracking-widest uppercase">
-              {statusIsLive ? "LIVE" : statusIsEnded ? "ENDED" : "OPEN"}
+              {statusDisplay.label}
             </span>
           </div>
         </div>

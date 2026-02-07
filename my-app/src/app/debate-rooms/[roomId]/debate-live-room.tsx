@@ -780,59 +780,59 @@ function DebateLiveContent({
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="h-14 bg-[#1f1f1f] border-b border-white/10 flex items-center justify-between px-4 flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="relative h-8 w-8 flex-shrink-0">
+      <div className="h-12 sm:h-14 bg-[#1f1f1f] border-b border-white/10 flex items-center justify-between px-2 sm:px-4 flex-shrink-0">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+          <div className="relative h-6 w-6 sm:h-8 sm:w-8 flex-shrink-0">
             <Image src="/webyalaya-main-logo.svg" alt="Webyalaya" fill className="object-contain" priority />
           </div>
-          <div className="flex flex-col min-w-0">
-            <span className="text-white font-medium text-sm truncate">{debateRoom.topic}</span>
-            <span className="text-white/50 text-xs">Debate Room</span>
+          <div className="flex flex-col min-w-0 flex-1">
+            <span className="text-white font-medium text-xs sm:text-sm truncate">{debateRoom.topic}</span>
+            <span className="text-white/50 text-[10px] sm:text-xs">Debate Room</span>
           </div>
           <Badge
             variant="outline"
             className={cn(
-              'ml-2 flex-shrink-0',
+              'ml-1 sm:ml-2 flex-shrink-0 text-[10px] sm:text-xs px-1.5 sm:px-2',
               isPrepPhase && 'bg-blue-500/20 border-blue-500 text-blue-300',
               isLive && 'bg-green-500/20 border-green-500 text-green-300'
             )}
           >
-            {isPrepPhase ? 'Prep Phase' : '🔴 LIVE'}
+            {isPrepPhase ? 'Prep' : '🔴 LIVE'}
           </Badge>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1.5 sm:gap-3 flex-shrink-0">
           {/* View Mode Toggle */}
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setViewMode(viewMode === 'speaker' ? 'grid' : 'speaker')}
-            className="text-white/70 hover:text-white hover:bg-white/10"
+            className="text-white/70 hover:text-white hover:bg-white/10 h-8 w-8 sm:h-9 sm:w-auto sm:px-3 p-0"
           >
             {viewMode === 'speaker' ? (
               <>
-                <Grid2X2 className="h-4 w-4 mr-2" />
-                <span className="hidden md:inline">Grid View</span>
+                <Grid2X2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Grid View</span>
               </>
             ) : (
               <>
-                <Focus className="h-4 w-4 mr-2" />
-                <span className="hidden md:inline">Presenter View</span>
+                <Focus className="h-3.5 w-3.5 sm:h-4 sm:w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Presenter View</span>
               </>
             )}
           </Button>
 
           {/* Role Badge */}
           {isModerator && (
-            <Badge variant="outline" className="bg-yellow-500/20 border-yellow-500 text-yellow-300 flex-shrink-0">
-              {userRole === 'host' ? <Crown className="h-3 w-3 mr-1" /> : <Shield className="h-3 w-3 mr-1" />}
-              {userRole === 'host' ? 'Host' : 'Moderator'}
+            <Badge variant="outline" className="bg-yellow-500/20 border-yellow-500 text-yellow-300 flex-shrink-0 text-[10px] sm:text-xs px-1.5 sm:px-2">
+              {userRole === 'host' ? <Crown className="h-2.5 w-2.5 sm:h-3 sm:w-3 sm:mr-1" /> : <Shield className="h-2.5 w-2.5 sm:h-3 sm:w-3 sm:mr-1" />}
+              <span className="hidden sm:inline">{userRole === 'host' ? 'Host' : 'Moderator'}</span>
             </Badge>
           )}
 
           {/* Participant count */}
-          <div className="hidden md:flex items-center gap-1 text-white/60 text-sm flex-shrink-0">
-            <Users className="h-4 w-4" />
+          <div className="hidden sm:flex items-center gap-1 text-white/60 text-xs sm:text-sm flex-shrink-0">
+            <Users className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             <span>{participants.length} ({allTracks.length} videos)</span>
           </div>
 
@@ -841,9 +841,9 @@ function DebateLiveContent({
             variant="ghost"
             size="sm"
             onClick={() => setShowSidebar(!showSidebar)}
-            className="text-white/70 hover:text-white hover:bg-white/10 flex-shrink-0"
+            className="text-white/70 hover:text-white hover:bg-white/10 flex-shrink-0 h-8 w-8 sm:h-9 sm:w-9 p-0"
           >
-            {showSidebar ? <ChevronRight className="h-5 w-5" /> : <ChevronLeft className="h-5 w-5" />}
+            {showSidebar ? <ChevronRight className="h-4 w-4 sm:h-5 sm:w-5" /> : <ChevronLeft className="h-4 w-4 sm:h-5 sm:w-5" />}
           </Button>
         </div>
       </div>
@@ -875,13 +875,13 @@ function DebateLiveContent({
           )}
 
           {/* LEFT SIDE: TEAM FOR */}
-          <div className="flex-1 flex flex-col border-r border-green-500/30 bg-gradient-to-b from-green-900/10 to-transparent">
+          <div className="flex-1 flex flex-col border-r border-green-500/30 bg-gradient-to-b from-green-900/10 to-transparent min-w-0">
             {/* Team Header */}
-            <div className="flex items-center justify-between p-3 border-b border-green-500/20">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-green-500" />
-                <h3 className="text-green-400 font-bold text-lg">TEAM FOR</h3>
-                <Badge variant="outline" className="bg-green-500/20 border-green-500 text-green-300 text-xs">
+            <div className="flex items-center justify-between p-2 sm:p-3 border-b border-green-500/20">
+              <div className="flex items-center gap-1 sm:gap-2 min-w-0">
+                <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-green-500 flex-shrink-0" />
+                <h3 className="text-green-400 font-bold text-sm sm:text-lg truncate">TEAM FOR</h3>
+                <Badge variant="outline" className="bg-green-500/20 border-green-500 text-green-300 text-xs flex-shrink-0">
                   {forPanelTracks.length}
                 </Badge>
               </div>
@@ -898,7 +898,7 @@ function DebateLiveContent({
             </div>
             
             {/* Video Grid for Team FOR */}
-            <div className="flex-1 p-3 overflow-auto">
+            <div className="flex-1 p-2 sm:p-3 overflow-auto">
               <TeamVideoGrid 
                 tracks={forPanelTracks} 
                 teamColor="green"
@@ -908,33 +908,33 @@ function DebateLiveContent({
           </div>
 
           {/* CENTER: VS and Timer */}
-          <div className="w-20 md:w-24 flex flex-col items-center justify-center bg-black/50 border-x border-white/10">
-            <div className="text-3xl md:text-4xl font-black text-white/90 mb-4 tracking-widest">VS</div>
+          <div className="w-12 sm:w-20 md:w-24 flex flex-col items-center justify-center bg-black/50 border-x border-white/10 flex-shrink-0">
+            <div className="text-xl sm:text-3xl md:text-4xl font-black text-white/90 mb-2 sm:mb-4 tracking-widest">VS</div>
             
             {/* Timer */}
             {isLive && debateState?.turnStartedAt && (
-              <div className="bg-white/10 rounded-lg p-2 text-center">
-                <Clock className="h-5 w-5 text-white/70 mx-auto mb-1" />
+              <div className="bg-white/10 rounded-lg p-1.5 sm:p-2 text-center">
+                <Clock className="h-3 w-3 sm:h-5 sm:w-5 text-white/70 mx-auto mb-1" />
                 <DebateTurnTimer
                   turnDurationSeconds={debateRoom.turnDurationSeconds}
                   turnStartedAt={debateState.turnStartedAt}
                   isActive={!!debateState.currentSpeakerId}
-                  className="bg-transparent border-none p-0 text-white text-lg font-mono"
+                  className="bg-transparent border-none p-0 text-white text-sm sm:text-lg font-mono"
                 />
               </div>
             )}
 
             {/* Current Speaker Indicator */}
             {currentSpeaker && (
-              <div className="mt-4 text-center">
-                <div className="text-xs text-white/50 uppercase tracking-wider">Speaking</div>
-                <Avatar className="h-10 w-10 mx-auto mt-1 border-2 border-yellow-500">
+              <div className="mt-2 sm:mt-4 text-center px-1">
+                <div className="text-[10px] sm:text-xs text-white/50 uppercase tracking-wider">Speaking</div>
+                <Avatar className="h-8 w-8 sm:h-10 sm:w-10 mx-auto mt-1 border-2 border-yellow-500">
                   <AvatarImage src={currentSpeaker.user.avatar || undefined} />
-                  <AvatarFallback className="bg-yellow-500/20 text-yellow-400">
+                  <AvatarFallback className="bg-yellow-500/20 text-yellow-400 text-xs sm:text-sm">
                     {currentSpeaker.user.name?.charAt(0)?.toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
-                <div className="text-xs text-white/70 mt-1 truncate max-w-[80px]">
+                <div className="text-[10px] sm:text-xs text-white/70 mt-1 truncate max-w-[60px] sm:max-w-[80px]">
                   {currentSpeaker.user.name?.split(' ')[0]}
                 </div>
               </div>
@@ -942,37 +942,37 @@ function DebateLiveContent({
 
             {/* Moderator Controls */}
             {isModerator && isLive && (
-              <div className="mt-auto pb-4 flex flex-col gap-2">
+              <div className="mt-auto pb-2 sm:pb-4 flex flex-col gap-1.5 sm:gap-2">
                 <Button
                   onClick={onAdvanceTurn}
                   size="sm"
                   variant="outline"
-                  className="text-xs border-white/20 text-white/70 hover:text-white hover:bg-white/10"
+                  className="text-[10px] sm:text-xs border-white/20 text-white/70 hover:text-white hover:bg-white/10 h-7 sm:h-8 px-2 sm:px-3"
                 >
-                  <SkipForward className="h-3 w-3 mr-1" />
-                  Next
+                  <SkipForward className="h-3 w-3 sm:mr-1" />
+                  <span className="hidden sm:inline">Next</span>
                 </Button>
                 <Button
                   onClick={() => onEndDebate()}
                   size="sm"
                   variant="outline"
-                  className="text-xs border-red-500/50 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                  className="text-[10px] sm:text-xs border-red-500/50 text-red-400 hover:text-red-300 hover:bg-red-500/10 h-7 sm:h-8 px-2 sm:px-3"
                 >
-                  <Square className="h-3 w-3 mr-1" />
-                  End
+                  <Square className="h-3 w-3 sm:mr-1" />
+                  <span className="hidden sm:inline">End</span>
                 </Button>
               </div>
             )}
           </div>
 
           {/* RIGHT SIDE: TEAM AGAINST */}
-          <div className="flex-1 flex flex-col border-l border-red-500/30 bg-gradient-to-b from-red-900/10 to-transparent">
+          <div className="flex-1 flex flex-col border-l border-red-500/30 bg-gradient-to-b from-red-900/10 to-transparent min-w-0">
             {/* Team Header */}
-            <div className="flex items-center justify-between p-3 border-b border-red-500/20">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-red-500" />
-                <h3 className="text-red-400 font-bold text-lg">TEAM AGAINST</h3>
-                <Badge variant="outline" className="bg-red-500/20 border-red-500 text-red-300 text-xs">
+            <div className="flex items-center justify-between p-2 sm:p-3 border-b border-red-500/20">
+              <div className="flex items-center gap-1 sm:gap-2 min-w-0">
+                <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-red-500 flex-shrink-0" />
+                <h3 className="text-red-400 font-bold text-sm sm:text-lg truncate">TEAM AGAINST</h3>
+                <Badge variant="outline" className="bg-red-500/20 border-red-500 text-red-300 text-xs flex-shrink-0">
                   {againstPanelTracks.length}
                 </Badge>
               </div>
@@ -989,7 +989,7 @@ function DebateLiveContent({
             </div>
             
             {/* Video Grid for Team AGAINST */}
-            <div className="flex-1 p-3 overflow-auto">
+            <div className="flex-1 p-2 sm:p-3 overflow-auto">
               <TeamVideoGrid 
                 tracks={againstPanelTracks} 
                 teamColor="red"
@@ -1250,24 +1250,24 @@ function DebateLiveContent({
                   </ScrollArea>
                   
                   {/* Chat Input */}
-                  <div className="border-t border-white/10 p-3 flex-shrink-0">
+                  <div className="border-t border-white/10 p-2 sm:p-3 flex-shrink-0">
                     {/* Moderator-only toggle */}
                     {(userRole === 'host' || userRole === 'moderator') && (
-                      <div className="mb-2 flex items-center gap-2">
+                      <div className="mb-1.5 sm:mb-2 flex items-center gap-1.5 sm:gap-2">
                         <input
                           type="checkbox"
                           id="moderator-only"
                           checked={isModeratorOnly}
                           onChange={(e) => setIsModeratorOnly(e.target.checked)}
-                          className="rounded border-white/20 text-yellow-500 focus:ring-yellow-500/20"
+                          className="rounded border-white/20 text-yellow-500 focus:ring-yellow-500/20 h-3 w-3 sm:h-4 sm:w-4"
                         />
-                        <label htmlFor="moderator-only" className="text-xs text-white/60 cursor-pointer">
-                          🔒 Send to moderators only (private)
+                        <label htmlFor="moderator-only" className="text-[10px] sm:text-xs text-white/60 cursor-pointer">
+                          🔒 <span className="hidden sm:inline">Send to moderators only (private)</span><span className="sm:hidden">Private</span>
                         </label>
                       </div>
                     )}
                     
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 sm:gap-2">
                       <Input
                         value={chatInput}
                         onChange={(e) => setChatInput(e.target.value)}
@@ -1278,18 +1278,18 @@ function DebateLiveContent({
                           }
                         }}
                         placeholder="Type a message..."
-                        className="flex-1 bg-white/5 border-white/10 text-white placeholder:text-white/40 focus:border-green-500/50 focus:ring-green-500/20"
+                        className="flex-1 bg-white/5 border-white/10 text-white placeholder:text-white/40 focus:border-green-500/50 focus:ring-green-500/20 text-sm sm:text-base h-8 sm:h-9"
                       />
                       <Button
                         onClick={sendChatMessage}
                         disabled={!chatInput.trim()}
                         size="sm"
-                        className="bg-green-600 hover:bg-green-700 text-white h-9 px-3"
+                        className="bg-green-600 hover:bg-green-700 text-white h-8 w-8 sm:h-9 sm:w-auto sm:px-3 p-0 sm:p-2"
                       >
-                        <Send className="h-4 w-4" />
+                        <Send className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                       </Button>
                     </div>
-                    <p className="text-xs text-white/40 mt-2">
+                    <p className="text-[10px] sm:text-xs text-white/40 mt-1.5 sm:mt-2">
                       {(userRole === 'host' || userRole === 'moderator')
                         ? isModeratorOnly
                           ? "Sending private message to moderators only" 
@@ -1307,12 +1307,12 @@ function DebateLiveContent({
       </div>
 
       {/* Controls Bar - Fixed at bottom */}
-      <div className="h-20 bg-[#1f1f1f] border-t border-white/10 flex items-center justify-center gap-3 px-4 flex-shrink-0 z-50">
+      <div className="h-16 sm:h-20 bg-[#1f1f1f] border-t border-white/10 flex items-center justify-center gap-2 sm:gap-3 px-2 sm:px-4 flex-shrink-0 z-50">
         {/* Connection status indicator */}
         {!isRoomConnected && (
-          <div className="absolute left-4 flex items-center gap-2 text-yellow-500 text-sm">
+          <div className="absolute left-2 sm:left-4 flex items-center gap-1.5 sm:gap-2 text-yellow-500 text-xs sm:text-sm">
             <div className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" />
-            <span>Connecting...</span>
+            <span className="hidden sm:inline">Connecting...</span>
           </div>
         )}
 
@@ -1354,7 +1354,7 @@ function DebateLiveContent({
           variant="ghost"
           size="lg"
           className={cn(
-            'h-12 w-12 rounded-full transition-all p-0',
+            'h-10 w-10 sm:h-12 sm:w-12 rounded-full transition-all p-0',
             !isRoomConnected && 'opacity-50 cursor-not-allowed',
             localParticipant?.isCameraEnabled
               ? 'bg-white/10 hover:bg-white/20 text-white'
@@ -1363,8 +1363,8 @@ function DebateLiveContent({
           title={localParticipant?.isCameraEnabled ? 'Turn off camera' : 'Turn on camera'}
         >
           {localParticipant?.isCameraEnabled 
-            ? <Video className="h-6 w-6" /> 
-            : <VideoOff className="h-6 w-6" />}
+            ? <Video className="h-5 w-5 sm:h-6 sm:w-6" /> 
+            : <VideoOff className="h-5 w-5 sm:h-6 sm:w-6" />}
         </Button>
 
         {/* Mic Toggle */}
@@ -1394,7 +1394,7 @@ function DebateLiveContent({
           variant="ghost"
           size="lg"
           className={cn(
-            'h-12 w-12 rounded-full transition-all p-0',
+            'h-10 w-10 sm:h-12 sm:w-12 rounded-full transition-all p-0',
             !isRoomConnected && 'opacity-50 cursor-not-allowed',
             localParticipant?.isMicrophoneEnabled
               ? 'bg-white/10 hover:bg-white/20 text-white'
@@ -1403,8 +1403,8 @@ function DebateLiveContent({
           title={localParticipant?.isMicrophoneEnabled ? 'Mute' : 'Unmute'}
         >
           {localParticipant?.isMicrophoneEnabled 
-            ? <Mic className="h-6 w-6" /> 
-            : <MicOff className="h-6 w-6" />}
+            ? <Mic className="h-5 w-5 sm:h-6 sm:w-6" /> 
+            : <MicOff className="h-5 w-5 sm:h-6 sm:w-6" />}
         </Button>
 
         {/* Audio Output Toggle */}
@@ -1477,10 +1477,10 @@ function DebateLiveContent({
           }}
           variant="ghost"
           size="lg"
-          className="h-12 px-4 md:px-6 rounded-full bg-red-500 hover:bg-red-600 text-white font-medium"
+          className="h-10 w-10 sm:h-12 sm:w-auto sm:px-4 md:px-6 rounded-full bg-red-500 hover:bg-red-600 text-white font-medium"
         >
-          <PhoneOff className="h-5 w-5 md:mr-2" />
-          <span className="hidden md:inline">Leave</span>
+          <PhoneOff className="h-5 w-5 sm:mr-2" />
+          <span className="hidden sm:inline">Leave</span>
         </Button>
       </div>
     </div>
@@ -1511,10 +1511,10 @@ function TeamVideoGrid({ tracks, teamColor, currentSpeakerId }: TeamVideoGridPro
 
   return (
     <div className={cn(
-      "grid gap-3 h-full",
+      "grid gap-2 sm:gap-3 h-full",
       tracks.length === 1 && "grid-cols-1",
-      tracks.length === 2 && "grid-cols-1 md:grid-cols-2",
-      tracks.length >= 3 && "grid-cols-2"
+      tracks.length === 2 && "grid-cols-1 sm:grid-cols-2",
+      tracks.length >= 3 && "grid-cols-1 sm:grid-cols-2"
     )}>
       {tracks.map((trackRef) => {
         const isLocal = trackRef.participant.isLocal;
@@ -1544,13 +1544,13 @@ function TeamVideoGrid({ tracks, teamColor, currentSpeakerId }: TeamVideoGridPro
           >
             {/* Avatar placeholder - always visible as background */}
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-800 z-[1]">
-              <Avatar className="w-20 h-20 md:w-24 md:h-24 border-4 border-gray-700">
+              <Avatar className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 border-2 sm:border-4 border-gray-700">
                 <AvatarImage src={avatarUrl} />
-                <AvatarFallback className="bg-gray-700 text-white text-2xl">
+                <AvatarFallback className="bg-gray-700 text-white text-lg sm:text-2xl">
                   {(isLocal ? 'You' : (trackRef.participant.name || trackRef.participant.identity)).charAt(0).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
-              <p className="mt-3 text-white/90 text-sm font-medium">
+              <p className="mt-2 sm:mt-3 text-white/90 text-xs sm:text-sm font-medium px-2 text-center truncate w-full">
                 {isLocal ? 'You' : (trackRef.participant.name || trackRef.participant.identity)}
               </p>
             </div>
@@ -1563,18 +1563,18 @@ function TeamVideoGrid({ tracks, teamColor, currentSpeakerId }: TeamVideoGridPro
             )}
 
             {/* Name label */}
-            <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between z-[10]">
-              <span className="text-white text-sm bg-black/60 px-2 py-1 rounded backdrop-blur-sm truncate">
+            <div className="absolute bottom-1 sm:bottom-2 left-1 sm:left-2 right-1 sm:right-2 flex items-center justify-between z-[10]">
+              <span className="text-white text-xs sm:text-sm bg-black/60 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded backdrop-blur-sm truncate">
                 {isLocal ? 'You' : (trackRef.participant.name || trackRef.participant.identity)}
               </span>
               {isSpeaking && (
-                <span className="w-3 h-3 rounded-full bg-green-500 animate-pulse flex-shrink-0 ml-2" />
+                <span className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-green-500 animate-pulse flex-shrink-0 ml-1 sm:ml-2" />
               )}
             </div>
 
             {/* Current speaker badge */}
             {isCurrentSpeaker && (
-              <div className="absolute top-2 left-2 bg-yellow-500 text-black text-xs px-2 py-1 rounded-full font-bold z-[10]">
+              <div className="absolute top-1 sm:top-2 left-1 sm:left-2 bg-yellow-500 text-black text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full font-bold z-[10]">
                 Speaking
               </div>
             )}
