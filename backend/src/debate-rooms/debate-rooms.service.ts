@@ -27,6 +27,7 @@ import {
 } from '@prisma/client';
 import { redisClient } from '../redis/redis.provider';
 import { DebateAiService } from './debate-ai.service';
+import { DebateMicControlService } from './debate-mic-control.service';
 
 // Redis key prefixes
 const REDIS_KEYS = {
@@ -61,6 +62,7 @@ export class DebateRoomsService {
     private livekitService: LivekitService,
     private notificationsService: NotificationsService,
     private debateAiService: DebateAiService,
+    private micControlService: DebateMicControlService,
   ) {}
 
   /**
@@ -571,6 +573,9 @@ export class DebateRoomsService {
       { EX: 86400 },
     );
 
+    // Enable mic for moderators during prep phase
+    await this.micControlService.enableMicForModerators(roomId);
+
     this.logger.log(`Debate ${roomId} entering prep phase`);
     return { prepEndTime };
   }
@@ -701,6 +706,10 @@ export class DebateRoomsService {
       { EX: 86400 },
     );
 
+    // Mute all participants, then enable mic for first speaker
+    await this.micControlService.muteAllParticipants(roomId, true);
+    await this.micControlService.enableMicForSpeaker(roomId, firstTurn.participant.userId);
+
     this.logger.log(
       `Debate ${roomId} started. First speaker: ${firstTurn.participant.user.name}`,
     );
@@ -772,6 +781,9 @@ export class DebateRoomsService {
 
         // Commit any Redis transcripts to database
         await this.commitTranscriptsToDb(roomId, currentTurn.participantId, currentTurn.turnOrder);
+
+        // Mute previous speaker
+        await this.micControlService.muteParticipant(roomId, currentTurn.participant.userId);
       }
 
       // Find next speaker
@@ -804,6 +816,10 @@ export class DebateRoomsService {
           JSON.stringify(endState),
           { EX: 86400 },
         );
+
+        // Mute all participants and enable mic for moderators
+        await this.micControlService.muteAllParticipants(roomId, false);
+        await this.micControlService.enableMicForModerators(roomId);
 
         this.logger.log(`Debate ${roomId} has ended`);
         return { finished: true };
@@ -840,6 +856,9 @@ export class DebateRoomsService {
         JSON.stringify(state),
         { EX: 86400 },
       );
+
+      // Enable mic for next speaker
+      await this.micControlService.enableMicForSpeaker(roomId, nextTurn.participant.userId);
 
       this.logger.log(
         `Debate ${roomId} turn ${nextTurnIndex}: ${nextTurn.participant.user.name}`,
@@ -1294,6 +1313,70 @@ export class DebateRoomsService {
     await redisClient.del(REDIS_KEYS.debateTranscripts(roomId));
 
     this.logger.log(`Debate ${roomId} cancelled by host ${user.id}`);
+  }
+
+  /**
+   * End debate (moderator only)
+   */
+  async endDebate(roomId: string, userId: string, reason?: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({
+      where: { clerkId: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const debateRoom = await this.prisma.debateRoom.findUnique({
+      where: { id: roomId },
+      include: {
+        moderators: true,
+      },
+    });
+
+    if (!debateRoom) {
+      throw new NotFoundException('Debate room not found');
+    }
+
+    const isMod = debateRoom.moderators.some((m) => m.userId === user.id);
+    if (!isMod) {
+      throw new ForbiddenException('Only moderators can end the debate');
+    }
+
+    if (debateRoom.status !== DebateStatus.LIVE && debateRoom.status !== DebateStatus.PREP) {
+      throw new BadRequestException('Debate is not in a state that can be ended');
+    }
+
+    // Update status
+    await this.prisma.debateRoom.update({
+      where: { id: roomId },
+      data: {
+        status: DebateStatus.ENDED,
+        endTime: new Date(),
+        currentSpeakerId: null,
+      },
+    });
+
+    // Update Redis state
+    const endState: DebateState = {
+      status: DebateStatus.ENDED,
+      currentTurnIndex: debateRoom.currentTurnIndex,
+      currentSpeakerId: null,
+      turnStartedAt: null,
+      turnEndTime: null,
+      prepEndTime: null,
+    };
+    await redisClient.set(
+      REDIS_KEYS.debateState(roomId),
+      JSON.stringify(endState),
+      { EX: 86400 },
+    );
+
+    // Mute all participants and enable mic for moderators
+    await this.micControlService.muteAllParticipants(roomId, false);
+    await this.micControlService.enableMicForModerators(roomId);
+
+    this.logger.log(`Debate ${roomId} ended by moderator ${user.id}. Reason: ${reason || 'No reason provided'}`);
   }
 
   /**

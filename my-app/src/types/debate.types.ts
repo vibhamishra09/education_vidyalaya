@@ -242,6 +242,16 @@ export interface ParticipantLeftEvent {
   teamSize: { FOR: number; AGAINST: number };
 }
 
+export interface MicEnabledEvent {
+  participantId: string;
+  reason: 'moderator' | 'turn' | 'manual';
+}
+
+export interface MicDisabledEvent {
+  participantId: string;
+  reason: 'turn_ended' | 'debate_ended' | 'manual';
+}
+
 // LiveKit Token Response
 export interface DebateLivekitTokenResponse {
   token: string;

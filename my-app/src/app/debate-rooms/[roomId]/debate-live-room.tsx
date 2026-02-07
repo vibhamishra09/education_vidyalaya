@@ -46,6 +46,8 @@ import {
   Send,
   Bell,
   Zap,
+  Play,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
@@ -66,6 +68,8 @@ import {
   DebateTeamChat,
   CompactTeamsDisplay,
 } from '@/components/debate';
+import { useDebateMicControl } from '@/hooks/use-debate-mic-control';
+import { MicEnabledEvent, MicDisabledEvent } from '@/types/debate.types';
 
 interface ChatMessage {
   id: string;
@@ -93,6 +97,9 @@ interface DebateLiveRoomProps {
   onSendTeamChat: (message: string) => void;
   onAdvanceTurn: () => void;
   onEndDebate: (reason?: string) => void;
+  onStartDebate?: () => void;
+  canStartDebate?: boolean;
+  isStartingDebate?: boolean;
   getToken: () => Promise<string | null>;
 }
 
@@ -111,6 +118,9 @@ export function DebateLiveRoom({
   onSendTeamChat,
   onAdvanceTurn,
   onEndDebate,
+  onStartDebate,
+  canStartDebate,
+  isStartingDebate,
   getToken,
 }: DebateLiveRoomProps) {
   const router = useRouter();
@@ -204,6 +214,9 @@ export function DebateLiveRoom({
           onSendTeamChat={onSendTeamChat}
           onAdvanceTurn={onAdvanceTurn}
           onEndDebate={onEndDebate}
+          onStartDebate={onStartDebate}
+          canStartDebate={canStartDebate}
+          isStartingDebate={isStartingDebate}
           onLeave={handleLeave}
           getToken={getToken}
         />
@@ -226,8 +239,49 @@ interface DebateLiveContentProps {
   onSendTeamChat: (message: string) => void;
   onAdvanceTurn: () => void;
   onEndDebate: (reason?: string) => void;
+  onStartDebate?: () => void;
+  canStartDebate?: boolean;
+  isStartingDebate?: boolean;
   onLeave: () => void;
   getToken: () => Promise<string | null>;
+}
+
+// Local prep countdown timer component that updates every second
+function PrepCountdownTimer({ secondsRemaining: initialSeconds }: { secondsRemaining: number }) {
+  const [secondsRemaining, setSecondsRemaining] = useState(initialSeconds);
+
+  useEffect(() => {
+    // Reset when prop changes
+    setSecondsRemaining(initialSeconds);
+  }, [initialSeconds]);
+
+  useEffect(() => {
+    if (secondsRemaining <= 0) return;
+
+    const interval = setInterval(() => {
+      setSecondsRemaining((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [secondsRemaining]);
+
+  const minutes = Math.floor(secondsRemaining / 60);
+  const seconds = secondsRemaining % 60;
+
+  return (
+    <div className="bg-yellow-500/20 rounded-lg p-1.5 sm:p-2 text-center border border-yellow-500/30">
+      <Clock className="h-3 w-3 sm:h-5 sm:w-5 text-yellow-400 mx-auto mb-1" />
+      <div className="text-white text-sm sm:text-lg font-mono font-bold">
+        {minutes}:{seconds.toString().padStart(2, '0')}
+      </div>
+    </div>
+  );
 }
 
 function DebateLiveContent({
@@ -243,6 +297,9 @@ function DebateLiveContent({
   onSendTeamChat,
   onAdvanceTurn,
   onEndDebate,
+  onStartDebate,
+  canStartDebate,
+  isStartingDebate,
   onLeave,
   getToken,
 }: DebateLiveContentProps) {
@@ -774,6 +831,38 @@ function DebateLiveContent({
 
   const isUserTurn = currentSpeaker?.user.clerkId === userId;
 
+  // Mic control handlers - these will be called by socket events
+  const handleMicEnabledRef = useRef<((event: MicEnabledEvent) => void) | null>(null);
+  const handleMicDisabledRef = useRef<((event: MicDisabledEvent) => void) | null>(null);
+
+  const handleMicEnabled = useCallback((event: MicEnabledEvent) => {
+    console.log('[DebateLiveRoom] Mic enabled for:', event.participantId, 'reason:', event.reason);
+    // Call the handler from the hook if it exists
+    handleMicEnabledRef.current?.(event);
+  }, []);
+
+  const handleMicDisabled = useCallback((event: MicDisabledEvent) => {
+    console.log('[DebateLiveRoom] Mic disabled for:', event.participantId, 'reason:', event.reason);
+    // Call the handler from the hook if it exists
+    handleMicDisabledRef.current?.(event);
+  }, []);
+
+  // Use mic control hook
+  const { isMicLocked, canToggleMic, micLockReason, handleMicEnabled: handleMicEnabledFromHook, handleMicDisabled: handleMicDisabledFromHook } = useDebateMicControl({
+    debateStatus: debateRoom.status,
+    currentSpeakerId: debateState?.currentSpeakerId || null,
+    userRole,
+    userId,
+    onMicEnabled: handleMicEnabled,
+    onMicDisabled: handleMicDisabled,
+  });
+
+  // Store hook handlers in refs for socket callbacks to use
+  useEffect(() => {
+    handleMicEnabledRef.current = handleMicEnabledFromHook;
+    handleMicDisabledRef.current = handleMicDisabledFromHook;
+  }, [handleMicEnabledFromHook, handleMicDisabledFromHook]);
+
   // Active screen share
   const activeScreenShare = screenShareTracks.length > 0 ? screenShareTracks[0] : null;
 
@@ -911,14 +1000,16 @@ function DebateLiveContent({
           <div className="w-12 sm:w-20 md:w-24 flex flex-col items-center justify-center bg-black/50 border-x border-white/10 flex-shrink-0">
             <div className="text-xl sm:text-3xl md:text-4xl font-black text-white/90 mb-2 sm:mb-4 tracking-widest">VS</div>
             
-            {/* Timer */}
-            {isLive && debateState?.turnStartedAt && (
+            {/* Timer - Show prep countdown during PREP, turn timer during LIVE/WAITING */}
+            {debateRoom.status === DebateStatus.PREP && prepCountdown !== null ? (
+              <PrepCountdownTimer secondsRemaining={prepCountdown} />
+            ) : (isLive || debateRoom.status === DebateStatus.WAITING) && (
               <div className="bg-white/10 rounded-lg p-1.5 sm:p-2 text-center">
                 <Clock className="h-3 w-3 sm:h-5 sm:w-5 text-white/70 mx-auto mb-1" />
                 <DebateTurnTimer
                   turnDurationSeconds={debateRoom.turnDurationSeconds}
-                  turnStartedAt={debateState.turnStartedAt}
-                  isActive={!!debateState.currentSpeakerId}
+                  turnStartedAt={debateState?.turnStartedAt || null}
+                  isActive={isLive && !!debateState?.currentSpeakerId && !!debateState?.turnStartedAt}
                   className="bg-transparent border-none p-0 text-white text-sm sm:text-lg font-mono"
                 />
               </div>
@@ -940,7 +1031,36 @@ function DebateLiveContent({
               </div>
             )}
 
-            {/* Moderator Controls */}
+            {/* Start Debate Button (WAITING status) */}
+            {isModerator && debateRoom.status === DebateStatus.WAITING && onStartDebate && (
+              <div className="mt-auto pb-2 sm:pb-4 flex flex-col gap-1.5 sm:gap-2">
+                <Button
+                  onClick={onStartDebate}
+                  size="sm"
+                  disabled={!canStartDebate || isStartingDebate}
+                  className="text-[10px] sm:text-xs bg-green-600 hover:bg-green-700 text-white h-7 sm:h-8 px-2 sm:px-3"
+                >
+                  {isStartingDebate ? (
+                    <>
+                      <Loader2 className="h-3 w-3 sm:mr-1 animate-spin" />
+                      <span className="hidden sm:inline">Starting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Play className="h-3 w-3 sm:mr-1" />
+                      <span className="hidden sm:inline">Start Debate</span>
+                    </>
+                  )}
+                </Button>
+                {!canStartDebate && (
+                  <p className="text-[8px] sm:text-[10px] text-white/50 text-center px-1">
+                    Need at least 1 participant per team
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Moderator Controls (LIVE status) */}
             {isModerator && isLive && (
               <div className="mt-auto pb-2 sm:pb-4 flex flex-col gap-1.5 sm:gap-2">
                 <Button
@@ -1368,44 +1488,39 @@ function DebateLiveContent({
         </Button>
 
         {/* Mic Toggle */}
-        <Button
-          onClick={async () => {
-            try {
-              const participant = room?.localParticipant;
-              if (!participant) {
-                console.warn('[DebateRoom] No local participant');
-                return;
-              }
-              if (room?.state !== 'connected') {
-                console.warn('[DebateRoom] Room not connected yet');
-                alert('Please wait for the room to connect before enabling microphone.');
-                return;
-              }
-              const newState = !participant.isMicrophoneEnabled;
-              console.log('[DebateRoom] Toggling mic to:', newState);
-              await participant.setMicrophoneEnabled(newState);
-            } catch (err) {
-              console.error('[DebateRoom] Mic error:', err);
-              const error = err as Error;
-              alert(`Microphone error: ${error?.message || 'Unknown error'}`);
+        <div className="relative">
+          <Button
+            onClick={toggleMicrophone}
+            disabled={!isRoomConnected || !canToggleMic}
+            variant="ghost"
+            size="lg"
+            className={cn(
+              'h-10 w-10 sm:h-12 sm:w-12 rounded-full transition-all p-0',
+              (!isRoomConnected || !canToggleMic) && 'opacity-50 cursor-not-allowed',
+              localParticipant?.isMicrophoneEnabled
+                ? 'bg-white/10 hover:bg-white/20 text-white'
+                : 'bg-red-500 hover:bg-red-600 text-white',
+              isMicLocked && 'ring-2 ring-yellow-500/50'
+            )}
+            title={
+              isMicLocked && micLockReason
+                ? micLockReason
+                : localParticipant?.isMicrophoneEnabled
+                ? 'Mute'
+                : 'Unmute'
             }
-          }}
-          disabled={!isRoomConnected}
-          variant="ghost"
-          size="lg"
-          className={cn(
-            'h-10 w-10 sm:h-12 sm:w-12 rounded-full transition-all p-0',
-            !isRoomConnected && 'opacity-50 cursor-not-allowed',
-            localParticipant?.isMicrophoneEnabled
-              ? 'bg-white/10 hover:bg-white/20 text-white'
-              : 'bg-red-500 hover:bg-red-600 text-white'
+          >
+            {localParticipant?.isMicrophoneEnabled 
+              ? <Mic className="h-5 w-5 sm:h-6 sm:w-6" /> 
+              : <MicOff className="h-5 w-5 sm:h-6 sm:w-6" />}
+          </Button>
+          {isMicLocked && (
+            <div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-500 rounded-full border-2 border-[#202124]" />
           )}
-          title={localParticipant?.isMicrophoneEnabled ? 'Mute' : 'Unmute'}
-        >
-          {localParticipant?.isMicrophoneEnabled 
-            ? <Mic className="h-5 w-5 sm:h-6 sm:w-6" /> 
-            : <MicOff className="h-5 w-5 sm:h-6 sm:w-6" />}
-        </Button>
+          {isUserTurn && isLive && (
+            <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-[#202124] animate-pulse" />
+          )}
+        </div>
 
         {/* Audio Output Toggle */}
         <Button

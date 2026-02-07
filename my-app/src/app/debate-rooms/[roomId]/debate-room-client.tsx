@@ -145,6 +145,14 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
     onParticipantLeft: (event) => {
       showSuccess('Participant Left', `A participant left the debate`);
     },
+    onMicEnabled: (event) => {
+      // Mic control hook will handle this
+      console.log('[DebateRoomClient] Mic enabled:', event);
+    },
+    onMicDisabled: (event) => {
+      // Mic control hook will handle this
+      console.log('[DebateRoomClient] Mic disabled:', event);
+    },
   });
 
   // Join socket room when connected
@@ -252,12 +260,19 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
     );
   }
 
-  // Live Debate View
+  // Live Debate View - Allow entering when WAITING, LIVE, or PREP
   if (
-    (room.status === DebateStatus.LIVE || room.status === DebateStatus.PREP) &&
+    (room.status === DebateStatus.WAITING || room.status === DebateStatus.LIVE || room.status === DebateStatus.PREP) &&
     livekitData &&
     (isParticipant || isModerator)
   ) {
+    // Check if both teams have at least 1 participant
+    const forTeam = room.teams.find(t => t.side === DebateSide.FOR);
+    const againstTeam = room.teams.find(t => t.side === DebateSide.AGAINST);
+    const forCount = forTeam?.participants.length || 0;
+    const againstCount = againstTeam?.participants.length || 0;
+    const canStart = forCount >= 1 && againstCount >= 1;
+
     return (
       <DebateLiveRoom
         room={room}
@@ -274,6 +289,9 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
         onSendTeamChat={sendTeamChat}
         onAdvanceTurn={advanceTurn}
         onEndDebate={endDebate}
+        onStartDebate={room.status === DebateStatus.WAITING && isModerator ? handleStartPrep : undefined}
+        canStartDebate={canStart}
+        isStartingDebate={startPrepPhase.isPending}
         getToken={getToken}
       />
     );
