@@ -297,7 +297,7 @@ function BrowsePageContent() {
             </div>
             
             {/* Debate Rooms Link */}
-            <Link href="/debate-rooms">
+            <Link href="/debateroom">
               <Button 
                 variant="outline" 
                 className="h-11 rounded-2xl border-muted bg-muted/20 hover:bg-muted/40 text-sm font-semibold"
