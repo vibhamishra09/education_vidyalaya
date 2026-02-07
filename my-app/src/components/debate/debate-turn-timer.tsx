@@ -48,11 +48,14 @@ export function DebateTurnTimer({
       }
     };
 
+    // Update immediately
     updateTimer();
+    
+    // Then update every second
     const interval = setInterval(updateTimer, 1000);
 
     return () => clearInterval(interval);
-  }, [turnStartedAt, turnDurationSeconds, isActive, onTimeUp, hasCalledTimeUp]);
+  }, [turnStartedAt, turnDurationSeconds, isActive, onTimeUp]);
 
   const minutes = Math.floor(timeRemaining / 60);
   const seconds = timeRemaining % 60;

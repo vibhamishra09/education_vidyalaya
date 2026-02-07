@@ -56,6 +56,7 @@ export interface DebateRoomFilters {
   status?: DebateStatus;
   page?: number;
   limit?: number;
+  trending?: boolean;
 }
 
 // Response Types
@@ -168,6 +169,8 @@ export interface DebateState {
   currentTurnIndex: number;
   currentSpeakerId: string | null;
   turnStartedAt: string | null;
+  turnEndTime?: number | null;
+  prepEndTime?: number | null;
   turnDurationSeconds: number;
   prepTimeSeconds: number;
   teams: {
@@ -196,9 +199,12 @@ export interface TurnEndedEvent {
   nextSide?: DebateSide;
 }
 
+export interface PrepStartedEvent {
+  prepEndTime: number;
+}
+
 export interface PrepCountdownEvent {
   secondsRemaining: number;
-  startsAt: string;
 }
 
 export interface BuzzerPressedEvent {
@@ -239,6 +245,16 @@ export interface ParticipantLeftEvent {
   userId: string;
   side: DebateSide;
   teamSize: { FOR: number; AGAINST: number };
+}
+
+export interface MicEnabledEvent {
+  participantId: string;
+  reason: 'moderator' | 'turn' | 'manual';
+}
+
+export interface MicDisabledEvent {
+  participantId: string;
+  reason: 'turn_ended' | 'debate_ended' | 'manual';
 }
 
 // LiveKit Token Response
