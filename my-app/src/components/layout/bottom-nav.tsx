@@ -15,7 +15,7 @@ export function BottomNav() {
   }
 
   // Hide navigation when in video session (mobile view)
-  if (pathname?.startsWith('/rooms/') || pathname?.startsWith('/sessions/') || pathname?.startsWith('/studyroom/')) {
+  if (pathname?.startsWith('/rooms/') || pathname?.startsWith('/sessions/') || pathname?.startsWith('/studyroom/') || pathname?.startsWith('/debateroom/')) {
     return null;
   }
 
