@@ -62,7 +62,6 @@ import {
   DebateTeamChat,
   DebateResultsDisplay,
 } from '@/components/debate';
-import { DebateLiveRoom } from './debate-live-room';
 import { ShareButton } from '@/components/share/share-button';
 
 interface DebateRoomClientProps {
@@ -260,43 +259,6 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
     );
   }
 
-  // Live Debate View - Allow entering when WAITING, LIVE, or PREP
-  if (
-    (room.status === DebateStatus.WAITING || room.status === DebateStatus.LIVE || room.status === DebateStatus.PREP) &&
-    livekitData &&
-    (isParticipant || isModerator)
-  ) {
-    // Check if both teams have at least 1 participant
-    const forTeam = room.teams.find(t => t.side === DebateSide.FOR);
-    const againstTeam = room.teams.find(t => t.side === DebateSide.AGAINST);
-    const forCount = forTeam?.participants.length || 0;
-    const againstCount = againstTeam?.participants.length || 0;
-    const canStart = forCount >= 1 && againstCount >= 1;
-
-    return (
-      <DebateLiveRoom
-        room={room}
-        livekitToken={livekitData.token}
-        livekitServerUrl={livekitData.serverUrl}
-        userRole={userRole}
-        userSide={userSide}
-        userId={user?.id}
-        debateState={debateState}
-        teamChatMessages={teamChatMessages}
-        buzzerQueue={buzzerQueue}
-        prepCountdown={prepCountdown}
-        onPressBuzzer={pressBuzzer}
-        onSendTeamChat={sendTeamChat}
-        onAdvanceTurn={advanceTurn}
-        onEndDebate={endDebate}
-        onStartDebate={room.status === DebateStatus.WAITING && isModerator ? handleStartPrep : undefined}
-        canStartDebate={canStart}
-        isStartingDebate={startPrepPhase.isPending}
-        getToken={getToken}
-      />
-    );
-  }
-
   // Status display
   const statusConfig: Record<DebateStatus, { color: string; label: string }> = {
     [DebateStatus.WAITING]: { color: 'bg-yellow-500', label: 'Waiting for Participants' },
@@ -481,13 +443,17 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
               </Card>
             )}
 
-            {/* Enter Debate Room Button (for LIVE/PREP) */}
-            {(room.status === DebateStatus.LIVE || room.status === DebateStatus.PREP) && livekitData && (
+            {/* Enter Debate Room Button (for WAITING/LIVE/PREP) */}
+            {(room.status === DebateStatus.WAITING || 
+              room.status === DebateStatus.LIVE || 
+              room.status === DebateStatus.PREP) && (
               <Card>
                 <CardHeader>
                   <CardTitle>Enter Debate Room</CardTitle>
                   <CardDescription>
-                    {room.status === DebateStatus.PREP 
+                    {room.status === DebateStatus.WAITING
+                      ? 'Enter the debate room to join the video call and wait for the debate to start.'
+                      : room.status === DebateStatus.PREP 
                       ? 'Preparation phase is active. Join to prepare with your team.'
                       : 'The debate is live. Join to participate or watch.'}
                   </CardDescription>
@@ -496,8 +462,7 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
                   <Button
                     className="w-full font-semibold text-sm h-10 shadow-md shadow-primary/20 transition-all hover:scale-[1.01] active:scale-[0.99] rounded-lg bg-green-600 hover:bg-green-700 text-white"
                     onClick={() => {
-                      // Force refetch to trigger Live Debate View
-                      refetch();
+                      router.push(`/rooms/debateroom/${roomId}`);
                     }}
                   >
                     <Play className="h-3.5 w-3.5 mr-2" />
