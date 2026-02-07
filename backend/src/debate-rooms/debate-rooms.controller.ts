@@ -36,6 +36,7 @@ export class DebateRoomsController {
       query.status as any,
       query.page || 1,
       query.limit || 10,
+      query.trending,
     );
   }
 

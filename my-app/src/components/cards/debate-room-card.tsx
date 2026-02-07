@@ -2,249 +2,297 @@
 
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Play, Users, UserPlus } from "lucide-react";
+import { Users, Loader2, Share2, Play, Calendar, Clock, Swords, Trophy } from "lucide-react";
 import { motion } from "framer-motion";
-import { useRequireAuth } from "@/hooks/use-require-auth";
+import { ShareButton } from "@/components/share/share-button";
 import { cn } from "@/lib/utils";
+import { getRelativeTimeString } from "@/lib/utils/date-time";
+import { DebateRoom, DebateStatus } from "@/types/debate.types";
+import { useRouter } from "next/navigation";
+import { useRequireAuth } from "@/hooks/use-require-auth";
+
+type ButtonVariant = "default" | "outline" | "secondary" | "ghost" | "destructive" | "link";
 
 interface DebateRoomCardProps {
-  status: "open" | "in_progress" | "completed";
-  title: string;
-  watchers: number;
-  participants: {
-    for: string | null;
-    against: string | null;
-  };
+  room: DebateRoom;
+  actionLabel?: string;
+  actionVariant?: ButtonVariant;
+  onAction?: () => void;
+  actionDisabled?: boolean;
+  actionLoading?: boolean;
 }
 
 export function DebateRoomCard({
-  status,
-  title,
-  watchers,
-  participants,
+  room,
+  actionLabel,
+  actionVariant,
+  onAction,
+  actionDisabled = false,
+  actionLoading = false,
 }: DebateRoomCardProps) {
+  const router = useRouter();
   const requireAuth = useRequireAuth();
-
-  // Helper to determine status styling
-  const getStatusVisuals = (s: string) => {
-    switch (s) {
-      case "in_progress":
-        return {
-          label: "LIVE",
-          dotColor: "bg-red-500",
-          badgeStyle:
-            "bg-red-100/50 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800",
-        };
-      case "completed":
-        return {
-          label: "ENDED",
-          dotColor: "bg-muted-foreground",
-          badgeStyle:
-            "bg-secondary text-muted-foreground border-border dark:bg-secondary/50",
-        };
+  
+  // Map status to display labels
+  const getStatusDisplay = () => {
+    switch (room.status) {
+      case DebateStatus.CANCELLED:
+        return { label: 'CANCELLED', isLive: false, isEnded: true, isCancelled: true };
+      case DebateStatus.WAITING:
+        return { label: 'SCHEDULED', isLive: false, isEnded: false, isCancelled: false };
+      case DebateStatus.PREP:
+      case DebateStatus.LIVE:
+        return { label: 'LIVE', isLive: true, isEnded: false, isCancelled: false };
+      case DebateStatus.PROCESSED:
+      case DebateStatus.ENDED:
+        return { label: 'ENDED', isLive: false, isEnded: true, isCancelled: false };
       default:
-        return {
-          label: "OPEN",
-          dotColor: "bg-emerald-500",
-          badgeStyle:
-            "bg-emerald-100/50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800",
-        };
+        return { label: 'OPEN', isLive: false, isEnded: false, isCancelled: false };
     }
   };
 
-  const statusVis = getStatusVisuals(status);
+  const statusDisplay = getStatusDisplay();
+  const statusIsLive = statusDisplay.isLive;
+  const statusIsEnded = statusDisplay.isEnded;
+  const statusIsCancelled = statusDisplay.isCancelled;
+  
+  // Calculate participant counts
+  const forTeam = room.teams.find(t => t.side === 'FOR');
+  const againstTeam = room.teams.find(t => t.side === 'AGAINST');
+  const forCount = forTeam?.participants.filter(p => p.status === 'ACTIVE').length || 0;
+  const againstCount = againstTeam?.participants.filter(p => p.status === 'ACTIVE').length || 0;
+  const totalParticipants = forCount + againstCount;
+  const maxParticipants = room.maxParticipants * 2;
+  
+  const hostInitial = room.host.name?.charAt(0) || "U";
+  
+  // Format date/time if available
+  const formattedDateTime = room.scheduledAt ? getRelativeTimeString(room.scheduledAt) : null;
+  
+  // Get prize pool if configured (will be added in backend)
+  const prizePool = (room as DebateRoom & { prizePool?: number | null }).prizePool || null;
+
+  // Dynamic Theme Colors based on Status
+  const theme = statusIsCancelled
+    ? {
+        border: "border-red-200 dark:border-red-900",
+        hoverBorder: "hover:border-red-300 dark:hover:border-red-800",
+        gradient: "from-card to-red-50/50 dark:to-red-950/20",
+        badge: "bg-red-500/10 text-red-700 border border-red-500/20 dark:text-red-400",
+        titleHover: "group-hover:text-red-700 dark:group-hover:text-red-400",
+        avatarBorder: "border-red-200 dark:border-red-900",
+        avatarFallback: "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300",
+        button: "bg-red-500/10 text-red-700 hover:bg-red-500/20 border border-red-500/20 dark:text-red-400 shadow-sm",
+        iconColor: "text-red-600 dark:text-red-400"
+      }
+    : statusIsLive
+    ? {
+        border: "border-red-200 dark:border-red-900",
+        hoverBorder: "hover:border-red-300 dark:hover:border-red-800",
+        gradient: "from-card to-red-50/50 dark:to-red-950/20",
+        badge: "bg-red-500/10 text-red-700 border border-red-500/20 dark:text-red-400",
+        titleHover: "group-hover:text-red-700 dark:group-hover:text-red-400",
+        avatarBorder: "border-red-200 dark:border-red-900",
+        avatarFallback: "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300",
+        button: "bg-red-500/10 text-red-700 hover:bg-red-500/20 border border-red-500/20 dark:text-red-400 shadow-sm",
+        iconColor: "text-red-600 dark:text-red-400"
+      }
+    : statusIsEnded
+    ? {
+        border: "border-muted-foreground/20 dark:border-muted-foreground/40",
+        hoverBorder: "hover:border-muted-foreground/30 dark:hover:border-muted-foreground/50",
+        gradient: "from-card to-muted/20 dark:to-muted/10",
+        badge: "bg-secondary text-muted-foreground border-border dark:bg-secondary/50",
+        titleHover: "group-hover:text-muted-foreground",
+        avatarBorder: "border-muted-foreground/20 dark:border-muted-foreground/40",
+        avatarFallback: "bg-muted text-muted-foreground dark:bg-muted/50",
+        button: "bg-secondary text-muted-foreground hover:bg-secondary/80 border border-border shadow-sm",
+        iconColor: "text-muted-foreground"
+      }
+    : {
+        border: "border-green-200 dark:border-green-900",
+        hoverBorder: "hover:border-green-300 dark:hover:border-green-800",
+        gradient: "from-card to-green-50/50 dark:to-green-950/20",
+        badge: "bg-green-500/10 text-green-700 border border-green-500/20 dark:text-green-400",
+        titleHover: "group-hover:text-green-700 dark:group-hover:text-green-400",
+        avatarBorder: "border-green-200 dark:border-green-900",
+        avatarFallback: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
+        button: "bg-green-500/10 text-green-700 hover:bg-green-500/20 border border-green-500/20 dark:text-green-400 shadow-sm",
+        iconColor: "text-green-600 dark:text-green-400"
+      };
+
+  const handleCardClick = (e: React.MouseEvent) => {
+    // Don't navigate if clicking on button or share button
+    if ((e.target as HTMLElement).closest('button')) {
+      return;
+    }
+    router.push(`/debate-rooms/${room.id}`);
+  };
+
+  const handleDefaultAction = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onAction) {
+      onAction();
+    } else {
+      requireAuth(() => {
+        router.push(`/debate-rooms/${room.id}`);
+      });
+    }
+  };
 
   return (
     <motion.div
-      whileHover={{ y: -4 }}
-      transition={{ type: "spring", stiffness: 300, damping: 25 }}
-      className="h-full"
+      whileHover={{ y: -4, scale: 1.01 }}
+      transition={{ duration: 0.2 }}
+      className="h-full group"
     >
-      <Card className="group relative flex h-full flex-col overflow-hidden border-border bg-card p-3 transition-all duration-300 hover:border-emerald-200 hover:shadow-lg rounded-xl dark:hover:border-emerald-800">
+      <Card 
+        className={cn(
+          "h-full flex flex-col p-4 bg-gradient-to-br transition-all duration-300 border shadow-sm hover:shadow-lg cursor-pointer",
+          theme.gradient,
+          theme.border,
+          theme.hoverBorder
+        )}
+        onClick={handleCardClick}
+      >
         
-        {/* Header: Status & Watchers */}
-        <div className="mb-2 flex items-start justify-between">
-          <Badge
-            variant="outline"
-            className={cn(
-              "gap-1.5 px-2 py-1 text-xs font-bold tracking-wider rounded-md shadow-sm", // Increased text-[11px] -> text-xs
-              statusVis.badgeStyle
-            )}
-          >
-            <span className={cn("relative flex h-2 w-2")}>
-              {status === "in_progress" && (
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75"></span>
-              )}
-              <span
-                className={cn(
-                  "relative inline-flex h-2 w-2 rounded-full",
-                  statusVis.dotColor
-                )}
-              ></span>
-            </span>
-            {statusVis.label}
+        {/* Header: Category Badge & Status */}
+        <div className="flex items-center justify-between mb-3">
+          <Badge variant="secondary" className={cn(
+            "text-xs font-bold px-2 py-0.5 transition-colors uppercase tracking-wider rounded-lg border-0",
+            theme.badge
+          )}>
+            <Swords className="h-3 w-3 mr-1" />
+            Debate
           </Badge>
-
-          {/* Watchers Badge */}
-          <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md border border-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900">
-            <Users className="h-3.5 w-3.5" />
-            <span>{watchers}</span>
+          
+          <div className={cn("flex items-center gap-2", theme.iconColor)}>
+            <span className="relative flex h-2 w-2">
+              {statusIsLive && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>}
+              <span className={cn(
+                "relative inline-flex rounded-full h-2 w-2",
+                statusIsLive ? "bg-red-500" : statusIsEnded ? "bg-muted-foreground" : "bg-emerald-500"
+              )}></span>
+            </span>
+            <span className="text-[11px] font-extrabold tracking-widest uppercase">
+              {statusDisplay.label}
+            </span>
           </div>
         </div>
 
-        {/* Title */}
-        <div className="mb-2 flex-grow">
-          {/* Increased text-sm -> text-base for standard readability */}
-          <h3 className="line-clamp-2 text-base font-bold leading-snug tracking-tight text-foreground group-hover:text-emerald-600 transition-colors duration-300 dark:group-hover:text-emerald-400">
-            {title}
+        {/* Main Content: Title & Description */}
+        <div className="flex-1 space-y-1.5 mb-4">
+          <h3 className={cn("text-2xl font-bold leading-tight text-foreground tracking-tight transition-colors line-clamp-2", theme.titleHover)}>
+            {room.topic}
           </h3>
-        </div>
-
-        {/* Debate Grid */}
-        <div className="mb-2 flex flex-col gap-2">
+          {room.description && (
+            <p className="text-sm text-muted-foreground leading-relaxed line-clamp-1">
+              {room.description}
+            </p>
+          )}
           
-          {/* Proposition */}
-          <ParticipantSlot
-            side="for"
-            name={participants.for}
-            isFilled={!!participants.for}
-          />
-
-          {/* VS Divider */}
-          <div className="relative flex items-center justify-center -my-1.5 z-10">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t border-border/60" />
-            </div>
-            <div className="relative bg-card px-2">
-              <div className="flex items-center justify-center h-5 w-5 rounded-full bg-emerald-50 border border-emerald-100 text-[9px] font-bold text-emerald-600 shadow-sm dark:bg-emerald-950/40 dark:border-emerald-900 dark:text-emerald-300">
-                VS
+          {/* Date & Time Display */}
+          {formattedDateTime && (
+            <div className="flex flex-wrap items-center gap-2 pt-2">
+              <div className="flex items-center gap-1.5 bg-secondary/30 px-2.5 py-1 rounded-md border border-secondary/50">
+                <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-xs font-medium text-muted-foreground">
+                  {formattedDateTime}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 bg-secondary/30 px-2.5 py-1 rounded-md border border-secondary/50">
+                <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-xs font-medium text-muted-foreground">
+                  {room.turnDurationSeconds}s turns
+                </span>
               </div>
             </div>
-          </div>
+          )}
 
-          {/* Opposition */}
-          <ParticipantSlot
-            side="against"
-            name={participants.against}
-            isFilled={!!participants.against}
-          />
+          {/* Prize Pool Display */}
+          {prizePool && (
+            <div className="flex items-center gap-1.5 bg-yellow-50 dark:bg-yellow-950/20 px-2.5 py-1 rounded-md border border-yellow-200 dark:border-yellow-800">
+              <Trophy className="h-3.5 w-3.5 text-yellow-600 dark:text-yellow-400" />
+              <span className="text-xs font-medium text-yellow-700 dark:text-yellow-300">
+                {prizePool} Coins Prize Pool
+              </span>
+            </div>
+          )}
+
+          {/* Team Participant Counts */}
+          <div className="flex items-center gap-3 pt-2">
+            <div className="flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400">
+              <Users className="h-3.5 w-3.5" />
+              <span className="font-semibold">FOR: {forCount}</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-xs text-orange-600 dark:text-orange-400">
+              <Users className="h-3.5 w-3.5" />
+              <span className="font-semibold">AGAINST: {againstCount}</span>
+            </div>
+          </div>
         </div>
 
-        {/* Footer Actions */}
-        <div className="mt-auto pt-1">
-          {status === "open" ? (
-            <Button
-              className="w-full rounded-lg font-semibold shadow-sm h-9 text-sm bg-green-100 text-green-800 hover:bg-green-200 border border-green-300" // Increased h-8 -> h-9, text-xs -> text-sm
-              size="sm"
-              variant="default"
-              onClick={() => requireAuth(() => console.log("Join"))}
-            >
-              Join Debate
-            </Button>
-          ) : (
+        {/* Footer: Host, Participants & Actions */}
+        <div className="flex flex-wrap gap-y-3 items-center justify-between pt-3 border-t border-dashed border-border/60 mt-auto">
+          
+          {/* Host & Participant Info */}
+          <div className="flex flex-col gap-1.5">
+             {/* Host */}
+            <div className="flex items-center gap-2">
+              <Avatar className={cn("h-7 w-7 border transition-colors", theme.avatarBorder)}>
+                <AvatarImage src={room.host.avatar || undefined} />
+                <AvatarFallback className={cn("text-xs font-bold", theme.avatarFallback)}>
+                    {hostInitial}
+                </AvatarFallback>
+              </Avatar>
+              <span className="text-sm font-semibold text-muted-foreground truncate max-w-[100px]">
+                {room.host.name}
+              </span>
+            </div>
+             
+             {/* Participants */}
+             <div className="flex items-center gap-1.5 text-muted-foreground/80">
+               <Users className="h-3.5 w-3.5" />
+               <span className="text-xs font-bold tabular-nums">
+                 {totalParticipants}/{maxParticipants} joined
+               </span>
+             </div>
+          </div>
+
+          {/* Actions: Share & CTA Button */}
+          <div className="flex items-center gap-2">
+             <ShareButton
+                url={`${typeof window !== "undefined" ? window.location.origin : ""}/debate-rooms/${room.id}`}
+                title={room.topic}
+                description={room.description || undefined}
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all"
+             />
+            
             <Button
               className={cn(
-                "w-full rounded-lg font-semibold shadow-sm h-9 text-sm",
-                status === "in_progress" 
-                  ? "bg-red-100 text-red-700 hover:bg-red-200 border border-red-300" 
-                  : ""
+                "h-9 pl-3 pr-4 text-xs font-bold rounded-full shadow-md transition-all",
+                actionVariant ? "" : theme.button
               )}
-              size="sm"
-              variant={status === "in_progress" ? "default" : "secondary"}
-              onClick={() => requireAuth(() => console.log("Watch"))}
+              variant={actionVariant || "default"}
+              onClick={handleDefaultAction}
+              disabled={actionDisabled || actionLoading}
             >
-              <Play className="mr-1.5 h-3.5 w-3.5" />
-              {status === "in_progress" ? "Watch Live" : "Replay"}
+              {actionLoading ? (
+                  <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+              ) : statusIsLive ? (
+                  <Play className="h-3.5 w-3.5 mr-1.5 fill-current" />
+              ) : (
+                  <Calendar className="h-3.5 w-3.5 mr-1.5" />
+              )}
+              {actionLoading ? "Wait" : (actionLabel || (statusIsLive ? "Join" : statusIsEnded ? "View Results" : "Join"))}
             </Button>
-          )}
+          </div>
         </div>
       </Card>
     </motion.div>
-  );
-}
-
-// Participant Slot
-function ParticipantSlot({
-  side,
-  name,
-  isFilled,
-}: {
-  side: "for" | "against";
-  name: string | null;
-  isFilled: boolean;
-}) {
-  const isFor = side === "for";
-
-  const theme = isFor
-    ? {
-        bg: "bg-blue-50/50 dark:bg-blue-950/20",
-        border: "border-blue-200 dark:border-blue-800",
-        text: "text-blue-700 dark:text-blue-300",
-        avatar:
-          "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200",
-        label: "PRO",
-      }
-    : {
-        bg: "bg-orange-50/50 dark:bg-orange-950/20",
-        border: "border-orange-200 dark:border-orange-800",
-        text: "text-orange-700 dark:text-orange-300",
-        avatar:
-          "bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-200",
-        label: "CON",
-      };
-
-  return (
-    <div
-      className={cn(
-        "relative flex items-center gap-2 rounded-lg border px-2.5 py-1.5 transition-all duration-300 w-full",
-        isFilled
-          ? cn("border-opacity-100 shadow-sm", theme.bg, theme.border)
-          : "border-dashed border-border bg-muted/20"
-      )}
-    >
-      <div className="shrink-0">
-        {isFilled ? (
-          <div
-            className={cn(
-              "h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold ring-1 ring-background", // Increased h-7 -> h-8
-              theme.avatar
-            )}
-          >
-            {name?.charAt(0).toUpperCase()}
-          </div>
-        ) : (
-          <div className="h-8 w-8 rounded-full border border-dashed border-muted-foreground/40 flex items-center justify-center bg-background/50">
-             {/* Increased h-7 -> h-8 */}
-            <UserPlus className="h-4 w-4 text-muted-foreground/50" />
-          </div>
-        )}
-      </div>
-
-      <div className="flex-1 min-w-0 flex flex-col justify-center">
-        <div className="flex items-center justify-between">
-          <span
-            className={cn(
-              "text-[10px] font-extrabold uppercase tracking-wider opacity-70", // Increased text-[9px] -> text-[10px]
-              theme.text
-            )}
-          >
-            {theme.label}
-          </span>
-        </div>
-
-        {isFilled ? (
-          <span className="truncate text-sm font-semibold text-foreground">
-             {/* Increased text-xs -> text-sm */}
-            {name}
-          </span>
-        ) : (
-          <span className="text-sm font-medium text-muted-foreground/70 italic">
-             {/* Increased text-xs -> text-sm */}
-            Spot Open
-          </span>
-        )}
-      </div>
-    </div>
   );
 }

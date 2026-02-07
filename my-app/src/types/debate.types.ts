@@ -56,6 +56,7 @@ export interface DebateRoomFilters {
   status?: DebateStatus;
   page?: number;
   limit?: number;
+  trending?: boolean;
 }
 
 // Response Types
