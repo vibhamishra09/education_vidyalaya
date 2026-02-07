@@ -10,6 +10,7 @@ import {
   DebateSide,
   TurnStartedEvent,
   TurnEndedEvent,
+  PrepStartedEvent,
   PrepCountdownEvent,
   BuzzerPressedEvent,
   TeamChatMessage,
@@ -167,7 +168,24 @@ export function useDebateSocket({
         newSocket.on('debate:state_sync', (state: DebateState) => {
           if (mounted) {
             setDebateState(state);
+            // Calculate prep countdown from prepEndTime if in PREP phase
+            if (state.status === DebateStatus.PREP && state.prepEndTime) {
+              const now = Date.now();
+              const remaining = Math.max(0, Math.ceil((state.prepEndTime - now) / 1000));
+              setPrepCountdown(remaining);
+            } else if (state.status !== DebateStatus.PREP) {
+              setPrepCountdown(null);
+            }
             callbacksRef.current.onStateSync?.(state);
+          }
+        });
+
+        newSocket.on('debate:prep_started', (event: PrepStartedEvent) => {
+          if (mounted) {
+            // Calculate initial prep countdown
+            const now = Date.now();
+            const remaining = Math.max(0, Math.ceil((event.prepEndTime - now) / 1000));
+            setPrepCountdown(remaining);
           }
         });
 
@@ -221,10 +239,19 @@ export function useDebateSocket({
             setDebateState((prev) =>
               prev ? { ...prev, status: DebateStatus.ENDED } : prev
             );
+            setPrepCountdown(null);
           }
           callbacksRef.current.onDebateEnded?.(event);
           // Invalidate queries
           queryClient.invalidateQueries({ queryKey: debateRoomKeys.detail(roomId) });
+        });
+
+        newSocket.on('debate:debate_started', () => {
+          if (mounted) {
+            setPrepCountdown(null);
+            // Refetch room to get updated status
+            queryClient.invalidateQueries({ queryKey: debateRoomKeys.detail(roomId) });
+          }
         });
 
         newSocket.on('debate:participant_joined', (event: ParticipantJoinedEvent) => {

@@ -68,6 +68,107 @@ interface DebateRoomClientProps {
   roomId: string;
 }
 
+// Simple inline timer component for status display
+function TurnTimerDisplay({
+  turnDurationSeconds,
+  turnStartedAt,
+}: {
+  turnDurationSeconds: number;
+  turnStartedAt: string;
+}) {
+  const [timeRemaining, setTimeRemaining] = useState(turnDurationSeconds);
+
+  useEffect(() => {
+    if (!turnStartedAt) {
+      setTimeRemaining(turnDurationSeconds);
+      return;
+    }
+
+    const updateTimer = () => {
+      const startTime = new Date(turnStartedAt).getTime();
+      const now = Date.now();
+      const elapsed = Math.floor((now - startTime) / 1000);
+      const remaining = Math.max(0, turnDurationSeconds - elapsed);
+      setTimeRemaining(remaining);
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [turnStartedAt, turnDurationSeconds]);
+
+  const minutes = Math.floor(timeRemaining / 60);
+  const seconds = timeRemaining % 60;
+  const formattedTime = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  const isCritical = timeRemaining <= 10;
+
+  return (
+    <div className="text-right">
+      <div className="flex flex-col items-end gap-1">
+        <div className="flex items-center gap-1.5">
+          <Clock className={cn('h-3.5 w-3.5', isCritical && 'text-red-500 animate-pulse')} />
+          <span
+            className={cn(
+              'text-lg font-mono font-bold tabular-nums',
+              isCritical && 'text-red-500'
+            )}
+          >
+            {formattedTime}
+          </span>
+        </div>
+        <span className="text-xs text-muted-foreground">Time Remaining</span>
+      </div>
+    </div>
+  );
+}
+
+// Prep phase timer component
+function PrepTimerDisplay({ secondsRemaining: initialSeconds }: { secondsRemaining: number }) {
+  const [secondsRemaining, setSecondsRemaining] = useState(initialSeconds);
+
+  useEffect(() => {
+    // Reset when prop changes
+    setSecondsRemaining(initialSeconds);
+  }, [initialSeconds]);
+
+  useEffect(() => {
+    if (secondsRemaining <= 0) return;
+
+    const interval = setInterval(() => {
+      setSecondsRemaining((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [secondsRemaining]);
+
+  const minutes = Math.floor(secondsRemaining / 60);
+  const seconds = secondsRemaining % 60;
+  const formattedTime = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  const isCritical = secondsRemaining <= 30; // Show warning when less than 30 seconds
+
+  return (
+    <div className="text-center">
+      <div className="flex items-center justify-center gap-2">
+        <Clock className={cn('h-5 w-5 text-blue-600', isCritical && 'text-orange-500 animate-pulse')} />
+        <span
+          className={cn(
+            'text-3xl font-mono font-bold tabular-nums',
+            isCritical ? 'text-orange-500' : 'text-blue-600'
+          )}
+        >
+          {formattedTime}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
   const router = useRouter();
   const { user } = useUser();
@@ -78,6 +179,8 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [showLeaveDialog, setShowLeaveDialog] = useState(false);
   const [selectedSide, setSelectedSide] = useState<DebateSide | null>(null);
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [calculatedPrepCountdown, setCalculatedPrepCountdown] = useState<number | null>(null);
 
   // Queries
   const { data: room, isLoading, error, refetch } = useDebateRoomDetails(roomId);
@@ -160,6 +263,47 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
       socketJoinRoom();
     }
   }, [isConnected, room, socketJoinRoom]);
+
+  // Update current time every second
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Calculate prep countdown from prepEndTime if socket countdown is not available
+  useEffect(() => {
+    if (room?.status === DebateStatus.PREP && debateState?.prepEndTime) {
+      const updateCountdown = () => {
+        const now = Date.now();
+        const remaining = Math.max(0, Math.ceil((debateState.prepEndTime! - now) / 1000));
+        setCalculatedPrepCountdown(remaining);
+        
+        // If countdown reaches 0, refetch room to get updated status
+        if (remaining <= 0) {
+          setTimeout(() => refetch(), 500); // Small delay to ensure backend has updated
+        }
+      };
+
+      updateCountdown();
+      const interval = setInterval(updateCountdown, 1000);
+      return () => clearInterval(interval);
+    } else if (room?.status !== DebateStatus.PREP) {
+      setCalculatedPrepCountdown(null);
+    }
+  }, [room?.status, debateState?.prepEndTime, refetch]);
+
+  // Find current speaker
+  const currentSpeakerId = debateState?.currentSpeakerId || room?.currentSpeakerId;
+  const currentSpeaker = currentSpeakerId && room
+    ? room.teams
+        .flatMap((t) => t.participants)
+        .find((p) => p.user.clerkId === currentSpeakerId)
+    : null;
+  const currentSpeakerTeam = currentSpeaker && room
+    ? room.teams.find((t) => t.participants.some((p) => p.id === currentSpeaker.id))
+    : null;
 
   // Handlers
   const handleJoin = async (side?: DebateSide) => {
@@ -407,6 +551,128 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
                 </div>
               )}
             </div>
+
+            {/* Live Status Card - Time, Status, Current Speaker */}
+            {(room.status === DebateStatus.LIVE || 
+              room.status === DebateStatus.PREP || 
+              (room.status === DebateStatus.WAITING && currentSpeaker)) && (
+              <Card className="border-primary/20 shadow-lg">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Clock className="h-5 w-5 text-primary" />
+                    Live Status
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Current Time */}
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                    <div className="flex items-center gap-2">
+                      <Clock className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-medium text-muted-foreground">Current Time</span>
+                    </div>
+                    <span className="text-lg font-mono font-semibold">
+                      {currentTime.toLocaleTimeString()}
+                    </span>
+                  </div>
+
+                  {/* Debate Status */}
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                    <div className="flex items-center gap-2">
+                      <div
+                        className={cn(
+                          'w-3 h-3 rounded-full',
+                          room.status === DebateStatus.LIVE && 'bg-green-500 animate-pulse',
+                          room.status === DebateStatus.PREP && 'bg-blue-500',
+                          room.status === DebateStatus.WAITING && 'bg-yellow-500'
+                        )}
+                      />
+                      <span className="text-sm font-medium text-muted-foreground">Status</span>
+                    </div>
+                    <Badge
+                      variant={
+                        room.status === DebateStatus.LIVE
+                          ? 'default'
+                          : room.status === DebateStatus.PREP
+                          ? 'secondary'
+                          : 'outline'
+                      }
+                      className={cn(
+                        room.status === DebateStatus.LIVE && 'bg-green-600 hover:bg-green-700',
+                        room.status === DebateStatus.PREP && 'bg-blue-600 hover:bg-blue-700'
+                      )}
+                    >
+                      {statusConfig[room.status].label}
+                    </Badge>
+                  </div>
+
+                  {/* Current Speaker */}
+                  {currentSpeaker && currentSpeakerTeam && (
+                    <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-muted-foreground">Current Speaker</span>
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            'text-xs',
+                            currentSpeakerTeam.side === DebateSide.FOR
+                              ? 'border-green-500/30 text-green-600 bg-green-500/10'
+                              : 'border-red-500/30 text-red-600 bg-red-500/10'
+                          )}
+                        >
+                          {currentSpeakerTeam.side}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Avatar className="h-10 w-10 border-2 border-primary/20">
+                          <AvatarImage src={currentSpeaker.user.avatar || undefined} />
+                          <AvatarFallback className="bg-primary/10">
+                            {currentSpeaker.user.name?.[0]?.toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1">
+                          <p className="font-semibold text-base">{currentSpeaker.user.name}</p>
+                          <p className="text-xs text-muted-foreground">Team {currentSpeakerTeam.side}</p>
+                        </div>
+                        {debateState?.turnStartedAt && room.status === DebateStatus.LIVE && (
+                          <TurnTimerDisplay
+                            turnDurationSeconds={room.turnDurationSeconds}
+                            turnStartedAt={debateState.turnStartedAt}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Prep Phase Timer */}
+                  {room.status === DebateStatus.PREP && (prepCountdown !== null || calculatedPrepCountdown !== null) && (
+                    <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/30">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-4 w-4 text-blue-600" />
+                          <span className="text-sm font-medium text-blue-600">Preparation Time</span>
+                        </div>
+                        <Badge variant="outline" className="border-blue-500/30 text-blue-600 bg-blue-500/10">
+                          PREP PHASE
+                        </Badge>
+                      </div>
+                      <PrepTimerDisplay secondsRemaining={prepCountdown ?? calculatedPrepCountdown ?? 0} />
+                      <p className="text-xs text-blue-600/80 mt-2 text-center">
+                        Discuss strategy with your team
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Turn Timer (when no speaker but debate is live) */}
+                  {!currentSpeaker && room.status === DebateStatus.LIVE && (
+                    <div className="p-3 rounded-lg bg-muted/50">
+                      <p className="text-sm text-muted-foreground text-center">
+                        Waiting for next speaker
+                      </p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
             {/* Main Content */}
             {/* Results View */}
@@ -768,7 +1034,7 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
 
                     {/* Share Button */}
                     <ShareButton
-                      url={`${typeof window !== "undefined" ? window.location.origin : ""}/debate-rooms/${roomId}`}
+                      url={`${typeof window !== "undefined" ? window.location.origin : ""}/debateroom/${roomId}`}
                       title={room.topic}
                       description={room.description || ""}
                       variant="outline"

@@ -59,7 +59,7 @@ export default function DebateRoomPage() {
     roomId,
     enabled: !!room && room.status !== DebateStatus.CANCELLED,
     onDebateEnded: () => {
-      router.push(`/debate-rooms/${roomId}`);
+      router.push(`/debateroom/${roomId}`);
     },
   });
 
