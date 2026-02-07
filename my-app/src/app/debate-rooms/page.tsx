@@ -5,10 +5,8 @@ import { Navigation } from '@/components/layout/navigation';
 import { Footer } from '@/components/layout/footer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   Select,
   SelectContent,
@@ -30,20 +28,16 @@ import { Textarea } from '@/components/ui/textarea';
 import {
   Plus,
   Search,
-  Users,
-  Clock,
-  MessageSquare,
   Loader2,
   Swords,
-  ArrowRight,
+  X,
 } from 'lucide-react';
-import Link from 'next/link';
+import { DebateRoomCard } from '@/components/cards/debate-room-card';
 import { useDebateRooms, useCreateDebateRoom } from '@/hooks/use-debate-rooms';
 import { useToast } from '@/contexts/toast-context';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import {
-  DebateRoom,
   DebateStatus,
   TurnOrderType,
   DebateRoomFilters,
@@ -77,6 +71,7 @@ export default function DebateRoomsPage() {
   const [newTurnOrder, setNewTurnOrder] = useState<TurnOrderType>(TurnOrderType.FIFO);
   const [newDate, setNewDate] = useState('');
   const [newTime, setNewTime] = useState('');
+  const [scheduleForLater, setScheduleForLater] = useState(false);
 
   const createDebateRoom = useCreateDebateRoom();
 
@@ -86,13 +81,15 @@ export default function DebateRoomsPage() {
       return;
     }
 
-    if (!newDate || !newTime) {
-      showError('Validation Error', 'Date and time are required');
+    if (scheduleForLater && (!newDate || !newTime)) {
+      showError('Validation Error', 'Date and time are required when scheduling for later');
       return;
     }
 
-    // Combine date and time into ISO string
-    const scheduledAt = `${newDate}T${newTime}:00`;
+    // Combine date and time into ISO string if scheduling
+    const scheduledAt = scheduleForLater && newDate && newTime 
+      ? `${newDate}T${newTime}:00` 
+      : undefined;
 
     try {
       const room = await createDebateRoom.mutateAsync({
@@ -123,6 +120,7 @@ export default function DebateRoomsPage() {
     setNewTurnOrder(TurnOrderType.FIFO);
     setNewDate('');
     setNewTime('');
+    setScheduleForLater(false);
   };
 
   return (
@@ -131,13 +129,13 @@ export default function DebateRoomsPage() {
 
       <main className="flex-1 container mx-auto px-4 py-8">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
           <div>
-            <h1 className="text-3xl font-bold flex items-center gap-2">
+            <h1 className="text-3xl sm:text-4xl font-bold flex items-center gap-2">
               <Swords className="h-8 w-8 text-primary" />
               Debate Rooms
             </h1>
-            <p className="text-muted-foreground mt-1">
+            <p className="text-sm sm:text-base text-muted-foreground mt-1">
               Join structured debates and improve your argumentation skills
             </p>
           </div>
@@ -147,7 +145,7 @@ export default function DebateRoomsPage() {
             if (!open) resetForm();
           }}>
             <DialogTrigger asChild>
-              <Button>
+              <Button className="bg-green-500/10 text-green-700 hover:bg-green-500/20 border border-green-500/20 dark:text-green-400 shadow-sm">
                 <Plus className="h-4 w-4 mr-2" />
                 Create Debate
               </Button>
@@ -182,29 +180,46 @@ export default function DebateRoomsPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="date">Date *</Label>
-                    <Input
-                      id="date"
-                      type="date"
-                      value={newDate}
-                      onChange={(e) => setNewDate(e.target.value)}
-                      min={new Date().toISOString().split('T')[0]}
-                      required
+                {/* Schedule Toggle */}
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="scheduleForLater"
+                      checked={scheduleForLater}
+                      onChange={(e) => setScheduleForLater(e.target.checked)}
+                      className="h-4 w-4 rounded border-gray-300"
                     />
+                    <Label htmlFor="scheduleForLater" className="text-sm font-medium cursor-pointer">
+                      Schedule for later
+                    </Label>
                   </div>
+                  {scheduleForLater && (
+                    <div className="grid grid-cols-2 gap-4 mt-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="date">Date *</Label>
+                        <Input
+                          id="date"
+                          type="date"
+                          value={newDate}
+                          onChange={(e) => setNewDate(e.target.value)}
+                          min={new Date().toISOString().split('T')[0]}
+                          required={scheduleForLater}
+                        />
+                      </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="time">Time *</Label>
-                    <Input
-                      id="time"
-                      type="time"
-                      value={newTime}
-                      onChange={(e) => setNewTime(e.target.value)}
-                      required
-                    />
-                  </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="time">Time *</Label>
+                        <Input
+                          id="time"
+                          type="time"
+                          value={newTime}
+                          onChange={(e) => setNewTime(e.target.value)}
+                          required={scheduleForLater}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -312,7 +327,7 @@ export default function DebateRoomsPage() {
                 </Button>
                 <Button
                   onClick={handleCreate}
-                  disabled={createDebateRoom.isPending || !newTopic.trim() || !newDate || !newTime}
+                  disabled={createDebateRoom.isPending || !newTopic.trim() || (scheduleForLater && (!newDate || !newTime))}
                 >
                   {createDebateRoom.isPending ? (
                     <>
@@ -320,7 +335,7 @@ export default function DebateRoomsPage() {
                       Creating...
                     </>
                   ) : (
-                    'Create Debate'
+                    scheduleForLater ? 'Schedule Debate' : 'Create Now'
                   )}
                 </Button>
               </DialogFooter>
@@ -328,23 +343,34 @@ export default function DebateRoomsPage() {
           </Dialog>
         </div>
 
-        {/* Filters */}
-        <div className="flex flex-col sm:flex-row gap-4 mb-6">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        {/* Filters & Search Container */}
+        <div className="flex flex-col md:flex-row gap-4 mb-8 items-start md:items-center justify-between sticky top-0 z-30 bg-background/80 backdrop-blur-md py-4 -mx-4 px-4 border-b border-border/40">
+          {/* Search Bar */}
+          <div className="relative w-full md:max-w-md group">
+            <Search className="absolute left-3.5 top-1/2 transform -translate-y-1/2 text-muted-foreground/50 h-4 w-4 group-focus-within:text-green-600 transition-colors" />
             <Input
-              placeholder="Search debates..."
+              type="text"
+              placeholder="Search debates by topic..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-10"
+              className="pl-10 h-11 w-full rounded-2xl border-muted bg-muted/20 focus-visible:ring-green-500/20 focus-visible:border-green-500/30 transition-all"
             />
+            {search && (
+              <button
+                onClick={() => setSearch('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
           </div>
 
+          {/* Status Filter */}
           <Select
             value={statusFilter}
             onValueChange={(v) => setStatusFilter(v as DebateStatus | 'ALL')}
           >
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-[180px] h-11 rounded-2xl border-muted bg-muted/20">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
@@ -359,52 +385,72 @@ export default function DebateRoomsPage() {
 
         {/* Loading State */}
         {isLoading && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {Array.from({ length: 6 }).map((_, i) => (
-              <Card key={i}>
-                <CardContent className="pt-6">
-                  <Skeleton className="h-6 w-3/4 mb-4" />
-                  <Skeleton className="h-4 w-1/2 mb-2" />
-                  <Skeleton className="h-4 w-full" />
-                </CardContent>
-              </Card>
+              <div key={i} className="h-full">
+                <div className="border rounded-lg p-5 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Skeleton className="h-6 w-16" />
+                    <Skeleton className="h-6 w-20" />
+                  </div>
+                  <div className="space-y-2">
+                    <Skeleton className="h-6 w-3/4" />
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-2/3" />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <Skeleton className="h-4 w-20" />
+                    <Skeleton className="h-6 w-24" />
+                  </div>
+                  <Skeleton className="h-10 w-full" />
+                </div>
+              </div>
             ))}
           </div>
         )}
 
         {/* Error State */}
         {error && (
-          <div className="text-center py-12">
-            <p className="text-red-500">Failed to load debate rooms</p>
-            <Button
-              variant="outline"
-              className="mt-4"
-              onClick={() => window.location.reload()}
-            >
-              Try Again
-            </Button>
+          <div className="py-10">
+            <div className="max-w-md mx-auto border rounded-xl bg-card p-6 shadow-sm text-center">
+              <p className="text-muted-foreground mb-4">
+                Failed to load debate rooms. Please try again later.
+              </p>
+              <Button 
+                variant="default"
+                onClick={() => window.location.reload()}
+                className="bg-green-100 text-green-800 hover:bg-green-200 border border-green-300 shadow-none"
+              >
+                Retry
+              </Button>
+            </div>
           </div>
         )}
 
         {/* Debate Rooms Grid */}
-        {data && (
+        {data && !isLoading && (
           <>
             {!data.debateRooms || data.debateRooms.length === 0 ? (
-              <div className="text-center py-12">
-                <Swords className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <h3 className="text-lg font-medium mb-2">No debates found</h3>
-                <p className="text-muted-foreground mb-4">
-                  {search || statusFilter !== 'ALL'
-                    ? 'Try adjusting your filters'
-                    : 'Be the first to create a debate!'}
-                </p>
-                <Button onClick={() => setIsCreateOpen(true)}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create Debate
-                </Button>
+              <div className="py-10">
+                <div className="max-w-md mx-auto border rounded-xl bg-card p-6 shadow-sm text-center">
+                  <Swords className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-medium mb-2">No debates found</h3>
+                  <p className="text-muted-foreground mb-4">
+                    {search || statusFilter !== 'ALL'
+                      ? 'Try adjusting your filters'
+                      : 'Be the first to create a debate!'}
+                  </p>
+                  <Button 
+                    onClick={() => setIsCreateOpen(true)}
+                    className="bg-green-100 text-green-800 hover:bg-green-200 border border-green-300 shadow-none"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create Debate
+                  </Button>
+                </div>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                 {data.debateRooms.map((room) => (
                   <DebateRoomCard key={room.id} room={room} />
                 ))}
@@ -439,114 +485,5 @@ export default function DebateRoomsPage() {
 
       <Footer />
     </div>
-  );
-}
-
-// Debate Room Card Component
-function DebateRoomCard({ room }: { room: DebateRoom }) {
-  const statusColors: Record<DebateStatus, string> = {
-    [DebateStatus.WAITING]: 'bg-yellow-500/10 text-yellow-600 border-yellow-500/30',
-    [DebateStatus.PREP]: 'bg-blue-500/10 text-blue-600 border-blue-500/30',
-    [DebateStatus.LIVE]: 'bg-green-500/10 text-green-600 border-green-500/30',
-    [DebateStatus.ENDED]: 'bg-gray-500/10 text-gray-600 border-gray-500/30',
-    [DebateStatus.PROCESSED]: 'bg-purple-500/10 text-purple-600 border-purple-500/30',
-    [DebateStatus.CANCELLED]: 'bg-red-500/10 text-red-600 border-red-500/30',
-  };
-
-  const statusLabels: Record<DebateStatus, string> = {
-    [DebateStatus.WAITING]: 'Waiting',
-    [DebateStatus.PREP]: 'Preparing',
-    [DebateStatus.LIVE]: '🔴 Live',
-    [DebateStatus.ENDED]: 'Ended',
-    [DebateStatus.PROCESSED]: 'Processed',
-    [DebateStatus.CANCELLED]: 'Cancelled',
-  };
-
-  const totalParticipants = room.teams.reduce(
-    (sum, team) => sum + team.participants.length,
-    0
-  );
-
-  const forTeam = room.teams.find((t) => t.side === 'FOR');
-  const againstTeam = room.teams.find((t) => t.side === 'AGAINST');
-
-  return (
-    <Link href={`/debate-rooms/${room.id}`}>
-      <Card className="hover:border-primary/50 transition-colors cursor-pointer h-full">
-        <CardHeader className="pb-2">
-          <div className="flex items-start justify-between gap-2">
-            <CardTitle className="text-lg line-clamp-2">{room.topic}</CardTitle>
-            <Badge
-              variant="outline"
-              className={cn('shrink-0', statusColors[room.status])}
-            >
-              {statusLabels[room.status]}
-            </Badge>
-          </div>
-        </CardHeader>
-
-        <CardContent className="space-y-4">
-          {room.description && (
-            <p className="text-sm text-muted-foreground line-clamp-2">
-              {room.description}
-            </p>
-          )}
-
-          {/* Host */}
-          <div className="flex items-center gap-2">
-            <Avatar className="h-6 w-6">
-              <AvatarImage src={room.host.avatar || undefined} />
-              <AvatarFallback className="text-xs">
-                {room.host.name?.charAt(0)?.toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
-            <span className="text-sm text-muted-foreground">
-              Hosted by {room.host.name}
-            </span>
-          </div>
-
-          {/* Stats */}
-          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-            <div className="flex items-center gap-1">
-              <Users className="h-4 w-4" />
-              <span>
-                {totalParticipants}/{room.maxParticipants * 2}
-              </span>
-            </div>
-            <div className="flex items-center gap-1">
-              <Clock className="h-4 w-4" />
-              <span>{room.turnDurationSeconds}s turns</span>
-            </div>
-          </div>
-
-          {/* Team sizes */}
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1 text-sm">
-              <div className="w-2 h-2 rounded-full bg-green-500" />
-              <span className="text-green-600">
-                FOR ({forTeam?.participants.length || 0})
-              </span>
-            </div>
-            <span className="text-muted-foreground">vs</span>
-            <div className="flex items-center gap-1 text-sm">
-              <div className="w-2 h-2 rounded-full bg-red-500" />
-              <span className="text-red-600">
-                AGAINST ({againstTeam?.participants.length || 0})
-              </span>
-            </div>
-          </div>
-
-          {/* CTA */}
-          <div className="flex items-center justify-between pt-2 border-t">
-            <span className="text-xs text-muted-foreground">
-              {new Date(room.createdAt).toLocaleDateString()}
-            </span>
-            <span className="text-sm text-primary flex items-center gap-1">
-              View <ArrowRight className="h-4 w-4" />
-            </span>
-          </div>
-        </CardContent>
-      </Card>
-    </Link>
   );
 }

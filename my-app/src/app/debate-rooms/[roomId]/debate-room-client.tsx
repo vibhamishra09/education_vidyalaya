@@ -63,6 +63,7 @@ import {
   DebateResultsDisplay,
 } from '@/components/debate';
 import { DebateLiveRoom } from './debate-live-room';
+import { ShareButton } from '@/components/share/share-button';
 
 interface DebateRoomClientProps {
   roomId: string;
@@ -313,84 +314,121 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
   const isOnlyModerator = isModerator && room.moderators.length === 1;
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-background selection:bg-primary/10 selection:text-primary">
       <Navigation />
 
-      <main className="flex-1 container mx-auto px-4 py-8">
+      <main className="flex-1 container mx-auto px-4 py-6 max-w-5xl relative z-10">
         {/* Back Button */}
-        <Link href="/debate-rooms">
-          <Button variant="ghost" className="mb-6">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Debates
-          </Button>
+        <Link href="/debate-rooms" className="inline-flex items-center text-sm font-medium text-muted-foreground hover:text-foreground mb-4 transition-colors group">
+          <ArrowLeft className="h-4 w-4 mr-2 group-hover:-translate-x-1 transition-transform" />
+          Back to Debates
         </Link>
 
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-start justify-between gap-4 mb-4">
-            <div className="flex-1">
-              <div className="flex items-center gap-3 mb-2">
-                <h1 className="text-3xl font-bold">{room.topic}</h1>
+        <div className="grid lg:grid-cols-3 gap-6">
+          {/* Left Column: Content */}
+          <div className="lg:col-span-2 space-y-5">
+            {/* Header Section */}
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center gap-2">
                 <Badge
-                  variant="outline"
-                  className={cn(
-                    'flex items-center gap-1',
-                    statusConfig[room.status].color.includes('animate')
-                      ? 'border-green-500 text-green-600'
-                      : ''
-                  )}
+                  variant={room.status === DebateStatus.LIVE || room.status === DebateStatus.PREP ? "destructive" : "secondary"}
+                  className="rounded-full px-2.5 py-0.5 text-xs font-medium shadow-none border-transparent bg-primary/10 text-primary hover:bg-primary/20"
                 >
-                  <div className={cn('w-2 h-2 rounded-full', statusConfig[room.status].color)} />
-                  {statusConfig[room.status].label}
+                  {room.status === DebateStatus.LIVE || room.status === DebateStatus.PREP ? (
+                    <span className="flex items-center gap-1.5">
+                      <span className="relative flex h-1.5 w-1.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-red-500"></span>
+                      </span>
+                      {room.status === DebateStatus.PREP ? 'Preparation Phase' : 'Live Now'}
+                    </span>
+                  ) : (
+                    statusConfig[room.status].label
+                  )}
                 </Badge>
+                
+                {isHost && (
+                  <Badge className="rounded-full px-2.5 py-0.5 text-xs bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 shadow-none border-transparent">
+                    <Crown className="h-3 w-3 mr-1" />
+                    Host
+                  </Badge>
+                )}
+                {isModerator && !isHost && (
+                  <Badge className="rounded-full px-2.5 py-0.5 text-xs bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 shadow-none border-transparent">
+                    <Shield className="h-3 w-3 mr-1" />
+                    Moderator
+                  </Badge>
+                )}
+                {isParticipant && (
+                  <Badge className="rounded-full px-2.5 py-0.5 text-xs bg-green-500/10 text-green-600 hover:bg-green-500/20 shadow-none border-transparent">
+                    Enrolled
+                  </Badge>
+                )}
               </div>
+
+              <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground leading-tight">
+                {room.topic}
+              </h1>
+          
               {room.description && (
-                <p className="text-muted-foreground">{room.description}</p>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  {room.description}
+                </p>
+              )}
+
+              <div className="grid sm:grid-cols-2 gap-3 pt-2">
+                {room.scheduledAt && (
+                  <div className="p-3 rounded-xl bg-blue-500/5 border border-blue-500/10 flex items-center gap-3 transition-colors hover:bg-blue-500/10">
+                    <div className="p-2 rounded-lg bg-background shadow-sm border border-border/50">
+                      <Calendar className="h-4 w-4 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground">Scheduled</p>
+                      <p className="text-sm font-semibold">{new Date(room.scheduledAt).toLocaleString()}</p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="p-3 rounded-xl bg-blue-500/5 border border-blue-500/10 flex items-center gap-3 transition-colors hover:bg-blue-500/10">
+                  <div className="p-2 rounded-lg bg-background shadow-sm border border-border/50">
+                    <Clock className="h-4 w-4 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground">Turn Duration</p>
+                    <p className="text-sm font-semibold">{room.turnDurationSeconds}s per turn</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Host Info */}
+              <div className="flex items-center gap-3 p-3 rounded-xl border border-border/50 bg-background/50 backdrop-blur-sm">
+                <Avatar className="h-10 w-10 border-2 border-background shadow-sm">
+                  <AvatarImage src={room.host.avatar || undefined} />
+                  <AvatarFallback>{room.host.name?.[0]}</AvatarFallback>
+                </Avatar>
+                <div>
+                  <p className="text-xs text-muted-foreground">Hosted by</p>
+                  <span className="text-sm font-semibold">{room.host.name}</span>
+                </div>
+              </div>
+
+              {/* Connection status */}
+              {isConnected !== undefined && (
+                <div className="flex items-center gap-2 text-sm p-3 rounded-xl border border-border/50 bg-background/50 backdrop-blur-sm">
+                  <div
+                    className={cn(
+                      'w-2 h-2 rounded-full',
+                      isConnected ? 'bg-green-500' : 'bg-red-500'
+                    )}
+                  />
+                  <span className="text-muted-foreground">
+                    {isConnected ? 'Connected' : 'Disconnected'}
+                  </span>
+                </div>
               )}
             </div>
 
-            {/* Connection status */}
-            <div className="flex items-center gap-2 text-sm">
-              <div
-                className={cn(
-                  'w-2 h-2 rounded-full',
-                  isConnected ? 'bg-green-500' : 'bg-red-500'
-                )}
-              />
-              <span className="text-muted-foreground">
-                {isConnected ? 'Connected' : 'Disconnected'}
-              </span>
-            </div>
-          </div>
-
-          {/* Host & Settings */}
-          <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-            <div className="flex items-center gap-2">
-              <Crown className="h-4 w-4 text-yellow-500" />
-              <Avatar className="h-6 w-6">
-                <AvatarImage src={room.host.avatar || undefined} />
-                <AvatarFallback className="text-xs">
-                  {room.host.name?.charAt(0)?.toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-              <span>{room.host.name}</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <Users className="h-4 w-4" />
-              <span>
-                {totalParticipants}/{room.maxParticipants * 2} participants
-              </span>
-            </div>
-            <div className="flex items-center gap-1">
-              <Clock className="h-4 w-4" />
-              <span>{room.turnDurationSeconds}s per turn</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main Content */}
-          <div className="lg:col-span-2 space-y-6">
+            {/* Main Content */}
             {/* Results View */}
             {(room.status === DebateStatus.ENDED ||
               room.status === DebateStatus.PROCESSED) &&
@@ -545,45 +583,81 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
             )}
           </div>
 
-          {/* Sidebar */}
-          <div className="space-y-4">
-            {/* Your Status */}
-            {(isParticipant || isModerator) && (
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Your Status</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center gap-2 mb-2">
-                    {isHost && <Crown className="h-4 w-4 text-yellow-500" />}
-                    {isModerator && !isHost && (
-                      <Shield className="h-4 w-4 text-blue-500" />
-                    )}
-                    <span className="font-medium capitalize">{userRole}</span>
-                  </div>
-                  {userSide && (
-                    <div className="flex items-center gap-2">
-                      <div
-                        className={cn(
-                          'w-3 h-3 rounded-full',
-                          userSide === DebateSide.FOR
-                            ? 'bg-green-500'
-                            : 'bg-red-500'
-                        )}
-                      />
-                      <span>Team {userSide}</span>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            )}
+          </div>
 
-            {/* Actions */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Actions</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
+          {/* Right Column: Action Card & Status */}
+          <div className="lg:col-span-1 space-y-4">
+            <div className="sticky top-20 space-y-4">
+              <Card className="border-border/50 shadow-lg shadow-primary/5 overflow-hidden backdrop-blur-sm bg-background/80 relative">
+                <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-purple-500 to-blue-500" />
+                <CardHeader className="space-y-1 pb-3 pt-5 px-5">
+                  <CardTitle className="flex justify-between items-center text-base">
+                    <span>Debate Details</span>
+                    <Badge variant={totalParticipants >= room.maxParticipants * 2 ? "destructive" : "secondary"} className="font-mono text-[10px] uppercase tracking-wider px-2 py-0.5">
+                      {totalParticipants >= room.maxParticipants * 2 ? 'Full' : 'Open'}
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4 px-5 pb-5">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between py-1.5 border-b border-border/50 group text-sm">
+                      <div className="flex items-center text-muted-foreground group-hover:text-foreground transition-colors">
+                        <Users className="h-3.5 w-3.5 mr-2" />
+                        <span>Participants</span>
+                      </div>
+                      <span className="font-medium font-mono">{totalParticipants} / {room.maxParticipants * 2}</span>
+                    </div>
+                    
+                    {forTeam && againstTeam && (
+                      <>
+                        <div className="flex items-center justify-between py-1.5 border-b border-border/50 group text-sm">
+                          <div className="flex items-center text-muted-foreground group-hover:text-foreground transition-colors">
+                            <div className="w-2 h-2 rounded-full bg-green-500 mr-2" />
+                            <span>Team FOR</span>
+                          </div>
+                          <span className="font-medium font-mono">{forTeam.participants.length} / {room.maxParticipants}</span>
+                        </div>
+                        
+                        <div className="flex items-center justify-between py-1.5 border-b border-border/50 group text-sm">
+                          <div className="flex items-center text-muted-foreground group-hover:text-foreground transition-colors">
+                            <div className="w-2 h-2 rounded-full bg-red-500 mr-2" />
+                            <span>Team AGAINST</span>
+                          </div>
+                          <span className="font-medium font-mono">{againstTeam.participants.length} / {room.maxParticipants}</span>
+                        </div>
+                      </>
+                    )}
+
+                    {userSide && (
+                      <div className="flex items-center justify-between py-1.5 border-b border-border/50 group text-sm">
+                        <div className="flex items-center text-muted-foreground group-hover:text-foreground transition-colors">
+                          {isHost && <Crown className="h-3.5 w-3.5 mr-2 text-yellow-500" />}
+                          {isModerator && !isHost && <Shield className="h-3.5 w-3.5 mr-2 text-blue-500" />}
+                          <span>Your Role</span>
+                        </div>
+                        <span className="font-medium capitalize">{userRole}</span>
+                      </div>
+                    )}
+
+                    {userSide && (
+                      <div className="flex items-center justify-between py-1.5 border-b border-border/50 group text-sm">
+                        <div className="flex items-center text-muted-foreground group-hover:text-foreground transition-colors">
+                          <div
+                            className={cn(
+                              'w-2 h-2 rounded-full mr-2',
+                              userSide === DebateSide.FOR
+                                ? 'bg-green-500'
+                                : 'bg-red-500'
+                            )}
+                          />
+                          <span>Your Team</span>
+                        </div>
+                        <span className="font-medium">{userSide}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="pt-1 space-y-2.5">
                 {/* Scheduled time warning */}
                 {scheduledTime && room.status === DebateStatus.WAITING && (
                   <div className={cn(
@@ -608,79 +682,92 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
                   </div>
                 )}
 
-                {/* Host/Moderator actions */}
-                {isModerator && room.status === DebateStatus.WAITING && (
-                  <>
-                    <Button
-                      className="w-full"
-                      onClick={handleStartPrep}
-                      disabled={!canStart || startPrepPhase.isPending}
-                    >
-                      {startPrepPhase.isPending ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Starting...
-                        </>
-                      ) : (
-                        <>
-                          <Play className="h-4 w-4 mr-2" />
-                          Start Debate
-                        </>
-                      )}
-                    </Button>
-                    {!canStart && (
-                      <p className="text-xs text-muted-foreground text-center">
-                        Need at least 1 participant per team
-                        {forCount === 0 && ' (FOR team empty)'}
-                        {againstCount === 0 && ' (AGAINST team empty)'}
+                    {/* Host/Moderator actions */}
+                    {isModerator && room.status === DebateStatus.WAITING && (
+                      <>
+                        <Button
+                          size="default"
+                          className="w-full font-semibold text-sm h-10 shadow-md shadow-primary/20 transition-all hover:scale-[1.01] active:scale-[0.99] rounded-lg bg-green-600 hover:bg-green-700 text-white"
+                          onClick={handleStartPrep}
+                          disabled={!canStart || startPrepPhase.isPending}
+                        >
+                          {startPrepPhase.isPending ? (
+                            <>
+                              <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
+                              Starting...
+                            </>
+                          ) : (
+                            <>
+                              <Play className="h-3.5 w-3.5 mr-2" />
+                              Start Debate
+                            </>
+                          )}
+                        </Button>
+                        {!canStart && (
+                          <p className="text-xs text-muted-foreground text-center">
+                            Need at least 1 participant per team
+                            {forCount === 0 && ' (FOR team empty)'}
+                            {againstCount === 0 && ' (AGAINST team empty)'}
+                          </p>
+                        )}
+                      </>
+                    )}
+
+                    {/* Cancel/Delete button for host */}
+                    {isHost && room.status === DebateStatus.WAITING && (
+                      <Button
+                        variant="destructive"
+                        size="default"
+                        className="w-full h-10 rounded-lg"
+                        onClick={() => setShowCancelDialog(true)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5 mr-2" />
+                        Cancel Debate
+                      </Button>
+                    )}
+
+                    {/* Participant actions */}
+                    {isParticipant && room.status === DebateStatus.WAITING && (
+                      <Button
+                        variant="outline"
+                        size="default"
+                        className="w-full h-10 rounded-lg"
+                        onClick={() => setShowLeaveDialog(true)}
+                      >
+                        <LogOut className="h-3.5 w-3.5 mr-2" />
+                        Leave Debate
+                      </Button>
+                    )}
+
+                    {/* No actions message */}
+                    {!isModerator && !isParticipant && room.status === DebateStatus.WAITING && (
+                      <p className="text-xs text-muted-foreground text-center py-2">
+                        Join the debate to see actions
                       </p>
                     )}
-                  </>
-                )}
 
-                {/* Cancel/Delete button for host */}
-                {isHost && room.status === DebateStatus.WAITING && (
-                  <Button
-                    variant="destructive"
-                    className="w-full"
-                    onClick={() => setShowCancelDialog(true)}
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Cancel Debate
-                  </Button>
-                )}
+                    {/* Back to results */}
+                    {(room.status === DebateStatus.ENDED ||
+                      room.status === DebateStatus.PROCESSED) && (
+                      <Link href="/debate-rooms" className="block">
+                        <Button variant="outline" size="default" className="w-full h-10 rounded-lg">
+                          <ArrowLeft className="h-3.5 w-3.5 mr-2" />
+                          Back to Debates
+                        </Button>
+                      </Link>
+                    )}
 
-                {/* Participant actions */}
-                {isParticipant && room.status === DebateStatus.WAITING && (
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => setShowLeaveDialog(true)}
-                  >
-                    <LogOut className="h-4 w-4 mr-2" />
-                    Leave Debate
-                  </Button>
-                )}
-
-                {/* No actions message */}
-                {!isModerator && !isParticipant && room.status === DebateStatus.WAITING && (
-                  <p className="text-xs text-muted-foreground text-center py-2">
-                    Join the debate to see actions
-                  </p>
-                )}
-
-                {/* Back to results */}
-                {(room.status === DebateStatus.ENDED ||
-                  room.status === DebateStatus.PROCESSED) && (
-                  <Link href="/debate-rooms" className="block">
-                    <Button variant="outline" className="w-full">
-                      <ArrowLeft className="h-4 w-4 mr-2" />
-                      Back to Debates
-                    </Button>
-                  </Link>
-                )}
-              </CardContent>
-            </Card>
+                    {/* Share Button */}
+                    <ShareButton
+                      url={`${typeof window !== "undefined" ? window.location.origin : ""}/debate-rooms/${roomId}`}
+                      title={room.topic}
+                      description={room.description || ""}
+                      variant="outline"
+                      className="w-full rounded-lg h-9 hover:bg-primary/5 text-xs text-green-600 border-green-200/50 hover:text-green-700"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
 
             {/* Moderators */}
             {room.moderators.length > 0 && (
