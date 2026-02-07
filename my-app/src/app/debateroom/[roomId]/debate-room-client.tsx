@@ -334,7 +334,7 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
       await cancelDebateRoom.mutateAsync(roomId);
       showSuccess('Debate Cancelled', 'The debate has been cancelled');
       setShowCancelDialog(false);
-      router.push('/debate-rooms');
+      router.push('/debateroom');
     } catch (err: unknown) {
       showError('Error', err instanceof Error ? err.message : 'Failed to cancel debate');
     }
@@ -390,7 +390,7 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
             <p className="text-muted-foreground mb-4">
               This debate room doesn&apos;t exist or has been cancelled.
             </p>
-            <Link href="/debate-rooms">
+            <Link href="/debateroom">
               <Button>
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Back to Debates
@@ -443,7 +443,7 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
 
       <main className="flex-1 container mx-auto px-4 py-6 max-w-5xl relative z-10">
         {/* Back Button */}
-        <Link href="/debate-rooms" className="inline-flex items-center text-sm font-medium text-muted-foreground hover:text-foreground mb-4 transition-colors group">
+        <Link href="/debateroom" className="inline-flex items-center text-sm font-medium text-muted-foreground hover:text-foreground mb-4 transition-colors group">
           <ArrowLeft className="h-4 w-4 mr-2 group-hover:-translate-x-1 transition-transform" />
           Back to Debates
         </Link>
@@ -1024,7 +1024,7 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
                     {/* Back to results */}
                     {(room.status === DebateStatus.ENDED ||
                       room.status === DebateStatus.PROCESSED) && (
-                      <Link href="/debate-rooms" className="block">
+                      <Link href="/debateroom" className="block">
                         <Button variant="outline" size="default" className="w-full h-10 rounded-lg">
                           <ArrowLeft className="h-3.5 w-3.5 mr-2" />
                           Back to Debates
