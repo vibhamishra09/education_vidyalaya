@@ -13,9 +13,11 @@ import { Footer } from "@/components/layout/footer";
 import { FadeIn } from "@/components/ui/fade-in";
 import { Button } from "@/components/ui/button";
 import { useStudyRooms, useJoinStudyRoom } from "@/hooks/use-study-rooms";
+import { useDebateRooms } from "@/hooks/use-debate-rooms";
 import { useRequireAuth } from "@/hooks/use-require-auth";
 import { useToast } from "@/contexts/toast-context";
 import { SessionStatus } from "@/types/api.types";
+import { DebateStatus } from "@/types/debate.types";
 import type { StudyRoomCard as StudyRoomCardType } from "@/types/api.types";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -33,22 +35,15 @@ export function HomeClient() {
     trending: true,
   });
 
-  const studyRooms = studyRoomsData?.studyRooms ?? [];
+  // Get trending debate rooms (scheduled for future)
+  const { data: debateRoomsData, isLoading: debateRoomsLoading, error: debateRoomsError } = useDebateRooms({
+    limit: 4,
+    status: DebateStatus.WAITING,
+    trending: true,
+  });
 
-  const debateRooms = [
-    {
-      status: "open" as const,
-      title: "AI will replace human creativity in the next decade",
-      watchers: 0,
-      participants: { for: null, against: null },
-    },
-    {
-      status: "in_progress" as const,
-      title: "Remote work is more productive than office work",
-      watchers: 5,
-      participants: { for: "Emma Wilson", against: "John Smith" },
-    },
-  ];
+  const studyRooms = studyRoomsData?.studyRooms ?? [];
+  const debateRooms = debateRoomsData?.debateRooms ?? [];
 
   const handleViewAll = () => {
     router.push("/browse");
@@ -222,25 +217,80 @@ export function HomeClient() {
           </div>
         </section>
 
-        {/* Debate Rooms Section (Mock Data) */}
+        {/* Debate Rooms Section */}
         <section className="py-10 sm:py-12" id="community">
           <div className="container mx-auto px-4 sm:px-6 lg:px-8">
             <FadeIn>
-              <div className="mb-5 sm:mb-6">
-                <h2 className="text-3xl sm:text-4xl font-bold tracking-tight mb-2">Debate Rooms</h2>
-                <p className="text-sm sm:text-base text-muted-foreground font-tagline">
-                  Engage in meaningful conversations. Broaden your perspective.
-                </p>
+              <div className="flex items-center justify-between mb-5 sm:mb-6">
+                <div>
+                  <h2 className="text-3xl sm:text-4xl font-bold tracking-tight mb-2">Trending Debate Rooms</h2>
+                  <p className="text-sm sm:text-base text-muted-foreground font-tagline">
+                    Engage in meaningful conversations. Broaden your perspective.
+                  </p>
+                </div>
+                <Button variant="ghost" className="hover:bg-muted/50" onClick={() => router.push("/debate-rooms")}>
+                  View All
+                </Button>
               </div>
             </FadeIn>
 
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 sm:gap-5">
-              {debateRooms.map((room, index) => (
-                <FadeIn key={room.title} delay={index * 0.1}>
-                  <DebateRoomCard {...room} />
-                </FadeIn>
-              ))}
-            </div>
+            {debateRoomsLoading ? (
+              <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                {Array.from({ length: 4 }).map((_, index) => (
+                  <FadeIn key={index} delay={index * 0.1}>
+                    <div className="h-full">
+                      <div className="border rounded-lg p-5 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <Skeleton className="h-6 w-16" />
+                          <Skeleton className="h-6 w-20" />
+                        </div>
+                        <div className="space-y-2">
+                          <Skeleton className="h-6 w-3/4" />
+                          <Skeleton className="h-4 w-full" />
+                          <Skeleton className="h-4 w-2/3" />
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <Skeleton className="h-4 w-20" />
+                          <Skeleton className="h-6 w-24" />
+                        </div>
+                        <Skeleton className="h-10 w-full" />
+                      </div>
+                    </div>
+                  </FadeIn>
+                ))}
+              </div>
+            ) : debateRoomsError ? (
+              <div className="py-10">
+                <div className="max-w-md mx-auto border rounded-xl bg-card p-6 shadow-sm text-center">
+                  <p className="text-muted-foreground mb-4">
+                    Failed to load debate rooms. Please try again later.
+                  </p>
+                  <Button 
+                    variant="default"
+                    onClick={() => window.location.reload()}
+                    className="bg-green-100 text-green-800 hover:bg-green-200 border border-green-300 shadow-none"
+                  >
+                    Retry
+                  </Button>
+                </div>
+              </div>
+            ) : debateRooms.length === 0 ? (
+              <div className="py-10">
+                <div className="max-w-md mx-auto border rounded-xl bg-card p-6 shadow-sm text-center">
+                  <p className="text-muted-foreground">
+                    No trending debate rooms are available right now. Check back soon!
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                {debateRooms.map((room, index) => (
+                  <FadeIn key={room.id} delay={index * 0.1}>
+                    <DebateRoomCard room={room} />
+                  </FadeIn>
+                ))}
+              </div>
+            )}
           </div>
         </section>
 

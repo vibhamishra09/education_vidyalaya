@@ -144,6 +144,11 @@ export class DebateRoomQueryDto {
   @Min(1)
   @Max(50)
   limit?: number = 10;
+
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
+  @IsBoolean()
+  trending?: boolean;
 }
 
 // Response DTOs
