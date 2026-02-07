@@ -104,7 +104,7 @@ export default function DebateRoomsPage() {
 
       showSuccess('Debate Room Created', 'Your debate room has been created!');
       setIsCreateOpen(false);
-      router.push(`/debate-rooms/${room.id}`);
+      router.push(`/debateroom/${room.id}`);
     } catch (err) {
       console.error('Failed to create debate room:', err);
       showError('Error', 'Failed to create debate room. Please try again.');

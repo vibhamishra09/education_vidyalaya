@@ -128,7 +128,7 @@ export function DebateRoomCard({
     if ((e.target as HTMLElement).closest('button')) {
       return;
     }
-    router.push(`/debate-rooms/${room.id}`);
+    router.push(`/debateroom/${room.id}`);
   };
 
   const handleDefaultAction = (e: React.MouseEvent) => {
@@ -137,7 +137,7 @@ export function DebateRoomCard({
       onAction();
     } else {
       requireAuth(() => {
-        router.push(`/debate-rooms/${room.id}`);
+        router.push(`/debateroom/${room.id}`);
       });
     }
   };
@@ -264,7 +264,7 @@ export function DebateRoomCard({
           {/* Actions: Share & CTA Button */}
           <div className="flex items-center gap-2">
              <ShareButton
-                url={`${typeof window !== "undefined" ? window.location.origin : ""}/debate-rooms/${room.id}`}
+                url={`${typeof window !== "undefined" ? window.location.origin : ""}/debateroom/${room.id}`}
                 title={room.topic}
                 description={room.description || undefined}
                 variant="ghost"

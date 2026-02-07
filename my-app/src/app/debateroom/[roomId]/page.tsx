@@ -5,7 +5,7 @@ import DebateRoomClient from './debate-room-client';
 async function getDebateRoomData(roomId: string) {
   try {
     const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-    const response = await fetch(`${baseUrl}/api/debate-rooms/${roomId}`, {
+    const response = await fetch(`${baseUrl}/api/debateroom/${roomId}`, {
       next: { revalidate: 60 }, // Cache for 60 seconds
     });
     
@@ -45,7 +45,7 @@ export async function generateMetadata({
     openGraph: {
       title: `${room.topic} | Debate Room | Webyalaya`,
       description: room.description || `Join the debate: ${room.topic}`,
-      url: `/debate-rooms/${roomId}`,
+      url: `/debaterooms/${roomId}`,
       type: "website",
       images: [
         {
@@ -67,7 +67,7 @@ export async function generateMetadata({
       follow: true,
     },
     alternates: {
-      canonical: `/debate-rooms/${roomId}`,
+      canonical: `/debaterooms/${roomId}`,
     },
   };
 }
