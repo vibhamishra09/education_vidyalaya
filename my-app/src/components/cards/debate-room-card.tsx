@@ -72,7 +72,7 @@ export function DebateRoomCard({
   const formattedDateTime = room.scheduledAt ? getRelativeTimeString(room.scheduledAt) : null;
   
   // Get prize pool if configured (will be added in backend)
-  const prizePool = (room as any).prizePool || null;
+  const prizePool = (room as DebateRoom & { prizePool?: number | null }).prizePool || null;
 
   // Dynamic Theme Colors based on Status
   const theme = statusIsCancelled
