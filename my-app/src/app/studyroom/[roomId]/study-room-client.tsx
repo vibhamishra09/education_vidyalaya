@@ -396,7 +396,7 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
                             </div>
                             
                             {canJoinVideoCall ? (
-                              <Link href={`/rooms/${liveRoomName}`} className="block w-full">
+                              <Link href={`/rooms/studyroom/${liveRoomName}`} className="block w-full">
                                 <Button size="sm" className="w-full h-9 rounded-lg bg-green-600 text-white hover:bg-green-700 shadow-sm transition-all text-xs">
                                   Enter Classroom
                                   <ArrowLeft className="h-3 w-3 ml-2 rotate-180" />

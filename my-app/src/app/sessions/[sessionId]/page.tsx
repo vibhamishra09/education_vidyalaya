@@ -377,7 +377,7 @@ export default function PeerSessionPage({
             <CardContent>
               <div className="flex flex-wrap gap-3">
                 {canJoinVideoCall ? (
-                  <Link href={`/rooms/${liveRoomName}`}>
+                  <Link href={`/rooms/studyroom/${liveRoomName}`}>
                     <Button className="bg-blue-600 hover:bg-blue-700">
                       Join Live Session
                     </Button>
@@ -457,7 +457,7 @@ export default function PeerSessionPage({
                </p>
             </div>
             {canJoinVideoCall ? (
-                  <Link href={`/rooms/${liveRoomName}`} className="w-full md:w-auto">
+                  <Link href={`/rooms/studyroom/${liveRoomName}`} className="w-full md:w-auto">
                     <Button size="lg" className="w-full md:w-auto px-8 rounded-full h-12 shadow-sm">
                       Join Live Session
                     </Button>
