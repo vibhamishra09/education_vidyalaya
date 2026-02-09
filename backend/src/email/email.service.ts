@@ -1,27 +1,28 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Resend } from 'resend';
+import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
-  private resend: Resend;
-  private readonly fromEmail = 'notify@noreply.webyalaya.com';
+  private sesClient: SESClient;
+  private readonly fromEmail = 'notifications@webyalaya.com';
+  private region: string;
 
   constructor(
     private prisma: PrismaService,
     private configService: ConfigService,
   ) {
-    const resendApiKey = this.configService.get<string>('RESEND_API_KEY');
-
-    if (resendApiKey) {
-      this.resend = new Resend(resendApiKey);
-    } else {
-      this.logger.warn(
-        'RESEND_API_KEY not configured. Email notifications will not work.',
-      );
-    }
+    this.region = this.configService.get<string>('AWS_REGION') || 'us-east-1';
+    this.sesClient = new SESClient({
+      region: this.region,
+      credentials: {
+        accessKeyId: this.configService.get<string>('AWS_ACCESS_KEY_ID') || '',
+        secretAccessKey:
+          this.configService.get<string>('AWS_SECRET_ACCESS_KEY') || '',
+      },
+    });
   }
 
   /**
@@ -37,13 +38,6 @@ export class EmailService {
     message: string,
   ): Promise<boolean> {
     try {
-      if (!this.resend) {
-        this.logger.warn(
-          'Resend not initialized. Skipping email notification.',
-        );
-        return false;
-      }
-
       // Get user email from database
       const user = await this.prisma.user.findUnique({
         where: { id: userId },
@@ -55,28 +49,30 @@ export class EmailService {
         return false;
       }
 
-      // Send email via Resend
-      const { data, error } = await this.resend.emails.send({
-        from: this.fromEmail,
-        to: user.email,
-        subject,
-        html: this.formatEmailHtml(user.name || 'User', message),
+      // Send email via SES
+      const command = new SendEmailCommand({
+        Source: this.fromEmail,
+        Destination: {
+          ToAddresses: [user.email],
+        },
+        Message: {
+          Subject: {
+            Data: subject,
+            Charset: 'UTF-8',
+          },
+          Body: {
+            Html: {
+              Data: this.formatEmailHtml(user.name || 'User', message),
+              Charset: 'UTF-8',
+            },
+          },
+        },
       });
 
-      if (error) {
-        this.logger.error('Failed to send email via Resend:', {
-          error,
-          message: error.message,
-          name: error.name,
-          from: this.fromEmail,
-          to: user.email,
-          subject,
-        });
-        return false;
-      }
+      const response = await this.sesClient.send(command);
 
       this.logger.log(
-        `✅ Email sent successfully to ${user.email} (ID: ${data?.id})`,
+        `✅ Email sent successfully to ${user.email} (MessageId: ${response.MessageId})`,
       );
       return true;
     } catch (error) {
