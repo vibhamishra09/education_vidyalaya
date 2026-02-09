@@ -18,6 +18,7 @@ import { PaymentsModule } from './payments/payments.module';
 import { ChatModule } from './chat/chat.module';
 import { LivekitModule } from './livekit/livekit.module';
 import { UploadModule } from './upload/upload.module';
+import { EmailModule } from './email/email.module';
 import { AvailabilityModule } from './availability/availability.module';
 import { StreaksModule } from './streaks/streaks.module';
 import { AchievementsModule } from './achievements/achievements.module';
@@ -57,6 +58,7 @@ import { LoggerModule } from './common/logger';
     ChatModule,
     LivekitModule,
     UploadModule,
+    EmailModule,
     AvailabilityModule,
     StreaksModule,
     AchievementsModule,

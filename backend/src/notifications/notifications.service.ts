@@ -2,7 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotifType } from '@prisma/client';
 import { PushNotificationService } from './push-notification.service';
-import { EmailService } from './email.service';
+import { EmailService } from '../email/email.service';
 import { redisClient } from '../redis/redis.provider';
 
 @Injectable()
