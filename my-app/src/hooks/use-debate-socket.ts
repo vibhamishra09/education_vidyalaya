@@ -19,6 +19,7 @@ import {
   ParticipantLeftEvent,
   MicEnabledEvent,
   MicDisabledEvent,
+  DebateRoom,
 } from '@/types/debate.types';
 import { debateRoomKeys } from './use-debate-rooms';
 
@@ -107,6 +108,9 @@ export function useDebateSocket({
   });
 
   useEffect(() => {
+    // #region agent log
+    fetch('http://127.0.0.1:7244/ingest/d6208dbe-815f-4534-a4cc-4028b2570455',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'use-debate-socket.ts:109',message:'Updating callbacks ref',data:{hasOnMicEnabled:!!onMicEnabled,hasOnMicDisabled:!!onMicDisabled},timestamp:Date.now(),runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
     callbacksRef.current = {
       onTurnStarted,
       onTurnEnded,
@@ -121,7 +125,7 @@ export function useDebateSocket({
       onMicDisabled,
       onError,
     };
-  });
+  }, [onTurnStarted, onTurnEnded, onPrepCountdown, onBuzzerPressed, onTeamChat, onDebateEnded, onParticipantJoined, onParticipantLeft, onStateSync, onMicEnabled, onMicDisabled, onError]);
 
   // Connect to socket
   useEffect(() => {
@@ -182,7 +186,7 @@ export function useDebateSocket({
         });
 
         // Handle state update (includes room data)
-        newSocket.on('debate:state_update', (data: { room?: any; state: DebateState }) => {
+        newSocket.on('debate:state_update', (data: { room?: DebateRoom; state: DebateState }) => {
           if (mounted) {
             if (data.state) {
               setDebateState(data.state);
@@ -306,6 +310,9 @@ export function useDebateSocket({
 
         // Mic control events
         newSocket.on('debate:mic_enabled', (event: MicEnabledEvent) => {
+          // #region agent log
+          fetch('http://127.0.0.1:7244/ingest/d6208dbe-815f-4534-a4cc-4028b2570455',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'use-debate-socket.ts:308',message:'Socket event debate:mic_enabled received',data:{eventParticipantId:event.participantId,reason:event.reason,hasCallback:!!callbacksRef.current.onMicEnabled},timestamp:Date.now(),runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+          // #endregion
           callbacksRef.current.onMicEnabled?.(event);
         });
 

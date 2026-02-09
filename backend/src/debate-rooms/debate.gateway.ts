@@ -246,17 +246,33 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
       if (result.finished) {
         this.handleDebateEnd(roomId);
       } else {
-        // Emit mic disabled for disconnected speaker
-        this.server.to(roomId).emit(DEBATE_EVENTS.MIC_DISABLED, {
-          participantId: userId,
-          reason: 'turn_ended',
+        // Get user's Clerk ID for mic events
+        const disconnectedUser = await this.prisma.user.findUnique({
+          where: { id: userId },
+          select: { clerkId: true },
         });
 
-        // Emit mic enabled for next speaker
-        this.server.to(roomId).emit(DEBATE_EVENTS.MIC_ENABLED, {
-          participantId: result.nextSpeakerId,
-          reason: 'turn',
+        // Get next speaker's Clerk ID
+        const nextSpeaker = await this.prisma.user.findUnique({
+          where: { id: result.nextSpeakerId },
+          select: { clerkId: true },
         });
+
+        // Emit mic disabled for disconnected speaker
+        if (disconnectedUser) {
+          this.server.to(roomId).emit(DEBATE_EVENTS.MIC_DISABLED, {
+            participantId: disconnectedUser.clerkId,
+            reason: 'turn_ended',
+          });
+        }
+
+        // Emit mic enabled for next speaker
+        if (nextSpeaker) {
+          this.server.to(roomId).emit(DEBATE_EVENTS.MIC_ENABLED, {
+            participantId: nextSpeaker.clerkId,
+            reason: 'turn',
+          });
+        }
 
         this.server.to(roomId).emit(DEBATE_EVENTS.TURN_STARTED, {
           speakerId: result.nextSpeakerId,
@@ -544,16 +560,17 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
             });
           }
 
+          // Use Clerk ID for mic events
           this.server.to(roomId).emit(DEBATE_EVENTS.MIC_DISABLED, {
-            participantId: currentState.currentSpeakerId,
+            participantId: currentParticipant.user.clerkId,
             reason: 'turn_ended',
           });
         }
 
         // Emit mic enabled for next speaker
-        if (result.nextSpeakerId) {
+        if (nextParticipant) {
           this.server.to(roomId).emit(DEBATE_EVENTS.MIC_ENABLED, {
-            participantId: result.nextSpeakerId,
+            participantId: nextParticipant.user.clerkId,
             reason: 'turn',
           });
         }
@@ -636,7 +653,7 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
       if (debateRoom) {
         for (const moderator of debateRoom.moderators) {
           this.server.to(roomId).emit(DEBATE_EVENTS.MIC_ENABLED, {
-            participantId: moderator.user.id,
+            participantId: moderator.user.clerkId,
             reason: 'moderator',
           });
         }
@@ -734,18 +751,19 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
               nextParticipantUserId: nextParticipant?.user.clerkId,
               nextSide: nextParticipant?.team.side,
             });
-          }
 
-          this.server.to(roomId).emit(DEBATE_EVENTS.MIC_DISABLED, {
-            participantId: currentState.currentSpeakerId,
-            reason: 'turn_ended',
-          });
+            // Use Clerk ID for mic events
+            this.server.to(roomId).emit(DEBATE_EVENTS.MIC_DISABLED, {
+              participantId: currentParticipant.user.clerkId,
+              reason: 'turn_ended',
+            });
+          }
         }
 
         // Emit mic enabled for next speaker
-        if (result.nextSpeakerId) {
+        if (nextParticipant) {
           this.server.to(roomId).emit(DEBATE_EVENTS.MIC_ENABLED, {
-            participantId: result.nextSpeakerId,
+            participantId: nextParticipant.user.clerkId,
             reason: 'turn',
           });
         }
@@ -801,7 +819,7 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
         // Emit mic disabled for all participants
         for (const participant of debateRoom.participants) {
           this.server.to(roomId).emit(DEBATE_EVENTS.MIC_DISABLED, {
-            participantId: participant.user.id,
+            participantId: participant.user.clerkId,
             reason: 'debate_ended',
           });
         }
@@ -809,7 +827,7 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
         // Emit mic enabled for moderators
         for (const moderator of debateRoom.moderators) {
           this.server.to(roomId).emit(DEBATE_EVENTS.MIC_ENABLED, {
-            participantId: moderator.user.id,
+            participantId: moderator.user.clerkId,
             reason: 'moderator',
           });
         }
@@ -1072,16 +1090,17 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
             });
           }
 
+          // Use Clerk ID for mic events
           this.server.to(roomId).emit(DEBATE_EVENTS.MIC_DISABLED, {
-            participantId: currentState.currentSpeakerId,
+            participantId: currentParticipant.user.clerkId,
             reason: 'turn_ended',
           });
         }
 
         // Emit mic enabled for next speaker
-        if (result.nextSpeakerId) {
+        if (nextParticipant) {
           this.server.to(roomId).emit(DEBATE_EVENTS.MIC_ENABLED, {
-            participantId: result.nextSpeakerId,
+            participantId: nextParticipant.user.clerkId,
             reason: 'turn',
           });
         }
@@ -1128,7 +1147,7 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
       // Emit mic disabled for all participants
       for (const participant of debateRoom.participants) {
         this.server.to(roomId).emit(DEBATE_EVENTS.MIC_DISABLED, {
-          participantId: participant.user.id,
+          participantId: participant.user.clerkId,
           reason: 'debate_ended',
         });
       }
@@ -1136,7 +1155,7 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
       // Emit mic enabled for moderators
       for (const moderator of debateRoom.moderators) {
         this.server.to(roomId).emit(DEBATE_EVENTS.MIC_ENABLED, {
-          participantId: moderator.user.id,
+          participantId: moderator.user.clerkId,
           reason: 'moderator',
         });
       }
