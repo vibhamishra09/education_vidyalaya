@@ -691,11 +691,11 @@ export class DebateRoomsService {
       data: { startedAt: new Date() },
     });
 
-    // Update Redis state
+    // Update Redis state (use Clerk ID for frontend compatibility)
     const state: DebateState = {
       status: DebateStatus.LIVE,
       currentTurnIndex: 0,
-      currentSpeakerId: firstTurn.participant.userId,
+      currentSpeakerId: firstTurn.participant.user.clerkId, // Use Clerk ID for frontend
       turnStartedAt: now,
       turnEndTime,
       prepEndTime: null,
@@ -846,7 +846,7 @@ export class DebateRoomsService {
       const state: DebateState = {
         status: DebateStatus.LIVE,
         currentTurnIndex: nextTurnIndex,
-        currentSpeakerId: nextTurn.participant.userId,
+        currentSpeakerId: nextTurn.participant.user.clerkId, // Use Clerk ID for frontend
         turnStartedAt: now,
         turnEndTime,
         prepEndTime: null,

@@ -524,6 +524,22 @@ function DebateLiveContent({
       console.log('[DebateRoom] Camera tracks:', cameraTracks.map(t => ({ identity: t.participant.identity, name: t.participant.name })));
       console.log('[DebateRoom] All participants:', participants.map(p => ({ identity: p.identity, name: p.name })));
       console.log('[DebateRoom] Speaking participants:', speakingParticipants.map(p => p.identity));
+      console.log('[DebateRoom] Current speaker ID from debate state:', debateState?.currentSpeakerId);
+      console.log('[DebateRoom] Local participant mic enabled:', localParticipant.isMicrophoneEnabled);
+      console.log('[DebateRoom] Local participant identity:', localParticipant.identity);
+      console.log('[DebateRoom] Is local participant current speaker?', debateState?.currentSpeakerId === localParticipant.identity || debateState?.currentSpeakerId === userId);
+      
+      // Check audio tracks for all participants
+      participants.forEach(p => {
+        const audioTracks = Array.from(p.audioTrackPublications.values());
+        console.log(`[DebateRoom] Participant ${p.identity} (${p.name}):`, {
+          isSpeaking: p.isSpeaking,
+          audioTracks: audioTracks.length,
+          micEnabled: audioTracks.some(t => !t.isMuted),
+          tracks: audioTracks.map(t => ({ trackSid: t.trackSid, isMuted: t.isMuted, kind: t.kind }))
+        });
+      });
+      
       console.log('[DebateRoom] Debate teams:', debateRoom.teams.map(t => ({
         side: t.side,
         participants: t.participants.map(p => ({ id: p.user.id, clerkId: p.user.clerkId, name: p.user.name }))
