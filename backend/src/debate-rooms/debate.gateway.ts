@@ -246,17 +246,33 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
       if (result.finished) {
         this.handleDebateEnd(roomId);
       } else {
-        // Emit mic disabled for disconnected speaker
-        this.server.to(roomId).emit(DEBATE_EVENTS.MIC_DISABLED, {
-          participantId: userId,
-          reason: 'turn_ended',
+        // Get user's Clerk ID for mic events
+        const disconnectedUser = await this.prisma.user.findUnique({
+          where: { id: userId },
+          select: { clerkId: true },
         });
 
-        // Emit mic enabled for next speaker
-        this.server.to(roomId).emit(DEBATE_EVENTS.MIC_ENABLED, {
-          participantId: result.nextSpeakerId,
-          reason: 'turn',
+        // Get next speaker's Clerk ID
+        const nextSpeaker = await this.prisma.user.findUnique({
+          where: { id: result.nextSpeakerId },
+          select: { clerkId: true },
         });
+
+        // Emit mic disabled for disconnected speaker
+        if (disconnectedUser) {
+          this.server.to(roomId).emit(DEBATE_EVENTS.MIC_DISABLED, {
+            participantId: disconnectedUser.clerkId,
+            reason: 'turn_ended',
+          });
+        }
+
+        // Emit mic enabled for next speaker
+        if (nextSpeaker) {
+          this.server.to(roomId).emit(DEBATE_EVENTS.MIC_ENABLED, {
+            participantId: nextSpeaker.clerkId,
+            reason: 'turn',
+          });
+        }
 
         this.server.to(roomId).emit(DEBATE_EVENTS.TURN_STARTED, {
           speakerId: result.nextSpeakerId,
@@ -502,27 +518,76 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
       if (result.finished) {
         this.handleDebateEnd(roomId);
       } else {
-        // Get current speaker to emit mic disabled
-        const state = await this.debateRoomsService.getDebateState(roomId);
-        if (state?.currentSpeakerId) {
+        // Get current and next participant details
+        const [currentState, nextParticipant, debateRoom] = await Promise.all([
+          this.debateRoomsService.getDebateState(roomId),
+          this.prisma.debateParticipant.findFirst({
+            where: {
+              debateRoomId: roomId,
+              userId: result.nextSpeakerId,
+            },
+            include: {
+              user: { select: { id: true, name: true, clerkId: true } },
+              team: { select: { side: true } },
+            },
+          }),
+          this.prisma.debateRoom.findUnique({
+            where: { id: roomId },
+            select: { turnDurationSeconds: true },
+          }),
+        ]);
+
+        // Emit TURN_ENDED for current speaker if we have their info
+        if (currentState?.currentSpeakerId) {
+          const currentParticipant = await this.prisma.debateParticipant.findFirst({
+            where: {
+              debateRoomId: roomId,
+              userId: currentState.currentSpeakerId,
+            },
+            include: {
+              user: { select: { id: true, name: true, clerkId: true } },
+              team: { select: { side: true } },
+            },
+          });
+
+          if (currentParticipant) {
+            this.server.to(roomId).emit(DEBATE_EVENTS.TURN_ENDED, {
+              participantId: currentParticipant.id,
+              participantUserId: currentParticipant.user.clerkId,
+              nextParticipantId: nextParticipant?.id,
+              nextParticipantUserId: nextParticipant?.user.clerkId,
+              nextSide: nextParticipant?.team.side,
+            });
+          }
+
+          // Use Clerk ID for mic events
           this.server.to(roomId).emit(DEBATE_EVENTS.MIC_DISABLED, {
-            participantId: state.currentSpeakerId,
+            participantId: currentParticipant.user.clerkId,
             reason: 'turn_ended',
           });
         }
 
         // Emit mic enabled for next speaker
-        this.server.to(roomId).emit(DEBATE_EVENTS.MIC_ENABLED, {
-          participantId: result.nextSpeakerId,
-          reason: 'turn',
-        });
+        if (nextParticipant) {
+          this.server.to(roomId).emit(DEBATE_EVENTS.MIC_ENABLED, {
+            participantId: nextParticipant.user.clerkId,
+            reason: 'turn',
+          });
+        }
 
-        this.server.to(roomId).emit(DEBATE_EVENTS.TURN_STARTED, {
-          speakerId: result.nextSpeakerId,
-          turnEndTime: result.turnEndTime,
-          turnNumber: result.turnNumber,
-          reason: 'Buzzer pressed',
-        });
+        // Emit TURN_STARTED for next speaker
+        if (nextParticipant) {
+          const state = await this.debateRoomsService.getDebateState(roomId);
+          this.server.to(roomId).emit(DEBATE_EVENTS.TURN_STARTED, {
+            participantId: nextParticipant.id,
+            participantUserId: nextParticipant.user.clerkId,
+            participantName: nextParticipant.user.name,
+            side: nextParticipant.team.side,
+            turnIndex: result.turnNumber || 0,
+            duration: debateRoom?.turnDurationSeconds || 0,
+            startedAt: state?.turnStartedAt ? new Date(state.turnStartedAt).toISOString() : new Date().toISOString(),
+          });
+        }
 
         // Start new turn timer
         this.startTurnTimer(roomId, result.turnEndTime!);
@@ -546,20 +611,49 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
     try {
       const result = await this.debateRoomsService.startPrepPhase(roomId, clerkId);
 
-      // Notify all in room
+      // Get updated room and state
+      const debateRoom = await this.prisma.debateRoom.findUnique({
+        where: { id: roomId },
+        include: {
+          moderators: { include: { user: true } },
+          participants: {
+            include: {
+              team: true,
+              user: { select: { id: true, name: true, avatar: true } },
+            },
+          },
+          teams: {
+            include: {
+              participants: {
+                include: {
+                  user: { select: { id: true, name: true, avatar: true } },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      const state = await this.debateRoomsService.getDebateState(roomId);
+
+      // Notify all in room with updated state
       this.server.to(roomId).emit(DEBATE_EVENTS.PREP_STARTED, {
         prepEndTime: result.prepEndTime,
       });
 
+      // Emit state update to all clients
+      if (debateRoom && state) {
+        this.server.to(roomId).emit(DEBATE_EVENTS.STATE_UPDATE, {
+          room: debateRoom,
+          state,
+        });
+      }
+
       // Emit mic enabled for moderators
-      const debateRoom = await this.prisma.debateRoom.findUnique({
-        where: { id: roomId },
-        include: { moderators: { include: { user: true } } },
-      });
       if (debateRoom) {
         for (const moderator of debateRoom.moderators) {
           this.server.to(roomId).emit(DEBATE_EVENTS.MIC_ENABLED, {
-            participantId: moderator.user.id,
+            participantId: moderator.user.clerkId,
             reason: 'moderator',
           });
         }
@@ -617,27 +711,76 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
       if (result.finished) {
         await this.handleDebateEnd(roomId);
       } else {
-        // Get current speaker to emit mic disabled
-        const state = await this.debateRoomsService.getDebateState(roomId);
-        if (state?.currentSpeakerId) {
-          this.server.to(roomId).emit(DEBATE_EVENTS.MIC_DISABLED, {
-            participantId: state.currentSpeakerId,
-            reason: 'turn_ended',
+        // Get current and next participant details
+        const [currentState, nextParticipant, debateRoom] = await Promise.all([
+          this.debateRoomsService.getDebateState(roomId),
+          this.prisma.debateParticipant.findFirst({
+            where: {
+              debateRoomId: roomId,
+              userId: result.nextSpeakerId,
+            },
+            include: {
+              user: { select: { id: true, name: true, clerkId: true } },
+              team: { select: { side: true } },
+            },
+          }),
+          this.prisma.debateRoom.findUnique({
+            where: { id: roomId },
+            select: { turnDurationSeconds: true },
+          }),
+        ]);
+
+        // Emit TURN_ENDED for current speaker if we have their info
+        if (currentState?.currentSpeakerId) {
+          const currentParticipant = await this.prisma.debateParticipant.findFirst({
+            where: {
+              debateRoomId: roomId,
+              userId: currentState.currentSpeakerId,
+            },
+            include: {
+              user: { select: { id: true, name: true, clerkId: true } },
+              team: { select: { side: true } },
+            },
           });
+
+          if (currentParticipant) {
+            this.server.to(roomId).emit(DEBATE_EVENTS.TURN_ENDED, {
+              participantId: currentParticipant.id,
+              participantUserId: currentParticipant.user.clerkId,
+              nextParticipantId: nextParticipant?.id,
+              nextParticipantUserId: nextParticipant?.user.clerkId,
+              nextSide: nextParticipant?.team.side,
+            });
+
+            // Use Clerk ID for mic events
+            this.server.to(roomId).emit(DEBATE_EVENTS.MIC_DISABLED, {
+              participantId: currentParticipant.user.clerkId,
+              reason: 'turn_ended',
+            });
+          }
         }
 
         // Emit mic enabled for next speaker
-        this.server.to(roomId).emit(DEBATE_EVENTS.MIC_ENABLED, {
-          participantId: result.nextSpeakerId,
-          reason: 'turn',
-        });
+        if (nextParticipant) {
+          this.server.to(roomId).emit(DEBATE_EVENTS.MIC_ENABLED, {
+            participantId: nextParticipant.user.clerkId,
+            reason: 'turn',
+          });
+        }
 
-        this.server.to(roomId).emit(DEBATE_EVENTS.TURN_STARTED, {
-          speakerId: result.nextSpeakerId,
-          turnEndTime: result.turnEndTime,
-          turnNumber: result.turnNumber,
-          reason: 'Moderator advanced',
-        });
+        // Emit TURN_STARTED for next speaker
+        if (nextParticipant) {
+          const state = await this.debateRoomsService.getDebateState(roomId);
+          this.server.to(roomId).emit(DEBATE_EVENTS.TURN_STARTED, {
+            participantId: nextParticipant.id,
+            participantUserId: nextParticipant.user.clerkId,
+            participantName: nextParticipant.user.name,
+            side: nextParticipant.team.side,
+            turnIndex: result.turnNumber || 0,
+            duration: debateRoom?.turnDurationSeconds || 0,
+            startedAt: state?.turnStartedAt ? new Date(state.turnStartedAt).toISOString() : new Date().toISOString(),
+          });
+        }
 
         // Start new turn timer
         this.startTurnTimer(roomId, result.turnEndTime!);
@@ -676,7 +819,7 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
         // Emit mic disabled for all participants
         for (const participant of debateRoom.participants) {
           this.server.to(roomId).emit(DEBATE_EVENTS.MIC_DISABLED, {
-            participantId: participant.user.id,
+            participantId: participant.user.clerkId,
             reason: 'debate_ended',
           });
         }
@@ -684,7 +827,7 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
         // Emit mic enabled for moderators
         for (const moderator of debateRoom.moderators) {
           this.server.to(roomId).emit(DEBATE_EVENTS.MIC_ENABLED, {
-            participantId: moderator.user.id,
+            participantId: moderator.user.clerkId,
             reason: 'moderator',
           });
         }
@@ -804,10 +947,42 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
     try {
       const result = await this.debateRoomsService.startLiveDebate(roomId);
 
+      // Get participant details for DEBATE_STARTED event
+      const firstParticipant = await this.prisma.debateParticipant.findFirst({
+        where: {
+          debateRoomId: roomId,
+          userId: result.currentSpeakerId,
+        },
+        include: {
+          user: { select: { id: true, name: true, clerkId: true } },
+          team: { select: { side: true } },
+        },
+      });
+
+      const debateRoom = await this.prisma.debateRoom.findUnique({
+        where: { id: roomId },
+        select: { turnDurationSeconds: true },
+      });
+
+      const state = await this.debateRoomsService.getDebateState(roomId);
+
       this.server.to(roomId).emit(DEBATE_EVENTS.DEBATE_STARTED, {
         currentSpeakerId: result.currentSpeakerId,
         turnEndTime: result.turnEndTime,
       });
+
+      // Also emit TURN_STARTED for the first speaker
+      if (firstParticipant && state) {
+        this.server.to(roomId).emit(DEBATE_EVENTS.TURN_STARTED, {
+          participantId: firstParticipant.id,
+          participantUserId: firstParticipant.user.clerkId,
+          participantName: firstParticipant.user.name,
+          side: firstParticipant.team.side,
+          turnIndex: 0,
+          duration: debateRoom?.turnDurationSeconds || 0,
+          startedAt: state.turnStartedAt ? new Date(state.turnStartedAt).toISOString() : new Date().toISOString(),
+        });
+      }
 
       // Start turn timer
       this.startTurnTimer(roomId, result.turnEndTime);
@@ -873,27 +1048,76 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
       if (result.finished) {
         this.handleDebateEnd(roomId);
       } else {
-        // Get current speaker to emit mic disabled
-        const state = await this.debateRoomsService.getDebateState(roomId);
-        if (state?.currentSpeakerId) {
+        // Get current and next participant details
+        const [currentState, nextParticipant, debateRoom] = await Promise.all([
+          this.debateRoomsService.getDebateState(roomId),
+          this.prisma.debateParticipant.findFirst({
+            where: {
+              debateRoomId: roomId,
+              userId: result.nextSpeakerId,
+            },
+            include: {
+              user: { select: { id: true, name: true, clerkId: true } },
+              team: { select: { side: true } },
+            },
+          }),
+          this.prisma.debateRoom.findUnique({
+            where: { id: roomId },
+            select: { turnDurationSeconds: true },
+          }),
+        ]);
+
+        // Emit TURN_ENDED for current speaker if we have their info
+        if (currentState?.currentSpeakerId) {
+          const currentParticipant = await this.prisma.debateParticipant.findFirst({
+            where: {
+              debateRoomId: roomId,
+              userId: currentState.currentSpeakerId,
+            },
+            include: {
+              user: { select: { id: true, name: true, clerkId: true } },
+              team: { select: { side: true } },
+            },
+          });
+
+          if (currentParticipant) {
+            this.server.to(roomId).emit(DEBATE_EVENTS.TURN_ENDED, {
+              participantId: currentParticipant.id,
+              participantUserId: currentParticipant.user.clerkId,
+              nextParticipantId: nextParticipant?.id,
+              nextParticipantUserId: nextParticipant?.user.clerkId,
+              nextSide: nextParticipant?.team.side,
+            });
+          }
+
+          // Use Clerk ID for mic events
           this.server.to(roomId).emit(DEBATE_EVENTS.MIC_DISABLED, {
-            participantId: state.currentSpeakerId,
+            participantId: currentParticipant.user.clerkId,
             reason: 'turn_ended',
           });
         }
 
         // Emit mic enabled for next speaker
-        this.server.to(roomId).emit(DEBATE_EVENTS.MIC_ENABLED, {
-          participantId: result.nextSpeakerId,
-          reason: 'turn',
-        });
+        if (nextParticipant) {
+          this.server.to(roomId).emit(DEBATE_EVENTS.MIC_ENABLED, {
+            participantId: nextParticipant.user.clerkId,
+            reason: 'turn',
+          });
+        }
 
-        this.server.to(roomId).emit(DEBATE_EVENTS.TURN_STARTED, {
-          speakerId: result.nextSpeakerId,
-          turnEndTime: result.turnEndTime,
-          turnNumber: result.turnNumber,
-          reason: 'Timer expired',
-        });
+        // Emit TURN_STARTED for next speaker
+        if (nextParticipant) {
+          const state = await this.debateRoomsService.getDebateState(roomId);
+          this.server.to(roomId).emit(DEBATE_EVENTS.TURN_STARTED, {
+            participantId: nextParticipant.id,
+            participantUserId: nextParticipant.user.clerkId,
+            participantName: nextParticipant.user.name,
+            side: nextParticipant.team.side,
+            turnIndex: result.turnNumber || 0,
+            duration: debateRoom?.turnDurationSeconds || 0,
+            startedAt: state?.turnStartedAt ? new Date(state.turnStartedAt).toISOString() : new Date().toISOString(),
+          });
+        }
 
         // Start new turn timer
         this.startTurnTimer(roomId, result.turnEndTime!);
@@ -923,7 +1147,7 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
       // Emit mic disabled for all participants
       for (const participant of debateRoom.participants) {
         this.server.to(roomId).emit(DEBATE_EVENTS.MIC_DISABLED, {
-          participantId: participant.user.id,
+          participantId: participant.user.clerkId,
           reason: 'debate_ended',
         });
       }
@@ -931,7 +1155,7 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
       // Emit mic enabled for moderators
       for (const moderator of debateRoom.moderators) {
         this.server.to(roomId).emit(DEBATE_EVENTS.MIC_ENABLED, {
-          participantId: moderator.user.id,
+          participantId: moderator.user.clerkId,
           reason: 'moderator',
         });
       }
