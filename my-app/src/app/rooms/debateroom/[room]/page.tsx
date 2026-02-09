@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useUser, useAuth } from '@clerk/nextjs';
 import { Loader2 } from 'lucide-react';
@@ -15,6 +15,8 @@ import {
   DebateSide,
   getUserDebateRole,
   getUserTeamSide,
+  MicEnabledEvent,
+  MicDisabledEvent,
 } from '@/types/debate.types';
 
 // Live Debate View - Allow entering when WAITING, LIVE, or PREP
@@ -39,6 +41,21 @@ export default function DebateRoomPage() {
   const userSide = room && user ? getUserTeamSide(room, user.id) : null;
   const isModerator = userRole === 'host' || userRole === 'moderator';
 
+  // Mic control handlers - will be passed to socket and debate room
+  const handleMicEnabledRef = useRef<((event: MicEnabledEvent) => void) | null>(null);
+  const handleMicDisabledRef = useRef<((event: MicDisabledEvent) => void) | null>(null);
+
+  const handleMicEnabled = useCallback((event: MicEnabledEvent) => {
+    // #region agent log
+    fetch('http://127.0.0.1:7244/ingest/d6208dbe-815f-4534-a4cc-4028b2570455',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:46',message:'handleMicEnabled called',data:{eventParticipantId:event.participantId,hasRef:!!handleMicEnabledRef.current},timestamp:Date.now(),runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
+    handleMicEnabledRef.current?.(event);
+  }, []);
+
+  const handleMicDisabled = useCallback((event: MicDisabledEvent) => {
+    handleMicDisabledRef.current?.(event);
+  }, []);
+
   // Socket connection for real-time updates
   const {
     isConnected,
@@ -58,6 +75,8 @@ export default function DebateRoomPage() {
     onDebateEnded: () => {
       router.push(`/debateroom/${roomId}`);
     },
+    onMicEnabled: handleMicEnabled,
+    onMicDisabled: handleMicDisabled,
   });
 
   // Join socket room when connected
@@ -158,6 +177,8 @@ export default function DebateRoomPage() {
       canStartDebate={canStart}
       isStartingDebate={!isConnected}
       getToken={getToken}
+      onMicEnabledRef={handleMicEnabledRef}
+      onMicDisabledRef={handleMicDisabledRef}
     />
   );
 }

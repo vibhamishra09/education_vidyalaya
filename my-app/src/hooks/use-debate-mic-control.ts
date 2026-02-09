@@ -11,6 +11,7 @@ interface UseDebateMicControlOptions {
   userId?: string;
   onMicEnabled?: (event: MicEnabledEvent) => void;
   onMicDisabled?: (event: MicDisabledEvent) => void;
+  onNotification?: (title: string, message?: string, type?: 'info' | 'warning' | 'error' | 'success') => void;
 }
 
 interface UseDebateMicControlReturn {
@@ -32,6 +33,7 @@ export function useDebateMicControl({
   userId,
   onMicEnabled,
   onMicDisabled,
+  onNotification,
 }: UseDebateMicControlOptions): UseDebateMicControlReturn {
   const { localParticipant } = useLocalParticipant();
   const room = useRoomContext();
@@ -108,61 +110,11 @@ export function useDebateMicControl({
     console.log('[useDebateMicControl] Is for current user?', isForCurrentUser);
 
     if (isForCurrentUser) {
-      if (micControlRef.current.enabled) {
-        console.log('[useDebateMicControl] Mic already enabled, skipping');
-        return;
-      }
-      micControlRef.current.enabled = true;
-      micControlRef.current.disabled = false;
-
-      console.log('[useDebateMicControl] Enabling microphone...');
-      console.log('[useDebateMicControl] Current mic state before enable:', localParticipant.isMicrophoneEnabled);
-      
-      localParticipant.setMicrophoneEnabled(true).then(() => {
-        console.log('[useDebateMicControl] Microphone enabled successfully');
-        console.log('[useDebateMicControl] Mic state after enable:', localParticipant.isMicrophoneEnabled);
-        
-        // Verify it's actually enabled
-        setTimeout(() => {
-          const isEnabled = localParticipant.isMicrophoneEnabled;
-          console.log('[useDebateMicControl] Mic state after 500ms:', isEnabled);
-          if (!isEnabled) {
-            console.warn('[useDebateMicControl] Warning: Microphone was enabled but is now disabled. This might indicate a permission issue.');
-          } else {
-            // Check if we have an audio track
-            const audioTrack = localParticipant.audioTrackPublications.values().next().value;
-            if (audioTrack) {
-              console.log('[useDebateMicControl] Audio track found:', {
-                trackSid: audioTrack.trackSid,
-                isMuted: audioTrack.isMuted,
-                kind: audioTrack.kind,
-              });
-            } else {
-              console.warn('[useDebateMicControl] Warning: No audio track found after enabling mic');
-            }
-          }
-        }, 500);
-      }).catch((err) => {
-        console.error('[useDebateMicControl] Failed to enable mic:', err);
-        // Check for specific error types
-        if (err instanceof Error) {
-          if (err.message.includes('permission') || err.name === 'NotAllowedError') {
-            console.error('[useDebateMicControl] Microphone permission denied. User needs to grant permission in browser settings.');
-          } else if (err.message.includes('track') || err.message.includes('not found')) {
-            console.error('[useDebateMicControl] Microphone track not found. This might be a LiveKit connection issue.');
-          } else {
-            console.error('[useDebateMicControl] Unknown error enabling microphone:', err.message);
-          }
-        }
-      });
-
-      setTimeout(() => {
-        micControlRef.current.enabled = false;
-      }, 1000);
-    } else {
-      console.log('[useDebateMicControl] Event not for current user, ignoring');
+      // Don't auto-enable, just unlock - user can manually unmute
+      console.log('[useDebateMicControl] Mic unlocked for current speaker - user can now unmute');
+      onNotification?.('🎤 Microphone Unlocked', 'It\'s your turn! You can now unmute your microphone.', 'info');
     }
-  }, [localParticipant, userId]);
+  }, [localParticipant, userId, onNotification]);
 
   const handleMicDisabledInternal = useCallback((event: MicDisabledEvent) => {
     if (!localParticipant || !userId) return;
@@ -203,37 +155,63 @@ export function useDebateMicControl({
     }
   }, [onMicDisabled, handleMicDisabledInternal]);
 
-  // Auto-enable mic when user becomes current speaker
+  // Show notification when it's user's turn but mic is muted
+  const prevIsCurrentSpeakerRef = useRef(false);
+  const notificationShownRef = useRef(false);
   useEffect(() => {
-    if (!localParticipant || !userId || debateStatus !== DebateStatus.LIVE) return;
-    
-    // If user is current speaker and mic is not enabled, enable it
-    if (isCurrentSpeaker && !localParticipant.isMicrophoneEnabled) {
-      console.log('[useDebateMicControl] Auto-enabling mic for current speaker');
-      localParticipant.setMicrophoneEnabled(true).then(() => {
-        console.log('[useDebateMicControl] Auto-enabled microphone successfully');
-      }).catch((err) => {
-        console.error('[useDebateMicControl] Failed to auto-enable mic:', err);
-        // If permission error, log it clearly
-        if (err instanceof Error && err.message.includes('permission')) {
-          console.error('[useDebateMicControl] Microphone permission denied. User needs to grant permission.');
-        }
-      });
+    if (!localParticipant || !userId || debateStatus !== DebateStatus.LIVE) {
+      prevIsCurrentSpeakerRef.current = false;
+      notificationShownRef.current = false;
+      return;
     }
-  }, [isCurrentSpeaker, localParticipant, userId, debateStatus]);
+    
+    // Check if user just became the current speaker
+    const justBecameSpeaker = isCurrentSpeaker && !prevIsCurrentSpeakerRef.current;
+    const wasCurrentSpeaker = prevIsCurrentSpeakerRef.current;
+    prevIsCurrentSpeakerRef.current = isCurrentSpeaker;
+    
+    // If user just became the current speaker and mic is muted, show notification
+    if (justBecameSpeaker && !localParticipant.isMicrophoneEnabled) {
+      onNotification?.('🎤 It\'s your turn to speak!', 'Please unmute your microphone to participate.', 'warning');
+      notificationShownRef.current = true;
+    } else if (!isCurrentSpeaker) {
+      // Reset notification flag when it's no longer their turn
+      notificationShownRef.current = false;
+    }
+  }, [isCurrentSpeaker, localParticipant, userId, debateStatus, currentSpeakerId, onNotification]);
 
-  // Auto-mute when mic is locked (unless already muted)
+  // Lock mic when it's not user's turn - force mute if they try to unmute
   useEffect(() => {
-    if (!localParticipant || !isMicLocked) return;
+    if (!localParticipant) return;
 
-    // If mic is locked and user is not current speaker/moderator, ensure mic is muted
+    // If mic is locked (not user's turn), ensure mic is muted
     if (isMicLocked && localParticipant.isMicrophoneEnabled) {
-      console.log('[useDebateMicControl] Auto-muting because mic is locked');
+      console.log('[useDebateMicControl] Auto-muting because mic is locked (not your turn)');
       localParticipant.setMicrophoneEnabled(false).catch((err) => {
         console.error('[useDebateMicControl] Failed to auto-mute:', err);
       });
     }
-  }, [isMicLocked, localParticipant, isCurrentSpeaker]);
+  }, [isMicLocked, localParticipant]);
+
+  // Prevent manual unmute when mic is locked
+  const prevMicEnabledRef = useRef<boolean | null>(null);
+  useEffect(() => {
+    if (!localParticipant) return;
+    
+    const currentMicEnabled = localParticipant.isMicrophoneEnabled;
+    const wasEnabled = prevMicEnabledRef.current;
+    
+    // If user manually tried to unmute while locked, mute them again
+    if (isMicLocked && currentMicEnabled && wasEnabled === false) {
+      console.log('[useDebateMicControl] User tried to unmute while locked, muting again');
+      localParticipant.setMicrophoneEnabled(false).catch((err) => {
+        console.error('[useDebateMicControl] Failed to enforce mute:', err);
+      });
+      onNotification?.('🔒 Microphone Locked', micLockReason || 'You cannot unmute during this phase.', 'warning');
+    }
+    
+    prevMicEnabledRef.current = currentMicEnabled;
+  }, [localParticipant?.isMicrophoneEnabled, isMicLocked, micLockReason, onNotification]);
 
   return {
     isMicLocked,

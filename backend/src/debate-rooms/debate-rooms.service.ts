@@ -1272,7 +1272,31 @@ export class DebateRoomsService {
   async getDebateState(roomId: string): Promise<DebateState | null> {
     const stateStr = await redisClient.get(REDIS_KEYS.debateState(roomId));
     if (!stateStr) return null;
-    return JSON.parse(stateStr);
+    const state = JSON.parse(stateStr);
+    
+    // Convert currentSpeakerId from database ID to Clerk ID if needed
+    if (state.currentSpeakerId && !state.currentSpeakerId.startsWith('user_')) {
+      try {
+        const user = await this.prisma.user.findUnique({
+          where: { id: state.currentSpeakerId },
+          select: { clerkId: true },
+        });
+        if (user) {
+          state.currentSpeakerId = user.clerkId;
+          // Update Redis with corrected ID
+          await redisClient.set(
+            REDIS_KEYS.debateState(roomId),
+            JSON.stringify(state),
+            { EX: 86400 },
+          );
+        }
+      } catch (error) {
+        // If conversion fails, leave as is
+        this.logger.warn(`Failed to convert currentSpeakerId for room ${roomId}:`, error);
+      }
+    }
+    
+    return state;
   }
 
   /**
