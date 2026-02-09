@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useUser, useAuth } from '@clerk/nextjs';
 import { Loader2 } from 'lucide-react';
@@ -8,7 +8,6 @@ import { DebateLiveRoom } from './debate-live-room';
 import {
   useDebateRoomDetails,
   useDebateLivekitToken,
-  useStartPrepPhase,
 } from '@/hooks/use-debate-rooms';
 import { useDebateSocket } from '@/hooks/use-debate-socket';
 import {
@@ -16,6 +15,8 @@ import {
   DebateSide,
   getUserDebateRole,
   getUserTeamSide,
+  MicEnabledEvent,
+  MicDisabledEvent,
 } from '@/types/debate.types';
 
 // Live Debate View - Allow entering when WAITING, LIVE, or PREP
@@ -35,13 +36,25 @@ export default function DebateRoomPage() {
     room?.status === DebateStatus.LIVE || room?.status === DebateStatus.PREP || room?.status === DebateStatus.WAITING
   );
 
-  // Mutations
-  const startPrepPhase = useStartPrepPhase();
-
   // Get user's role and team
   const userRole = room && user ? getUserDebateRole(room, user.id) : null;
   const userSide = room && user ? getUserTeamSide(room, user.id) : null;
   const isModerator = userRole === 'host' || userRole === 'moderator';
+
+  // Mic control handlers - will be passed to socket and debate room
+  const handleMicEnabledRef = useRef<((event: MicEnabledEvent) => void) | null>(null);
+  const handleMicDisabledRef = useRef<((event: MicDisabledEvent) => void) | null>(null);
+
+  const handleMicEnabled = useCallback((event: MicEnabledEvent) => {
+    // #region agent log
+    fetch('http://127.0.0.1:7244/ingest/d6208dbe-815f-4534-a4cc-4028b2570455',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:46',message:'handleMicEnabled called',data:{eventParticipantId:event.participantId,hasRef:!!handleMicEnabledRef.current},timestamp:Date.now(),runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
+    handleMicEnabledRef.current?.(event);
+  }, []);
+
+  const handleMicDisabled = useCallback((event: MicDisabledEvent) => {
+    handleMicDisabledRef.current?.(event);
+  }, []);
 
   // Socket connection for real-time updates
   const {
@@ -53,6 +66,7 @@ export default function DebateRoomPage() {
     joinRoom: socketJoinRoom,
     pressBuzzer,
     sendTeamChat,
+    startPrep: socketStartPrep,
     advanceTurn,
     endDebate,
   } = useDebateSocket({
@@ -61,6 +75,8 @@ export default function DebateRoomPage() {
     onDebateEnded: () => {
       router.push(`/debateroom/${roomId}`);
     },
+    onMicEnabled: handleMicEnabled,
+    onMicDisabled: handleMicDisabled,
   });
 
   // Join socket room when connected
@@ -70,12 +86,12 @@ export default function DebateRoomPage() {
     }
   }, [isConnected, room, socketJoinRoom]);
 
-  // Handle start prep phase
-  const handleStartPrep = async () => {
-    try {
-      await startPrepPhase.mutateAsync(roomId);
-    } catch (err) {
-      console.error('Failed to start prep phase:', err);
+  // Handle start prep phase via socket
+  const handleStartPrep = () => {
+    if (isConnected && socketStartPrep) {
+      socketStartPrep();
+    } else {
+      console.error('Socket not connected, cannot start prep phase');
     }
   };
 
@@ -159,8 +175,10 @@ export default function DebateRoomPage() {
       onEndDebate={endDebate}
       onStartDebate={room.status === DebateStatus.WAITING && isModerator ? handleStartPrep : undefined}
       canStartDebate={canStart}
-      isStartingDebate={startPrepPhase.isPending}
+      isStartingDebate={!isConnected}
       getToken={getToken}
+      onMicEnabledRef={handleMicEnabledRef}
+      onMicDisabledRef={handleMicDisabledRef}
     />
   );
 }

@@ -12,7 +12,7 @@ import {
   isTrackReference,
   useSpeakingParticipants,
 } from '@livekit/components-react';
-import { Track, RoomOptions, VideoPresets, RemoteParticipant } from 'livekit-client';
+import { Track, RoomOptions, VideoPresets, RemoteParticipant, LocalTrackPublication, RemoteTrackPublication } from 'livekit-client';
 import { io, Socket } from 'socket.io-client';
 import type { TrackReferenceOrPlaceholder } from '@livekit/components-react';
 import '@livekit/components-styles';
@@ -70,6 +70,7 @@ import {
 } from '@/components/debate';
 import { useDebateMicControl } from '@/hooks/use-debate-mic-control';
 import { MicEnabledEvent, MicDisabledEvent } from '@/types/debate.types';
+import { useToast } from '@/contexts/toast-context';
 
 interface ChatMessage {
   id: string;
@@ -101,6 +102,8 @@ interface DebateLiveRoomProps {
   canStartDebate?: boolean;
   isStartingDebate?: boolean;
   getToken: () => Promise<string | null>;
+  onMicEnabledRef: React.MutableRefObject<((event: MicEnabledEvent) => void) | null>;
+  onMicDisabledRef: React.MutableRefObject<((event: MicDisabledEvent) => void) | null>;
 }
 
 export function DebateLiveRoom({
@@ -122,6 +125,8 @@ export function DebateLiveRoom({
   canStartDebate,
   isStartingDebate,
   getToken,
+  onMicEnabledRef,
+  onMicDisabledRef,
 }: DebateLiveRoomProps) {
   const router = useRouter();
 
@@ -219,6 +224,8 @@ export function DebateLiveRoom({
           isStartingDebate={isStartingDebate}
           onLeave={handleLeave}
           getToken={getToken}
+          onMicEnabledRef={onMicEnabledRef}
+          onMicDisabledRef={onMicDisabledRef}
         />
         <RoomAudioRenderer />
       </LiveKitRoom>
@@ -244,6 +251,8 @@ interface DebateLiveContentProps {
   isStartingDebate?: boolean;
   onLeave: () => void;
   getToken: () => Promise<string | null>;
+  onMicEnabledRef: React.MutableRefObject<((event: MicEnabledEvent) => void) | null>;
+  onMicDisabledRef: React.MutableRefObject<((event: MicDisabledEvent) => void) | null>;
 }
 
 // Local prep countdown timer component that updates every second
@@ -302,7 +311,10 @@ function DebateLiveContent({
   isStartingDebate,
   onLeave,
   getToken,
+  onMicEnabledRef,
+  onMicDisabledRef,
 }: DebateLiveContentProps) {
+  const { showWarning, showInfo } = useToast();
   const [showSidebar, setShowSidebar] = useState(true);
   const [sidebarTab, setSidebarTab] = useState<'teams' | 'chat'>('teams');
   const [isAudioOutputEnabled, setIsAudioOutputEnabled] = useState(true);
@@ -524,6 +536,25 @@ function DebateLiveContent({
       console.log('[DebateRoom] Camera tracks:', cameraTracks.map(t => ({ identity: t.participant.identity, name: t.participant.name })));
       console.log('[DebateRoom] All participants:', participants.map(p => ({ identity: p.identity, name: p.name })));
       console.log('[DebateRoom] Speaking participants:', speakingParticipants.map(p => p.identity));
+      console.log('[DebateRoom] Current speaker ID from debate state:', debateState?.currentSpeakerId);
+      console.log('[DebateRoom] Local participant mic enabled:', localParticipant.isMicrophoneEnabled);
+      console.log('[DebateRoom] Local participant identity:', localParticipant.identity);
+      console.log('[DebateRoom] Is local participant current speaker?', debateState?.currentSpeakerId === localParticipant.identity || debateState?.currentSpeakerId === userId);
+      
+      // Check audio tracks for all participants
+      participants.forEach(p => {
+        const audioTracks: (LocalTrackPublication | RemoteTrackPublication)[] = [];
+        p.audioTrackPublications.forEach((pub) => {
+          audioTracks.push(pub);
+        });
+        console.log(`[DebateRoom] Participant ${p.identity} (${p.name}):`, {
+          isSpeaking: p.isSpeaking,
+          audioTracks: audioTracks.length,
+          micEnabled: audioTracks.some(t => !t.isMuted),
+          tracks: audioTracks.map(t => ({ trackSid: t.trackSid, isMuted: t.isMuted, kind: t.kind }))
+        });
+      });
+      
       console.log('[DebateRoom] Debate teams:', debateRoom.teams.map(t => ({
         side: t.side,
         participants: t.participants.map(p => ({ id: p.user.id, clerkId: p.user.clerkId, name: p.user.name }))
@@ -652,17 +683,6 @@ function DebateLiveContent({
     }
   }, [localParticipant]);
 
-  // Toggle microphone with proper error handling
-  const toggleMicrophone = useCallback(async () => {
-    if (!localParticipant) return;
-
-    try {
-      await localParticipant.setMicrophoneEnabled(!localParticipant.isMicrophoneEnabled);
-      console.log('[DebateRoom] Microphone toggled:', !localParticipant.isMicrophoneEnabled);
-    } catch (err) {
-      console.error('[DebateRoom] Microphone toggle error:', err);
-    }
-  }, [localParticipant]);
 
   // Toggle audio output
   const toggleAudioOutput = useCallback(() => {
@@ -831,21 +851,21 @@ function DebateLiveContent({
 
   const isUserTurn = currentSpeaker?.user.clerkId === userId;
 
-  // Mic control handlers - these will be called by socket events
-  const handleMicEnabledRef = useRef<((event: MicEnabledEvent) => void) | null>(null);
-  const handleMicDisabledRef = useRef<((event: MicDisabledEvent) => void) | null>(null);
-
+  // Mic control handlers - connect to refs from parent
   const handleMicEnabled = useCallback((event: MicEnabledEvent) => {
+    // #region agent log
+    fetch('http://127.0.0.1:7244/ingest/d6208dbe-815f-4534-a4cc-4028b2570455',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'debate-live-room.tsx:854',message:'Socket mic enabled event received',data:{eventParticipantId:event.participantId,reason:event.reason,hasHandler:!!onMicEnabledRef.current},timestamp:Date.now(),runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
     console.log('[DebateLiveRoom] Mic enabled for:', event.participantId, 'reason:', event.reason);
     // Call the handler from the hook if it exists
-    handleMicEnabledRef.current?.(event);
-  }, []);
+    onMicEnabledRef.current?.(event);
+  }, [onMicEnabledRef]);
 
   const handleMicDisabled = useCallback((event: MicDisabledEvent) => {
     console.log('[DebateLiveRoom] Mic disabled for:', event.participantId, 'reason:', event.reason);
     // Call the handler from the hook if it exists
-    handleMicDisabledRef.current?.(event);
-  }, []);
+    onMicDisabledRef.current?.(event);
+  }, [onMicDisabledRef]);
 
   // Use mic control hook
   const { isMicLocked, canToggleMic, micLockReason, handleMicEnabled: handleMicEnabledFromHook, handleMicDisabled: handleMicDisabledFromHook } = useDebateMicControl({
@@ -855,13 +875,47 @@ function DebateLiveContent({
     userId,
     onMicEnabled: handleMicEnabled,
     onMicDisabled: handleMicDisabled,
+    onNotification: (title, message, type) => {
+      if (type === 'warning') {
+        showWarning(title, message);
+      } else if (type === 'info') {
+        showInfo(title, message);
+      } else if (type === 'error') {
+        showWarning(title, message); // Use warning for errors too
+      } else {
+        showInfo(title, message);
+      }
+    },
   });
 
   // Store hook handlers in refs for socket callbacks to use
   useEffect(() => {
-    handleMicEnabledRef.current = handleMicEnabledFromHook;
-    handleMicDisabledRef.current = handleMicDisabledFromHook;
-  }, [handleMicEnabledFromHook, handleMicDisabledFromHook]);
+    // #region agent log
+    fetch('http://127.0.0.1:7244/ingest/d6208dbe-815f-4534-a4cc-4028b2570455',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'debate-live-room.tsx:890',message:'Setting mic handler refs',data:{hasHandleMicEnabledFromHook:!!handleMicEnabledFromHook,hasHandleMicDisabledFromHook:!!handleMicDisabledFromHook},timestamp:Date.now(),runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
+    onMicEnabledRef.current = handleMicEnabledFromHook;
+    onMicDisabledRef.current = handleMicDisabledFromHook;
+  }, [handleMicEnabledFromHook, handleMicDisabledFromHook, onMicEnabledRef, onMicDisabledRef]);
+
+  // Toggle microphone with proper error handling and lock checking
+  const toggleMicrophone = useCallback(async () => {
+    if (!localParticipant) return;
+
+    // Check if mic is locked
+    if (isMicLocked && !localParticipant.isMicrophoneEnabled) {
+      // User is trying to unmute while locked
+      showWarning('🔒 Microphone Locked', micLockReason || 'You cannot unmute during this phase.');
+      return;
+    }
+
+    try {
+      await localParticipant.setMicrophoneEnabled(!localParticipant.isMicrophoneEnabled);
+      console.log('[DebateRoom] Microphone toggled:', !localParticipant.isMicrophoneEnabled);
+    } catch (err) {
+      console.error('[DebateRoom] Microphone toggle error:', err);
+      showWarning('Microphone Error', 'Failed to toggle microphone. Please check your permissions.');
+    }
+  }, [localParticipant, isMicLocked, micLockReason, showWarning]);
 
   // Active screen share
   const activeScreenShare = screenShareTracks.length > 0 ? screenShareTracks[0] : null;
