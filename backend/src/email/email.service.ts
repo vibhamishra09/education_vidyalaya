@@ -14,7 +14,11 @@ export class EmailService {
     private prisma: PrismaService,
     private configService: ConfigService,
   ) {
-    this.region = this.configService.get<string>('AWS_REGION') || 'us-east-1';
+    // Use AWS_SES_REGION if set, otherwise fall back to AWS_REGION, default to us-east-1
+    this.region =
+      this.configService.get<string>('AWS_SES_REGION') ||
+      this.configService.get<string>('AWS_REGION') ||
+      'us-east-1';
     this.sesClient = new SESClient({
       region: this.region,
       credentials: {
@@ -49,6 +53,10 @@ export class EmailService {
         return false;
       }
 
+      this.logger.log(
+        `📧 Preparing to send email from ${this.fromEmail} to ${user.email}`,
+      );
+
       // Send email via SES
       const command = new SendEmailCommand({
         Source: this.fromEmail,
@@ -72,7 +80,7 @@ export class EmailService {
       const response = await this.sesClient.send(command);
 
       this.logger.log(
-        `✅ Email sent successfully to ${user.email} (MessageId: ${response.MessageId})`,
+        `✅ Email sent successfully from ${this.fromEmail} to ${user.email} (MessageId: ${response.MessageId})`,
       );
       return true;
     } catch (error) {

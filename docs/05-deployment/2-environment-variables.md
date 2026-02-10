@@ -69,12 +69,14 @@ The backend runs as a Docker container on AWS ECS. Environment variables are con
 #### Email Notifications (AWS SES)
 | Variable | Description | Example | Required |
 |----------|-------------|---------|----------|
-| `AWS_REGION` | AWS region for SES (same as S3) | `us-west-2` | ✅ Yes |
+| `AWS_SES_REGION` | AWS region for SES (if different from S3) | `ap-south-1` | ⚠️ Optional* |
+| `AWS_REGION` | AWS region (used for SES if `AWS_SES_REGION` not set) | `us-west-2` | ✅ Yes |
 | `AWS_ACCESS_KEY_ID` | AWS access key ID (same as S3) | `AKIAIOSFODNN7EXAMPLE` | ✅ Yes |
 | `AWS_SECRET_ACCESS_KEY` | AWS secret access key (same as S3) | `wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY` | ✅ Yes |
 
 **Note:** 
 - Email notifications use the same AWS credentials as S3 file uploads
+- **Region Configuration**: If your SES email is verified in a different region than your S3 bucket, set `AWS_SES_REGION` to the SES region (e.g., `ap-south-1`). If not set, SES will use `AWS_REGION`.
 - The sender email address (`notifications@webyalaya.com`) must be verified in AWS SES before sending emails
 - In SES sandbox mode, you can only send emails to verified email addresses. Request production access to send to any email address
 - Email notifications for high priority (URGENT) notifications will not work if AWS credentials are not configured
