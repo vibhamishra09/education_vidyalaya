@@ -558,13 +558,13 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
               nextParticipantUserId: nextParticipant?.user.clerkId,
               nextSide: nextParticipant?.team.side,
             });
-          }
 
-          // Use Clerk ID for mic events
-          this.server.to(roomId).emit(DEBATE_EVENTS.MIC_DISABLED, {
-            participantId: currentParticipant.user.clerkId,
-            reason: 'turn_ended',
-          });
+            // Use Clerk ID for mic events
+            this.server.to(roomId).emit(DEBATE_EVENTS.MIC_DISABLED, {
+              participantId: currentParticipant.user.clerkId,
+              reason: 'turn_ended',
+            });
+          }
         }
 
         // Emit mic enabled for next speaker
@@ -1088,13 +1088,13 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
               nextParticipantUserId: nextParticipant?.user.clerkId,
               nextSide: nextParticipant?.team.side,
             });
-          }
 
-          // Use Clerk ID for mic events
-          this.server.to(roomId).emit(DEBATE_EVENTS.MIC_DISABLED, {
-            participantId: currentParticipant.user.clerkId,
-            reason: 'turn_ended',
-          });
+            // Use Clerk ID for mic events
+            this.server.to(roomId).emit(DEBATE_EVENTS.MIC_DISABLED, {
+              participantId: currentParticipant.user.clerkId,
+              reason: 'turn_ended',
+            });
+          }
         }
 
         // Emit mic enabled for next speaker

@@ -66,12 +66,20 @@ The backend runs as a Docker container on AWS ECS. Environment variables are con
 
 **Note:** Push notifications will not work if VAPID keys are not configured.
 
-#### Email Notifications (Resend)
+#### Email Notifications (AWS SES)
 | Variable | Description | Example | Required |
 |----------|-------------|---------|----------|
-| `RESEND_API_KEY` | Resend API key for sending emails | `re_...` | ⚠️ Optional |
+| `AWS_SES_REGION` | AWS region for SES (if different from S3) | `ap-south-1` | ⚠️ Optional* |
+| `AWS_REGION` | AWS region (used for SES if `AWS_SES_REGION` not set) | `us-west-2` | ✅ Yes |
+| `AWS_ACCESS_KEY_ID` | AWS access key ID (same as S3) | `AKIAIOSFODNN7EXAMPLE` | ✅ Yes |
+| `AWS_SECRET_ACCESS_KEY` | AWS secret access key (same as S3) | `wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY` | ✅ Yes |
 
-**Note:** Email notifications for high priority (URGENT) notifications will not work if `RESEND_API_KEY` is not configured. Emails are sent from `notify@noreply.webyalaya.com`.
+**Note:** 
+- Email notifications use the same AWS credentials as S3 file uploads
+- **Region Configuration**: If your SES email is verified in a different region than your S3 bucket, set `AWS_SES_REGION` to the SES region (e.g., `ap-south-1`). If not set, SES will use `AWS_REGION`.
+- The sender email address (`notifications@webyalaya.com`) must be verified in AWS SES before sending emails
+- In SES sandbox mode, you can only send emails to verified email addresses. Request production access to send to any email address
+- Email notifications for high priority (URGENT) notifications will not work if AWS credentials are not configured
 
 #### Application Configuration
 | Variable | Description | Example | Required |
@@ -314,7 +322,6 @@ TODO: verify if this should be https or wss.
 - [ ] `FRONTEND_URLS` - Allowed CORS origins (optional)
 - [ ] `VAPID_PUBLIC_KEY` - Push notification public key (optional)
 - [ ] `VAPID_PRIVATE_KEY` - Push notification private key (optional)
-- [ ] `RESEND_API_KEY` - Resend API key for email notifications (optional)
 - [ ] `PORT` - Application port (optional, defaults to 3001)
 - [ ] `LOG_LEVEL` - Logging level (optional, defaults to debug)
 
