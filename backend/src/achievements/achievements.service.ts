@@ -10,33 +10,41 @@ export class AchievementsService {
 
   /**
    * Get all achievements with user's progress
-   * @param userId User ID
+   * @param userId Clerk ID
+   * @param dbUserId Optional database user ID to avoid redundant lookup
    * @returns Categorized achievements (unlocked, in-progress, locked)
    */
-  async getUserAchievements(userId: string) {
-    // userId is actually Clerk ID, convert to database ID
-    const user = await this.prisma.user.findUnique({
-      where: { clerkId: userId },
-      select: { id: true, name: true },
-    });
-
-    if (!user) {
-      this.logger.warn(`User not found for clerkId: ${userId}`);
-      throw new Error('User not found');
-    }
-
-    const dbUserId = user.id;
+  async getUserAchievements(userId: string, dbUserId?: string) {
+    let dbUserIdFinal: string;
     
-    // Get all achievements
-    const allAchievements = await this.prisma.achievement.findMany({
-      orderBy: [{ category: 'asc' }, { rarity: 'asc' }],
-    });
+    // If dbUserId is provided, use it directly to avoid lookup
+    if (dbUserId) {
+      dbUserIdFinal = dbUserId;
+    } else {
+      // userId is actually Clerk ID, convert to database ID
+      const user = await this.prisma.user.findUnique({
+        where: { clerkId: userId },
+        select: { id: true, name: true },
+      });
 
-    // Get user's achievement progress
-    const userAchievements = await this.prisma.userAchievement.findMany({
-      where: { userId: dbUserId },
-      include: { achievement: true },
-    });
+      if (!user) {
+        this.logger.warn(`User not found for clerkId: ${userId}`);
+        throw new Error('User not found');
+      }
+
+      dbUserIdFinal = user.id;
+    }
+    
+    // Get all achievements and user's achievement progress in parallel
+    const [allAchievements, userAchievements] = await Promise.all([
+      this.prisma.achievement.findMany({
+        orderBy: [{ category: 'asc' }, { rarity: 'asc' }],
+      }),
+      this.prisma.userAchievement.findMany({
+        where: { userId: dbUserIdFinal },
+        include: { achievement: true },
+      }),
+    ]);
 
     // Create a map for quick lookup
     const userAchievementMap = new Map(

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SessionStatus } from '@prisma/client';
 import { StreaksService } from '../streaks/streaks.service';
@@ -20,6 +20,8 @@ export interface WalletActivityDataPoint {
 
 @Injectable()
 export class DashboardService {
+  private readonly logger = new Logger(DashboardService.name);
+
   constructor(
     private prisma: PrismaService,
     private streaksService: StreaksService,
@@ -37,7 +39,9 @@ export class DashboardService {
     sessionsPage: number = 1,
     sessionsLimit: number = 10,
   ) {
-    console.log('includeMetrics', includeMetrics);
+    const startTime = Date.now();
+    this.logger.debug(`[Dashboard] Fetching dashboard data for user: ${userId}`);
+
     // userId is actually clerkId, so we need to find the user by clerkId first
     const user = await this.prisma.user.findUnique({
       where: { clerkId: userId },
@@ -48,80 +52,87 @@ export class DashboardService {
       throw new Error('User not found');
     }
 
-    const data: any = {};
-
-    if (includeMetrics) {
+    // Helper functions for each data block
+    const getMetrics = async () => {
+      if (!includeMetrics) return null;
+      const blockStart = Date.now();
+      
       const [
         completedPeerSessions,
         completedStudyRoomsAsHost,
         studyRoomsAsParticipant,
         totalEarnings,
-        receivedReviews,
+        reviewStats,
       ] = await Promise.all([
-          // Peer sessions (as learner or teacher)
-          this.prisma.peerSession.count({
-            where: {
-              OR: [{ requestedById: user.id }, { requestedToId: user.id }],
+        // Peer sessions (as learner or teacher)
+        this.prisma.peerSession.count({
+          where: {
+            OR: [{ requestedById: user.id }, { requestedToId: user.id }],
+            sessionStatus: SessionStatus.DONE,
+          },
+        }),
+        // Study rooms created by user (as host)
+        this.prisma.studyRoom.count({
+          where: {
+            createdById: user.id,
+            sessionStatus: SessionStatus.DONE,
+          },
+        }),
+        // Study rooms user participated in (as learner)
+        this.prisma.studyRoomParticipant.count({
+          where: {
+            userId: user.id,
+            studyRoom: {
               sessionStatus: SessionStatus.DONE,
+              createdById: { not: user.id },
             },
-          }),
-          // Study rooms created by user (as host)
-          this.prisma.studyRoom.count({
-            where: {
-              createdById: user.id,
-              sessionStatus: SessionStatus.DONE,
-            },
-          }),
-          // Study rooms user participated in (as learner)
-          this.prisma.studyRoomParticipant.count({
-            where: {
-              userId: user.id,
-              studyRoom: {
-                sessionStatus: SessionStatus.DONE,
-                createdById: { not: user.id },
-              },
-            },
-          }),
-          this.prisma.payment.aggregate({
-            where: { receivedById: user.id, paymentStatus: 'RECEIVED' },
-            _sum: { amountReceived: true },
-          }),
-          this.prisma.review.findMany({
-            where: { revieweeId: user.id },
-          }),
-        ]);
+          },
+        }),
+        this.prisma.payment.aggregate({
+          where: { receivedById: user.id, paymentStatus: 'RECEIVED' },
+          _sum: { amountReceived: true },
+        }),
+        // Use aggregation instead of fetching all reviews
+        this.prisma.review.aggregate({
+          where: { revieweeId: user.id },
+          _avg: { rating: true },
+          _count: true,
+        }),
+      ]);
 
-      // Total completed sessions = peer sessions + study rooms (as host) + study rooms (as participant)
       const completedSessions = completedPeerSessions + completedStudyRoomsAsHost + studyRoomsAsParticipant;
+      const avgRating = reviewStats._avg.rating ? Number(reviewStats._avg.rating) : 0;
 
-      const avgRating =
-        receivedReviews.length > 0
-          ? receivedReviews.reduce((sum, r) => sum + r.rating, 0) /
-            receivedReviews.length
-          : 0;
+      const blockDuration = Date.now() - blockStart;
+      this.logger.debug(`[Dashboard] Metrics block completed in ${blockDuration}ms`);
 
-      data.metrics = [
-        {
-          name: 'Sessions Completed',
-          value: completedSessions,
-          description: 'Total sessions',
-        },
-        {
-          name: 'Total Earnings',
-          value:
-            Math.round(Number(totalEarnings._sum.amountReceived || 0) * 100) /
-            100,
-          description: 'Coins earned',
-        },
-        {
-          name: 'Average Rating',
-          value: Math.round(avgRating * 10) / 10,
-          description: 'Out of 5 stars',
-        },
-      ];
-    }
+      return {
+        metrics: [
+          {
+            name: 'Sessions Completed',
+            value: completedSessions,
+            description: 'Total sessions',
+          },
+          {
+            name: 'Total Earnings',
+            value:
+              Math.round(Number(totalEarnings._sum.amountReceived || 0) * 100) /
+              100,
+            description: 'Coins earned',
+          },
+          {
+            name: 'Average Rating',
+            value: Math.round(avgRating * 10) / 10,
+            description: 'Out of 5 stars',
+          },
+        ],
+      };
+    };
 
-    if (includeRequests) {
+    const getRequests = async () => {
+      if (!includeRequests) return null;
+      const blockStart = Date.now();
+
       const [pendingRequests, sentRequests] = await Promise.all([
         this.prisma.peerSession.findMany({
           where: {
@@ -149,33 +160,38 @@ export class DashboardService {
         }),
       ]);
 
-      data.pendingRequests = pendingRequests.map((ps) => ({
-        id: ps.id,
-        title: ps.title,
-        requestedBy: ps.requestedBy,
-        requestedTo: ps.requestedTo,
-        date: ps.date,
-        duration: ps.duration,
-        skills: ps.skills.map((s) => s.skill.name),
-        direction: 'received',
-      }));
+      const blockDuration = Date.now() - blockStart;
+      this.logger.debug(`[Dashboard] Requests block completed in ${blockDuration}ms`);
 
-      data.sentRequests = sentRequests.map((ps) => ({
-        id: ps.id,
-        title: ps.title,
-        requestedBy: ps.requestedBy,
-        requestedTo: ps.requestedTo,
-        date: ps.date,
-        duration: ps.duration,
-        skills: ps.skills.map((s) => s.skill.name),
-        direction: 'sent',
-      }));
-    }
+      return {
+        pendingRequests: pendingRequests.map((ps) => ({
+          id: ps.id,
+          title: ps.title,
+          requestedBy: ps.requestedBy,
+          requestedTo: ps.requestedTo,
+          date: ps.date,
+          duration: ps.duration,
+          skills: ps.skills.map((s) => s.skill.name),
+          direction: 'received',
+        })),
+        sentRequests: sentRequests.map((ps) => ({
+          id: ps.id,
+          title: ps.title,
+          requestedBy: ps.requestedBy,
+          requestedTo: ps.requestedTo,
+          date: ps.date,
+          duration: ps.duration,
+          skills: ps.skills.map((s) => s.skill.name),
+          direction: 'sent',
+        })),
+      };
+    };
 
-    if (includeSessions) {
-      const now = new Date();
+    const getSessions = async () => {
+      if (!includeSessions) return null;
+      const blockStart = Date.now();
       const skip = (sessionsPage - 1) * sessionsLimit;
-      
+
       const [
         upcomingSessions,
         pastSessions,
@@ -185,6 +201,7 @@ export class DashboardService {
         pastSessionsTotal,
         upcomingStudyRoomsTotal,
         pastStudyRoomsTotal,
+        pendingReviews,
       ] = await Promise.all([
         // Upcoming peer sessions (including ONGOING)
         this.prisma.peerSession.findMany({
@@ -199,7 +216,7 @@ export class DashboardService {
               include: { skill: { select: { id: true, name: true } } },
             },
           },
-          orderBy: { date: 'asc' }, // Sort by scheduled time
+          orderBy: { date: 'asc' },
           skip,
           take: sessionsLimit,
         }),
@@ -216,7 +233,7 @@ export class DashboardService {
               include: { skill: { select: { id: true, name: true } } },
             },
           },
-          orderBy: { date: 'desc' }, // Most recent past sessions first
+          orderBy: { date: 'desc' },
           skip,
           take: sessionsLimit,
         }),
@@ -236,7 +253,7 @@ export class DashboardService {
             },
             learners: { select: { userId: true } },
           },
-          orderBy: { date: 'asc' }, // Sort by scheduled time
+          orderBy: { date: 'asc' },
           skip,
           take: sessionsLimit,
         }),
@@ -256,7 +273,7 @@ export class DashboardService {
             },
             learners: { select: { userId: true } },
           },
-          orderBy: { date: 'desc' }, // Most recent past sessions first
+          orderBy: { date: 'desc' },
           skip,
           take: sessionsLimit,
         }),
@@ -291,122 +308,193 @@ export class DashboardService {
             sessionStatus: SessionStatus.DONE,
           },
         }),
+        // Pending reviews count
+        this.prisma.peerSession.count({
+          where: {
+            OR: [{ requestedById: user.id }, { requestedToId: user.id }],
+            sessionStatus: SessionStatus.DONE,
+            reviews: { none: { reviewerId: user.id } },
+          },
+        }),
       ]);
 
-      data.upcomingSessions = upcomingSessions.map((ps) => ({
-        id: ps.id,
-        title: ps.title,
-        date: ps.date,
-        duration: ps.duration,
-        peer: ps.requestedById === user.id ? ps.requestedTo : ps.requestedBy,
-        skills: ps.skills.map((s) => s.skill),
-        description: ps.description,
-        requestedBy: ps.requestedBy,
-        sessionStatus: ps.sessionStatus,
-      }));
+      const blockDuration = Date.now() - blockStart;
+      this.logger.debug(`[Dashboard] Sessions block completed in ${blockDuration}ms`);
 
-      data.pastSessions = pastSessions.map((ps) => ({
-        id: ps.id,
-        title: ps.title,
-        date: ps.date,
-        duration: ps.duration,
-        peer: ps.requestedById === user.id ? ps.requestedTo : ps.requestedBy,
-        skills: ps.skills.map((s) => s.skill),
-        description: ps.description,
-        requestedBy: ps.requestedBy,
-        sessionStatus: ps.sessionStatus,
-      }));
-
-      data.upcomingStudyRooms = upcomingStudyRooms.map((sr) => ({
-        id: sr.id,
-        title: sr.title,
-        date: sr.date,
-        duration: sr.duration,
-        maxParticipants: sr.maxParticipants,
-        participantCount: sr.learners.length,
-        createdBy: sr.createdBy,
-        skills: sr.skills.map((s) => s.skill),
-        description: sr.description,
-        sessionStatus: sr.sessionStatus,
-      }));
-
-      data.pastStudyRooms = pastStudyRooms.map((sr) => ({
-        id: sr.id,
-        title: sr.title,
-        date: sr.date,
-        duration: sr.duration,
-        maxParticipants: sr.maxParticipants,
-        participantCount: sr.learners.length,
-        createdBy: sr.createdBy,
-        skills: sr.skills.map((s) => s.skill),
-        description: sr.description,
-        sessionStatus: sr.sessionStatus,
-      }));
-
-      // Add pagination metadata for sessions
-      data.sessionsPagination = {
-        upcomingSessions: {
-          total: upcomingSessionsTotal,
-          page: sessionsPage,
-          limit: sessionsLimit,
-          totalPages: Math.ceil(upcomingSessionsTotal / sessionsLimit),
-          hasMore: skip + sessionsLimit < upcomingSessionsTotal,
+      return {
+        upcomingSessions: upcomingSessions.map((ps) => ({
+          id: ps.id,
+          title: ps.title,
+          date: ps.date,
+          duration: ps.duration,
+          peer: ps.requestedById === user.id ? ps.requestedTo : ps.requestedBy,
+          skills: ps.skills.map((s) => s.skill),
+          description: ps.description,
+          requestedBy: ps.requestedBy,
+          sessionStatus: ps.sessionStatus,
+        })),
+        pastSessions: pastSessions.map((ps) => ({
+          id: ps.id,
+          title: ps.title,
+          date: ps.date,
+          duration: ps.duration,
+          peer: ps.requestedById === user.id ? ps.requestedTo : ps.requestedBy,
+          skills: ps.skills.map((s) => s.skill),
+          description: ps.description,
+          requestedBy: ps.requestedBy,
+          sessionStatus: ps.sessionStatus,
+        })),
+        upcomingStudyRooms: upcomingStudyRooms.map((sr) => ({
+          id: sr.id,
+          title: sr.title,
+          date: sr.date,
+          duration: sr.duration,
+          maxParticipants: sr.maxParticipants,
+          participantCount: sr.learners.length,
+          createdBy: sr.createdBy,
+          skills: sr.skills.map((s) => s.skill),
+          description: sr.description,
+          sessionStatus: sr.sessionStatus,
+        })),
+        pastStudyRooms: pastStudyRooms.map((sr) => ({
+          id: sr.id,
+          title: sr.title,
+          date: sr.date,
+          duration: sr.duration,
+          maxParticipants: sr.maxParticipants,
+          participantCount: sr.learners.length,
+          createdBy: sr.createdBy,
+          skills: sr.skills.map((s) => s.skill),
+          description: sr.description,
+          sessionStatus: sr.sessionStatus,
+        })),
+        sessionsPagination: {
+          upcomingSessions: {
+            total: upcomingSessionsTotal,
+            page: sessionsPage,
+            limit: sessionsLimit,
+            totalPages: Math.ceil(upcomingSessionsTotal / sessionsLimit),
+            hasMore: skip + sessionsLimit < upcomingSessionsTotal,
+          },
+          pastSessions: {
+            total: pastSessionsTotal,
+            page: sessionsPage,
+            limit: sessionsLimit,
+            totalPages: Math.ceil(pastSessionsTotal / sessionsLimit),
+            hasMore: skip + sessionsLimit < pastSessionsTotal,
+          },
+          upcomingStudyRooms: {
+            total: upcomingStudyRoomsTotal,
+            page: sessionsPage,
+            limit: sessionsLimit,
+            totalPages: Math.ceil(upcomingStudyRoomsTotal / sessionsLimit),
+            hasMore: skip + sessionsLimit < upcomingStudyRoomsTotal,
+          },
+          pastStudyRooms: {
+            total: pastStudyRoomsTotal,
+            page: sessionsPage,
+            limit: sessionsLimit,
+            totalPages: Math.ceil(pastStudyRoomsTotal / sessionsLimit),
+            hasMore: skip + sessionsLimit < pastStudyRoomsTotal,
+          },
         },
-        pastSessions: {
-          total: pastSessionsTotal,
-          page: sessionsPage,
-          limit: sessionsLimit,
-          totalPages: Math.ceil(pastSessionsTotal / sessionsLimit),
-          hasMore: skip + sessionsLimit < pastSessionsTotal,
-        },
-        upcomingStudyRooms: {
-          total: upcomingStudyRoomsTotal,
-          page: sessionsPage,
-          limit: sessionsLimit,
-          totalPages: Math.ceil(upcomingStudyRoomsTotal / sessionsLimit),
-          hasMore: skip + sessionsLimit < upcomingStudyRoomsTotal,
-        },
-        pastStudyRooms: {
-          total: pastStudyRoomsTotal,
-          page: sessionsPage,
-          limit: sessionsLimit,
-          totalPages: Math.ceil(pastStudyRoomsTotal / sessionsLimit),
-          hasMore: skip + sessionsLimit < pastStudyRoomsTotal,
-        },
+        pendingReviews,
       };
+    };
 
-      data.pendingReviews = await this.prisma.peerSession.count({
-        where: {
-          OR: [{ requestedById: user.id }, { requestedToId: user.id }],
-          sessionStatus: SessionStatus.DONE,
-          reviews: { none: { reviewerId: user.id } },
-        },
-      });
-    }
+    const getNotifications = async () => {
+      if (!includeNotifications) return null;
+      const blockStart = Date.now();
 
-    if (includeNotifications) {
-      data.notifications = await this.prisma.notification.findMany({
+      const notifications = await this.prisma.notification.findMany({
         where: { userId: user.id },
         orderBy: { createdAt: 'desc' },
         take: 5,
       });
-    }
 
-    if (includeStreaks) {
-      data.streak = await this.streaksService.getUserStreak(user.id);
-    }
+      const blockDuration = Date.now() - blockStart;
+      this.logger.debug(`[Dashboard] Notifications block completed in ${blockDuration}ms`);
 
-    if (includeAchievements) {
+      return { notifications };
+    };
+
+    const getStreaks = async () => {
+      if (!includeStreaks) return null;
+      const blockStart = Date.now();
+
+      // Pass user.id directly to avoid redundant lookup
+      const streak = await this.streaksService.getUserStreak(user.id);
+
+      const blockDuration = Date.now() - blockStart;
+      this.logger.debug(`[Dashboard] Streaks block completed in ${blockDuration}ms`);
+
+      return { streak };
+    };
+
+    const getAchievements = async () => {
+      if (!includeAchievements) return null;
+      const blockStart = Date.now();
+
+      // Pass user object to avoid redundant lookup
       const achievements = await this.achievementsService.getUserAchievements(
         user.clerkId,
+        user.id, // Pass dbUserId to avoid lookup
       );
-      data.achievements = {
-        unlocked: achievements.unlocked.slice(0, 5), // Latest 5 unlocked
-        inProgress: achievements.inProgress.slice(0, 3), // Top 3 in progress
-        totalUnlocked: achievements.totalUnlocked,
-        totalAvailable: achievements.totalAvailable,
+
+      const blockDuration = Date.now() - blockStart;
+      this.logger.debug(`[Dashboard] Achievements block completed in ${blockDuration}ms`);
+
+      return {
+        achievements: {
+          unlocked: achievements.unlocked.slice(0, 5),
+          inProgress: achievements.inProgress.slice(0, 3),
+          totalUnlocked: achievements.totalUnlocked,
+          totalAvailable: achievements.totalAvailable,
+        },
       };
-    }
+    };
+
+    // Execute all query blocks in parallel
+    const [
+      metricsData,
+      requestsData,
+      sessionsData,
+      notificationsData,
+      streaksData,
+      achievementsData,
+    ] = await Promise.all([
+      getMetrics(),
+      getRequests(),
+      getSessions(),
+      getNotifications(),
+      getStreaks(),
+      getAchievements(),
+    ]);
+
+    // Combine all data
+    const data: any = {
+      ...metricsData,
+      ...requestsData,
+      ...sessionsData,
+      ...notificationsData,
+      ...streaksData,
+      ...achievementsData,
+    };
+
+    const totalDuration = Date.now() - startTime;
+    this.logger.log({
+      message: `[Dashboard] Dashboard data fetched successfully`,
+      userId: user.id,
+      duration: `${totalDuration}ms`,
+      includes: {
+        metrics: includeMetrics,
+        requests: includeRequests,
+        sessions: includeSessions,
+        notifications: includeNotifications,
+        streaks: includeStreaks,
+        achievements: includeAchievements,
+      },
+    });
 
     return data;
   }

@@ -10,12 +10,16 @@ import {
   DebateSide,
   TurnStartedEvent,
   TurnEndedEvent,
+  PrepStartedEvent,
   PrepCountdownEvent,
   BuzzerPressedEvent,
   TeamChatMessage,
   DebateEndedEvent,
   ParticipantJoinedEvent,
   ParticipantLeftEvent,
+  MicEnabledEvent,
+  MicDisabledEvent,
+  DebateRoom,
 } from '@/types/debate.types';
 import { debateRoomKeys } from './use-debate-rooms';
 
@@ -31,6 +35,8 @@ interface UseDebateSocketOptions {
   onParticipantJoined?: (event: ParticipantJoinedEvent) => void;
   onParticipantLeft?: (event: ParticipantLeftEvent) => void;
   onStateSync?: (state: DebateState) => void;
+  onMicEnabled?: (event: MicEnabledEvent) => void;
+  onMicDisabled?: (event: MicDisabledEvent) => void;
   onError?: (error: string) => void;
 }
 
@@ -50,6 +56,7 @@ interface UseDebateSocketReturn {
   sendTranscript: (text: string, isFinal: boolean) => void;
   
   // For moderators
+  startPrep: () => void;
   advanceTurn: () => void;
   endDebate: (reason?: string) => void;
 }
@@ -66,6 +73,8 @@ export function useDebateSocket({
   onParticipantJoined,
   onParticipantLeft,
   onStateSync,
+  onMicEnabled,
+  onMicDisabled,
   onError,
 }: UseDebateSocketOptions): UseDebateSocketReturn {
   const { getToken, isLoaded } = useAuth();
@@ -93,10 +102,15 @@ export function useDebateSocket({
     onParticipantJoined,
     onParticipantLeft,
     onStateSync,
+    onMicEnabled,
+    onMicDisabled,
     onError,
   });
 
   useEffect(() => {
+    // #region agent log
+    fetch('http://127.0.0.1:7244/ingest/d6208dbe-815f-4534-a4cc-4028b2570455',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'use-debate-socket.ts:109',message:'Updating callbacks ref',data:{hasOnMicEnabled:!!onMicEnabled,hasOnMicDisabled:!!onMicDisabled},timestamp:Date.now(),runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
     callbacksRef.current = {
       onTurnStarted,
       onTurnEnded,
@@ -107,9 +121,11 @@ export function useDebateSocket({
       onParticipantJoined,
       onParticipantLeft,
       onStateSync,
+      onMicEnabled,
+      onMicDisabled,
       onError,
     };
-  });
+  }, [onTurnStarted, onTurnEnded, onPrepCountdown, onBuzzerPressed, onTeamChat, onDebateEnded, onParticipantJoined, onParticipantLeft, onStateSync, onMicEnabled, onMicDisabled, onError]);
 
   // Connect to socket
   useEffect(() => {
@@ -157,7 +173,48 @@ export function useDebateSocket({
         newSocket.on('debate:state_sync', (state: DebateState) => {
           if (mounted) {
             setDebateState(state);
+            // Calculate prep countdown from prepEndTime if in PREP phase
+            if (state.status === DebateStatus.PREP && state.prepEndTime) {
+              const now = Date.now();
+              const remaining = Math.max(0, Math.ceil((state.prepEndTime - now) / 1000));
+              setPrepCountdown(remaining);
+            } else if (state.status !== DebateStatus.PREP) {
+              setPrepCountdown(null);
+            }
             callbacksRef.current.onStateSync?.(state);
+          }
+        });
+
+        // Handle state update (includes room data)
+        newSocket.on('debate:state_update', (data: { room?: DebateRoom; state: DebateState }) => {
+          if (mounted) {
+            if (data.state) {
+              setDebateState(data.state);
+              // Calculate prep countdown from prepEndTime if in PREP phase
+              if (data.state.status === DebateStatus.PREP && data.state.prepEndTime) {
+                const now = Date.now();
+                const remaining = Math.max(0, Math.ceil((data.state.prepEndTime - now) / 1000));
+                setPrepCountdown(remaining);
+              } else if (data.state.status !== DebateStatus.PREP) {
+                setPrepCountdown(null);
+              }
+              callbacksRef.current.onStateSync?.(data.state);
+            }
+            // Invalidate room query to refetch if room data is included
+            if (data.room) {
+              queryClient.invalidateQueries({ queryKey: debateRoomKeys.detail(roomId) });
+            }
+          }
+        });
+
+        newSocket.on('debate:prep_started', (event: PrepStartedEvent) => {
+          if (mounted) {
+            // Calculate initial prep countdown
+            const now = Date.now();
+            const remaining = Math.max(0, Math.ceil((event.prepEndTime - now) / 1000));
+            setPrepCountdown(remaining);
+            // Invalidate room query to refetch updated status
+            queryClient.invalidateQueries({ queryKey: debateRoomKeys.detail(roomId) });
           }
         });
 
@@ -192,6 +249,15 @@ export function useDebateSocket({
           callbacksRef.current.onPrepCountdown?.(event);
         });
 
+        // Listen for turn countdown updates
+        newSocket.on('debate:turn_countdown', (event: { secondsRemaining: number }) => {
+          // This is handled by the DebateTurnTimer component which calculates from turnStartedAt
+          // But we can use this to sync if needed
+          if (mounted) {
+            // Update state if needed - the timer component handles its own countdown
+          }
+        });
+
         newSocket.on('debate:buzzer_pressed', (event: BuzzerPressedEvent) => {
           if (mounted) {
             setBuzzerQueue((prev) => [...prev, event]);
@@ -211,10 +277,19 @@ export function useDebateSocket({
             setDebateState((prev) =>
               prev ? { ...prev, status: DebateStatus.ENDED } : prev
             );
+            setPrepCountdown(null);
           }
           callbacksRef.current.onDebateEnded?.(event);
           // Invalidate queries
           queryClient.invalidateQueries({ queryKey: debateRoomKeys.detail(roomId) });
+        });
+
+        newSocket.on('debate:debate_started', () => {
+          if (mounted) {
+            setPrepCountdown(null);
+            // Refetch room to get updated status
+            queryClient.invalidateQueries({ queryKey: debateRoomKeys.detail(roomId) });
+          }
         });
 
         newSocket.on('debate:participant_joined', (event: ParticipantJoinedEvent) => {
@@ -231,6 +306,18 @@ export function useDebateSocket({
 
         newSocket.on('debate:error', (error: { message: string }) => {
           callbacksRef.current.onError?.(error.message);
+        });
+
+        // Mic control events
+        newSocket.on('debate:mic_enabled', (event: MicEnabledEvent) => {
+          // #region agent log
+          fetch('http://127.0.0.1:7244/ingest/d6208dbe-815f-4534-a4cc-4028b2570455',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'use-debate-socket.ts:308',message:'Socket event debate:mic_enabled received',data:{eventParticipantId:event.participantId,reason:event.reason,hasCallback:!!callbacksRef.current.onMicEnabled},timestamp:Date.now(),runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+          // #endregion
+          callbacksRef.current.onMicEnabled?.(event);
+        });
+
+        newSocket.on('debate:mic_disabled', (event: MicDisabledEvent) => {
+          callbacksRef.current.onMicDisabled?.(event);
         });
 
       } catch (err) {
@@ -297,6 +384,12 @@ export function useDebateSocket({
   );
 
   // Moderator actions
+  const startPrep = useCallback(() => {
+    if (socket && isConnected) {
+      socket.emit('debate:start_prep', { roomId });
+    }
+  }, [socket, isConnected, roomId]);
+
   const advanceTurn = useCallback(() => {
     if (socket && isConnected) {
       socket.emit('debate:advance_turn', { roomId });
@@ -324,6 +417,7 @@ export function useDebateSocket({
     pressBuzzer,
     sendTeamChat,
     sendTranscript,
+    startPrep,
     advanceTurn,
     endDebate,
   };

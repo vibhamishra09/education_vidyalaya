@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, X, Loader2, Sparkles, ArrowLeft } from "lucide-react";
+import { Search, X, Loader2, Sparkles, ArrowLeft, Swords } from "lucide-react";
 import { useBrowse, useBrowseRecommendations } from "@/hooks/use-browse";
 import { useSkills } from "@/hooks/use-skills";
 import { useCurrentUser } from "@/hooks/use-users";
@@ -295,6 +295,17 @@ function BrowsePageContent() {
                 )}
                 </button>
             </div>
+            
+            {/* Debate Rooms Link */}
+            <Link href="/debateroom">
+              <Button 
+                variant="outline" 
+                className="h-11 rounded-2xl border-muted bg-muted/20 hover:bg-muted/40 text-sm font-semibold"
+              >
+                <Swords className="h-4 w-4 mr-2" />
+                Debate Rooms
+              </Button>
+            </Link>
         </div>
 
         {/* Skill Filters */}

@@ -18,6 +18,7 @@ import { PaymentsModule } from './payments/payments.module';
 import { ChatModule } from './chat/chat.module';
 import { LivekitModule } from './livekit/livekit.module';
 import { UploadModule } from './upload/upload.module';
+import { EmailModule } from './email/email.module';
 import { AvailabilityModule } from './availability/availability.module';
 import { StreaksModule } from './streaks/streaks.module';
 import { AchievementsModule } from './achievements/achievements.module';
@@ -29,12 +30,14 @@ import { SessionExtensionModule } from './session-extension/session-extension.mo
 import { SessionModerationModule } from './session-moderation/session-moderation.module';
 import { LoggingInterceptor } from './logging.interceptor';
 import { SentryModule } from './common/sentry';
+import { LoggerModule } from './common/logger';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    LoggerModule,
     PrometheusModule.register({
       path: '/metrics',
       defaultMetrics: {
@@ -55,6 +58,7 @@ import { SentryModule } from './common/sentry';
     ChatModule,
     LivekitModule,
     UploadModule,
+    EmailModule,
     AvailabilityModule,
     StreaksModule,
     AchievementsModule,

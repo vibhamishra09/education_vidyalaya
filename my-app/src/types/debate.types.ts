@@ -56,6 +56,7 @@ export interface DebateRoomFilters {
   status?: DebateStatus;
   page?: number;
   limit?: number;
+  trending?: boolean;
 }
 
 // Response Types
@@ -132,10 +133,19 @@ export interface DebateReport {
   clarityScore: number;
   rebuttalScore: number;
   overallScore: number;
+  aiScore?: number | null;
   strengths: string[];
   weaknesses: string[];
   suggestions: string[];
   summary?: string | null;
+  judgeReviews?: {
+    moderatorId: string;
+    moderatorName: string;
+    turnNumber: number;
+    notes?: string | null;
+    scores: Record<string, number>;
+    createdAt: string;
+  }[];
   participant?: {
     user: {
       id: string;
@@ -152,6 +162,7 @@ export interface DebateResults {
   debateRoomId: string;
   topic: string;
   winningTeam: DebateSide | null;
+  aiScoringStatus?: 'pending';
   teams: {
     side: DebateSide;
     totalScore: number;
@@ -161,6 +172,55 @@ export interface DebateResults {
   reports: DebateReport[];
 }
 
+export type DebateEvaluationScores = Record<string, number>;
+
+export interface DebateGradingFactor {
+  key: string;
+  label: string;
+}
+
+export const DEFAULT_DEBATE_GRADING_FACTORS: DebateGradingFactor[] = [
+  { key: 'clarityOfThoughts', label: 'Clarity of Thoughts' },
+  { key: 'factCheck', label: 'Fact Check' },
+  { key: 'argumentQuality', label: 'Argument Quality' },
+];
+
+export interface DebateModeratorEvaluation {
+  id: string;
+  debateRoomId: string;
+  participantId: string;
+  moderatorId: string;
+  turnNumber: number;
+  notes?: string | null;
+  scores: DebateEvaluationScores;
+  createdAt: string;
+  updatedAt: string;
+  participant?: {
+    id: string;
+    user: {
+      id: string;
+      clerkId: string;
+      name: string;
+      avatar?: string | null;
+    };
+    team: {
+      side: DebateSide;
+    };
+  };
+}
+
+export interface UpsertDebateModeratorEvaluationDto {
+  participantId: string;
+  turnNumber: number;
+  notes?: string;
+  scores?: DebateEvaluationScores;
+}
+
+export interface ModeratorEvaluationsQuery {
+  participantId?: string;
+  turnNumber?: number;
+}
+
 // Socket Event Types
 export interface DebateState {
   roomId: string;
@@ -168,6 +228,8 @@ export interface DebateState {
   currentTurnIndex: number;
   currentSpeakerId: string | null;
   turnStartedAt: string | null;
+  turnEndTime?: number | null;
+  prepEndTime?: number | null;
   turnDurationSeconds: number;
   prepTimeSeconds: number;
   teams: {
@@ -196,9 +258,12 @@ export interface TurnEndedEvent {
   nextSide?: DebateSide;
 }
 
+export interface PrepStartedEvent {
+  prepEndTime: number;
+}
+
 export interface PrepCountdownEvent {
   secondsRemaining: number;
-  startsAt: string;
 }
 
 export interface BuzzerPressedEvent {
@@ -239,6 +304,16 @@ export interface ParticipantLeftEvent {
   userId: string;
   side: DebateSide;
   teamSize: { FOR: number; AGAINST: number };
+}
+
+export interface MicEnabledEvent {
+  participantId: string;
+  reason: 'moderator' | 'turn' | 'manual';
+}
+
+export interface MicDisabledEvent {
+  participantId: string;
+  reason: 'turn_ended' | 'debate_ended' | 'manual';
 }
 
 // LiveKit Token Response
