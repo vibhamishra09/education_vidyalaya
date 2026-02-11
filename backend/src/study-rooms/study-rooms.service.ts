@@ -26,6 +26,7 @@ type StudyRoomWithRelations = {
   id: string;
   title: string;
   description?: string | null;
+  imageUrl?: string | null;
   sessionStatus: SessionStatus;
   date: Date;
   duration: number;
@@ -549,6 +550,7 @@ export class StudyRoomsService {
       id: room.id,
       title: room.title,
       description: room.description,
+      imageUrl: room.imageUrl,
       sessionStatus: room.sessionStatus,
       date: room.date,
       duration: room.duration,
@@ -645,6 +647,7 @@ export class StudyRoomsService {
       id: studyRoom.id,
       title: studyRoom.title,
       description: studyRoom.description,
+      imageUrl: studyRoom.imageUrl,
       sessionStatus: studyRoom.sessionStatus,
       date: studyRoom.date,
       duration: studyRoom.duration,
@@ -715,6 +718,7 @@ export class StudyRoomsService {
       data: {
         title: createDto.title,
         description: createDto.description,
+        imageUrl: createDto.imageUrl,
         date: dateTime,
         duration: createDto.duration,
         maxParticipants: createDto.maxParticipants,
@@ -792,6 +796,8 @@ export class StudyRoomsService {
     if (updateDto.title) updateData.title = updateDto.title;
     if (updateDto.description !== undefined)
       updateData.description = updateDto.description;
+    if (updateDto.imageUrl !== undefined)
+      updateData.imageUrl = updateDto.imageUrl;
     if (updateDto.duration) updateData.duration = updateDto.duration;
     if (updateDto.maxParticipants)
       updateData.maxParticipants = updateDto.maxParticipants;

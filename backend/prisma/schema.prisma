@@ -66,6 +66,7 @@ model StudyRoom {
   id              String                 @id @default(cuid())
   title           String
   description     String?
+  imageUrl        String?
   sessionStatus   SessionStatus
   date            DateTime
   duration        Int

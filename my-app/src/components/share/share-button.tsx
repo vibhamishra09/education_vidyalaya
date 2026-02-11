@@ -14,6 +14,7 @@ interface ShareButtonProps {
   url: string;
   title: string;
   description?: string;
+  image?: string;
   variant?: "default" | "outline" | "ghost" | "secondary" | "link" | "destructive";
   size?: "default" | "sm" | "lg" | "icon";
   className?: string;
@@ -23,6 +24,7 @@ export function ShareButton({
   url,
   title,
   description = "",
+  image,
   variant = "outline",
   size = "default",
   className = "",
@@ -48,11 +50,26 @@ export function ShareButton({
   const handleWebShare = async () => {
     if (navigator.share) {
       try {
-        await navigator.share({
+        const shareData: ShareData = {
           title,
           text: shareText,
           url,
-        });
+        };
+
+        // Add image if available and supported
+        if (image) {
+          try {
+            const response = await fetch(image);
+            const blob = await response.blob();
+            const file = new File([blob], "study-room-image.jpg", { type: blob.type });
+            shareData.files = [file];
+          } catch (err) {
+            // If image fetch fails, share without image
+            console.warn("Failed to fetch image for sharing:", err);
+          }
+        }
+
+        await navigator.share(shareData);
       } catch (err) {
         // User cancelled or error occurred
         if ((err as Error).name !== "AbortError") {
