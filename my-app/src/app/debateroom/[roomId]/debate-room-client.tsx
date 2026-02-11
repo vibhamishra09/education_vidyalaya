@@ -690,7 +690,7 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
               <Card>
                 <CardContent className="pt-6 text-center">
                   <p className="mb-4">
-                    The debate has ended. Generate results from judges' reviews?
+                    The debate has ended. Generate results from judges&apos; reviews?
                   </p>
                   <Button
                     onClick={handleGenerateResults}
