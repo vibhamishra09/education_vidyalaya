@@ -18,6 +18,26 @@ type Message = {
 	}
 }
 
+// Keep chat history in-memory per channel so closing/reopening the panel
+// does not wipe the current message list.
+const channelMessageCache = new Map<string, Message[]>()
+
+function mergeMessages(existing: Message[], incoming: Message[]): Message[] {
+	if (incoming.length === 0) return existing
+
+	const byId = new Map<string, Message>()
+	for (const message of existing) {
+		byId.set(message.id, message)
+	}
+	for (const message of incoming) {
+		byId.set(message.id, message)
+	}
+
+	return Array.from(byId.values()).sort(
+		(a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+	)
+}
+
 interface ChatWidgetProps {
 	channelId: string | null | undefined
 	className?: string
@@ -27,7 +47,10 @@ interface ChatWidgetProps {
 export function ChatWidget({ channelId, className = '', chatDisabled = false }: ChatWidgetProps) {
 	const { user, isLoaded } = useUser()
 	const { getToken } = useAuth()
-	const [messages, setMessages] = useState<Message[]>([])
+	const [messages, setMessages] = useState<Message[]>(() => {
+		if (!channelId) return []
+		return channelMessageCache.get(channelId) || []
+	})
 	const socketRef = useRef<Socket | null>(null)
 	const [error, setError] = useState<string | null>(null)
 	const [isConnecting, setIsConnecting] = useState(false)
@@ -43,16 +66,27 @@ export function ChatWidget({ channelId, className = '', chatDisabled = false }: 
 			setError(null)
 			return
 		}
+		const activeChannelId = channelId
+
+		const cachedMessages = channelMessageCache.get(activeChannelId)
+		if (cachedMessages) {
+			setMessages(cachedMessages)
+		}
 
 		let mounted = true
 		async function loadHistory() {
 			try {
 				console.log('Loading chat history for channel:', channelId)
 				// Load more messages to show complete history
-				const res = await apiClient.get(`/api/chat/channels/${channelId}/messages`, { params: { limit: 200 } })
+				const res = await apiClient.get(`/api/chat/channels/${activeChannelId}/messages`, { params: { limit: 200 } })
 				if (!mounted) return
 				console.log('Loaded messages:', res.data?.length || 0, 'messages')
-				setMessages(res.data || [])
+				const historyMessages: Message[] = Array.isArray(res.data) ? res.data : []
+				setMessages((prev) => {
+					const merged = mergeMessages(prev, historyMessages)
+					channelMessageCache.set(activeChannelId, merged)
+					return merged
+				})
 			} catch (e: unknown) {
 				if (!mounted) return
 				const errorMessage = e instanceof Error ? e.message : 'Failed to load messages'
@@ -74,6 +108,7 @@ export function ChatWidget({ channelId, className = '', chatDisabled = false }: 
 			}
 			return
 		}
+		const activeChannelId = channelId
 		
 		let socketInstance: Socket | null = null
 		let isMounted = true
@@ -101,7 +136,7 @@ export function ChatWidget({ channelId, className = '', chatDisabled = false }: 
 					process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 
 					'http://localhost:3001'
 				
-				console.log('🔌 [Chat] Connecting to WebSocket:', url, 'for channel:', channelId)
+				console.log('🔌 [Chat] Connecting to WebSocket:', url, 'for channel:', activeChannelId)
 				
 				const s = io(url, { 
 					transports: ['websocket'],
@@ -116,8 +151,8 @@ export function ChatWidget({ channelId, className = '', chatDisabled = false }: 
 				socketRef.current = s
 				
 				s.on('connect', () => {
-					console.log('✅ [Chat] Socket connected, joining channel:', channelId)
-					s.emit('join:channel', { channelId })
+					console.log('✅ [Chat] Socket connected, joining channel:', activeChannelId)
+					s.emit('join:channel', { channelId: activeChannelId })
 					if (isMounted) {
 						setIsConnecting(false)
 						setError(null)
@@ -125,7 +160,7 @@ export function ChatWidget({ channelId, className = '', chatDisabled = false }: 
 				})
 				
 				s.on('joined:channel', () => {
-					console.log('✅ [Chat] Successfully joined channel:', channelId)
+					console.log('✅ [Chat] Successfully joined channel:', activeChannelId)
 					if (isMounted) {
 						setError(null) // Clear any previous errors
 					}
@@ -139,7 +174,9 @@ export function ChatWidget({ channelId, className = '', chatDisabled = false }: 
 						console.warn('⚠️ [Chat] Duplicate message detected, ignoring:', msg.id)
 						return prev
 					}
-					return [...prev, msg]
+					const next = [...prev, msg]
+					channelMessageCache.set(activeChannelId, next)
+					return next
 				})
 			})
 		
@@ -231,6 +268,12 @@ export function ChatWidget({ channelId, className = '', chatDisabled = false }: 
 			socketRef.current = null
 		}
 	}, [channelId, isLoaded, user, getToken])
+
+	useEffect(() => {
+		if (!channelId) return
+		const activeChannelId = channelId
+		channelMessageCache.set(activeChannelId, messages)
+	}, [channelId, messages])
 
 	if (!channelId) {
 		return (
