@@ -133,10 +133,19 @@ export interface DebateReport {
   clarityScore: number;
   rebuttalScore: number;
   overallScore: number;
+  aiScore?: number | null;
   strengths: string[];
   weaknesses: string[];
   suggestions: string[];
   summary?: string | null;
+  judgeReviews?: {
+    moderatorId: string;
+    moderatorName: string;
+    turnNumber: number;
+    notes?: string | null;
+    scores: Record<string, number>;
+    createdAt: string;
+  }[];
   participant?: {
     user: {
       id: string;
@@ -153,6 +162,7 @@ export interface DebateResults {
   debateRoomId: string;
   topic: string;
   winningTeam: DebateSide | null;
+  aiScoringStatus?: 'pending';
   teams: {
     side: DebateSide;
     totalScore: number;

@@ -137,7 +137,7 @@ export class DebateRoomsController {
   }
 
   /**
-   * Generate AI evaluation results (moderator only)
+   * Generate debate results from judges' evaluations (moderator only)
    */
   @Post(':roomId/generate-results')
   @UseGuards(ClerkAuthGuard)

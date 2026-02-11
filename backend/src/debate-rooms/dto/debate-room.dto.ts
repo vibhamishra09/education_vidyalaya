@@ -245,10 +245,19 @@ export class DebateReportResponse {
   clarityScore: number;
   rebuttalScore: number;
   overallScore: number;
+  aiScore?: number | null;
   strengths: string[];
   weaknesses: string[];
   suggestions: string[];
   summary?: string | null;
+  judgeReviews?: {
+    moderatorId: string;
+    moderatorName: string;
+    turnNumber: number;
+    notes?: string | null;
+    scores: Record<string, number>;
+    createdAt: Date;
+  }[];
   participant?: {
     user: {
       id: string;
@@ -265,6 +274,7 @@ export class DebateResultsResponse {
   debateRoomId: string;
   topic: string;
   winningTeam: DebateSideDto | null;
+  aiScoringStatus?: 'pending';
   teams: {
     side: DebateSideDto;
     totalScore: number;

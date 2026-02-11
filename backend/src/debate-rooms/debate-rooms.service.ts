@@ -1117,7 +1117,8 @@ export class DebateRoomsService {
   }
 
   /**
-   * Generate AI evaluation results
+   * Generate result summaries from judge evaluations.
+   * AI scoring is intentionally left pending for later integration.
    */
   async generateResults(roomId: string, userId: string): Promise<DebateResultsResponse> {
     const user = await this.prisma.user.findUnique({
@@ -1140,17 +1141,6 @@ export class DebateRoomsService {
             },
           },
         },
-        transcripts: {
-          include: {
-            participant: {
-              include: {
-                user: true,
-                team: true,
-              },
-            },
-          },
-          orderBy: { turnNumber: 'asc' },
-        },
       },
     });
 
@@ -1168,68 +1158,105 @@ export class DebateRoomsService {
       throw new BadRequestException('Debate must be ended before generating results');
     }
 
-    // Call AI service to evaluate
-    const evaluations = await this.debateAiService.evaluateDebate(
-      debateRoom.topic,
-      debateRoom.transcripts,
-      debateRoom.teams,
+    const participantIds = debateRoom.teams.flatMap((team) =>
+      team.participants.map((participant) => participant.id),
     );
 
+    const moderatorEvaluations = await this.prisma.debateModeratorEvaluation.findMany({
+      where: {
+        debateRoomId: roomId,
+        participantId: { in: participantIds },
+      },
+      include: {
+        moderator: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+      orderBy: [{ participantId: 'asc' }, { createdAt: 'asc' }],
+    });
+
+    const evaluationsByParticipant = new Map<string, typeof moderatorEvaluations>();
+    for (const evaluation of moderatorEvaluations) {
+      const existing = evaluationsByParticipant.get(evaluation.participantId) ?? [];
+      existing.push(evaluation);
+      evaluationsByParticipant.set(evaluation.participantId, existing);
+    }
+
     // Save reports to database
-    for (const evaluation of evaluations) {
+    for (const participantId of participantIds) {
+      const evaluations = evaluationsByParticipant.get(participantId) ?? [];
+      const aggregated = this.aggregateJudgeEvaluations(evaluations);
+
       await this.prisma.debateReport.upsert({
-        where: { participantId: evaluation.participantId },
+        where: { participantId },
         create: {
           debateRoomId: roomId,
-          participantId: evaluation.participantId,
-          ideaScore: evaluation.ideaScore,
-          clarityScore: evaluation.clarityScore,
-          rebuttalScore: evaluation.rebuttalScore,
-          overallScore: evaluation.overallScore,
-          strengths: evaluation.strengths,
-          weaknesses: evaluation.weaknesses,
-          suggestions: evaluation.suggestions,
-          summary: evaluation.summary,
+          participantId,
+          ideaScore: aggregated.ideaScore,
+          clarityScore: aggregated.clarityScore,
+          rebuttalScore: aggregated.rebuttalScore,
+          overallScore: aggregated.overallScore,
+          strengths: aggregated.strengths,
+          weaknesses: aggregated.weaknesses,
+          suggestions: aggregated.suggestions,
+          summary: aggregated.summary,
         },
         update: {
-          ideaScore: evaluation.ideaScore,
-          clarityScore: evaluation.clarityScore,
-          rebuttalScore: evaluation.rebuttalScore,
-          overallScore: evaluation.overallScore,
-          strengths: evaluation.strengths,
-          weaknesses: evaluation.weaknesses,
-          suggestions: evaluation.suggestions,
-          summary: evaluation.summary,
+          ideaScore: aggregated.ideaScore,
+          clarityScore: aggregated.clarityScore,
+          rebuttalScore: aggregated.rebuttalScore,
+          overallScore: aggregated.overallScore,
+          strengths: aggregated.strengths,
+          weaknesses: aggregated.weaknesses,
+          suggestions: aggregated.suggestions,
+          summary: aggregated.summary,
         },
       });
     }
 
     // Calculate team scores and determine winner
     const teamScores = new Map<string, { total: number; count: number }>();
-    
-    for (const team of debateRoom.teams) {
-      const teamEvaluations = evaluations.filter((e) => {
-        const participant = team.participants.find((p) => p.id === e.participantId);
-        return !!participant;
-      });
 
-      const totalScore = teamEvaluations.reduce((sum, e) => sum + e.overallScore, 0);
+    for (const team of debateRoom.teams) {
+      const teamParticipantIds = new Set(team.participants.map((p) => p.id));
+      let totalScore = 0;
+      let count = 0;
+
+      for (const participantId of teamParticipantIds) {
+        const aggregated = this.aggregateJudgeEvaluations(
+          evaluationsByParticipant.get(participantId) ?? [],
+        );
+        totalScore += aggregated.overallScore;
+        count += 1;
+      }
+
       teamScores.set(team.id, {
         total: totalScore,
-        count: teamEvaluations.length,
+        count,
       });
     }
 
     // Determine winner
     let winningTeamId: string | null = null;
-    let highestAvg = -1;
+    let highestTotal = -1;
+    let tie = false;
 
     for (const [teamId, scores] of teamScores.entries()) {
-      const avg = scores.count > 0 ? scores.total / scores.count : 0;
-      if (avg > highestAvg) {
-        highestAvg = avg;
+      const total = scores.total;
+      if (total > highestTotal) {
+        highestTotal = total;
         winningTeamId = teamId;
+        tie = false;
+      } else if (total === highestTotal) {
+        tie = true;
       }
+    }
+
+    if (tie) {
+      winningTeamId = null;
     }
 
     // Update teams with scores and winner
@@ -1257,7 +1284,7 @@ export class DebateRoomsService {
           });
 
           await this.notificationsService.createNotification(
-            participant.user.clerkId,
+            participant.userId,
             `Congratulations! Your team won the debate "${debateRoom.topic}". You earned ${WINNER_COIN_REWARD} coins!`,
             NotifType.NORMAL,
           );
@@ -1271,7 +1298,7 @@ export class DebateRoomsService {
       data: { status: DebateStatus.PROCESSED },
     });
 
-    this.logger.log(`Debate ${roomId} results generated`);
+    this.logger.log(`Debate ${roomId} results generated from judge evaluations`);
 
     return this.getResults(roomId, userId);
   }
@@ -1312,6 +1339,17 @@ export class DebateRoomsService {
             },
           },
         },
+        moderatorEvaluations: {
+          include: {
+            moderator: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+          orderBy: [{ participantId: 'asc' }, { createdAt: 'asc' }],
+        },
       },
     });
 
@@ -1341,10 +1379,21 @@ export class DebateRoomsService {
         clarityScore: r.clarityScore,
         rebuttalScore: r.rebuttalScore,
         overallScore: r.overallScore,
+        aiScore: null,
         strengths: r.strengths,
         weaknesses: r.weaknesses,
         suggestions: r.suggestions,
         summary: r.summary,
+        judgeReviews: debateRoom.moderatorEvaluations
+          .filter((evaluation) => evaluation.participantId === r.participantId)
+          .map((evaluation) => ({
+            moderatorId: evaluation.moderator.id,
+            moderatorName: evaluation.moderator.name,
+            turnNumber: evaluation.turnNumber,
+            notes: evaluation.notes,
+            scores: this.parseScoresJson(evaluation.scores),
+            createdAt: evaluation.createdAt,
+          })),
         participant: r.participant
           ? {
               user: {
@@ -1368,6 +1417,7 @@ export class DebateRoomsService {
           clarityScore: r.clarityScore,
           rebuttalScore: r.rebuttalScore,
           overallScore: r.overallScore,
+          aiScore: null,
           strengths: r.strengths,
           weaknesses: r.weaknesses,
           suggestions: r.suggestions,
@@ -1382,6 +1432,7 @@ export class DebateRoomsService {
       debateRoomId: roomId,
       topic: debateRoom.topic,
       winningTeam: winningTeam?.side as DebateSideDto || null,
+      aiScoringStatus: 'pending',
       teams: debateRoom.teams.map((t) => ({
         side: t.side as DebateSideDto,
         totalScore: t.totalScore || 0,
@@ -1389,6 +1440,92 @@ export class DebateRoomsService {
         participantCount: t.participants.length,
       })),
       reports,
+    };
+  }
+
+  private parseScoresJson(scores: Prisma.JsonValue): Record<string, number> {
+    if (!scores || typeof scores !== 'object' || Array.isArray(scores)) {
+      return {};
+    }
+
+    const parsed: Record<string, number> = {};
+    for (const [key, value] of Object.entries(scores as Record<string, unknown>)) {
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        parsed[key] = value;
+      }
+    }
+    return parsed;
+  }
+
+  private aggregateJudgeEvaluations(
+    evaluations: Array<{ scores: Prisma.JsonValue }>,
+  ): {
+    ideaScore: number;
+    clarityScore: number;
+    rebuttalScore: number;
+    overallScore: number;
+    strengths: string[];
+    weaknesses: string[];
+    suggestions: string[];
+    summary: string;
+  } {
+    if (evaluations.length === 0) {
+      return {
+        ideaScore: 0,
+        clarityScore: 0,
+        rebuttalScore: 0,
+        overallScore: 0,
+        strengths: [],
+        weaknesses: ['No judge reviews submitted.'],
+        suggestions: ['Ask judges to submit scores before generating final results.'],
+        summary: 'No judge reviews were available for this participant.',
+      };
+    }
+
+    const metric = (
+      aliases: string[],
+      fallbackFromAll = false,
+    ): number => {
+      const values: number[] = [];
+
+      for (const evaluation of evaluations) {
+        const scores = this.parseScoresJson(evaluation.scores);
+        let chosen: number | null = null;
+        for (const alias of aliases) {
+          if (typeof scores[alias] === 'number') {
+            chosen = scores[alias];
+            break;
+          }
+        }
+        if (chosen === null && fallbackFromAll) {
+          const allValues = Object.values(scores);
+          if (allValues.length > 0) {
+            chosen = allValues.reduce((sum, value) => sum + value, 0) / allValues.length;
+          }
+        }
+        if (chosen !== null) {
+          values.push(chosen);
+        }
+      }
+
+      if (values.length === 0) return 0;
+      return values.reduce((sum, value) => sum + value, 0) / values.length;
+    };
+
+    const clarityScore = metric(['clarityOfThoughts', 'clarity', 'clarityScore']);
+    const ideaScore = metric(['argumentQuality', 'ideaScore', 'ideas', 'arguments']);
+    const rebuttalScore = metric(['factCheck', 'rebuttalScore', 'rebuttal', 'facts']);
+    const overallScore = metric([], true);
+
+    return {
+      ideaScore,
+      clarityScore,
+      rebuttalScore,
+      overallScore,
+      strengths: [],
+      weaknesses: [],
+      suggestions: [],
+      summary: `${evaluations.length} judge review(s) aggregated. AI score pending.`,
     };
   }
 

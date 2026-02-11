@@ -352,7 +352,7 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
   const handleGenerateResults = async () => {
     try {
       await generateResults.mutateAsync(roomId);
-      showSuccess('Results Generated', 'AI evaluation complete!');
+      showSuccess('Results Generated', 'Judge reviews have been aggregated successfully.');
     } catch (err: unknown) {
       showError('Error', err instanceof Error ? err.message : 'Failed to generate results');
     }
@@ -690,7 +690,7 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
               <Card>
                 <CardContent className="pt-6 text-center">
                   <p className="mb-4">
-                    The debate has ended. Generate AI evaluation results?
+                    The debate has ended. Generate results from judges' reviews?
                   </p>
                   <Button
                     onClick={handleGenerateResults}
