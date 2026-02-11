@@ -59,6 +59,7 @@ model User {
   debateParticipations  DebateParticipant[]    @relation("DebateParticipant")
   debateModeratorRoles  DebateModerator[]      @relation("DebateModerator")
   debateChatMessages    DebateChatMessage[]    @relation("DebateChatMessages")
+  debateModeratorEvaluations DebateModeratorEvaluation[] @relation("DebateModeratorEvaluations")
 }
 
 model StudyRoom {
@@ -438,6 +439,7 @@ model DebateRoom {
   reports             DebateReport[]
   turnQueue           DebateTurnQueue[]
   chatMessages        DebateChatMessage[]
+  moderatorEvaluations DebateModeratorEvaluation[]
   
   @@index([hostId])
   @@index([status])
@@ -505,11 +507,36 @@ model DebateParticipant {
   transcripts     DebateTranscript[]
   report          DebateReport?
   turnQueueEntry  DebateTurnQueue?
+  moderatorEvaluations DebateModeratorEvaluation[]
   
   @@unique([debateRoomId, userId])
   @@index([debateRoomId])
   @@index([teamId])
   @@index([userId])
+}
+
+// Debate Moderator Evaluation - private per moderator, per participant, per turn
+model DebateModeratorEvaluation {
+  id              String            @id @default(cuid())
+  debateRoomId    String
+  participantId   String
+  moderatorId     String
+  turnNumber      Int
+  notes           String?           @db.Text
+  scores          Json              // Flexible score map: { factorKey: 0-10 }
+
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  // Relations
+  debateRoom      DebateRoom        @relation(fields: [debateRoomId], references: [id], onDelete: Cascade)
+  participant     DebateParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  moderator       User              @relation("DebateModeratorEvaluations", fields: [moderatorId], references: [id], onDelete: Cascade)
+
+  @@unique([debateRoomId, participantId, moderatorId, turnNumber])
+  @@index([debateRoomId, moderatorId])
+  @@index([debateRoomId, participantId])
+  @@index([participantId])
 }
 
 // Participant Status
