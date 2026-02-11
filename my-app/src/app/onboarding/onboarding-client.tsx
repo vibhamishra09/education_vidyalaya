@@ -12,7 +12,6 @@ import { SkillInput } from "@/components/ui/skill-input";
 import { motion, AnimatePresence } from "framer-motion";
 import { Camera, ArrowRight, ArrowLeft, CheckCircle, Sparkles, Upload } from "lucide-react";
 import { uploadFile, validateImageFile } from "@/lib/upload";
-import { setAuthToken } from "@/lib/api-client";
 
 type OnboardingStep = "profile" | "skills" | "complete";
 
@@ -67,12 +66,13 @@ export function OnboardingClient() {
     try {
       // Get auth token
       const token = await getToken();
-      if (token) {
-        setAuthToken(token);
+      if (!token) {
+        alert('Please sign in to upload images.');
+        return;
       }
 
-      // Upload file
-      const fileUrl = await uploadFile(file, 'avatar');
+      // Upload file with token
+      const fileUrl = await uploadFile(file, 'avatar', token);
       setAvatar(fileUrl);
     } catch (error) {
       console.error('Error uploading avatar:', error);

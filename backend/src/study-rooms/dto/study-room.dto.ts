@@ -14,6 +14,7 @@ export class StudyRoomDto {
   id: string;
   title: string;
   description?: string;
+  imageUrl?: string;
   sessionStatus: SessionStatus;
   date: Date;
   duration: number;
@@ -33,6 +34,7 @@ export class StudyRoomCardDto {
   id: string;
   title: string;
   description?: string;
+  imageUrl?: string;
   sessionStatus: SessionStatus;
   date: Date;
   duration: number;
@@ -85,6 +87,10 @@ export class CreateStudyRoomDto {
   @IsString()
   gmeetLink?: string;
 
+  @IsOptional()
+  @IsString()
+  imageUrl?: string;
+
   @IsString()
   timezone: string;
 }
@@ -132,6 +138,10 @@ export class UpdateStudyRoomDto {
   @IsOptional()
   @IsString()
   gmeetLink?: string;
+
+  @IsOptional()
+  @IsString()
+  imageUrl?: string;
 
   @IsOptional()
   status?: SessionStatus;

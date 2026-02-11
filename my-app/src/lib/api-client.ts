@@ -69,6 +69,15 @@ apiClient.interceptors.request.use(
       return config;
     }
     
+    // Check if token is set in defaults (set via setAuthToken)
+    if (apiClient.defaults.headers && apiClient.defaults.headers.common && apiClient.defaults.headers.common.Authorization) {
+      const defaultToken = apiClient.defaults.headers.common.Authorization as string;
+      if (defaultToken && config.headers) {
+        config.headers.Authorization = defaultToken;
+        return config;
+      }
+    }
+    
     // Otherwise, try to get the Clerk token for authenticated requests
     const token = await getClerkToken();
     if (token && config.headers) {
