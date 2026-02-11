@@ -8,6 +8,9 @@ import {
   DebateRoomFilters,
   DebateResults,
   DebateLivekitTokenResponse,
+  DebateModeratorEvaluation,
+  UpsertDebateModeratorEvaluationDto,
+  ModeratorEvaluationsQuery,
 } from '@/types/debate.types';
 import { cleanQueryParams } from '../utils/api-utils';
 
@@ -104,6 +107,47 @@ export const debateRoomsApi = {
   getLivekitToken: async (roomId: string): Promise<DebateLivekitTokenResponse> => {
     const response = await apiClient.get<DebateLivekitTokenResponse>(
       `/api/debate-rooms/${roomId}/token`
+    );
+    return response.data;
+  },
+
+  // Create or update private moderator evaluation
+  upsertModeratorEvaluation: async (
+    roomId: string,
+    data: UpsertDebateModeratorEvaluationDto
+  ): Promise<{ evaluation: DebateModeratorEvaluation }> => {
+    const response = await apiClient.post<{ evaluation: DebateModeratorEvaluation }>(
+      `/api/debate-rooms/${roomId}/evaluations`,
+      data
+    );
+    return response.data;
+  },
+
+  // Get current moderator evaluations for this room
+  getModeratorEvaluations: async (
+    roomId: string,
+    query?: ModeratorEvaluationsQuery
+  ): Promise<{ evaluations: DebateModeratorEvaluation[] }> => {
+    const response = await apiClient.get<{ evaluations: DebateModeratorEvaluation[] }>(
+      `/api/debate-rooms/${roomId}/evaluations`,
+      {
+        params: query ? cleanQueryParams(query as unknown as Record<string, unknown>) : {},
+      }
+    );
+    return response.data;
+  },
+
+  // Get current moderator evaluations for one participant
+  getParticipantEvaluations: async (
+    roomId: string,
+    participantId: string,
+    query?: Omit<ModeratorEvaluationsQuery, 'participantId'>
+  ): Promise<{ evaluations: DebateModeratorEvaluation[] }> => {
+    const response = await apiClient.get<{ evaluations: DebateModeratorEvaluation[] }>(
+      `/api/debate-rooms/${roomId}/evaluations/${participantId}`,
+      {
+        params: query ? cleanQueryParams(query as unknown as Record<string, unknown>) : {},
+      }
     );
     return response.data;
   },

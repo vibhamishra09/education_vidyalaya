@@ -352,7 +352,7 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
   const handleGenerateResults = async () => {
     try {
       await generateResults.mutateAsync(roomId);
-      showSuccess('Results Generated', 'AI evaluation complete!');
+      showSuccess('Results Generated', 'Judge reviews have been aggregated successfully.');
     } catch (err: unknown) {
       showError('Error', err instanceof Error ? err.message : 'Failed to generate results');
     }
@@ -690,7 +690,7 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
               <Card>
                 <CardContent className="pt-6 text-center">
                   <p className="mb-4">
-                    The debate has ended. Generate AI evaluation results?
+                    The debate has ended. Generate results from judges&apos; reviews?
                   </p>
                   <Button
                     onClick={handleGenerateResults}
@@ -704,35 +704,6 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
                     ) : (
                       'Generate Results'
                     )}
-                  </Button>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Enter Debate Room Button (for WAITING/LIVE/PREP) */}
-            {(room.status === DebateStatus.WAITING || 
-              room.status === DebateStatus.LIVE || 
-              room.status === DebateStatus.PREP) && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Enter Debate Room</CardTitle>
-                  <CardDescription>
-                    {room.status === DebateStatus.WAITING
-                      ? 'Enter the debate room to join the video call and wait for the debate to start.'
-                      : room.status === DebateStatus.PREP 
-                      ? 'Preparation phase is active. Join to prepare with your team.'
-                      : 'The debate is live. Join to participate or watch.'}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Button
-                    className="w-full font-semibold text-sm h-10 shadow-md shadow-primary/20 transition-all hover:scale-[1.01] active:scale-[0.99] rounded-lg bg-green-600 hover:bg-green-700 text-white"
-                    onClick={() => {
-                      router.push(`/rooms/debateroom/${roomId}`);
-                    }}
-                  >
-                    <Play className="h-3.5 w-3.5 mr-2" />
-                    Enter Debate Room
                   </Button>
                 </CardContent>
               </Card>
@@ -853,6 +824,88 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
                       </p>
                     </div>
                   )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Enter Debate Room Button (for WAITING/LIVE/PREP) - Below team selection */}
+            {(room.status === DebateStatus.WAITING || 
+              room.status === DebateStatus.LIVE || 
+              room.status === DebateStatus.PREP) && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Enter Debate Room</CardTitle>
+                  <CardDescription>
+                    {room.status === DebateStatus.WAITING
+                      ? 'Enter the debate room to join the video call and wait for the debate to start.'
+                      : room.status === DebateStatus.PREP 
+                      ? 'Preparation phase is active. Join to prepare with your team.'
+                      : 'The debate is live. Join to participate or watch.'}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {(() => {
+                    // Calculate time until scheduled time
+                    const scheduledTime = room.scheduledAt ? new Date(room.scheduledAt) : null;
+                    const now = new Date();
+                    const minutesUntilScheduled = scheduledTime 
+                      ? Math.max(0, Math.floor((scheduledTime.getTime() - now.getTime()) / (1000 * 60)))
+                      : null;
+                    
+                    // Check if host has joined (host should be in moderators list with isHost flag)
+                    const hostHasJoined = room.moderators.some(mod => mod.isHost);
+                    
+                    // For participants: must have chosen a team AND host must have joined
+                    const canEnterAsParticipant = isParticipant && userSide !== null && hostHasJoined;
+                    
+                    // For host: can enter only if 5 minutes or less remain until scheduled time
+                    const canEnterAsHost = isHost && (
+                      scheduledTime === null || // No scheduled time means can enter anytime
+                      minutesUntilScheduled !== null && minutesUntilScheduled <= 5
+                    );
+                    
+                    // For moderators (non-host): can enter if host has joined
+                    const canEnterAsModerator = isModerator && !isHost && hostHasJoined;
+                    
+                    // For non-participants: can enter if host has joined
+                    const canEnterAsViewer = !isParticipant && !isModerator && hostHasJoined;
+                    
+                    const canEnter = canEnterAsParticipant || canEnterAsHost || canEnterAsModerator || canEnterAsViewer;
+                    
+                    // Determine disabled reason
+                    let disabledReason = '';
+                    if (!canEnter) {
+                      if (isParticipant && userSide === null) {
+                        disabledReason = 'Please choose a team (FOR or AGAINST) first';
+                      } else if (isParticipant && !hostHasJoined) {
+                        disabledReason = 'Waiting for host to join the debate room';
+                      } else if (isHost && scheduledTime && minutesUntilScheduled !== null && minutesUntilScheduled > 5) {
+                        disabledReason = `Host can enter only when 5 minutes or less remain (${minutesUntilScheduled} minutes remaining)`;
+                      } else if (!hostHasJoined) {
+                        disabledReason = 'Waiting for host to join the debate room';
+                      }
+                    }
+                    
+                    return (
+                      <>
+                        <Button
+                          className="w-full font-semibold text-sm h-10 shadow-md shadow-primary/20 transition-all hover:scale-[1.01] active:scale-[0.99] rounded-lg bg-green-600 hover:bg-green-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                          onClick={() => {
+                            router.push(`/rooms/debateroom/${roomId}`);
+                          }}
+                          disabled={!canEnter}
+                        >
+                          <Play className="h-3.5 w-3.5 mr-2" />
+                          Enter Debate Room
+                        </Button>
+                        {!canEnter && disabledReason && (
+                          <p className="text-xs text-muted-foreground mt-2 text-center">
+                            {disabledReason}
+                          </p>
+                        )}
+                      </>
+                    );
+                  })()}
                 </CardContent>
               </Card>
             )}
