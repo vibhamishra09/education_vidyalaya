@@ -1,0 +1,2 @@
+-- RenameIndex
+ALTER INDEX "DebateModeratorEvaluation_debateRoomId_participantId_moderatorI" RENAME TO "DebateModeratorEvaluation_debateRoomId_participantId_modera_key";

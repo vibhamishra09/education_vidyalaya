@@ -26,7 +26,6 @@ import {
 import { Loader2, Upload, Plus, X, Linkedin, Github, Globe, Youtube, Instagram } from "lucide-react";
 import { usersApi } from "@/lib/api";
 import { User, UpdateUserDto, SocialLink, SOCIAL_PLATFORMS } from "@/types/api.types";
-import { setAuthToken } from "@/lib/api-client";
 import { uploadFile, validateImageFile } from "@/lib/upload";
 
 interface EditProfileModalProps {
@@ -351,12 +350,13 @@ export function EditProfileModal({
     try {
       // Get auth token
       const token = await getToken();
-      if (token) {
-        setAuthToken(token);
+      if (!token) {
+        setError('Please sign in to upload images.');
+        return;
       }
 
-      // Upload file
-      const fileUrl = await uploadFile(file, 'avatar');
+      // Upload file with token
+      const fileUrl = await uploadFile(file, 'avatar', token);
       setAvatar(fileUrl);
     } catch (error) {
       setError('Failed to upload image. Please try again.');

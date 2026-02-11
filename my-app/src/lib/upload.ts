@@ -17,10 +17,13 @@ export interface GenerateUploadUrlParams {
  */
 export async function getPresignedUploadUrl(
   params: GenerateUploadUrlParams,
+  token?: string,
 ): Promise<PresignedUrlResponse> {
+  const headers = token ? { Authorization: `Bearer ${token}` } : {};
   const response = await apiClient.post<PresignedUrlResponse>(
     '/api/upload/presigned-url',
     params,
+    { headers },
   );
   return response.data;
 }
@@ -41,7 +44,16 @@ export async function uploadFileToS3(
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to upload file: ${response.statusText}`);
+    let errorBody = '';
+    try {
+      errorBody = await response.text();
+    } catch {
+      errorBody = '';
+    }
+
+    throw new Error(
+      `Failed to upload file: ${response.status} ${response.statusText}${errorBody ? ` - ${errorBody}` : ''}`,
+    );
   }
 }
 
@@ -51,13 +63,17 @@ export async function uploadFileToS3(
 export async function uploadFile(
   file: File,
   type: 'avatar' | 'document' = 'avatar',
+  token?: string,
 ): Promise<string> {
   // Get presigned URL
-  const { uploadUrl, fileUrl } = await getPresignedUploadUrl({
-    filename: file.name,
-    contentType: file.type,
-    type,
-  });
+  const { uploadUrl, fileUrl } = await getPresignedUploadUrl(
+    {
+      filename: file.name,
+      contentType: file.type,
+      type,
+    },
+    token,
+  );
 
   // Upload to S3
   await uploadFileToS3(file, uploadUrl);

@@ -31,7 +31,6 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { uploadFile, validateImageFile } from "@/lib/upload";
-import { setAuthToken } from "@/lib/api-client";
 
 interface StudyRoomFormData {
   title: string;
@@ -132,18 +131,20 @@ export function CreateStudyRoomClient() {
     try {
       // Get auth token
       const token = await getToken();
-      if (token) {
-        setAuthToken(token);
+      if (!token) {
+        setError('Please sign in to upload images.');
+        return;
       }
 
       // Create preview
       const previewUrl = URL.createObjectURL(file);
       setImagePreview(previewUrl);
 
-      // Upload file
-      const fileUrl = await uploadFile(file, 'document');
+      // Upload file with token
+      const fileUrl = await uploadFile(file, 'document', token);
       updateField("imageUrl", fileUrl);
     } catch (error) {
+      console.error('Upload error:', error);
       setError('Failed to upload image. Please try again.');
       setImagePreview(null);
     } finally {
