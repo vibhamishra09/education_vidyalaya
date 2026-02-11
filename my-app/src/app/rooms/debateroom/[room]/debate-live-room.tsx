@@ -62,7 +62,7 @@ import {
   DebateUserRole,
 } from '@/types/debate.types';
 import {
-  DebateTurnTimer,
+  SimpleTimer,
   PrepCountdown,
   DebateBuzzer,
   DebateTeamChat,
@@ -1058,13 +1058,12 @@ function DebateLiveContent({
             {debateRoom.status === DebateStatus.PREP && prepCountdown !== null ? (
               <PrepCountdownTimer secondsRemaining={prepCountdown} />
             ) : (isLive || debateRoom.status === DebateStatus.WAITING) && (
-              <div className="bg-white/10 rounded-lg p-1.5 sm:p-2 text-center">
+              <div className="bg-white/10 rounded-lg p-1.5 sm:p-2 text-center text-white text-sm sm:text-lg">
                 <Clock className="h-3 w-3 sm:h-5 sm:w-5 text-white/70 mx-auto mb-1" />
-                <DebateTurnTimer
+                <SimpleTimer
                   turnDurationSeconds={debateRoom.turnDurationSeconds}
                   turnStartedAt={debateState?.turnStartedAt || null}
                   isActive={isLive && !!debateState?.currentSpeakerId && !!debateState?.turnStartedAt}
-                  className="bg-transparent border-none p-0 text-white text-sm sm:text-lg font-mono"
                 />
               </div>
             )}
