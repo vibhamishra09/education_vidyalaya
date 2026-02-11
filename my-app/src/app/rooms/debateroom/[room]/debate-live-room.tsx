@@ -67,10 +67,12 @@ import {
   DebateBuzzer,
   DebateTeamChat,
   CompactTeamsDisplay,
+  ModeratorEvaluationPanel,
 } from '@/components/debate';
 import { useDebateMicControl } from '@/hooks/use-debate-mic-control';
 import { MicEnabledEvent, MicDisabledEvent } from '@/types/debate.types';
 import { useToast } from '@/contexts/toast-context';
+import { useParticipantEvaluations, useUpsertModeratorEvaluation } from '@/hooks/use-debate-rooms';
 
 interface ChatMessage {
   id: string;
@@ -316,7 +318,7 @@ function DebateLiveContent({
 }: DebateLiveContentProps) {
   const { showWarning, showInfo } = useToast();
   const [showSidebar, setShowSidebar] = useState(true);
-  const [sidebarTab, setSidebarTab] = useState<'teams' | 'chat'>('teams');
+  const [sidebarTab, setSidebarTab] = useState<'teams' | 'chat' | 'evaluation'>('teams');
   const [isAudioOutputEnabled, setIsAudioOutputEnabled] = useState(true);
   const [viewMode, setViewMode] = useState<'speaker' | 'grid'>('speaker');
   const [isRoomConnected, setIsRoomConnected] = useState(false);
@@ -843,6 +845,7 @@ function DebateLiveContent({
   const isModerator = userRole === 'host' || userRole === 'moderator';
   const isPrepPhase = debateRoom.status === DebateStatus.PREP;
   const isLive = debateRoom.status === DebateStatus.LIVE;
+  const currentTurnNumber = debateState?.currentTurnIndex ?? debateRoom.currentTurnIndex ?? 0;
 
   // Find current speaker from debate state
   const currentSpeaker = debateRoom.teams
@@ -850,6 +853,42 @@ function DebateLiveContent({
     .find((p) => debateState?.currentSpeakerId && p.user.clerkId === debateState.currentSpeakerId);
 
   const isUserTurn = currentSpeaker?.user.clerkId === userId;
+
+  const currentSpeakerParticipant = useMemo(
+    () =>
+      debateRoom.teams
+        .flatMap((t) => t.participants)
+        .find(
+          (p) =>
+            !!debateState?.currentSpeakerId &&
+            (p.user.clerkId === debateState.currentSpeakerId ||
+              p.user.id === debateState.currentSpeakerId),
+        ),
+    [debateRoom.teams, debateState?.currentSpeakerId],
+  );
+
+  const { data: currentSpeakerEvaluations } = useParticipantEvaluations(
+    debateRoom.id,
+    currentSpeakerParticipant?.id || '',
+    currentTurnNumber,
+    isModerator && !!currentSpeakerParticipant && sidebarTab === 'evaluation',
+  );
+
+  const upsertModeratorEvaluation = useUpsertModeratorEvaluation(debateRoom.id);
+  const existingEvaluation = currentSpeakerEvaluations?.evaluations?.[0];
+
+  const handleSaveModeratorEvaluation = useCallback(
+    async (payload: { notes?: string; scores?: Record<string, number> }) => {
+      if (!currentSpeakerParticipant) return;
+      await upsertModeratorEvaluation.mutateAsync({
+        participantId: currentSpeakerParticipant.id,
+        turnNumber: currentTurnNumber,
+        ...(payload.notes !== undefined ? { notes: payload.notes } : {}),
+        ...(payload.scores !== undefined ? { scores: payload.scores } : {}),
+      });
+    },
+    [currentSpeakerParticipant, currentTurnNumber, upsertModeratorEvaluation],
+  );
 
   // Mic control handlers - connect to refs from parent
   const handleMicEnabled = useCallback((event: MicEnabledEvent) => {
@@ -1197,6 +1236,20 @@ function DebateLiveContent({
                 <MessageSquare className="h-4 w-4" />
                 Chat
               </button>
+              {isModerator && (
+                <button
+                  onClick={() => setSidebarTab('evaluation')}
+                  className={cn(
+                    'flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium transition-colors',
+                    sidebarTab === 'evaluation'
+                      ? 'text-white border-b-2 border-yellow-500'
+                      : 'text-white/50 hover:text-white/70',
+                  )}
+                >
+                  <Shield className="h-4 w-4" />
+                  Evaluate
+                </button>
+              )}
             </div>
 
             {/* Sidebar Content */}
@@ -1327,7 +1380,7 @@ function DebateLiveContent({
                     )}
                   </div>
                 </ScrollArea>
-              ) : (
+              ) : sidebarTab === 'chat' ? (
                 <div className="h-full flex flex-col">
                   {/* Chat Header with message count */}
                   <div className="flex items-center justify-between px-4 py-2 border-b border-white/5">
@@ -1472,6 +1525,25 @@ function DebateLiveContent({
                           : "Join a team to start chatting"}
                     </p>
                   </div>
+                </div>
+              ) : (
+                <div className="h-full">
+                  {currentSpeakerParticipant ? (
+                    <ModeratorEvaluationPanel
+                      debateRoomId={debateRoom.id}
+                      participantId={currentSpeakerParticipant.id}
+                      participantName={currentSpeakerParticipant.user.name}
+                      turnNumber={currentTurnNumber}
+                      initialNotes={existingEvaluation?.notes}
+                      initialScores={existingEvaluation?.scores as Record<string, number> | undefined}
+                      isSaving={upsertModeratorEvaluation.isPending}
+                      onSave={handleSaveModeratorEvaluation}
+                    />
+                  ) : (
+                    <div className="h-full flex items-center justify-center p-6 text-center text-white/60">
+                      No active speaker right now. Evaluation panel appears when a participant is speaking.
+                    </div>
+                  )}
                 </div>
               )}
             </div>

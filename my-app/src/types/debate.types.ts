@@ -162,6 +162,55 @@ export interface DebateResults {
   reports: DebateReport[];
 }
 
+export type DebateEvaluationScores = Record<string, number>;
+
+export interface DebateGradingFactor {
+  key: string;
+  label: string;
+}
+
+export const DEFAULT_DEBATE_GRADING_FACTORS: DebateGradingFactor[] = [
+  { key: 'clarityOfThoughts', label: 'Clarity of Thoughts' },
+  { key: 'factCheck', label: 'Fact Check' },
+  { key: 'argumentQuality', label: 'Argument Quality' },
+];
+
+export interface DebateModeratorEvaluation {
+  id: string;
+  debateRoomId: string;
+  participantId: string;
+  moderatorId: string;
+  turnNumber: number;
+  notes?: string | null;
+  scores: DebateEvaluationScores;
+  createdAt: string;
+  updatedAt: string;
+  participant?: {
+    id: string;
+    user: {
+      id: string;
+      clerkId: string;
+      name: string;
+      avatar?: string | null;
+    };
+    team: {
+      side: DebateSide;
+    };
+  };
+}
+
+export interface UpsertDebateModeratorEvaluationDto {
+  participantId: string;
+  turnNumber: number;
+  notes?: string;
+  scores?: DebateEvaluationScores;
+}
+
+export interface ModeratorEvaluationsQuery {
+  participantId?: string;
+  turnNumber?: number;
+}
+
 // Socket Event Types
 export interface DebateState {
   roomId: string;

@@ -8,6 +8,7 @@ import {
   IsArray,
   IsBoolean,
   IsDateString,
+  IsObject,
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 
@@ -149,6 +150,36 @@ export class DebateRoomQueryDto {
   @Transform(({ value }) => value === 'true' || value === true)
   @IsBoolean()
   trending?: boolean;
+}
+
+export class UpsertModeratorEvaluationDto {
+  @IsString()
+  participantId: string;
+
+  @IsInt()
+  @Min(0)
+  @Type(() => Number)
+  turnNumber: number;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+
+  @IsOptional()
+  @IsObject()
+  scores?: Record<string, number>;
+}
+
+export class ModeratorEvaluationsQueryDto {
+  @IsOptional()
+  @IsString()
+  participantId?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Type(() => Number)
+  turnNumber?: number;
 }
 
 // Response DTOs

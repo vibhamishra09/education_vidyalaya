@@ -10,12 +10,13 @@ import { LivekitService } from '../livekit/livekit.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import {
   CreateDebateRoomDto,
-  UpdateDebateRoomDto,
   JoinDebateRoomDto,
   DebateRoomResponse,
   DebateResultsResponse,
   TurnOrderTypeDto,
   DebateSideDto,
+  UpsertModeratorEvaluationDto,
+  ModeratorEvaluationsQueryDto,
 } from './dto/debate-room.dto';
 import {
   Prisma,
@@ -495,6 +496,181 @@ export class DebateRoomsService {
     );
 
     this.logger.log(`User ${targetUserId} banned from debate ${roomId}`);
+  }
+
+  /**
+   * Save or update moderator evaluation for a participant turn.
+   * Evaluations are private to the moderator creating them.
+   */
+  async createOrUpdateModeratorEvaluation(
+    roomId: string,
+    moderatorClerkId: string,
+    dto: UpsertModeratorEvaluationDto,
+  ) {
+    if (dto.notes === undefined && dto.scores === undefined) {
+      throw new BadRequestException('Provide at least notes or scores');
+    }
+
+    const { user } = await this.assertModeratorInRoom(roomId, moderatorClerkId);
+
+    const participant = await this.prisma.debateParticipant.findFirst({
+      where: {
+        id: dto.participantId,
+        debateRoomId: roomId,
+      },
+    });
+
+    if (!participant) {
+      throw new NotFoundException('Participant not found in this debate room');
+    }
+
+    const validatedScores =
+      dto.scores !== undefined ? this.validateAndNormalizeScores(dto.scores) : undefined;
+
+    const existing = await this.prisma.debateModeratorEvaluation.findUnique({
+      where: {
+        debateRoomId_participantId_moderatorId_turnNumber: {
+          debateRoomId: roomId,
+          participantId: dto.participantId,
+          moderatorId: user.id,
+          turnNumber: dto.turnNumber,
+        },
+      },
+    });
+
+    if (!existing) {
+      return this.prisma.debateModeratorEvaluation.create({
+        data: {
+          debateRoomId: roomId,
+          participantId: dto.participantId,
+          moderatorId: user.id,
+          turnNumber: dto.turnNumber,
+          notes: dto.notes ?? null,
+          scores: (validatedScores ?? {}) as Prisma.JsonObject,
+        },
+        include: {
+          participant: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  clerkId: true,
+                  name: true,
+                  avatar: true,
+                },
+              },
+              team: {
+                select: { side: true },
+              },
+            },
+          },
+        },
+      });
+    }
+
+    return this.prisma.debateModeratorEvaluation.update({
+      where: { id: existing.id },
+      data: {
+        ...(dto.notes !== undefined ? { notes: dto.notes } : {}),
+        ...(validatedScores !== undefined
+          ? { scores: validatedScores as Prisma.JsonObject }
+          : {}),
+      },
+      include: {
+        participant: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                clerkId: true,
+                name: true,
+                avatar: true,
+              },
+            },
+            team: {
+              select: { side: true },
+            },
+          },
+        },
+      },
+    });
+  }
+
+  /**
+   * Get current moderator's evaluations for a room (optionally filtered).
+   */
+  async getModeratorEvaluations(
+    roomId: string,
+    moderatorClerkId: string,
+    query?: ModeratorEvaluationsQueryDto,
+  ) {
+    const { user } = await this.assertModeratorInRoom(roomId, moderatorClerkId);
+
+    return this.prisma.debateModeratorEvaluation.findMany({
+      where: {
+        debateRoomId: roomId,
+        moderatorId: user.id,
+        ...(query?.participantId ? { participantId: query.participantId } : {}),
+        ...(query?.turnNumber !== undefined ? { turnNumber: query.turnNumber } : {}),
+      },
+      include: {
+        participant: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                clerkId: true,
+                name: true,
+                avatar: true,
+              },
+            },
+            team: {
+              select: { side: true },
+            },
+          },
+        },
+      },
+      orderBy: [{ turnNumber: 'desc' }, { updatedAt: 'desc' }],
+    });
+  }
+
+  /**
+   * Get current moderator's evaluations for a specific participant.
+   */
+  async getParticipantEvaluations(
+    roomId: string,
+    moderatorClerkId: string,
+    participantId: string,
+    turnNumber?: number,
+  ) {
+    const { user } = await this.assertModeratorInRoom(roomId, moderatorClerkId);
+
+    return this.prisma.debateModeratorEvaluation.findMany({
+      where: {
+        debateRoomId: roomId,
+        moderatorId: user.id,
+        participantId,
+        ...(turnNumber !== undefined ? { turnNumber } : {}),
+      },
+      include: {
+        participant: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                clerkId: true,
+                name: true,
+                avatar: true,
+              },
+            },
+            team: {
+              select: { side: true },
+            },
+          },
+        },
+      },
+      orderBy: [{ turnNumber: 'desc' }, { updatedAt: 'desc' }],
+    });
   }
 
   /**
@@ -1488,5 +1664,59 @@ export class DebateRoomsService {
       livekitRoomName: debateRoom.livekitRoomName,
       createdAt: debateRoom.createdAt,
     };
+  }
+
+  private async assertModeratorInRoom(roomId: string, moderatorClerkId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { clerkId: moderatorClerkId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const debateRoom = await this.prisma.debateRoom.findUnique({
+      where: { id: roomId },
+      include: { moderators: true },
+    });
+
+    if (!debateRoom) {
+      throw new NotFoundException('Debate room not found');
+    }
+
+    const isModerator = debateRoom.moderators.some((m) => m.userId === user.id);
+    if (!isModerator) {
+      throw new ForbiddenException('Only moderators can access evaluations');
+    }
+
+    return { user, debateRoom };
+  }
+
+  private validateAndNormalizeScores(
+    scores: Record<string, number>,
+  ): Record<string, number> {
+    if (!scores || typeof scores !== 'object' || Array.isArray(scores)) {
+      throw new BadRequestException('Scores must be an object of factor keys and numeric values');
+    }
+
+    const normalized: Record<string, number> = {};
+
+    for (const [factorKey, rawValue] of Object.entries(scores)) {
+      if (!factorKey.trim()) {
+        throw new BadRequestException('Score factor key cannot be empty');
+      }
+
+      if (typeof rawValue !== 'number' || Number.isNaN(rawValue) || !Number.isFinite(rawValue)) {
+        throw new BadRequestException(`Score for "${factorKey}" must be a valid number`);
+      }
+
+      if (rawValue < 0 || rawValue > 10) {
+        throw new BadRequestException(`Score for "${factorKey}" must be between 0 and 10`);
+      }
+
+      normalized[factorKey] = rawValue;
+    }
+
+    return normalized;
   }
 }

@@ -15,11 +15,12 @@ import { OptionalClerkAuthGuard } from '../common/guards/optional-clerk-auth.gua
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import {
   CreateDebateRoomDto,
-  UpdateDebateRoomDto,
   JoinDebateRoomDto,
   DebateRoomQueryDto,
   PromoteModeratorDto,
   BanParticipantDto,
+  UpsertModeratorEvaluationDto,
+  ModeratorEvaluationsQueryDto,
 } from './dto/debate-room.dto';
 
 @Controller('api/debate-rooms')
@@ -196,6 +197,62 @@ export class DebateRoomsController {
   async getDebateState(@Param('roomId') roomId: string) {
     const state = await this.debateRoomsService.getDebateState(roomId);
     return { state };
+  }
+
+  /**
+   * Create/update moderator evaluation (private per moderator)
+   */
+  @Post(':roomId/evaluations')
+  @UseGuards(ClerkAuthGuard)
+  async upsertModeratorEvaluation(
+    @Param('roomId') roomId: string,
+    @CurrentUser() userId: string,
+    @Body() dto: UpsertModeratorEvaluationDto,
+  ) {
+    const evaluation = await this.debateRoomsService.createOrUpdateModeratorEvaluation(
+      roomId,
+      userId,
+      dto,
+    );
+    return { evaluation };
+  }
+
+  /**
+   * Get current moderator evaluations for a room
+   */
+  @Get(':roomId/evaluations')
+  @UseGuards(ClerkAuthGuard)
+  async getModeratorEvaluations(
+    @Param('roomId') roomId: string,
+    @CurrentUser() userId: string,
+    @Query() query: ModeratorEvaluationsQueryDto,
+  ) {
+    const evaluations = await this.debateRoomsService.getModeratorEvaluations(
+      roomId,
+      userId,
+      query,
+    );
+    return { evaluations };
+  }
+
+  /**
+   * Get current moderator evaluations for one participant
+   */
+  @Get(':roomId/evaluations/:participantId')
+  @UseGuards(ClerkAuthGuard)
+  async getParticipantEvaluations(
+    @Param('roomId') roomId: string,
+    @Param('participantId') participantId: string,
+    @CurrentUser() userId: string,
+    @Query() query: ModeratorEvaluationsQueryDto,
+  ) {
+    const evaluations = await this.debateRoomsService.getParticipantEvaluations(
+      roomId,
+      userId,
+      participantId,
+      query.turnNumber,
+    );
+    return { evaluations };
   }
 
   /**
