@@ -313,10 +313,6 @@ export function EditProfileModal({
       // Check availability
       setCheckingUsername(true);
       try {
-        const token = await getToken();
-        if (token) {
-          setAuthToken(token);
-        }
         const result = await usersApi.checkUsernameAvailability(trimmedUsername);
         setUsernameAvailable(result.available);
         if (!result.available) {
@@ -388,13 +384,7 @@ export function EditProfileModal({
     try {
       setLoading(true);
       setError(null);
-      
-      // Get token and set it for API calls
-      const token = await getToken();
-      if (token) {
-        setAuthToken(token);
-      }
-      
+
       // Convert hourlyRate to number, handling empty strings
       // If empty string, don't include it (preserves original value on backend)
       // If valid number (including 0), include it
