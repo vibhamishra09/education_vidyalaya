@@ -57,6 +57,11 @@ export function DebateResultsDisplay({
               : "It's a Tie!"}
           </h2>
           <p className="text-muted-foreground">{results.topic}</p>
+          {results.aiScoringStatus === 'pending' && (
+            <p className="text-xs text-muted-foreground mt-2">
+              AI score is pending and will be added later.
+            </p>
+          )}
         </CardContent>
       </Card>
 
@@ -232,6 +237,9 @@ function ParticipantReportCard({
             <span className="text-2xl font-bold">{report.overallScore.toFixed(1)}</span>
           </div>
           <span className="text-xs text-muted-foreground">Overall Score</span>
+          <div className="text-xs text-muted-foreground mt-1">
+            AI: {report.aiScore == null ? 'Pending' : report.aiScore.toFixed(1)}
+          </div>
         </div>
       </div>
 
@@ -300,6 +308,37 @@ function ParticipantReportCard({
               <li key={i}>• {s}</li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {/* Judge Reviews */}
+      {report.judgeReviews && report.judgeReviews.length > 0 && (
+        <div className="mt-4 border-t pt-4">
+          <div className="text-sm font-medium mb-2">Judge Reviews</div>
+          <div className="space-y-2">
+            {report.judgeReviews.map((review, idx) => (
+              <div key={`${review.moderatorId}-${review.turnNumber}-${idx}`} className="rounded-md border p-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-medium">
+                    {review.moderatorName}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    Turn {review.turnNumber + 1}
+                  </span>
+                </div>
+                {review.notes && (
+                  <p className="text-xs text-muted-foreground mt-1">{review.notes}</p>
+                )}
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {Object.entries(review.scores).map(([factor, value]) => (
+                    <Badge key={factor} variant="outline" className="text-[10px]">
+                      {factor}: {value.toFixed(1)}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>

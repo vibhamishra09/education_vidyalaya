@@ -8,6 +8,7 @@ import {
   IsArray,
   IsBoolean,
   IsDateString,
+  IsObject,
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 
@@ -151,6 +152,36 @@ export class DebateRoomQueryDto {
   trending?: boolean;
 }
 
+export class UpsertModeratorEvaluationDto {
+  @IsString()
+  participantId: string;
+
+  @IsInt()
+  @Min(0)
+  @Type(() => Number)
+  turnNumber: number;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+
+  @IsOptional()
+  @IsObject()
+  scores?: Record<string, number>;
+}
+
+export class ModeratorEvaluationsQueryDto {
+  @IsOptional()
+  @IsString()
+  participantId?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Type(() => Number)
+  turnNumber?: number;
+}
+
 // Response DTOs
 export class DebateParticipantResponse {
   id: string;
@@ -214,10 +245,19 @@ export class DebateReportResponse {
   clarityScore: number;
   rebuttalScore: number;
   overallScore: number;
+  aiScore?: number | null;
   strengths: string[];
   weaknesses: string[];
   suggestions: string[];
   summary?: string | null;
+  judgeReviews?: {
+    moderatorId: string;
+    moderatorName: string;
+    turnNumber: number;
+    notes?: string | null;
+    scores: Record<string, number>;
+    createdAt: Date;
+  }[];
   participant?: {
     user: {
       id: string;
@@ -234,6 +274,7 @@ export class DebateResultsResponse {
   debateRoomId: string;
   topic: string;
   winningTeam: DebateSideDto | null;
+  aiScoringStatus?: 'pending';
   teams: {
     side: DebateSideDto;
     totalScore: number;

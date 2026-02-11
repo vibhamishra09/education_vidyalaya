@@ -8,6 +8,8 @@ import {
   JoinDebateRoomDto,
   DebateRoomFilters,
   DebateSide,
+  UpsertDebateModeratorEvaluationDto,
+  ModeratorEvaluationsQuery,
 } from '@/types/debate.types';
 
 // Query Keys
@@ -19,6 +21,11 @@ export const debateRoomKeys = {
   detail: (id: string) => [...debateRoomKeys.details(), id] as const,
   results: (id: string) => [...debateRoomKeys.all, 'results', id] as const,
   token: (id: string) => [...debateRoomKeys.all, 'token', id] as const,
+  evaluations: (id: string) => [...debateRoomKeys.all, 'evaluations', id] as const,
+  evaluationsFiltered: (id: string, query?: ModeratorEvaluationsQuery) =>
+    [...debateRoomKeys.evaluations(id), query] as const,
+  participantEvaluations: (id: string, participantId: string, turnNumber?: number) =>
+    [...debateRoomKeys.evaluations(id), participantId, turnNumber] as const,
 };
 
 // Get debate rooms list
@@ -274,5 +281,76 @@ export function useDebateLivekitToken(roomId: string, enabled = true) {
     },
     enabled: !!roomId && isLoaded && enabled,
     staleTime: 5 * 60 * 1000, // Token is valid for longer
+  });
+}
+
+// Create or update moderator evaluation
+export function useUpsertModeratorEvaluation(roomId: string) {
+  const queryClient = useQueryClient();
+  const { getToken, isLoaded } = useAuth();
+
+  return useMutation({
+    mutationFn: async (payload: UpsertDebateModeratorEvaluationDto) => {
+      if (isLoaded) {
+        const token = await getToken();
+        if (token) {
+          setAuthToken(token);
+        }
+      }
+      return debateRoomsApi.upsertModeratorEvaluation(roomId, payload);
+    },
+    onSuccess: (_, payload) => {
+      queryClient.invalidateQueries({ queryKey: debateRoomKeys.evaluations(roomId) });
+      queryClient.invalidateQueries({
+        queryKey: debateRoomKeys.participantEvaluations(roomId, payload.participantId, payload.turnNumber),
+      });
+    },
+  });
+}
+
+// Get current moderator evaluations with optional filters
+export function useModeratorEvaluations(
+  roomId: string,
+  query?: ModeratorEvaluationsQuery,
+  enabled = true,
+) {
+  const { getToken, isLoaded } = useAuth();
+
+  return useQuery({
+    queryKey: debateRoomKeys.evaluationsFiltered(roomId, query),
+    queryFn: async () => {
+      if (isLoaded) {
+        const token = await getToken();
+        if (token) {
+          setAuthToken(token);
+        }
+      }
+      return debateRoomsApi.getModeratorEvaluations(roomId, query);
+    },
+    enabled: !!roomId && isLoaded && enabled,
+  });
+}
+
+// Get current moderator evaluations for a specific participant
+export function useParticipantEvaluations(
+  roomId: string,
+  participantId: string,
+  turnNumber?: number,
+  enabled = true,
+) {
+  const { getToken, isLoaded } = useAuth();
+
+  return useQuery({
+    queryKey: debateRoomKeys.participantEvaluations(roomId, participantId, turnNumber),
+    queryFn: async () => {
+      if (isLoaded) {
+        const token = await getToken();
+        if (token) {
+          setAuthToken(token);
+        }
+      }
+      return debateRoomsApi.getParticipantEvaluations(roomId, participantId, { turnNumber });
+    },
+    enabled: !!roomId && !!participantId && isLoaded && enabled,
   });
 }
