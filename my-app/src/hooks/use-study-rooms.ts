@@ -33,7 +33,7 @@ export function useStudyRoomDetails(studyRoomId: string) {
   return useQuery({
     queryKey: studyRoomKeys.detail(studyRoomId),
     queryFn: async () => {
-      // Ensure token is set before making the request
+      // If auth is ready, attach token; don't block this public endpoint on Clerk load.
       if (isLoaded) {
         const token = await getToken();
         if (token) {
@@ -42,7 +42,7 @@ export function useStudyRoomDetails(studyRoomId: string) {
       }
       return studyRoomsApi.getStudyRoomDetails(studyRoomId);
     },
-    enabled: !!studyRoomId && isLoaded, // Wait for Clerk to be loaded
+    enabled: !!studyRoomId,
   });
 }
 

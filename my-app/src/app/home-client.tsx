@@ -193,6 +193,7 @@ export function HomeClient() {
                           max: room.maxParticipants,
                         }}
                         host={{
+                          id: room.createdBy.id,
                           name: room.createdBy.name,
                           avatar: room.createdBy.avatar || "",
                         }}

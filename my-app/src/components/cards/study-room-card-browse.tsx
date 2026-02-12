@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Users, Play, Calendar, Star, Clock } from "lucide-react";
 import { motion } from "framer-motion";
 import { StudyRoomCard, SessionStatus } from "@/types/api.types";
-import { getRelativeTimeString } from "@/lib/utils/date-time";
+import { formatDate } from "@/lib/utils/date-time";
 import { ShareButton } from "@/components/share/share-button";
 
 interface StudyRoomCardBrowseProps {
@@ -16,21 +16,21 @@ interface StudyRoomCardBrowseProps {
 }
 
 export function StudyRoomCardBrowse({ studyRoom }: StudyRoomCardBrowseProps) {
+  const router = useRouter();
   const isLive = studyRoom.sessionStatus === SessionStatus.ONGOING;
   const isUpcoming = studyRoom.sessionStatus === SessionStatus.UPCOMING;
   const isDone = studyRoom.sessionStatus === SessionStatus.DONE;
 
   // Get timezone-aware formatted time
-  const formattedDateTime = getRelativeTimeString(studyRoom.date);
+  const formattedDateTime = formatDate(studyRoom.date, "datetime");
 
   return (
-    <Link href={`/studyroom/${studyRoom.id}`}>
-      <motion.div
-        whileHover={{ scale: 1.02, y: -4 }}
-        transition={{ duration: 0.2 }}
-        className="h-full"
-      >
-        <Card className="h-full flex flex-col hover:shadow-lg transition-shadow duration-200 cursor-pointer">
+    <motion.div
+      whileHover={{ scale: 1.02, y: -4 }}
+      transition={{ duration: 0.2 }}
+      className="h-full"
+    >
+      <Card className="h-full flex flex-col hover:shadow-lg transition-shadow duration-200">
           <CardHeader className="space-y-3">
             <div className="flex items-center justify-between">
               <Badge
@@ -60,7 +60,10 @@ export function StudyRoomCardBrowse({ studyRoom }: StudyRoomCardBrowseProps) {
               </div>
             </div>
             <div className="space-y-2">
-              <h3 className="font-semibold text-lg leading-tight line-clamp-2">
+              <h3
+                className="font-semibold text-lg leading-tight line-clamp-2 cursor-pointer"
+                onClick={() => router.push(`/studyroom/${studyRoom.id}`)}
+              >
                 {studyRoom.title}
               </h3>
               <p className="text-sm text-muted-foreground line-clamp-2">
@@ -96,13 +99,19 @@ export function StudyRoomCardBrowse({ studyRoom }: StudyRoomCardBrowseProps) {
               </div>
               <div className="flex flex-col items-end gap-1">
                 <div className="flex items-center gap-2">
-                  <Avatar className="h-6 w-6">
+                  <Avatar
+                    className="h-6 w-6 cursor-pointer"
+                    onClick={() => router.push(`/profile/${studyRoom.createdBy.id}`)}
+                  >
                     <AvatarImage src={studyRoom.createdBy.avatar} />
                     <AvatarFallback>
                       {studyRoom.createdBy.name.charAt(0)}
                     </AvatarFallback>
                   </Avatar>
-                  <span className="text-muted-foreground text-xs truncate max-w-[100px]">
+                  <span
+                    className="text-muted-foreground text-xs truncate max-w-[100px] cursor-pointer"
+                    onClick={() => router.push(`/profile/${studyRoom.createdBy.id}`)}
+                  >
                     {studyRoom.createdBy.name}
                   </span>
                 </div>
@@ -140,6 +149,7 @@ export function StudyRoomCardBrowse({ studyRoom }: StudyRoomCardBrowseProps) {
               <Button
                 className="flex-1"
                 variant={isLive ? "default" : "outline"}
+                onClick={() => router.push(`/studyroom/${studyRoom.id}`)}
               >
                 {isLive ? (
                   <>
@@ -154,8 +164,7 @@ export function StudyRoomCardBrowse({ studyRoom }: StudyRoomCardBrowseProps) {
               </Button>
             </div>
           </CardContent>
-        </Card>
-      </motion.div>
-    </Link>
+      </Card>
+    </motion.div>
   );
 }

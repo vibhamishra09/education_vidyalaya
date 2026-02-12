@@ -578,6 +578,7 @@ export interface StudyRoomFilters extends PaginationQuery {
   dateFrom?: string;
   dateTo?: string;
   trending?: boolean;
+  createdById?: string;
   [key: string]: unknown;
 }
 
