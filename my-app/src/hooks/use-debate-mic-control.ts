@@ -40,6 +40,15 @@ export function useDebateMicControl({
   const isModerator = userRole === 'host' || userRole === 'moderator';
   const isCurrentSpeaker = currentSpeakerId === userId;
   const micControlRef = useRef<{ enabled: boolean; disabled: boolean }>({ enabled: false, disabled: false });
+  const lastNotificationAtRef = useRef<Record<string, number>>({});
+
+  const shouldNotify = useCallback((key: string, cooldownMs: number = 5000) => {
+    const now = Date.now();
+    const lastAt = lastNotificationAtRef.current[key] || 0;
+    if (now - lastAt < cooldownMs) return false;
+    lastNotificationAtRef.current[key] = now;
+    return true;
+  }, []);
 
   // Determine if mic is locked and why
   const isMicLocked = (() => {
@@ -112,9 +121,11 @@ export function useDebateMicControl({
     if (isForCurrentUser) {
       // Don't auto-enable, just unlock - user can manually unmute
       console.log('[useDebateMicControl] Mic unlocked for current speaker - user can now unmute');
-      onNotification?.('🎤 Microphone Unlocked', 'It\'s your turn! You can now unmute your microphone.', 'info');
+      if (shouldNotify('mic-unlocked', 7000)) {
+        onNotification?.('🎤 Microphone Unlocked', 'It\'s your turn! You can now unmute your microphone.', 'info');
+      }
     }
-  }, [localParticipant, userId, onNotification]);
+  }, [localParticipant, userId, onNotification, shouldNotify]);
 
   const handleMicDisabledInternal = useCallback((event: MicDisabledEvent) => {
     if (!localParticipant || !userId) return;
@@ -172,13 +183,15 @@ export function useDebateMicControl({
     
     // If user just became the current speaker and mic is muted, show notification
     if (justBecameSpeaker && !localParticipant.isMicrophoneEnabled) {
-      onNotification?.('🎤 It\'s your turn to speak!', 'Please unmute your microphone to participate.', 'warning');
+      if (shouldNotify('turn-reminder', 7000)) {
+        onNotification?.('🎤 It\'s your turn to speak!', 'Please unmute your microphone to participate.', 'warning');
+      }
       notificationShownRef.current = true;
     } else if (!isCurrentSpeaker) {
       // Reset notification flag when it's no longer their turn
       notificationShownRef.current = false;
     }
-  }, [isCurrentSpeaker, localParticipant, userId, debateStatus, currentSpeakerId, onNotification]);
+  }, [isCurrentSpeaker, localParticipant, userId, debateStatus, currentSpeakerId, onNotification, shouldNotify]);
 
   // Lock mic when it's not user's turn - force mute if they try to unmute
   useEffect(() => {
@@ -207,11 +220,13 @@ export function useDebateMicControl({
       localParticipant.setMicrophoneEnabled(false).catch((err) => {
         console.error('[useDebateMicControl] Failed to enforce mute:', err);
       });
-      onNotification?.('🔒 Microphone Locked', micLockReason || 'You cannot unmute during this phase.', 'warning');
+      if (shouldNotify('mic-locked', 5000)) {
+        onNotification?.('🔒 Microphone Locked', micLockReason || 'You cannot unmute during this phase.', 'warning');
+      }
     }
     
     prevMicEnabledRef.current = currentMicEnabled;
-  }, [localParticipant?.isMicrophoneEnabled, isMicLocked, micLockReason, onNotification]);
+  }, [localParticipant?.isMicrophoneEnabled, isMicLocked, micLockReason, onNotification, shouldNotify]);
 
   return {
     isMicLocked,

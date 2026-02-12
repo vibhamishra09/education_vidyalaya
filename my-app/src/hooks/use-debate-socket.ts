@@ -108,9 +108,6 @@ export function useDebateSocket({
   });
 
   useEffect(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/d6208dbe-815f-4534-a4cc-4028b2570455',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'use-debate-socket.ts:109',message:'Updating callbacks ref',data:{hasOnMicEnabled:!!onMicEnabled,hasOnMicDisabled:!!onMicDisabled},timestamp:Date.now(),runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
     callbacksRef.current = {
       onTurnStarted,
       onTurnEnded,
@@ -310,9 +307,6 @@ export function useDebateSocket({
 
         // Mic control events
         newSocket.on('debate:mic_enabled', (event: MicEnabledEvent) => {
-          // #region agent log
-          fetch('http://127.0.0.1:7244/ingest/d6208dbe-815f-4534-a4cc-4028b2570455',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'use-debate-socket.ts:308',message:'Socket event debate:mic_enabled received',data:{eventParticipantId:event.participantId,reason:event.reason,hasCallback:!!callbacksRef.current.onMicEnabled},timestamp:Date.now(),runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-          // #endregion
           callbacksRef.current.onMicEnabled?.(event);
         });
 
