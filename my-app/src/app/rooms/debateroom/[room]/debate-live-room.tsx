@@ -12,7 +12,7 @@ import {
   isTrackReference,
   useSpeakingParticipants,
 } from '@livekit/components-react';
-import { Track, RoomOptions, VideoPresets, RemoteParticipant, LocalTrackPublication, RemoteTrackPublication } from 'livekit-client';
+import { Track, RoomOptions, VideoPresets, RemoteParticipant } from 'livekit-client';
 import { io, Socket } from 'socket.io-client';
 import type { TrackReferenceOrPlaceholder } from '@livekit/components-react';
 import '@livekit/components-styles';
@@ -131,6 +131,17 @@ export function DebateLiveRoom({
   onMicDisabledRef,
 }: DebateLiveRoomProps) {
   const router = useRouter();
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const mediaQuery = window.matchMedia('(max-width: 767px)');
+    const updateViewport = () => setIsMobileViewport(mediaQuery.matches);
+    updateViewport();
+    mediaQuery.addEventListener('change', updateViewport);
+    return () => mediaQuery.removeEventListener('change', updateViewport);
+  }, []);
 
   const handleLeave = useCallback(async () => {
     router.push('/debateroom');
@@ -194,7 +205,8 @@ export function DebateLiveRoom({
         onError={handleRoomError}
         options={{
           videoCaptureDefaults: {
-            resolution: VideoPresets.h720,
+            resolution: isMobileViewport ? VideoPresets.h360 : VideoPresets.h720,
+            frameRate: isMobileViewport ? 15 : 24,
           },
           audioCaptureDefaults: {
             echoCancellation: true,
@@ -204,7 +216,9 @@ export function DebateLiveRoom({
           adaptiveStream: true,
           dynacast: true,
           publishDefaults: {
-            videoSimulcastLayers: [VideoPresets.h180, VideoPresets.h360],
+            videoSimulcastLayers: isMobileViewport
+              ? [VideoPresets.h180]
+              : [VideoPresets.h180, VideoPresets.h360],
           },
         } as RoomOptions}
       >
@@ -330,6 +344,13 @@ function DebateLiveContent({
   const socketRef = useRef<Socket | null>(null);
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (window.matchMedia('(max-width: 767px)').matches) {
+      setShowSidebar(false);
+    }
+  }, []);
 
   // Initialize Socket.io connection
   useEffect(() => {
@@ -526,43 +547,16 @@ function DebateLiveContent({
     };
   }, [room]);
 
-  // Log connection for debugging
+  // Log a concise connection snapshot in development only.
   useEffect(() => {
-    if (room && localParticipant) {
-      console.log('[DebateRoom] Connected to room:', room.name);
-      console.log('[DebateRoom] Room state:', room.state);
-      console.log('[DebateRoom] Local participant:', localParticipant.identity);
-      console.log('[DebateRoom] Camera enabled:', localParticipant.isCameraEnabled);
-      console.log('[DebateRoom] Mic enabled:', localParticipant.isMicrophoneEnabled);
-      console.log('[DebateRoom] Total camera tracks:', cameraTracks.length);
-      console.log('[DebateRoom] Camera tracks:', cameraTracks.map(t => ({ identity: t.participant.identity, name: t.participant.name })));
-      console.log('[DebateRoom] All participants:', participants.map(p => ({ identity: p.identity, name: p.name })));
-      console.log('[DebateRoom] Speaking participants:', speakingParticipants.map(p => p.identity));
-      console.log('[DebateRoom] Current speaker ID from debate state:', debateState?.currentSpeakerId);
-      console.log('[DebateRoom] Local participant mic enabled:', localParticipant.isMicrophoneEnabled);
-      console.log('[DebateRoom] Local participant identity:', localParticipant.identity);
-      console.log('[DebateRoom] Is local participant current speaker?', debateState?.currentSpeakerId === localParticipant.identity || debateState?.currentSpeakerId === userId);
-      
-      // Check audio tracks for all participants
-      participants.forEach(p => {
-        const audioTracks: (LocalTrackPublication | RemoteTrackPublication)[] = [];
-        p.audioTrackPublications.forEach((pub) => {
-          audioTracks.push(pub);
-        });
-        console.log(`[DebateRoom] Participant ${p.identity} (${p.name}):`, {
-          isSpeaking: p.isSpeaking,
-          audioTracks: audioTracks.length,
-          micEnabled: audioTracks.some(t => !t.isMuted),
-          tracks: audioTracks.map(t => ({ trackSid: t.trackSid, isMuted: t.isMuted, kind: t.kind }))
-        });
-      });
-      
-      console.log('[DebateRoom] Debate teams:', debateRoom.teams.map(t => ({
-        side: t.side,
-        participants: t.participants.map(p => ({ id: p.user.id, clerkId: p.user.clerkId, name: p.user.name }))
-      })));
-    }
-  }, [room, localParticipant, cameraTracks.length, participants, debateRoom.teams, cameraTracks, speakingParticipants]);
+    if (process.env.NODE_ENV !== 'development' || !room || !localParticipant) return;
+    console.log('[DebateRoom] Connected to room:', room.name);
+    console.log('[DebateRoom] Room state:', room.state);
+    console.log('[DebateRoom] Local participant:', localParticipant.identity);
+    console.log('[DebateRoom] Total camera tracks:', cameraTracks.length);
+    console.log('[DebateRoom] Participants:', participants.length);
+    console.log('[DebateRoom] Speaking participants:', speakingParticipants.length);
+  }, [room, localParticipant, cameraTracks.length, participants.length, speakingParticipants.length]);
 
   // Auto-scroll chat to bottom when new messages arrive
   useEffect(() => {
@@ -892,9 +886,6 @@ function DebateLiveContent({
 
   // Mic control handlers - connect to refs from parent
   const handleMicEnabled = useCallback((event: MicEnabledEvent) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/d6208dbe-815f-4534-a4cc-4028b2570455',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'debate-live-room.tsx:854',message:'Socket mic enabled event received',data:{eventParticipantId:event.participantId,reason:event.reason,hasHandler:!!onMicEnabledRef.current},timestamp:Date.now(),runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
     console.log('[DebateLiveRoom] Mic enabled for:', event.participantId, 'reason:', event.reason);
     // Call the handler from the hook if it exists
     onMicEnabledRef.current?.(event);
@@ -929,9 +920,6 @@ function DebateLiveContent({
 
   // Store hook handlers in refs for socket callbacks to use
   useEffect(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/d6208dbe-815f-4534-a4cc-4028b2570455',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'debate-live-room.tsx:890',message:'Setting mic handler refs',data:{hasHandleMicEnabledFromHook:!!handleMicEnabledFromHook,hasHandleMicDisabledFromHook:!!handleMicDisabledFromHook},timestamp:Date.now(),runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
     onMicEnabledRef.current = handleMicEnabledFromHook;
     onMicDisabledRef.current = handleMicDisabledFromHook;
   }, [handleMicEnabledFromHook, handleMicDisabledFromHook, onMicEnabledRef, onMicDisabledRef]);

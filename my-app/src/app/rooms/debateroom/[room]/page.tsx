@@ -46,9 +46,6 @@ export default function DebateRoomPage() {
   const handleMicDisabledRef = useRef<((event: MicDisabledEvent) => void) | null>(null);
 
   const handleMicEnabled = useCallback((event: MicEnabledEvent) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/d6208dbe-815f-4534-a4cc-4028b2570455',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:46',message:'handleMicEnabled called',data:{eventParticipantId:event.participantId,hasRef:!!handleMicEnabledRef.current},timestamp:Date.now(),runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
     handleMicEnabledRef.current?.(event);
   }, []);
 
