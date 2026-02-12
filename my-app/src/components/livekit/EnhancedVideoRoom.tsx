@@ -90,6 +90,7 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 	const [showParticipants, setShowParticipants] = useState(false)
 	const [isFullscreen, setIsFullscreen] = useState(false)
 	const [showWarning, setShowWarning] = useState(false)
+	const [isMobileViewport, setIsMobileViewport] = useState(false)
 	const router = useRouter()
 	const { showSuccess } = useToast()
 	const { getToken } = useAuth()
@@ -111,6 +112,15 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 
 	// User activity tracking for auto-hiding controls
 	const [isUserActive, setIsUserActive] = useState(true)
+
+	useEffect(() => {
+		if (typeof window === 'undefined') return
+		const mediaQuery = window.matchMedia('(max-width: 767px)')
+		const updateViewport = () => setIsMobileViewport(mediaQuery.matches)
+		updateViewport()
+		mediaQuery.addEventListener('change', updateViewport)
+		return () => mediaQuery.removeEventListener('change', updateViewport)
+	}, [])
 
 	useEffect(() => {
 		let timeoutId: NodeJS.Timeout
@@ -470,7 +480,7 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 		callId: sessionData?.id || null,
 		userId: user?.id || null,
 		socket: transcriptSocket,
-		enabled: !!sessionData?.id && !!user && !!transcriptSocket,
+		enabled: !!sessionData?.id && !!user && !!transcriptSocket && !isMobileViewport,
 	})
 	
 	// Speech recognition status logging removed
@@ -482,7 +492,8 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 	// Memoize LiveKit room options to avoid passing a new object every render
 	const roomOptions = useMemo(() => ({
 		videoCaptureDefaults: {
-			resolution: VideoPresets.h720,
+			resolution: isMobileViewport ? VideoPresets.h360 : VideoPresets.h720,
+			frameRate: isMobileViewport ? 15 : 24,
 		},
 		audioCaptureDefaults: {
 			echoCancellation: true,
@@ -492,9 +503,11 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 		adaptiveStream: true,
 		dynacast: true,
 		publishDefaults: {
-			videoSimulcastLayers: [VideoPresets.h180, VideoPresets.h360],
+			videoSimulcastLayers: isMobileViewport
+				? [VideoPresets.h180]
+				: [VideoPresets.h180, VideoPresets.h360],
 		},
-	} as RoomOptions), [])
+	} as RoomOptions), [isMobileViewport])
 
 	return (
 		<div className="h-screen w-screen flex flex-col bg-[#202124] overflow-hidden fixed inset-0">
@@ -558,6 +571,7 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 					hostRespondParticipantVideo={hostRespondParticipantVideo}
 					pendingParticipantRequests={pendingParticipantRequests}
 					clearParticipantRequest={clearParticipantRequest}
+					isMobileViewport={isMobileViewport}
 				/>
 		</LiveKitRoom>
 
@@ -658,6 +672,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	hostRespondParticipantVideo,
 	pendingParticipantRequests,
 	clearParticipantRequest,
+	isMobileViewport,
 }: {
 	isUserActive: boolean
 	showChat: boolean
@@ -709,6 +724,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	hostRespondParticipantVideo?: (userId: string, accepted: boolean) => void
 	pendingParticipantRequests?: ParticipantPermissionRequest[]
 	clearParticipantRequest?: (userId: string, type: 'audio' | 'video') => void
+	isMobileViewport?: boolean
 }) {
 	// Room context removed to avoid race conditions, using localParticipant hook instead
 	const params = useParams<{ room: string }>()
@@ -722,6 +738,14 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	
 	// Track pending requests to show toast when new requests arrive
 	const prevRequestCountRef = useRef(0)
+	const lastToastAtRef = useRef<Record<string, number>>({})
+	const shouldShowToast = useCallback((key: string, cooldownMs: number = 5000) => {
+		const now = Date.now()
+		const lastAt = lastToastAtRef.current[key] || 0
+		if (now - lastAt < cooldownMs) return false
+		lastToastAtRef.current[key] = now
+		return true
+	}, [])
 	useEffect(() => {
 		if (!isHost || !pendingParticipantRequests) return
 		
@@ -732,15 +756,16 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			// Look up participant name from room
 			const participant = allParticipants.find(p => p.identity === newest.userId)
 			const displayName = participant?.name || newest.userId
+			const toastKey = `permission-request-${newest.type}-${newest.userId}`
 			
-			if (newest.type === 'audio') {
+			if (newest.type === 'audio' && shouldShowToast(toastKey, 6000)) {
 				showWarning('Permission Request', `${displayName} is requesting to unmute`)
-			} else {
+			} else if (newest.type === 'video' && shouldShowToast(toastKey, 6000)) {
 				showWarning('Permission Request', `${displayName} is requesting to enable camera`)
 			}
 		}
 		prevRequestCountRef.current = pendingParticipantRequests.length
-	}, [pendingParticipantRequests, isHost, showWarning, allParticipants])
+	}, [pendingParticipantRequests, isHost, showWarning, allParticipants, shouldShowToast])
 	
 	// Layout mode: 'focus' shows speaker large with others small, 'grid' shows equal tiles
 	const [layoutMode, setLayoutMode] = useState<'focus' | 'grid'>('grid')
@@ -814,12 +839,14 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				
 				// Show toast notification when host mutes this participant
 				if (data.action === 'mute' && data.targetUserId === currentUserId) {
-					showWarning(
-						'Microphone muted',
-						data.isLocked 
-							? 'The host has muted your microphone and locked it. You cannot unmute until the host allows it.'
-							: 'The host has muted your microphone.'
-					)
+					if (shouldShowToast('moderation-muted', 6000)) {
+						showWarning(
+							'Microphone muted',
+							data.isLocked 
+								? 'The host has muted your microphone and locked it. You cannot unmute until the host allows it.'
+								: 'The host has muted your microphone.'
+						)
+					}
 				}
 			} catch (err) {
 				// Error applying mute action
@@ -839,12 +866,14 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				
 				// Show toast notification when host disables video for this participant
 				if (data.action === 'disable' && data.targetUserId === currentUserId) {
-					showWarning(
-						'Camera disabled',
-						data.isLocked 
-							? 'The host has disabled your camera and locked it. You cannot enable it until the host allows it.'
-							: 'The host has disabled your camera.'
-					)
+					if (shouldShowToast('moderation-video-disabled', 6000)) {
+						showWarning(
+							'Camera disabled',
+							data.isLocked 
+								? 'The host has disabled your camera and locked it. You cannot enable it until the host allows it.'
+								: 'The host has disabled your camera.'
+						)
+					}
 				}
 			} catch (err) {
 				// Error applying video action
@@ -858,7 +887,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			moderationSocket.off('moderation-mute', handleMute)
 			moderationSocket.off('moderation-video', handleVideo)
 		}
-	}, [moderationSocket, currentUserId, localParticipant, showWarning])
+	}, [moderationSocket, currentUserId, localParticipant, showWarning, shouldShowToast])
 
 	// Enforce permission locks on initial join and when permissions change
 	// This ensures that when a participant rejoins/refreshes, they respect the locked state
@@ -883,34 +912,46 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			// Audio lock changed
 			if (prevPermissions.allowAudio !== permissions.allowAudio) {
 				if (!permissions.allowAudio) {
-					showWarning('🔇 Audio Locked', 'The host has locked audio. You cannot unmute until allowed.')
+					if (shouldShowToast('audio-locked', 5000)) {
+						showWarning('🔇 Audio Locked', 'The host has locked audio. You cannot unmute until allowed.')
+					}
 				} else {
-					showSuccess('🎤 Audio Unlocked', 'You can now unmute your microphone.')
+					if (shouldShowToast('audio-unlocked', 5000)) {
+						showSuccess('🎤 Audio Unlocked', 'You can now unmute your microphone.')
+					}
 				}
 			}
 			
 			// Video lock changed
 			if (prevPermissions.allowVideo !== permissions.allowVideo) {
 				if (!permissions.allowVideo) {
-					showWarning('📷 Video Locked', 'The host has locked video. You cannot enable camera until allowed.')
+					if (shouldShowToast('video-locked', 5000)) {
+						showWarning('📷 Video Locked', 'The host has locked video. You cannot enable camera until allowed.')
+					}
 				} else {
-					showSuccess('📹 Video Unlocked', 'You can now enable your camera.')
+					if (shouldShowToast('video-unlocked', 5000)) {
+						showSuccess('📹 Video Unlocked', 'You can now enable your camera.')
+					}
 				}
 			}
 			
 			// Chat lock changed
 			if (prevPermissions.allowChat !== permissions.allowChat) {
 				if (!permissions.allowChat) {
-					showWarning('💬 Chat Locked', 'The host has disabled chat.')
+					if (shouldShowToast('chat-locked', 5000)) {
+						showWarning('💬 Chat Locked', 'The host has disabled chat.')
+					}
 				} else {
-					showSuccess('💬 Chat Unlocked', 'You can now send messages.')
+					if (shouldShowToast('chat-unlocked', 5000)) {
+						showSuccess('💬 Chat Unlocked', 'You can now send messages.')
+					}
 				}
 			}
 		}
 		
 		// Update ref for next comparison
 		prevPermissionsRef.current = permissions
-	}, [permissions, localParticipant, isHost, showWarning, showSuccess])
+	}, [permissions, localParticipant, isHost, showWarning, showSuccess, shouldShowToast])
 	
 	// Use memoized virtual backgrounds (moved outside with stable ref below)
 	// Access via `VIRTUAL_BACKGROUNDS` constant defined below to avoid re-creating this array each render
@@ -1049,6 +1090,11 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	// This provides smoother transitions and better segmentation quality
 	// CRITICAL FIX: Empty dependency array - all values accessed via refs to prevent flickering
 	const applyBackgroundEffect = useCallback(async (mode: 'none' | 'blur' | 'virtual', intensity?: number) => {
+		// Hard guard: never allow background processing on mobile to avoid accidental high CPU usage.
+		if (isMobileViewport && mode !== 'none') {
+			return
+		}
+
 		// Prevent concurrent applications which cause flickering
 		if (isApplyingEffectRef.current) {
 			return
@@ -1133,9 +1179,16 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		} finally {
 			isApplyingEffectRef.current = false
 		}
-	// CRITICAL: Empty dependency array - all values accessed via refs
-	// This prevents the callback from being recreated on every render/state change
-	}, [])
+	}, [isMobileViewport])
+
+	// Ensure mobile sessions never keep background processors active.
+	useEffect(() => {
+		if (!isMobileViewport) return
+		setShowBackgroundMenu(false)
+		if (backgroundModeRef.current !== 'none') {
+			void applyBackgroundEffect('none')
+		}
+	}, [isMobileViewport, applyBackgroundEffect])
 	
 	// Debounced blur radius update - only updates the blur radius without recreating processor
 	// STABILIZED: Uses ref for backgroundMode check
@@ -1407,6 +1460,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	// Toggle native PiP mode
 	const togglePiP = useCallback(async () => {
 		try {
+			if (isMobileViewport) return
 			// Check if PiP is supported
 			if (!document.pictureInPictureEnabled) {
 				return
@@ -1519,10 +1573,11 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		} catch (error) {
 			// Error toggling PiP
 		}
-	}, [])
+	}, [isMobileViewport])
 	
 	// Auto-trigger PiP on visibility change (like Google Meet)
 	useEffect(() => {
+		if (isMobileViewport) return
 		const handleVisibilityChange = async () => {
 			if (!document.pictureInPictureEnabled) return
 			
@@ -1559,7 +1614,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			document.removeEventListener('visibilitychange', handleVisibilityChange)
 			document.removeEventListener('leavepictureinpicture', handlePiPExit)
 		}
-	}, [])
+	}, [isMobileViewport])
 
 	return (
 		<>
@@ -2653,7 +2708,10 @@ const VideoRoomContent = memo(function VideoRoomContent({
 							</button>
 							<div className="hidden md:block w-px h-6 bg-white/10 mx-1" />
 							<button 
-								onClick={() => setShowBackgroundMenu(!showBackgroundMenu)}
+								onClick={() => {
+									if (isMobileViewport) return
+									setShowBackgroundMenu(!showBackgroundMenu)
+								}}
 								className="hidden md:flex h-10 w-6 items-center justify-center rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
 								title="Video Settings"
 							>
@@ -3051,7 +3109,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		</div>
 
 		{/* Background Effects Popup - Floating Panel */}
-		{showBackgroundMenu && (
+		{showBackgroundMenu && !isMobileViewport && (
 			<div className="fixed bottom-20 left-1/2 -translate-x-1/2 md:left-[140px] md:translate-x-0 z-[50] animate-in slide-in-from-bottom-5 zoom-in-95 fade-in duration-200">
 				{/* Popup card */}
 				<div className="bg-[#1a1a1a]/95 backdrop-blur-2xl rounded-xl md:rounded-2xl shadow-2xl border border-white/10 w-[280px] md:w-[300px] overflow-hidden">
