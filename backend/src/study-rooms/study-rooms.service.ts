@@ -75,6 +75,7 @@ export class StudyRoomsService {
     page: number = 1,
     limit: number = 10,
     trending?: boolean,
+    createdById?: string,
   ) {
     const dbStartTime = Date.now();
     const isHomePageRequest = trending === true && limit === 6;
@@ -97,6 +98,7 @@ export class StudyRoomsService {
         status,
         dateFrom,
         dateTo,
+        createdById,
         page,
         limit,
       },
@@ -129,6 +131,10 @@ export class StudyRoomsService {
           },
         },
       };
+    }
+
+    if (createdById) {
+      where.createdById = createdById;
     }
 
     const skip = (page - 1) * limit;
@@ -571,77 +577,77 @@ export class StudyRoomsService {
   }
 
   async getStudyRoomDetails(studyRoomId: string, userId?: string) {
-    const studyRoom = await this.prisma.studyRoom.findUnique({
-      where: { id: studyRoomId },
-      include: {
-        createdBy: {
-          select: {
-            id: true,
-            name: true,
-            avatar: true,
+    const [studyRoom, currentUser, channel] = await Promise.all([
+      this.prisma.studyRoom.findUnique({
+        where: { id: studyRoomId },
+        include: {
+          createdBy: {
+            select: {
+              id: true,
+              name: true,
+              avatar: true,
+            },
           },
-        },
-        skills: {
-          include: {
-            skill: {
-              select: {
-                id: true,
-                name: true,
+          skills: {
+            include: {
+              skill: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          },
+          learners: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  avatar: true,
+                },
+              },
+            },
+          },
+          reviews: {
+            orderBy: { id: 'desc' },
+            take: 20,
+            include: {
+              reviewer: {
+                select: {
+                  id: true,
+                  name: true,
+                  avatar: true,
+                },
               },
             },
           },
         },
-        learners: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                avatar: true,
-              },
-            },
-          },
-        },
-        reviews: {
-          include: {
-            reviewer: {
-              select: {
-                id: true,
-                name: true,
-                avatar: true,
-              },
-            },
-          },
-        },
-      },
-    });
+      }),
+      userId
+        ? this.prisma.user.findUnique({
+            where: { clerkId: userId },
+            select: { id: true },
+          })
+        : Promise.resolve(null),
+      this.prisma.channel.findFirst({
+        where: { externalType: 'studyRoom', externalId: studyRoomId },
+        select: { id: true },
+      }),
+    ]);
 
     if (!studyRoom) {
       throw new NotFoundException('Study room not found');
     }
 
     let role: 'teacher' | 'learner' | 'empty' = 'empty';
-    if (userId) {
-      // userId is actually clerkId, so we need to find the user by clerkId first
-      const user = await this.prisma.user.findUnique({
-        where: { clerkId: userId },
-        select: { id: true },
-      });
-
-      if (user) {
-        if (studyRoom.createdById === user.id) {
+    if (currentUser) {
+      if (studyRoom.createdById === currentUser.id) {
           role = 'teacher';
-        } else if (studyRoom.learners.some((l) => l.userId === user.id)) {
+        } else if (studyRoom.learners.some((l) => l.userId === currentUser.id)) {
           role = 'learner';
-        }
       }
     }
-
-    // Find existing chat channel if any
-    const channel = await this.prisma.channel.findFirst({
-      where: { externalType: 'studyRoom', externalId: studyRoom.id },
-      select: { id: true },
-    });
 
     return {
       id: studyRoom.id,

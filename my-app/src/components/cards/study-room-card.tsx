@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -8,7 +9,7 @@ import { Users, Loader2, Share2, Play, Calendar, Clock } from "lucide-react";
 import { motion } from "framer-motion";
 import { ShareButton } from "@/components/share/share-button";
 import { cn } from "@/lib/utils";
-import { getRelativeTimeString } from "@/lib/utils/date-time";
+import { formatDate } from "@/lib/utils/date-time";
 
 type ButtonVariant = "default" | "outline" | "secondary" | "ghost" | "destructive" | "link";
 
@@ -26,6 +27,7 @@ interface StudyRoomCardProps {
     max: number;
   };
   host?: {
+    id?: string;
     name: string;
     avatar?: string;
   };
@@ -53,13 +55,14 @@ export function StudyRoomCard({
   actionDisabled = false,
   actionLoading = false,
 }: StudyRoomCardProps) {
+  const router = useRouter();
   const statusIsLive = status === "live";
   const participantCurrent = participants?.current ?? 0;
   const participantMax = participants?.max ?? 0;
   const hostInitial = host?.name?.charAt(0) || "U";
 
   // Format date/time if available
-  const formattedDateTime = date ? getRelativeTimeString(date) : null;
+  const formattedDateTime = date ? formatDate(date, "datetime") : null;
 
   // Dynamic Theme Colors based on Status
   const theme = statusIsLive
@@ -123,7 +126,10 @@ export function StudyRoomCard({
 
         {/* Main Content: Title & Description */}
         <div className="flex-1 space-y-1.5 mb-4">
-          <h3 className={cn("text-2xl font-bold leading-tight text-foreground tracking-tight transition-colors line-clamp-2", theme.titleHover)}>
+          <h3
+            className={cn("text-2xl font-bold leading-tight text-foreground tracking-tight transition-colors line-clamp-2 cursor-pointer", theme.titleHover)}
+            onClick={() => router.push(`/studyroom/${roomId}`)}
+          >
             {title}
           </h3>
           {description && (
@@ -159,13 +165,27 @@ export function StudyRoomCard({
           <div className="flex flex-col gap-1.5">
              {/* Host */}
             <div className="flex items-center gap-2">
-              <Avatar className={cn("h-7 w-7 border transition-colors", theme.avatarBorder)}>
+              <Avatar
+                className={cn("h-7 w-7 border transition-colors", theme.avatarBorder, host?.id && "cursor-pointer")}
+                onClick={() => {
+                  if (host?.id) {
+                    router.push(`/profile/${host.id}`);
+                  }
+                }}
+              >
                 <AvatarImage src={host?.avatar} />
                 <AvatarFallback className={cn("text-xs font-bold", theme.avatarFallback)}>
                     {hostInitial}
                 </AvatarFallback>
               </Avatar>
-              <span className="text-sm font-semibold text-muted-foreground truncate max-w-[100px]">
+              <span
+                className={cn("text-sm font-semibold text-muted-foreground truncate max-w-[100px]", host?.id && "cursor-pointer")}
+                onClick={() => {
+                  if (host?.id) {
+                    router.push(`/profile/${host.id}`);
+                  }
+                }}
+              >
                 {host?.name}
               </span>
             </div>

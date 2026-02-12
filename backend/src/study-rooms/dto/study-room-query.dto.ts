@@ -36,4 +36,8 @@ export class StudyRoomQueryDto extends PaginationQueryDto {
   @Type(() => Boolean)
   @IsBoolean()
   trending?: boolean;
+
+  @IsOptional()
+  @IsString()
+  createdById?: string;
 }
