@@ -55,6 +55,7 @@ export class StudyRoomsController {
         query.page || 1,
         query.limit || 10,
         query.trending,
+        query.createdById,
       );
 
       const duration = Date.now() - startTime;

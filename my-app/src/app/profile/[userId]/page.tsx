@@ -50,45 +50,27 @@ export default function PublicProfilePage({
           setAuthToken(token);
         }
 
-        // Fetch user profile and current user in parallel
-        const [userData, currentUserData] = await Promise.all([
+        const [userData, currentUserData, reviewsResponse, studyRoomsResponse] = await Promise.all([
           usersApi.getPublicUserProfile(userId),
           usersApi.getCurrentUser().catch(() => null), // Don't fail if not authenticated
+          reviewsApi.getReviews({ userId }),
+          studyRoomsApi.getStudyRooms({
+            status: SessionStatus.UPCOMING,
+            createdById: userId,
+          }),
         ]);
-        
+
         setUser(userData);
-        if (userData.publicStats) {
-          setRating(userData.publicStats.avgRating ?? 0);
-          setReviewCount(userData.publicStats.reviewCount ?? 0);
-        }
         if (currentUserData) {
           setCurrentUser(currentUserData.user);
         }
 
-        // Fetch user reviews
-        const reviewsResponse = await reviewsApi.getReviews({ userId });
         const reviews = reviewsResponse.reviews || [];
         setUserReviews(reviews);
 
-        // Calculate rating and review count
-        if (reviews.length > 0) {
-          const avgRating = reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length;
-          setRating(avgRating);
-          setReviewCount(reviews.length);
-        }
-
-        // Fetch user's upcoming study rooms
-        const studyRoomsResponse = await studyRoomsApi.getStudyRooms({
-          status: SessionStatus.UPCOMING,
-          // Note: We need to filter by creator, but the API might not support this directly
-          // For now, we'll fetch all upcoming rooms and filter on the frontend
-        });
-        
-        // Filter study rooms created by this user
-        const userStudyRooms = studyRoomsResponse.studyRooms.filter(
-          (room) => room.createdBy.id === userId
-        );
-        setUpcomingRooms(userStudyRooms);
+        setRating(userData.publicStats?.avgRating ?? 0);
+        setReviewCount(userData.publicStats?.reviewCount ?? reviews.length);
+        setUpcomingRooms(studyRoomsResponse.studyRooms || []);
 
       } catch (err) {
         console.error('Error fetching user data:', err);

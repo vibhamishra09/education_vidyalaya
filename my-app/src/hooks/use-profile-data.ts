@@ -25,14 +25,14 @@ export function useProfileData() {
         setAuthToken(token);
       }
 
-      // Fetch user data first to get the database user ID
-      const userData = await usersApi.getCurrentUser();
-
-      // Then fetch reviews using the Clerk user ID (which the backend will convert to database ID)
-      const reviewsResponse = await reviewsApi.getReviews({
-        userId: clerkUserId,
-        limit: 1000 // Get all reviews for stats
-      });
+      const [userData, reviewsResponse] = await Promise.all([
+        usersApi.getCurrentUser(),
+        // Keep higher limit for full reviews tab while avoiding a request waterfall.
+        reviewsApi.getReviews({
+          userId: clerkUserId,
+          limit: 1000,
+        }),
+      ]);
 
       const reviews = reviewsResponse.reviews || [];
       const avgRating =
