@@ -2,6 +2,7 @@ import { Global, Module } from '@nestjs/common';
 import { LoggerModule as PinoLoggerModule } from 'nestjs-pino';
 import { ConfigService } from '@nestjs/config';
 import pino from 'pino';
+import { LoggerService } from './logger.service';
 
 @Global()
 @Module({
@@ -142,6 +143,7 @@ import pino from 'pino';
       },
     }),
   ],
-  exports: [PinoLoggerModule],
+  providers: [LoggerService],
+  exports: [PinoLoggerModule, LoggerService],
 })
 export class LoggerModule {}

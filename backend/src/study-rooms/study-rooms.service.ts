@@ -3,7 +3,6 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
-  Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -11,6 +10,7 @@ import { ChatService } from '../chat/chat.service';
 import { StreaksService } from '../streaks/streaks.service';
 import { AchievementsService } from '../achievements/achievements.service';
 import { TranscriptsService } from '../transcripts/transcripts.service';
+import { LoggerService } from '../common/logger/logger.service';
 import { CreateStudyRoomDto, UpdateStudyRoomDto } from './dto/study-room.dto';
 import { SessionFeedbackDto } from '../common/dto/session-feedback.dto';
 import {
@@ -55,8 +55,6 @@ type StudyRoomWithRelations = {
 
 @Injectable()
 export class StudyRoomsService {
-  private readonly logger = new Logger(StudyRoomsService.name);
-
   constructor(
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
@@ -64,7 +62,10 @@ export class StudyRoomsService {
     private streaksService: StreaksService,
     private achievementsService: AchievementsService,
     private transcriptsService: TranscriptsService,
-  ) {}
+    private readonly logger: LoggerService,
+  ) {
+    this.logger.setContext(StudyRoomsService.name);
+  }
 
   async getStudyRooms(
     search?: string,
@@ -963,7 +964,8 @@ export class StudyRoomsService {
       select: { name: true },
     });
 
-    console.log('🔔 [joinStudyRoom] Sending notification to room creator:', {
+    this.logger.debug({
+      message: '🔔 [joinStudyRoom] Sending notification to room creator',
       creatorId: studyRoom.createdById,
       joinerName: userWithName?.name,
       roomTitle: studyRoom.title,
@@ -982,7 +984,7 @@ export class StudyRoomsService {
       },
     );
 
-    console.log('✅ [joinStudyRoom] Notification sent successfully');
+    this.logger.log('✅ [joinStudyRoom] Notification sent successfully');
 
     return {
       success: true,
@@ -991,7 +993,8 @@ export class StudyRoomsService {
   }
 
   async completeStudyRoom(studyRoomId: string, userId: string) {
-    console.log('🎯 [completeStudyRoom] Called with:', {
+    this.logger.debug({
+      message: '🎯 [completeStudyRoom] Called with',
       studyRoomId,
       clerkUserId: userId,
     });
@@ -1003,14 +1006,15 @@ export class StudyRoomsService {
     });
 
     if (!user) {
-      console.error(
-        '❌ [completeStudyRoom] User not found for clerkId:',
-        userId,
-      );
+    this.logger.error({
+      message: '❌ [completeStudyRoom] User not found for clerkId',
+      clerkUserId: userId,
+    });
       throw new NotFoundException('User not found');
     }
 
-    console.log('✅ [completeStudyRoom] User found:', {
+    this.logger.debug({
+      message: '✅ [completeStudyRoom] User found',
       id: user.id,
       name: user.name,
     });
@@ -1020,14 +1024,15 @@ export class StudyRoomsService {
     });
 
     if (!studyRoom) {
-      console.error(
-        '❌ [completeStudyRoom] Study room not found:',
+      this.logger.error({
+        message: '❌ [completeStudyRoom] Study room not found',
         studyRoomId,
-      );
+      });
       throw new NotFoundException('Study room not found');
     }
 
-    console.log('✅ [completeStudyRoom] Study room found:', {
+    this.logger.debug({
+      message: '✅ [completeStudyRoom] Study room found',
       id: studyRoom.id,
       title: studyRoom.title,
       date: studyRoom.date,
@@ -1044,13 +1049,14 @@ export class StudyRoomsService {
       },
     });
 
-    console.log('🔐 [completeStudyRoom] Authorization check:', {
+    this.logger.debug({
+      message: '🔐 [completeStudyRoom] Authorization check',
       isCreator,
       hasParticipant: !!isParticipant,
     });
 
     if (!isCreator && !isParticipant) {
-      console.error(
+      this.logger.error(
         '❌ [completeStudyRoom] Not authorized to complete this study room',
       );
       throw new ForbiddenException(
@@ -1059,12 +1065,12 @@ export class StudyRoomsService {
     }
 
     // Update study room status to COMPLETED
-    console.log('📝 [completeStudyRoom] Updating study room status to DONE...');
+    this.logger.debug('📝 [completeStudyRoom] Updating study room status to DONE...');
     const updatedRoom = await this.prisma.studyRoom.update({
       where: { id: studyRoomId },
       data: { sessionStatus: SessionStatus.DONE },
     });
-    console.log('✅ [completeStudyRoom] Study room status updated to DONE');
+    this.logger.log('✅ [completeStudyRoom] Study room status updated to DONE');
 
     // Get all participants for streak tracking
     const participants = await this.prisma.studyRoomParticipant.findMany({
@@ -1072,13 +1078,13 @@ export class StudyRoomsService {
       select: { userId: true },
     });
 
-    console.log(
+    this.logger.debug(
       `👥 [completeStudyRoom] Found ${participants.length} participants`,
     );
 
     // Update streak for the creator (host/teacher)
-    console.log(
-      '🔥 [completeStudyRoom] Updating streak for creator (teacher):',
+    this.logger.debug(
+      '🔥 [completeStudyRoom] Updating streak for creator (teacher)',
       studyRoom.createdById,
     );
     await this.streaksService.updateUserActivity(
@@ -1135,8 +1141,8 @@ export class StudyRoomsService {
     // Generate AI summary from transcripts
     let summary: string | null = null;
     try {
-      console.log(
-        '🤖 [completeStudyRoom] Generating AI summary for study room:',
+      this.logger.debug(
+        '🤖 [completeStudyRoom] Generating AI summary for study room',
         studyRoomId,
       );
       summary = await this.transcriptsService.compileAndSummarize(studyRoomId);
@@ -1146,13 +1152,14 @@ export class StudyRoomsService {
         where: { id: studyRoomId },
         data: { summary },
       });
-      console.log(
+      this.logger.log(
         '✅ [completeStudyRoom] AI summary generated and stored successfully',
       );
     } catch (error) {
-      console.error(
-        '⚠️ [completeStudyRoom] Failed to generate summary:',
-        error,
+      this.logger.error(
+        '⚠️ [completeStudyRoom] Failed to generate summary',
+        error instanceof Error ? error.stack : undefined,
+        `studyRoomId: ${studyRoomId}, error: ${error instanceof Error ? error.message : String(error)}`
       );
       // Continue execution even if summary generation fails
     }
@@ -1191,7 +1198,8 @@ export class StudyRoomsService {
   }
 
   async markNotCompleted(studyRoomId: string, userId: string) {
-    console.log('⏰ [markNotCompleted] Called with:', {
+    this.logger.debug({
+      message: '⏰ [markNotCompleted] Called with',
       studyRoomId,
       clerkUserId: userId,
     });
@@ -1203,7 +1211,10 @@ export class StudyRoomsService {
     });
 
     if (!user) {
-      console.error('❌ [markNotCompleted] User not found for clerkId:', userId);
+      this.logger.error({
+        message: '❌ [markNotCompleted] User not found for clerkId',
+        clerkUserId: userId,
+      });
       throw new NotFoundException('User not found');
     }
 
@@ -1218,25 +1229,28 @@ export class StudyRoomsService {
     });
 
     if (!studyRoom) {
-      console.error('❌ [markNotCompleted] Study room not found:', studyRoomId);
+      this.logger.error({
+        message: '❌ [markNotCompleted] Study room not found',
+        studyRoomId,
+      });
       throw new NotFoundException('Study room not found');
     }
 
     // Check if user is the host (only host can mark as not completed)
     if (studyRoom.createdById !== user.id) {
-      console.error('❌ [markNotCompleted] Not authorized - not the host');
+      this.logger.error('❌ [markNotCompleted] Not authorized - not the host');
       throw new ForbiddenException(
         'Only the host can mark the session as not completed',
       );
     }
 
     // Update study room status to NOT_COMPLETED
-    console.log('📝 [markNotCompleted] Updating study room status to NOT_COMPLETED...');
+    this.logger.debug('📝 [markNotCompleted] Updating study room status to NOT_COMPLETED...');
     const updatedRoom = await this.prisma.studyRoom.update({
       where: { id: studyRoomId },
       data: { sessionStatus: SessionStatus.NOT_COMPLETED },
     });
-    console.log('✅ [markNotCompleted] Study room status updated to NOT_COMPLETED');
+    this.logger.log('✅ [markNotCompleted] Study room status updated to NOT_COMPLETED');
 
     // No streak updates, no achievements, no summary for NOT_COMPLETED sessions
     return {
@@ -1307,8 +1321,7 @@ export class StudyRoomsService {
         },
       });
 
-      console.log(
-        '✅ [saveSessionFeedback] Feedback updated for study room:',
+      this.logger.log('✅ [saveSessionFeedback] Feedback updated for study room',
         studyRoomId,
       );
     } else {
@@ -1322,8 +1335,7 @@ export class StudyRoomsService {
         },
       });
 
-      console.log(
-        '✅ [saveSessionFeedback] Feedback created for study room:',
+      this.logger.log('✅ [saveSessionFeedback] Feedback created for study room',
         studyRoomId,
       );
     }
