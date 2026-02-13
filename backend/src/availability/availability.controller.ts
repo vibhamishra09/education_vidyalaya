@@ -1,14 +1,4 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Patch,
-  Delete,
-  Body,
-  Param,
-  Query,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, Logger } from '@nestjs/common';
 import { AvailabilityService } from './availability.service';
 import { ClerkAuthGuard } from '../common/guards/clerk-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -22,6 +12,8 @@ import {
 
 @Controller('api/availability')
 export class AvailabilityController {
+  private readonly logger = new Logger(AvailabilityController.name);
+
   constructor(private readonly availabilityService: AvailabilityService) {}
 
   /**
@@ -44,7 +36,7 @@ export class AvailabilityController {
     @CurrentUser() userId: string,
     @Body() data: UpdateUserPreferencesDto,
   ) {
-    console.log(data);
+    this.logger.debug(data);
     return this.availabilityService.updateUserPreferences(userId, data);
   }
 

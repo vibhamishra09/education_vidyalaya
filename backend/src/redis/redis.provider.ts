@@ -1,19 +1,22 @@
 import { createClient, RedisClientType } from 'redis';
+import { Logger } from '@nestjs/common';
+
+const logger = new Logger('RedisProvider');
 
 export const redisClient: RedisClientType = createClient({
   url: process.env.REDIS_URL,
 }) as RedisClientType;
 
 redisClient.on('error', (err) => {
-  console.error('Redis Client Error', err);
+  logger.debug('Redis Client Error', err);
 });
 
 // Auto-connect Redis when module is loaded
 redisClient
   .connect()
   .then(() => {
-    console.log('✅ Redis connected successfully');
+    logger.debug('✅ Redis connected successfully');
   })
   .catch((err) => {
-    console.error('❌ Redis connection failed:', err);
+    logger.debug('❌ Redis connection failed:', err);
   });

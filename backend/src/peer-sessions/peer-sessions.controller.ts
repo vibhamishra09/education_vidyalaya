@@ -1,13 +1,4 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Patch,
-  Body,
-  Param,
-  Query,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards, Logger } from '@nestjs/common';
 import { PeerSessionsService } from './peer-sessions.service';
 import { ClerkAuthGuard } from '../common/guards/clerk-auth.guard';
 import { OptionalClerkAuthGuard } from '../common/guards/optional-clerk-auth.guard';
@@ -21,6 +12,8 @@ import { SessionStatus } from '@prisma/client';
 
 @Controller('api/peer-sessions')
 export class PeerSessionsController {
+  private readonly logger = new Logger(PeerSessionsController.name);
+
   constructor(private peerSessionsService: PeerSessionsService) {}
 
   @Get()
@@ -33,7 +26,7 @@ export class PeerSessionsController {
     @Query('page') page?: number,
     @Query('limit') limit?: number,
   ) {
-    console.log('userId', userId);
+    this.logger.debug('userId', userId);
     return this.peerSessionsService.getPeerSessions(
       userId,
       status,
@@ -103,7 +96,7 @@ export class PeerSessionsController {
     @Param('peerSessionId') peerSessionId: string,
     @CurrentUser() userId: string,
   ) {
-    console.log(
+    this.logger.debug(
       '🎯 [PeerSessionsController.completePeerSession] Endpoint called:',
       { peerSessionId, userId },
     );
@@ -111,7 +104,7 @@ export class PeerSessionsController {
       peerSessionId,
       userId,
     );
-    console.log(
+    this.logger.debug(
       '✅ [PeerSessionsController.completePeerSession] Completed successfully',
     );
     return result;
@@ -132,7 +125,7 @@ export class PeerSessionsController {
     @Param('peerSessionId') peerSessionId: string,
     @CurrentUser() userId: string,
   ) {
-    console.log(
+    this.logger.debug(
       '⏱️ [PeerSessionsController.markNotCompleted] Endpoint called:',
       { peerSessionId, userId },
     );
@@ -146,7 +139,7 @@ export class PeerSessionsController {
     @CurrentUser() userId: string,
     @Body() feedbackDto: SessionFeedbackDto,
   ) {
-    console.log(
+    this.logger.debug(
       '📝 [PeerSessionsController.submitSessionFeedback] Endpoint called:',
       { peerSessionId, userId, isHost: feedbackDto.isHost },
     );

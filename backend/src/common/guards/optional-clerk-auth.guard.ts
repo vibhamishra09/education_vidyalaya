@@ -1,8 +1,10 @@
-import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
+import { Injectable, CanActivate, ExecutionContext, Logger } from '@nestjs/common';
 import { createClerkClient } from '@clerk/backend';
 
 @Injectable()
 export class OptionalClerkAuthGuard implements CanActivate {
+  private readonly logger = new Logger(OptionalClerkAuthGuard.name);
+
   private clerkClient;
 
   constructor() {
@@ -75,7 +77,7 @@ export class OptionalClerkAuthGuard implements CanActivate {
       // for both authenticated and unauthenticated users.
       // We don't log this as an error since it's expected behavior for optional auth.
       if (process.env.NODE_ENV === 'development') {
-        console.log(
+        this.logger.debug(
           'Optional auth: Token validation failed (this is OK):',
           error?.message || 'Unknown error',
         );
