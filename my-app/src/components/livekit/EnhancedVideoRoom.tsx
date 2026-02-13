@@ -2402,6 +2402,21 @@ const VideoRoomContent = memo(function VideoRoomContent({
 															/>
 														</div>
 													)}
+													{/* Mobile-only mic state badge */}
+													<div className="absolute top-2 right-2 z-[3] md:hidden">
+														<div
+															className={`w-6 h-6 rounded-full flex items-center justify-center ${
+																isMuted ? 'bg-sky-500' : 'bg-black/60 border border-white/20'
+															}`}
+															title={isMuted ? 'Muted' : 'Unmuted'}
+														>
+															{isMuted ? (
+																<MicOff className="h-3 w-3 text-white" />
+															) : (
+																<Mic className="h-3 w-3 text-white" />
+															)}
+														</div>
+													</div>
 												</div>
 												
 												{/* Name below video */}
@@ -2474,11 +2489,20 @@ const VideoRoomContent = memo(function VideoRoomContent({
 											
 											{/* Audio/Video status icons in top-right corner */}
 											<div className="absolute top-4 right-4 flex items-center gap-2 z-20">
-												{!focusedTrack.participant.isMicrophoneEnabled && (
-													<div className="w-8 h-8 bg-sky-500 rounded-full flex items-center justify-center" title="Muted">
+												<div
+													className={`w-8 h-8 rounded-full flex items-center justify-center ${
+														focusedTrack.participant.isMicrophoneEnabled
+															? 'bg-black/60 border border-white/20'
+															: 'bg-sky-500'
+													}`}
+													title={focusedTrack.participant.isMicrophoneEnabled ? 'Unmuted' : 'Muted'}
+												>
+													{focusedTrack.participant.isMicrophoneEnabled ? (
+														<Mic className="h-4 w-4 text-white" />
+													) : (
 														<MicOff className="h-4 w-4 text-white" />
-													</div>
-												)}
+													)}
+												</div>
 												{!focusedTrack.participant.isCameraEnabled && !isScreenShareFocused && (
 													<div className="w-8 h-8 bg-sky-500 rounded-full flex items-center justify-center" title="Camera off">
 														<VideoOff className="h-4 w-4 text-white" />
