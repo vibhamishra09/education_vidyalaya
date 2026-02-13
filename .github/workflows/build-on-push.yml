@@ -73,6 +73,8 @@ jobs:
     needs: detect_changes
     if: needs.detect_changes.outputs.my_app_changed == 'true'
     runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
     defaults:
       run:
         working-directory: my-app
@@ -91,6 +93,15 @@ jobs:
           node-version: 20
           cache: pnpm
           cache-dependency-path: my-app/pnpm-lock.yaml
+
+      - name: Validate required my-app secrets
+        shell: bash
+        run: |
+          if [ -z "${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}" ]; then
+            echo "Missing secret: NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"
+            echo "Add it at: Settings -> Secrets and variables -> Actions -> New repository secret"
+            exit 1
+          fi
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
