@@ -1,0 +1,173 @@
+name: Build Changed Projects On Push
+
+on:
+  push:
+    branches:
+      - "wi/**"
+    tags-ignore:
+      - "**"
+
+permissions:
+  contents: write
+
+jobs:
+  validate_branch_name:
+    name: Validate branch naming
+    runs-on: ubuntu-latest
+    outputs:
+      is_valid: ${{ steps.branch_check.outputs.is_valid }}
+    steps:
+      - name: Check branch format
+        id: branch_check
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_NAME}" =~ ^wi/[0-9]+$ ]]; then
+            echo "is_valid=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_valid=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  notify_invalid_branch_name:
+    name: Notify invalid wi branch format
+    needs: validate_branch_name
+    if: needs.validate_branch_name.outputs.is_valid != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify pusher
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createCommitComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: context.sha,
+              body: `Hi @${context.actor}, this workflow only runs builds for branches matching \`wi/<number>\` (example: \`wi/546\`).`
+            });
+
+  detect_changes:
+    name: Detect folder changes
+    needs: validate_branch_name
+    if: needs.validate_branch_name.outputs.is_valid == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      my_app_changed: ${{ steps.filter.outputs.my_app }}
+      backend_changed: ${{ steps.filter.outputs.backend }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check changed paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            my_app:
+              - 'my-app/**'
+            backend:
+              - 'backend/**'
+
+  build_my_app:
+    name: Build my-app
+    needs: detect_changes
+    if: needs.detect_changes.outputs.my_app_changed == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: my-app
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: my-app/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build my-app
+        run: pnpm build
+
+  build_backend:
+    name: Build backend
+    needs: detect_changes
+    if: needs.detect_changes.outputs.backend_changed == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: backend/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build backend
+        run: pnpm build
+
+  notify_no_relevant_changes:
+    name: Notify when no my-app/backend changes
+    needs: detect_changes
+    if: needs.detect_changes.outputs.my_app_changed != 'true' && needs.detect_changes.outputs.backend_changed != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify pusher
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createCommitComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: context.sha,
+              body: `Hi @${context.actor}, no build was run because this push did not change \`my-app/\` or \`backend/\`.`
+            });
+
+  notify_build_failure:
+    name: Notify pusher if a build fails
+    needs:
+      - detect_changes
+      - build_my_app
+      - build_backend
+    if: always() && (needs.build_my_app.result == 'failure' || needs.build_backend.result == 'failure')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify pusher
+        uses: actions/github-script@v7
+        env:
+          BUILD_MY_APP_RESULT: ${{ needs.build_my_app.result }}
+          BUILD_BACKEND_RESULT: ${{ needs.build_backend.result }}
+        with:
+          script: |
+            const failedTargets = [];
+            if (process.env.BUILD_MY_APP_RESULT === 'failure') failedTargets.push('my-app');
+            if (process.env.BUILD_BACKEND_RESULT === 'failure') failedTargets.push('backend');
+            const targets = failedTargets.join(', ');
+            await github.rest.repos.createCommitComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: context.sha,
+              body: `Hi @${context.actor}, build failed for: ${targets}. Please check the workflow logs.`
+            });
