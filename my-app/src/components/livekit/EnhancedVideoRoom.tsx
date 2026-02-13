@@ -91,6 +91,7 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 	const [isFullscreen, setIsFullscreen] = useState(false)
 	const [showWarning, setShowWarning] = useState(false)
 	const [isMobileViewport, setIsMobileViewport] = useState(false)
+	const [isMobileDevice, setIsMobileDevice] = useState(false)
 	const router = useRouter()
 	const { showSuccess } = useToast()
 	const { getToken } = useAuth()
@@ -120,6 +121,14 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 		updateViewport()
 		mediaQuery.addEventListener('change', updateViewport)
 		return () => mediaQuery.removeEventListener('change', updateViewport)
+	}, [])
+
+	useEffect(() => {
+		if (typeof window === 'undefined') return
+		const mobileByUa = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(window.navigator.userAgent)
+		const mobileByTouch = window.navigator.maxTouchPoints > 1 && window.screen.width <= 1024
+		// Keep a stable device signal so orientation changes don't reconfigure media pipelines.
+		setIsMobileDevice(mobileByUa || mobileByTouch)
 	}, [])
 
 	useEffect(() => {
@@ -484,7 +493,7 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 		callId: sessionData?.id || null,
 		userId: user?.id || null,
 		socket: transcriptSocket,
-		enabled: !!sessionData?.id && !!user && !!transcriptSocket && !isMobileViewport,
+		enabled: !!sessionData?.id && !!user && !!transcriptSocket && !isMobileDevice,
 	})
 	
 	// Speech recognition status logging removed
@@ -496,8 +505,8 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 	// Memoize LiveKit room options to avoid passing a new object every render
 	const roomOptions = useMemo(() => ({
 		videoCaptureDefaults: {
-			resolution: isMobileViewport ? VideoPresets.h360 : VideoPresets.h720,
-			frameRate: isMobileViewport ? 15 : 24,
+			resolution: isMobileDevice ? VideoPresets.h360 : VideoPresets.h720,
+			frameRate: isMobileDevice ? 15 : 24,
 		},
 		audioCaptureDefaults: {
 			echoCancellation: true,
@@ -507,11 +516,11 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 		adaptiveStream: true,
 		dynacast: true,
 		publishDefaults: {
-			videoSimulcastLayers: isMobileViewport
+			videoSimulcastLayers: isMobileDevice
 				? [VideoPresets.h180]
 				: [VideoPresets.h180, VideoPresets.h360],
 		},
-	} as RoomOptions), [isMobileViewport])
+	} as RoomOptions), [isMobileDevice])
 
 	return (
 		<div className="h-screen w-screen flex flex-col bg-[#202124] overflow-hidden fixed inset-0">
