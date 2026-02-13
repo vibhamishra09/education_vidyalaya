@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Suspense } from "react";
+import Script from "next/script";
 import { Inter } from "next/font/google";
 import localFont from "next/font/local";
 import { ClerkProvider } from "@clerk/nextjs";
@@ -242,6 +243,14 @@ export default function RootLayout({
           
           {/* DNS Prefetch for external APIs */}
           <link rel="dns-prefetch" href="https://api.dicebear.com" />
+          
+          {/* Google Analytics */}
+          {process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID && (
+            <>
+              <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
+              <link rel="dns-prefetch" href="https://www.google-analytics.com" />
+            </>
+          )}
         </head>
         <body
           suppressHydrationWarning={true}
@@ -268,6 +277,26 @@ export default function RootLayout({
               </ToastProvider>
             </NotificationProvider>
           </QueryProvider>
+          
+          {/* Google Analytics */}
+          {process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID && (
+            <>
+              <Script
+                src={`https://www.googletagmanager.com/gtag/js?id=${process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID}`}
+                strategy="afterInteractive"
+              />
+              <Script id="google-analytics" strategy="afterInteractive">
+                {`
+                  window.dataLayer = window.dataLayer || [];
+                  function gtag(){dataLayer.push(arguments);}
+                  gtag('js', new Date());
+                  gtag('config', '${process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID}', {
+                    page_path: window.location.pathname,
+                  });
+                `}
+              </Script>
+            </>
+          )}
         </body>
       </html>
     </ClerkProvider>
