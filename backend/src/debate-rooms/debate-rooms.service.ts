@@ -1,6 +1,5 @@
 import {
   Injectable,
-  Logger,
   NotFoundException,
   BadRequestException,
   ForbiddenException,
@@ -29,6 +28,7 @@ import {
 import { redisClient } from '../redis/redis.provider';
 import { DebateAiService } from './debate-ai.service';
 import { DebateMicControlService } from './debate-mic-control.service';
+import { LoggerService } from '../common/logger';
 
 // Redis key prefixes
 const REDIS_KEYS = {
@@ -56,7 +56,6 @@ export interface DebateState {
 
 @Injectable()
 export class DebateRoomsService {
-  private readonly logger = new Logger(DebateRoomsService.name);
 
   constructor(
     private prisma: PrismaService,
@@ -64,7 +63,9 @@ export class DebateRoomsService {
     private notificationsService: NotificationsService,
     private debateAiService: DebateAiService,
     private micControlService: DebateMicControlService,
-  ) {}
+    private readonly logger: LoggerService,
+  ) {
+    this.logger.setContext(DebateRoomsService.name);}
 
   /**
    * Create a new debate room

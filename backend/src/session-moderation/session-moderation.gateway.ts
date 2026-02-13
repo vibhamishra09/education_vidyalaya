@@ -1,4 +1,4 @@
-import { Logger } from '@nestjs/common';
+import {} from '@nestjs/common';
 import {
   OnGatewayConnection,
   OnGatewayDisconnect,
@@ -11,6 +11,7 @@ import { createClerkClient } from '@clerk/backend';
 import { StudyRoomsService } from '../study-rooms/study-rooms.service';
 import { PeerSessionsService } from '../peer-sessions/peer-sessions.service';
 import { PermissionsService } from './permissions.service';
+import { LoggerService } from '../common/logger';
 
 @WebSocketGateway({
   cors: {
@@ -43,8 +44,6 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
   @WebSocketServer()
   server!: Server;
 
-  private readonly logger = new Logger(SessionModerationGateway.name);
-
   private clerkClient = createClerkClient({
     secretKey: process.env.CLERK_SECRET_KEY,
     publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
@@ -54,7 +53,9 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
     private studyRoomsService: StudyRoomsService,
     private peerSessionsService: PeerSessionsService,
     private permissionsService: PermissionsService,
-  ) {}
+    private readonly logger: LoggerService,
+  ) {
+    this.logger.setContext(SessionModerationGateway.name);}
 
   async handleConnection(client: Socket) {
     try {

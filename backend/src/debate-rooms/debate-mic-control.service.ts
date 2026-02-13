@@ -1,7 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { RoomServiceClient, TrackSource } from 'livekit-server-sdk';
 import { PrismaService } from '../prisma/prisma.service';
 import { redisClient } from '../redis/redis.provider';
+import { LoggerService } from '../common/logger';
 
 const REDIS_KEYS = {
   micPermissions: (roomId: string) => `debate:${roomId}:mic_permissions`,
@@ -9,10 +10,12 @@ const REDIS_KEYS = {
 
 @Injectable()
 export class DebateMicControlService {
-  private readonly logger = new Logger(DebateMicControlService.name);
   private readonly roomService: RoomServiceClient;
 
-  constructor(private prisma: PrismaService) {
+  constructor(private prisma: PrismaService,
+    private readonly logger: LoggerService,
+  ) {
+    this.logger.setContext(DebateMicControlService.name);
     const apiKey = process.env.LIVEKIT_API_KEY;
     const apiSecret = process.env.LIVEKIT_API_SECRET;
     const serverUrl = process.env.LIVEKIT_SERVER_URL;

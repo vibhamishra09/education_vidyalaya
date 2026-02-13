@@ -12,33 +12,65 @@ export class LoggerService implements NestLoggerService {
 
   /**
    * Log a message at debug level
+   * Supports both string messages and structured objects
    */
-  debug(message: any, context?: string): void {
-    this.pinoLogger.debug({ context }, message);
+  debug(message: any, context?: any): void {
+    if (typeof message === 'object' && message !== null) {
+      // Structured logging with object
+      this.pinoLogger.debug({ ...message, context: context || message.context });
+    } else {
+      // Simple string message
+      this.pinoLogger.debug({ context }, message);
+    }
   }
 
   /**
    * Log a message at log/info level
+   * Supports both string messages and structured objects
    */
-  log(message: any, context?: string): void {
-    this.pinoLogger.info({ context }, message);
+  log(message: any, context?: any): void {
+    if (typeof message === 'object' && message !== null) {
+      // Structured logging with object
+      this.pinoLogger.info({ ...message, context: context || message.context });
+    } else {
+      // Simple string message
+      this.pinoLogger.info({ context }, message);
+    }
   }
 
   /**
    * Log a message at warn level
+   * Supports both string messages and structured objects
    */
-  warn(message: any, context?: string): void {
-    this.pinoLogger.warn({ context }, message);
+  warn(message: any, context?: any): void {
+    if (typeof message === 'object' && message !== null) {
+      // Structured logging with object
+      this.pinoLogger.warn({ ...message, context: context || message.context });
+    } else {
+      // Simple string message
+      this.pinoLogger.warn({ context }, message);
+    }
   }
 
   /**
    * Log a message at error level
+   * Supports both string messages and structured objects
    */
-  error(message: any, trace?: string, context?: string): void {
-    if (trace) {
-      this.pinoLogger.error({ context, trace }, message);
+  error(message: any, trace?: any, context?: any): void {
+    if (typeof message === 'object' && message !== null) {
+      // Structured logging with object
+      const errorObj = { ...message, context: context || message.context };
+      if (trace) {
+        errorObj.trace = trace;
+      }
+      this.pinoLogger.error(errorObj);
     } else {
-      this.pinoLogger.error({ context }, message);
+      // Simple string message
+      if (trace) {
+        this.pinoLogger.error({ context, trace }, message);
+      } else {
+        this.pinoLogger.error({ context }, message);
+      }
     }
   }
 

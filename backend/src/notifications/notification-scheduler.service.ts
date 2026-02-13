@@ -1,21 +1,23 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from './notifications.service';
 import { TranscriptsService } from '../transcripts/transcripts.service';
 import { StreaksService } from '../streaks/streaks.service';
 import { SessionStatus, NotifType } from '@prisma/client';
+import { LoggerService } from '../common/logger';
 
 @Injectable()
 export class NotificationSchedulerService {
-  private readonly logger = new Logger(NotificationSchedulerService.name);
 
   constructor(
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
     private transcriptsService: TranscriptsService,
     private streaksService: StreaksService,
-  ) {}
+    private readonly logger: LoggerService,
+  ) {
+    this.logger.setContext(NotificationSchedulerService.name);}
 
   // Run every 5 minutes to check for session reminders
   @Cron('*/5 * * * *')

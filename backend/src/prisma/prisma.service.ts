@@ -1,5 +1,6 @@
-import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
+import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { PrismaClient, Prisma } from '@prisma/client';
+import { LoggerService } from '../common/logger';
 
 /**
  * Connection error codes that indicate a "zombie" or stale connection
@@ -70,10 +71,11 @@ export class PrismaService
   extends PrismaClient
   implements OnModuleInit, OnModuleDestroy
 {
-  private readonly logger = new Logger(PrismaService.name);
   private connectionCheckInterval?: NodeJS.Timeout;
 
-  constructor() {
+  constructor(
+    private readonly logger: LoggerService,
+  ) {
     super({
       datasources: {
         db: {
@@ -83,6 +85,7 @@ export class PrismaService
       log: ['error'],
       errorFormat: 'minimal',
     });
+    this.logger.setContext(PrismaService.name);
 
     // Store reference to the base client for connection management
     baseClient = this;
@@ -273,7 +276,7 @@ export class PrismaService
 /**
  * Ensures the database connection is established before executing queries
  */
-async function ensureConnected(logger: Logger): Promise<void> {
+async function ensureConnected(logger: LoggerService): Promise<void> {
   if (isConnected) {
     return;
   }
@@ -291,7 +294,7 @@ async function ensureConnected(logger: Logger): Promise<void> {
   }
 }
 
-async function doConnect(logger: Logger): Promise<void> {
+async function doConnect(logger: LoggerService): Promise<void> {
   const MAX_CONNECT_RETRIES = 3;
   const CONNECT_BACKOFF_MS = 500;
 

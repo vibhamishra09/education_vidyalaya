@@ -1,12 +1,15 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from './prisma/prisma.service';
 import { SessionStatus } from '@prisma/client';
+import { LoggerService } from './common/logger';
 
 @Injectable()
 export class AppService {
-  private readonly logger = new Logger(AppService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService,
+    private readonly logger: LoggerService,
+  ) {
+    this.logger.setContext(AppService.name);}
 
   getHello(): string {
     return 'Namaste World!';

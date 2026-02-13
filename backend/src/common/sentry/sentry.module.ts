@@ -1,4 +1,4 @@
-import { Module, Global } from '@nestjs/common';
+import { Module, Global, Logger } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import * as Sentry from '@sentry/nestjs';
 import { nodeProfilingIntegration } from '@sentry/profiling-node';
@@ -6,6 +6,8 @@ import { nodeProfilingIntegration } from '@sentry/profiling-node';
 @Global()
 @Module({})
 export class SentryModule {
+  private static readonly logger = new Logger(SentryModule.name);
+
   static forRoot() {
     return {
       module: SentryModule,
@@ -17,7 +19,7 @@ export class SentryModule {
             const environment = configService.get<string>('NODE_ENV', 'development');
             
             if (!dsn) {
-              console.warn('⚠️  SENTRY_DSN not configured. Sentry will not be initialized.');
+              SentryModule.logger.debug('⚠️  SENTRY_DSN not configured. Sentry will not be initialized.');
               return null;
             }
 
@@ -80,7 +82,7 @@ export class SentryModule {
               ],
             });
 
-            console.log(`✅ Sentry initialized for environment: ${environment}`);
+            SentryModule.logger.debug(`✅ Sentry initialized for environment: ${environment}`);
             return Sentry;
           },
           inject: [ConfigService],

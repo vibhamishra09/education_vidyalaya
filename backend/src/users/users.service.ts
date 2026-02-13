@@ -1,15 +1,12 @@
-import {
-  Injectable,
-  NotFoundException,
-  ConflictException,
-  BadRequestException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException, Logger } from '@nestjs/common';
 import { Prisma, SessionStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateUserDto } from './dto/user.dto';
 
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
+
   constructor(private prisma: PrismaService) {}
 
   async getCurrentUser(clerkUserId: string) {
@@ -395,14 +392,14 @@ export class UsersService {
           }
         } catch (error) {
           // If we can't find current user, just treat username as taken
-          console.error('Error finding current user:', error);
+          this.logger.debug('Error finding current user:', error);
         }
       }
 
       // Username is taken by someone else
       return { available: false };
     } catch (error) {
-      console.error('Error checking username availability:', error);
+      this.logger.debug('Error checking username availability:', error);
       // On error, return false to be safe (don't allow potentially duplicate usernames)
       return { available: false };
     }
@@ -456,7 +453,7 @@ export class UsersService {
     },
   ) {
     // Create user with onboarding data (on-demand user creation)
-    console.log('🔍 Completing onboarding for user:', clerkId);
+    this.logger.debug('🔍 Completing onboarding for user:', clerkId);
     const normalizedHourlyRate = data.hourlyRate ?? 0;
     const user = await this.prisma.user.upsert({
       where: { clerkId },
@@ -485,7 +482,7 @@ export class UsersService {
       },
     });
 
-    console.log('🔍 User created:', user);
+    this.logger.debug('🔍 User created:', user);
 
     // Process skills - first ensure they exist in the Skill table
     const allSkills = [...data.skillsIHave, ...data.skillsIWant];

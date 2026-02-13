@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotifType } from '@prisma/client';
 import { PushNotificationService } from './push-notification.service';
@@ -7,6 +7,8 @@ import { redisClient } from '../redis/redis.provider';
 
 @Injectable()
 export class NotificationsService {
+  private readonly logger = new Logger(NotificationsService.name);
+
   constructor(
     private prisma: PrismaService,
     private pushNotificationService: PushNotificationService,
@@ -179,7 +181,7 @@ export class NotificationsService {
 
     // Send push notification if requested
     if (options?.sendPush) {
-      console.log('🔔 [NotificationsService] Triggering push notification:', {
+      this.logger.debug('🔔 [NotificationsService] Triggering push notification:', {
         userId,
         pushTitle: options.pushTitle || 'New Notification',
         message,
@@ -198,14 +200,14 @@ export class NotificationsService {
         },
       );
 
-      console.log(
+      this.logger.debug(
         '✅ [NotificationsService] Push notification triggered successfully',
       );
     }
 
     // Send email notification for high priority (URGENT) notifications
     if (type === NotifType.URGENT) {
-      console.log('📧 [NotificationsService] Sending email for URGENT notification:', {
+      this.logger.debug('📧 [NotificationsService] Sending email for URGENT notification:', {
         userId,
         message,
         notificationId: notification.id,
@@ -218,7 +220,7 @@ export class NotificationsService {
         message,
       );
 
-      console.log(
+      this.logger.debug(
         '✅ [NotificationsService] Email notification sent successfully',
       );
     }
