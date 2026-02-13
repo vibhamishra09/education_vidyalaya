@@ -40,17 +40,18 @@ export function ReviewForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (rating === 0 || review.length < 1) {
-      toast.error("Please provide a rating and at least 1 character for your review");
+    if (rating === 0) {
+      toast.error("Please provide a rating");
       return;
     }
 
     try {
+      const trimmedReview = review.trim();
       const reviewData: CreateReviewDto = {
         sessionId,
         sessionType,
         rating,
-        review: review.trim(),
+        ...(trimmedReview ? { review: trimmedReview } : {}),
       };
 
       await createReviewMutation.mutateAsync(reviewData);
@@ -157,14 +158,13 @@ export function ReviewForm({
 
           {/* Review */}
           <div className="space-y-2">
-            <Label htmlFor="review">Review *</Label>
+            <Label htmlFor="review">Review (optional)</Label>
             <Textarea
               id="review"
               placeholder="Share your experience, what you learned, and how the session helped you..."
               value={review}
               onChange={(e) => setReview(e.target.value)}
               rows={6}
-              required
               disabled={createReviewMutation.isPending}
             />
           </div>
@@ -196,7 +196,7 @@ export function ReviewForm({
             <Button
               type="submit"
               className="flex-1"
-              disabled={rating === 0 || review.length < 1 || createReviewMutation.isPending}
+              disabled={rating === 0 || createReviewMutation.isPending}
             >
               {createReviewMutation.isPending ? (
                 <>
