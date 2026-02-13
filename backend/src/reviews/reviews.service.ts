@@ -206,7 +206,7 @@ export class ReviewsService {
 
     const reviewData: any = {
       rating: createDto.rating,
-      review: createDto.review,
+      review: createDto.review?.trim() ?? '',
       reviewerId: user.id, // Use the database ID, not clerkId
       revieweeId,
     };

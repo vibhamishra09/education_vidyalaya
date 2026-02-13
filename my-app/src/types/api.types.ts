@@ -377,7 +377,7 @@ export interface CreateReviewDto {
   sessionId: string;
   sessionType: 'studyRoom' | 'peerSession';
   rating: number;
-  review: string;
+  review?: string;
 }
 
 export interface SessionReviewsResponse {
