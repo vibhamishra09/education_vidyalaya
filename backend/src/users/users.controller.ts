@@ -1,13 +1,4 @@
-import {
-  Controller,
-  Get,
-  Patch,
-  Body,
-  Param,
-  UseGuards,
-  Query,
-  Post,
-} from '@nestjs/common';
+import { Controller, Get, Patch, Body, Param, UseGuards, Query, Post, Logger } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { ClerkAuthGuard } from '../common/guards/clerk-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -15,6 +6,8 @@ import { UpdateUserDto } from './dto/user.dto';
 
 @Controller('api')
 export class UsersController {
+  private readonly logger = new Logger(UsersController.name);
+
   constructor(private usersService: UsersService) {}
 
   @Get('users/me')
@@ -47,7 +40,7 @@ export class UsersController {
         userId,
       );
     } catch (error) {
-      console.error('Error in checkUsernameAvailability controller:', error);
+      this.logger.debug('Error in checkUsernameAvailability controller:', error);
       // Return false on error to be safe
       return { available: false };
     }
@@ -68,7 +61,7 @@ export class UsersController {
 
   @Post('users/onboarding')
   async completeOnboarding(@Body() body: any) {
-    console.log('🔍 Complete onboarding called with body:', body);
+    this.logger.debug('🔍 Complete onboarding called with body:', body);
     const {
       clerkId,
       name,

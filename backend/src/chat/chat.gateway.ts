@@ -1,4 +1,4 @@
-import { UseGuards } from '@nestjs/common';
+import { UseGuards, Logger } from '@nestjs/common';
 import {
   OnGatewayConnection,
   OnGatewayDisconnect,
@@ -39,6 +39,8 @@ import { PermissionsService } from '../session-moderation/permissions.service';
   },
 })
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
+  private readonly logger = new Logger(ChatGateway.name);
+
   @WebSocketServer()
   server!: Server;
 
@@ -58,7 +60,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         client.handshake.auth?.token ||
         client.handshake.headers?.authorization?.replace('Bearer ', '');
       if (!token) {
-        console.log('No token provided in WebSocket handshake');
+        this.logger.debug('No token provided in WebSocket handshake');
         client.disconnect();
         return;
       }
@@ -82,7 +84,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         );
 
         if (!requestState.isSignedIn) {
-          console.log('User is not authenticated');
+          this.logger.debug('User is not authenticated');
           client.disconnect();
           return;
         }
@@ -90,16 +92,16 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         const auth = requestState.toAuth();
 
         if (!auth.userId) {
-          console.log('User ID not found in token');
+          this.logger.debug('User ID not found in token');
           client.disconnect();
           return;
         }
 
         client.data.userId = auth.userId;
         client.data.clerkId = auth.userId;
-        console.log('WebSocket authenticated for user:', auth.userId);
+        this.logger.debug('WebSocket authenticated for user:', auth.userId);
       } catch (verifyError: any) {
-        console.error(
+        this.logger.debug(
           'Token verification failed:',
           verifyError.message || verifyError,
         );
@@ -107,7 +109,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         return;
       }
     } catch (error) {
-      console.error('WebSocket connection error:', error);
+      this.logger.debug('WebSocket connection error:', error);
       client.disconnect();
     }
   }
@@ -170,7 +172,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       );
       this.server.to(payload.channelId).emit('message:new', message);
     } catch (error: any) {
-      console.error('Error sending message:', error);
+      this.logger.debug('Error sending message:', error);
       client.emit('error', {
         message: error.message || 'Failed to send message',
       });

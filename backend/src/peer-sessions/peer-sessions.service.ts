@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-  ForbiddenException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import {
@@ -25,6 +20,8 @@ import { TranscriptsService } from '../transcripts/transcripts.service';
 
 @Injectable()
 export class PeerSessionsService {
+  private readonly logger = new Logger(PeerSessionsService.name);
+
   constructor(
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
@@ -43,7 +40,7 @@ export class PeerSessionsService {
     page: number = 1,
     limit: number = 10,
   ) {
-    console.log('userId', userId);
+    this.logger.debug('userId', userId);
     // userId is actually clerkId, so we need to find the user by clerkId first
     const user = await this.prisma.user.findUnique({
       where: { clerkId: userId },
@@ -96,7 +93,7 @@ export class PeerSessionsService {
 
     // Process expired sessions (no payment processing - payments are only processed after reviews)
     for (const session of expiredSessions) {
-      console.log('⏰ [getPeerSessions] Auto-expiring session:', {
+      this.logger.debug('⏰ [getPeerSessions] Auto-expiring session:', {
         sessionId: session.id,
         scheduledEnd: new Date(session.date.getTime() + session.duration * 60000).toISOString(),
         currentStatus: session.sessionStatus,
@@ -185,7 +182,7 @@ export class PeerSessionsService {
     const isNotInTerminalState = !['DONE', 'CANCELLED', 'NOT_COMPLETED'].includes(peerSession.sessionStatus);
 
     if (isExpired && isNotInTerminalState) {
-      console.log('⏰ [getPeerSessionDetails] Session expired, marking as NOT_COMPLETED:', {
+      this.logger.debug('⏰ [getPeerSessionDetails] Session expired, marking as NOT_COMPLETED:', {
         sessionId: peerSessionId,
         scheduledEnd: sessionEndTime.toISOString(),
         currentTime: now.toISOString(),
@@ -250,7 +247,7 @@ export class PeerSessionsService {
       select: { id: true },
     });
 
-    console.log('📊 [getPeerSessionDetails] Returning session data:', {
+    this.logger.debug('📊 [getPeerSessionDetails] Returning session data:', {
       id: peerSession.id,
       date: peerSession.date,
       dateISO: peerSession.date.toISOString(),
@@ -545,7 +542,7 @@ export class PeerSessionsService {
 
       // Generate AI summary from transcripts
       try {
-        console.log(
+        this.logger.debug(
           '🤖 [completePeerSession] Generating AI summary for peer session:',
           peerSessionId,
         );
@@ -557,11 +554,11 @@ export class PeerSessionsService {
           where: { id: peerSessionId },
           data: { summary },
         });
-        console.log(
+        this.logger.debug(
           '✅ [completePeerSession] AI summary generated and stored successfully',
         );
       } catch (error) {
-        console.error(
+        this.logger.debug(
           '⚠️ [completePeerSession] Failed to generate summary:',
           error,
         );
@@ -677,7 +674,7 @@ export class PeerSessionsService {
   // Mark session as not completed (time expired without proper completion)
   // This refunds payment and doesn't trigger review prompts
   async markNotCompleted(peerSessionId: string, userId: string) {
-    console.log('⏱️ [markNotCompleted] Marking session as NOT_COMPLETED:', { peerSessionId, userId });
+    this.logger.debug('⏱️ [markNotCompleted] Marking session as NOT_COMPLETED:', { peerSessionId, userId });
     
     // userId is actually clerkId
     const user = await this.prisma.user.findUnique({
@@ -729,7 +726,7 @@ export class PeerSessionsService {
         data: { coins: { increment: payment.amountMade } },
       });
 
-      console.log('💰 [markNotCompleted] Payment refunded:', payment.amountMade.toString());
+      this.logger.debug('💰 [markNotCompleted] Payment refunded:', payment.amountMade.toString());
     }
 
     // Notify both parties (no review prompt)
@@ -757,7 +754,7 @@ export class PeerSessionsService {
       },
     );
 
-    console.log('✅ [markNotCompleted] Session marked as NOT_COMPLETED');
+    this.logger.debug('✅ [markNotCompleted] Session marked as NOT_COMPLETED');
     return { success: true, message: 'Session marked as not completed' };
   }
 
@@ -902,7 +899,7 @@ export class PeerSessionsService {
         },
       });
 
-      console.log(
+      this.logger.debug(
         '✅ [saveSessionFeedback] Feedback updated for peer session:',
         peerSessionId,
       );
@@ -917,7 +914,7 @@ export class PeerSessionsService {
         },
       });
 
-      console.log(
+      this.logger.debug(
         '✅ [saveSessionFeedback] Feedback created for peer session:',
         peerSessionId,
       );

@@ -1,7 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GoogleGenAI } from '@google/genai';
 import { redisClient } from '../redis/redis.provider';
+import { LoggerService } from '../common/logger';
 
 interface TranscriptEntry {
   user: string;
@@ -16,7 +17,6 @@ interface RateLimitEntry {
 
 @Injectable()
 export class TranscriptsService {
-  private readonly logger = new Logger(TranscriptsService.name);
   private genAI: GoogleGenAI;
   
   // Rate limiting: max 10 summary requests per call ID per hour
@@ -28,7 +28,10 @@ export class TranscriptsService {
   private summaryCache = new Map<string, { summary: string; timestamp: number }>();
   private readonly CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
-  constructor(private configService: ConfigService) {
+  constructor(private configService: ConfigService,
+    private readonly logger: LoggerService,
+  ) {
+    this.logger.setContext(TranscriptsService.name);
     const apiKey = this.configService.get<string>('GEMINI_API_KEY');
     if (!apiKey) {
       this.logger.warn(

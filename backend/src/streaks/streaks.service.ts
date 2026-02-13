@@ -1,9 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { DateTime } from 'luxon';
 
 @Injectable()
 export class StreaksService {
+  private readonly logger = new Logger(StreaksService.name);
+
   constructor(private prisma: PrismaService) {}
 
   /**
@@ -28,7 +30,7 @@ export class StreaksService {
     });
 
     if (!user) {
-      console.error(
+      this.logger.debug(
         '❌ [StreaksService.updateUserActivity] User not found:',
         userId,
       );
@@ -43,13 +45,13 @@ export class StreaksService {
       .startOf('day')
       .toJSDate();
 
-    console.log(
+    this.logger.debug(
       '📅 [StreaksService.updateUserActivity] Normalized date:',
       normalizedDate.toISOString(),
     );
 
     // Upsert daily activity record
-    console.log(
+    this.logger.debug(
       '💾 [StreaksService.updateUserActivity] Upserting daily activity...',
     );
     const activity = await this.prisma.dailyActivity.upsert({
@@ -76,7 +78,7 @@ export class StreaksService {
       },
     });
 
-    console.log(
+    this.logger.debug(
       '✅ [StreaksService.updateUserActivity] Daily activity saved:',
       {
         date: activity.date.toISOString(),
@@ -87,11 +89,11 @@ export class StreaksService {
     );
 
     // Update user's streak
-    console.log(
+    this.logger.debug(
       '🔄 [StreaksService.updateUserActivity] Updating user streak...',
     );
     await this.updateUserStreak(userId);
-    console.log(
+    this.logger.debug(
       '✅ [StreaksService.updateUserActivity] User streak updated successfully',
     );
 
@@ -103,12 +105,12 @@ export class StreaksService {
    * @param userId User ID
    */
   async updateUserStreak(userId: string) {
-    console.log(
+    this.logger.debug(
       '📊 [StreaksService.updateUserStreak] Calculating streak for:',
       userId,
     );
     const streak = await this.calculateStreak(userId);
-    console.log(
+    this.logger.debug(
       '📊 [StreaksService.updateUserStreak] Calculated streak:',
       streak,
     );
@@ -305,7 +307,7 @@ export class StreaksService {
     });
 
     if (!user) {
-      console.warn('⚠️ [StreaksService.getUserStreak] User not found:', userId);
+      this.logger.debug('⚠️ [StreaksService.getUserStreak] User not found:', userId);
       return {
         currentStreak: 0,
         longestStreak: 0,

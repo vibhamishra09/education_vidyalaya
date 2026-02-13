@@ -1,4 +1,4 @@
-import { Logger } from '@nestjs/common';
+import {} from '@nestjs/common';
 import {
   OnGatewayConnection,
   OnGatewayDisconnect,
@@ -13,6 +13,7 @@ import { createClerkClient } from '@clerk/backend';
 import { PrismaService } from '../prisma/prisma.service';
 import { DebateRoomsService, DebateStatus, ParticipantStatus } from './debate-rooms.service';
 import { redisClient } from '../redis/redis.provider';
+import { LoggerService } from '../common/logger';
 
 // Socket.io event types
 interface JoinRoomPayload {
@@ -100,8 +101,6 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server!: Server;
 
-  private readonly logger = new Logger(DebateGateway.name);
-
   private clerkClient = createClerkClient({
     secretKey: process.env.CLERK_SECRET_KEY,
     publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
@@ -115,7 +114,9 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
   constructor(
     private prisma: PrismaService,
     private debateRoomsService: DebateRoomsService,
-  ) {}
+    private readonly logger: LoggerService,
+  ) {
+    this.logger.setContext(DebateGateway.name);}
 
   /**
    * Handle WebSocket connection

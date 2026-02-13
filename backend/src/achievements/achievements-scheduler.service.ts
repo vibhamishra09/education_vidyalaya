@@ -1,12 +1,15 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { AchievementsService } from './achievements.service';
+import { LoggerService } from '../common/logger';
 
 @Injectable()
 export class AchievementsSchedulerService {
-  private readonly logger = new Logger(AchievementsSchedulerService.name);
 
-  constructor(private achievementsService: AchievementsService) {}
+  constructor(private achievementsService: AchievementsService,
+    private readonly logger: LoggerService,
+  ) {
+    this.logger.setContext(AchievementsSchedulerService.name);}
 
   /**
    * Awards monthly "Top Learner" and "Top Teacher" badges

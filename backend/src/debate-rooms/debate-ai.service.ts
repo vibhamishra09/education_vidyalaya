@@ -1,6 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GoogleGenAI } from '@google/genai';
+import { LoggerService } from '../common/logger';
 
 interface TranscriptWithParticipant {
   id: string;
@@ -46,10 +47,12 @@ export interface ParticipantEvaluation {
 
 @Injectable()
 export class DebateAiService {
-  private readonly logger = new Logger(DebateAiService.name);
   private genAI: GoogleGenAI | null = null;
 
-  constructor(private configService: ConfigService) {
+  constructor(private configService: ConfigService,
+    private readonly logger: LoggerService,
+  ) {
+    this.logger.setContext(DebateAiService.name);
     const apiKey = this.configService.get<string>('GEMINI_API_KEY');
     if (!apiKey) {
       this.logger.warn(

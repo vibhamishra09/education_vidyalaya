@@ -1,11 +1,11 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
 import { PrismaService } from '../prisma/prisma.service';
+import { LoggerService } from '../common/logger';
 
 @Injectable()
 export class EmailService {
-  private readonly logger = new Logger(EmailService.name);
   private sesClient: SESClient;
   private readonly fromEmail = 'notifications@webyalaya.com';
   private region: string;
@@ -13,7 +13,9 @@ export class EmailService {
   constructor(
     private prisma: PrismaService,
     private configService: ConfigService,
+    private readonly logger: LoggerService,
   ) {
+    this.logger.setContext(EmailService.name);
     // Use AWS_SES_REGION if set, otherwise fall back to AWS_REGION, default to us-east-1
     this.region =
       this.configService.get<string>('AWS_SES_REGION') ||
@@ -84,9 +86,9 @@ export class EmailService {
       );
       return true;
     } catch (error) {
-      this.logger.error('Error sending email notification:', {
-        error,
-        message: error instanceof Error ? error.message : String(error),
+      this.logger.error({
+        message: 'Error sending email notification',
+        error: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
         userId,
         subject,

@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import * as webpush from 'web-push';
 import { PrismaService } from '../prisma/prisma.service';
 import { redisClient } from '../redis/redis.provider';
+import { LoggerService } from '../common/logger';
 
 export interface PushSubscriptionDto {
   endpoint: string;
@@ -14,7 +15,6 @@ export interface PushSubscriptionDto {
 
 @Injectable()
 export class PushNotificationService {
-  private readonly logger = new Logger(PushNotificationService.name);
 
   // Redis client available for caching, rate-limiting, etc.
   private redis = redisClient;
@@ -22,7 +22,9 @@ export class PushNotificationService {
   constructor(
     private prisma: PrismaService,
     private configService: ConfigService,
+    private readonly logger: LoggerService,
   ) {
+    this.logger.setContext(PushNotificationService.name);
     const vapidPublicKey = this.configService.get<string>('VAPID_PUBLIC_KEY');
     const vapidPrivateKey = this.configService.get<string>('VAPID_PRIVATE_KEY');
     const vapidSubject = this.configService.get<string>(
@@ -97,7 +99,7 @@ export class PushNotificationService {
     data?: Record<string, any>,
   ) {
     try {
-      console.log('🔔 [PushNotificationService] Sending push notification:', {
+      this.logger.debug('🔔 [PushNotificationService] Sending push notification:', {
         userId,
         title,
         body,
@@ -108,12 +110,12 @@ export class PushNotificationService {
         where: { userId },
       });
 
-      console.log(
+      this.logger.debug(
         `📱 [PushNotificationService] Found ${subscriptions.length} subscription(s) for user ${userId}`,
       );
 
       if (subscriptions.length === 0) {
-        console.warn(
+        this.logger.debug(
           `⚠️  [PushNotificationService] No push subscriptions found for user ${userId}`,
         );
         this.logger.debug(`No push subscriptions found for user ${userId}`);
@@ -130,7 +132,7 @@ export class PushNotificationService {
 
       const sendPromises = subscriptions.map(async (subscription, index) => {
         try {
-          console.log(
+          this.logger.debug(
             `📤 [PushNotificationService] Sending to subscription ${index + 1}/${subscriptions.length}:`,
             {
               endpoint: subscription.endpoint.substring(0, 50) + '...',
@@ -148,19 +150,19 @@ export class PushNotificationService {
             payload,
           );
 
-          console.log(
+          this.logger.debug(
             `✅ [PushNotificationService] Successfully sent push ${index + 1}/${subscriptions.length}`,
           );
           return true;
         } catch (error: any) {
-          console.error(
+          this.logger.debug(
             `❌ [PushNotificationService] Failed to send push ${index + 1}/${subscriptions.length}:`,
             error.message,
           );
 
           // If subscription is invalid (410 Gone), remove it
           if (error.statusCode === 410 || error.statusCode === 404) {
-            console.log(
+            this.logger.debug(
               `🗑️  [PushNotificationService] Removing invalid subscription (${error.statusCode})`,
             );
             this.logger.debug(
@@ -179,7 +181,7 @@ export class PushNotificationService {
       const results = await Promise.all(sendPromises);
       const sentCount = results.filter((r) => r).length;
 
-      console.log(
+      this.logger.debug(
         `🎯 [PushNotificationService] Push notification summary: ${sentCount}/${subscriptions.length} sent successfully`,
       );
       this.logger.log(`Sent ${sentCount} push notifications to user ${userId}`);
