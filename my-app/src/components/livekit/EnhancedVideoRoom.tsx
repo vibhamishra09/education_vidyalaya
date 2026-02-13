@@ -2725,7 +2725,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				<div className="flex items-center gap-1 md:gap-3 flex-1 justify-center">
 					
 					{/* Share Screen */}
-					<div className="hidden md:flex flex-col items-center justify-center group">
+					<div className="flex flex-col items-center justify-center group">
 						<button
 							onClick={async () => {
 								try {
