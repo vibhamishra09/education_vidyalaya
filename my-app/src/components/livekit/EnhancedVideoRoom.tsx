@@ -403,18 +403,22 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 		}
 	}, [hasExtended, extendedEndTime, extensionMinutes])
 
-	// Auto-show chat on desktop, hide on mobile
+	// Auto-show chat on desktop, hide on mobile only when crossing the md breakpoint.
+	// This avoids closing chat on mobile keyboard open, which can trigger window resize.
 	useEffect(() => {
-		const checkScreenSize = () => {
-			if (window.innerWidth >= 768) { // md breakpoint
-				setShowChat(true)
-			} else {
-				setShowChat(false)
-			}
+		if (typeof window === 'undefined') return
+		const mediaQuery = window.matchMedia('(min-width: 768px)')
+		const applyChatVisibility = (matchesDesktop: boolean) => {
+			setShowChat(matchesDesktop)
 		}
-		checkScreenSize()
-		window.addEventListener('resize', checkScreenSize)
-		return () => window.removeEventListener('resize', checkScreenSize)
+
+		applyChatVisibility(mediaQuery.matches)
+		const handleChange = (event: MediaQueryListEvent) => {
+			applyChatVisibility(event.matches)
+		}
+
+		mediaQuery.addEventListener('change', handleChange)
+		return () => mediaQuery.removeEventListener('change', handleChange)
 	}, [])
 	
 	// Setup Socket.io for transcripts
