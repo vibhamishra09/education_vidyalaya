@@ -1,4 +1,4 @@
-import { Logger } from '@nestjs/common';
+import {} from '@nestjs/common';
 import {
   OnGatewayConnection,
   OnGatewayDisconnect,
@@ -9,6 +9,7 @@ import {
 import { Server, Socket } from 'socket.io';
 import { createClerkClient } from '@clerk/backend';
 import { PrismaService } from '../prisma/prisma.service';
+import { LoggerService } from '../common/logger';
 
 interface ExtensionState {
   hasExtended: boolean;
@@ -41,8 +42,6 @@ export class SessionExtensionGateway
   @WebSocketServer()
   server!: Server;
 
-  private readonly logger = new Logger(SessionExtensionGateway.name);
-
   private clerkClient = createClerkClient({
     secretKey: process.env.CLERK_SECRET_KEY,
     publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
@@ -51,7 +50,10 @@ export class SessionExtensionGateway
   // Track which sessions each client is connected to
   private clientSessions = new Map<string, string>(); // clientId -> sessionId
   
-  constructor(private prismaService: PrismaService) {}
+  constructor(private prismaService: PrismaService,
+    private readonly logger: LoggerService,
+  ) {
+    this.logger.setContext(SessionExtensionGateway.name);}
 
   async handleConnection(client: Socket) {
     try {

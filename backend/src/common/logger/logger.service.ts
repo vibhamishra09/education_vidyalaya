@@ -14,7 +14,7 @@ export class LoggerService implements NestLoggerService {
    * Log a message at debug level
    * Supports both string messages and structured objects
    */
-  debug(message: any, context?: string): void {
+  debug(message: any, context?: any): void {
     if (typeof message === 'object' && message !== null) {
       // Structured logging with object
       this.pinoLogger.debug({ ...message, context: context || message.context });
@@ -28,7 +28,7 @@ export class LoggerService implements NestLoggerService {
    * Log a message at log/info level
    * Supports both string messages and structured objects
    */
-  log(message: any, context?: string): void {
+  log(message: any, context?: any): void {
     if (typeof message === 'object' && message !== null) {
       // Structured logging with object
       this.pinoLogger.info({ ...message, context: context || message.context });
@@ -42,7 +42,7 @@ export class LoggerService implements NestLoggerService {
    * Log a message at warn level
    * Supports both string messages and structured objects
    */
-  warn(message: any, context?: string): void {
+  warn(message: any, context?: any): void {
     if (typeof message === 'object' && message !== null) {
       // Structured logging with object
       this.pinoLogger.warn({ ...message, context: context || message.context });
@@ -56,7 +56,7 @@ export class LoggerService implements NestLoggerService {
    * Log a message at error level
    * Supports both string messages and structured objects
    */
-  error(message: any, trace?: string, context?: string): void {
+  error(message: any, trace?: any, context?: any): void {
     if (typeof message === 'object' && message !== null) {
       // Structured logging with object
       const errorObj = { ...message, context: context || message.context };

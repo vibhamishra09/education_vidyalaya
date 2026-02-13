@@ -1,16 +1,18 @@
-import { Body, Controller, Headers, Post, Logger } from '@nestjs/common';
+import { Body, Controller, Headers, Post } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotifType } from '@prisma/client';
+import { LoggerService } from '../common/logger';
 
 @Controller('api/livekit/webhooks')
 export class LivekitWebhooksController {
-  private readonly logger = new Logger(LivekitWebhooksController.name);
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService,
-  ) {}
+    private readonly logger: LoggerService,
+  ) {
+    this.logger.setContext(LivekitWebhooksController.name);}
 
   @Post()
   async handleEvent(

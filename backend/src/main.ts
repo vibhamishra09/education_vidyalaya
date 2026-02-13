@@ -12,19 +12,20 @@ Sentry.init({
 });
 
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe, Logger } from '@nestjs/common';
+import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { redisClient } from './redis/redis.provider';
 import { SentryInterceptor, SentryExceptionFilter } from './common/sentry';
+import { LoggerService } from './common/logger';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     bufferLogs: true,
   });
   
-  // Use NestJS Logger - automatically uses Pino when LoggerModule is imported
-  const logger = new Logger('Bootstrap');
+  const logger = app.get(LoggerService);
+  logger.setContext('Bootstrap');
 
   // Enable CORS
   // Merge environment variable URLs with hardcoded defaults

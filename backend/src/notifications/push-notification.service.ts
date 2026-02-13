@@ -1,8 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as webpush from 'web-push';
 import { PrismaService } from '../prisma/prisma.service';
 import { redisClient } from '../redis/redis.provider';
+import { LoggerService } from '../common/logger';
 
 export interface PushSubscriptionDto {
   endpoint: string;
@@ -14,7 +15,6 @@ export interface PushSubscriptionDto {
 
 @Injectable()
 export class PushNotificationService {
-  private readonly logger = new Logger(PushNotificationService.name);
 
   // Redis client available for caching, rate-limiting, etc.
   private redis = redisClient;
@@ -22,7 +22,9 @@ export class PushNotificationService {
   constructor(
     private prisma: PrismaService,
     private configService: ConfigService,
+    private readonly logger: LoggerService,
   ) {
+    this.logger.setContext(PushNotificationService.name);
     const vapidPublicKey = this.configService.get<string>('VAPID_PUBLIC_KEY');
     const vapidPrivateKey = this.configService.get<string>('VAPID_PRIVATE_KEY');
     const vapidSubject = this.configService.get<string>(
