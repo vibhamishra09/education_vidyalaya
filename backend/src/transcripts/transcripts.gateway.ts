@@ -1,4 +1,4 @@
-import { Logger } from '@nestjs/common';
+import {} from '@nestjs/common';
 import {
   OnGatewayConnection,
   OnGatewayDisconnect,
@@ -10,6 +10,7 @@ import { Server, Socket } from 'socket.io';
 import { TranscriptsService } from './transcripts.service';
 import { createClerkClient } from '@clerk/backend';
 import { PrismaService } from '../prisma/prisma.service';
+import { LoggerService } from '../common/logger';
 
 @WebSocketGateway({
   cors: {
@@ -34,8 +35,6 @@ export class TranscriptsGateway
   @WebSocketServer()
   server!: Server;
 
-  private readonly logger = new Logger(TranscriptsGateway.name);
-
   private clerkClient = createClerkClient({
     secretKey: process.env.CLERK_SECRET_KEY,
     publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
@@ -47,7 +46,9 @@ export class TranscriptsGateway
   constructor(
     private transcriptsService: TranscriptsService,
     private prismaService: PrismaService,
-  ) {}
+    private readonly logger: LoggerService,
+  ) {
+    this.logger.setContext(TranscriptsGateway.name);}
 
   async handleConnection(client: Socket) {
     try {

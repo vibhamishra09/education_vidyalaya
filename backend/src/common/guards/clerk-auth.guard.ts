@@ -1,13 +1,10 @@
-import {
-  Injectable,
-  CanActivate,
-  ExecutionContext,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Injectable, CanActivate, ExecutionContext, UnauthorizedException, Logger } from '@nestjs/common';
 import { createClerkClient } from '@clerk/backend';
 
 @Injectable()
 export class ClerkAuthGuard implements CanActivate {
+  private readonly logger = new Logger(ClerkAuthGuard.name);
+
   private clerkClient;
 
   constructor() {
@@ -73,7 +70,7 @@ export class ClerkAuthGuard implements CanActivate {
         throw error;
       }
 
-      console.error('Clerk authentication error:', error);
+      this.logger.debug('Clerk authentication error:', error);
       throw new UnauthorizedException('Invalid or expired token');
     }
   }

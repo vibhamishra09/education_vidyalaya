@@ -1,12 +1,15 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AchievementCategory, AchievementRarity, Prisma } from '@prisma/client';
+import { LoggerService } from '../common/logger';
 
 @Injectable()
 export class AchievementsService {
-  private readonly logger = new Logger(AchievementsService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService,
+    private readonly logger: LoggerService,
+  ) {
+    this.logger.setContext(AchievementsService.name);}
 
   /**
    * Get all achievements with user's progress

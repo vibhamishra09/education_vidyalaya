@@ -7,6 +7,7 @@ import {
   OnGatewayConnection,
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
+import { Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { DebateChatService } from './debate-chat.service';
 import { DebateSide } from '@prisma/client';
@@ -19,17 +20,19 @@ import { DebateSide } from '@prisma/client';
   namespace: '/debate-chat',
 })
 export class DebateChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
+  private readonly logger = new Logger(DebateChatGateway.name);
+
   @WebSocketServer()
   server: Server;
 
   constructor(private readonly debateChatService: DebateChatService) {}
 
   handleConnection(client: Socket) {
-    console.log(`[DebateChatGateway] Client connected: ${client.id}`);
+    this.logger.debug(`[DebateChatGateway] Client connected: ${client.id}`);
   }
 
   handleDisconnect(client: Socket) {
-    console.log(`[DebateChatGateway] Client disconnected: ${client.id}`);
+    this.logger.debug(`[DebateChatGateway] Client disconnected: ${client.id}`);
   }
 
   /**
@@ -45,7 +48,7 @@ export class DebateChatGateway implements OnGatewayConnection, OnGatewayDisconne
     // Join the room
     client.join(`debate-room-${roomId}`);
     
-    console.log(`[DebateChatGateway] User ${userId} joined debate room ${roomId}`);
+    this.logger.debug(`[DebateChatGateway] User ${userId} joined debate room ${roomId}`);
     
     return {
       success: true,
@@ -66,7 +69,7 @@ export class DebateChatGateway implements OnGatewayConnection, OnGatewayDisconne
     // Leave the room
     client.leave(`debate-room-${roomId}`);
     
-    console.log(`[DebateChatGateway] User ${userId} left debate room ${roomId}`);
+    this.logger.debug(`[DebateChatGateway] User ${userId} left debate room ${roomId}`);
     
     return {
       success: true,
@@ -95,20 +98,20 @@ export class DebateChatGateway implements OnGatewayConnection, OnGatewayDisconne
     if (visibility === 'ALL' || visibility === 'MODERATOR') {
       // Broadcast to everyone in the room
       this.server.to(`debate-room-${roomId}`).emit('new-message', message);
-      console.log(`[DebateChatGateway] Broadcasting message to all in room ${roomId}`);
+      this.logger.debug(`[DebateChatGateway] Broadcasting message to all in room ${roomId}`);
     } else if (visibility === 'MODERATOR_ONLY') {
       // Send only to moderators - we'll emit to room and let client filter
       // In a production system, you'd track which clients are moderators
       this.server.to(`debate-room-${roomId}`).emit('new-message', message);
-      console.log(`[DebateChatGateway] Sending moderator-only message in room ${roomId}`);
+      this.logger.debug(`[DebateChatGateway] Sending moderator-only message in room ${roomId}`);
     } else if (visibility === 'TEAM_FOR') {
       // Send to Team FOR + moderators
       this.server.to(`debate-room-${roomId}`).emit('new-message', message);
-      console.log(`[DebateChatGateway] Sending Team FOR message in room ${roomId}`);
+      this.logger.debug(`[DebateChatGateway] Sending Team FOR message in room ${roomId}`);
     } else if (visibility === 'TEAM_AGAINST') {
       // Send to Team AGAINST + moderators
       this.server.to(`debate-room-${roomId}`).emit('new-message', message);
-      console.log(`[DebateChatGateway] Sending Team AGAINST message in room ${roomId}`);
+      this.logger.debug(`[DebateChatGateway] Sending Team AGAINST message in room ${roomId}`);
     }
     
     return { success: true };
@@ -129,7 +132,7 @@ export class DebateChatGateway implements OnGatewayConnection, OnGatewayDisconne
       timestamp: new Date().toISOString(),
     });
     
-    console.log(`[DebateChatGateway] Messages cleared in room ${roomId}`);
+    this.logger.debug(`[DebateChatGateway] Messages cleared in room ${roomId}`);
     
     return { success: true };
   }

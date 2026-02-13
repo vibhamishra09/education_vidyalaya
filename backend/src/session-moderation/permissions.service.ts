@@ -1,5 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { redisClient } from '../redis/redis.provider';
+import { LoggerService } from '../common/logger';
 
 /**
  * Redis-based permissions service for session moderation
@@ -32,7 +33,9 @@ export interface ComputedPermissions {
 
 @Injectable()
 export class PermissionsService {
-  private readonly logger = new Logger(PermissionsService.name);
+  constructor(private readonly logger: LoggerService) {
+    this.logger.setContext(PermissionsService.name);
+  }
   
   // TTL for room permissions (24 hours - should be longer than any session)
   private readonly PERMISSIONS_TTL = 24 * 60 * 60;

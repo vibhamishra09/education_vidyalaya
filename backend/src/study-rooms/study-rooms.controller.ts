@@ -7,9 +7,9 @@ import {
   Param,
   Query,
   UseGuards,
-  Logger,
 } from '@nestjs/common';
 import { StudyRoomsService } from './study-rooms.service';
+import { LoggerService } from '../common/logger/logger.service';
 import { ClerkAuthGuard } from '../common/guards/clerk-auth.guard';
 import { OptionalClerkAuthGuard } from '../common/guards/optional-clerk-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -19,9 +19,12 @@ import { SessionFeedbackDto } from '../common/dto/session-feedback.dto';
 
 @Controller('api/study-rooms')
 export class StudyRoomsController {
-  private readonly logger = new Logger(StudyRoomsController.name);
-
-  constructor(private studyRoomsService: StudyRoomsService) {}
+  constructor(
+    private studyRoomsService: StudyRoomsService,
+    private readonly logger: LoggerService,
+  ) {
+    this.logger.setContext(StudyRoomsController.name);
+  }
 
   @Get()
   async getStudyRooms(@Query() query: StudyRoomQueryDto) {
@@ -110,7 +113,10 @@ export class StudyRoomsController {
     @CurrentUser() userId: string,
     @Body() createDto: CreateStudyRoomDto,
   ) {
-    console.log('createDto', createDto);
+    this.logger.debug({
+      message: 'Creating study room',
+      createDto,
+    });
     return this.studyRoomsService.createStudyRoom(userId, createDto);
   }
 
@@ -143,17 +149,16 @@ export class StudyRoomsController {
     @Param('studyRoomId') studyRoomId: string,
     @CurrentUser() userId: string,
   ) {
-    console.log(
-      '🎯 [StudyRoomsController.completeStudyRoom] Endpoint called:',
-      { studyRoomId, userId },
-    );
+    this.logger.debug({
+      message: '🎯 [StudyRoomsController.completeStudyRoom] Endpoint called',
+      studyRoomId,
+      userId,
+    });
     const result = await this.studyRoomsService.completeStudyRoom(
       studyRoomId,
       userId,
     );
-    console.log(
-      '✅ [StudyRoomsController.completeStudyRoom] Completed successfully',
-    );
+    this.logger.log('✅ [StudyRoomsController.completeStudyRoom] Completed successfully');
     return result;
   }
 
@@ -163,10 +168,11 @@ export class StudyRoomsController {
     @Param('studyRoomId') studyRoomId: string,
     @CurrentUser() userId: string,
   ) {
-    console.log(
-      '⏱️ [StudyRoomsController.markNotCompleted] Endpoint called:',
-      { studyRoomId, userId },
-    );
+    this.logger.debug({
+      message: '⏱️ [StudyRoomsController.markNotCompleted] Endpoint called',
+      studyRoomId,
+      userId,
+    });
     return this.studyRoomsService.markNotCompleted(studyRoomId, userId);
   }
 
@@ -186,10 +192,12 @@ export class StudyRoomsController {
     @CurrentUser() userId: string,
     @Body() feedbackDto: SessionFeedbackDto,
   ) {
-    console.log(
-      '📝 [StudyRoomsController.submitSessionFeedback] Endpoint called:',
-      { studyRoomId, userId, isHost: feedbackDto.isHost },
-    );
+    this.logger.debug({
+      message: '📝 [StudyRoomsController.submitSessionFeedback] Endpoint called',
+      studyRoomId,
+      userId,
+      isHost: feedbackDto.isHost,
+    });
     return this.studyRoomsService.saveSessionFeedback(
       studyRoomId,
       userId,

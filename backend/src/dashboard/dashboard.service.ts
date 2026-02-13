@@ -1,8 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SessionStatus } from '@prisma/client';
 import { StreaksService } from '../streaks/streaks.service';
 import { AchievementsService } from '../achievements/achievements.service';
+import { LoggerService } from '../common/logger';
 
 export interface SessionActivityDataPoint {
   date: string;
@@ -20,13 +21,14 @@ export interface WalletActivityDataPoint {
 
 @Injectable()
 export class DashboardService {
-  private readonly logger = new Logger(DashboardService.name);
 
   constructor(
     private prisma: PrismaService,
     private streaksService: StreaksService,
     private achievementsService: AchievementsService,
-  ) {}
+    private readonly logger: LoggerService,
+  ) {
+    this.logger.setContext(DashboardService.name);}
 
   async getDashboardData(
     userId: string,
