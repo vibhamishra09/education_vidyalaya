@@ -224,7 +224,7 @@ export default function DebateRoomsPage() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="duration">Duration (minutes) *</Label>
+                    <Label htmlFor="duration">Duration per participant (minutes) *</Label>
                     <Input
                       id="duration"
                       type="number"
@@ -235,20 +235,6 @@ export default function DebateRoomsPage() {
                       onChange={(e) => setNewTurnDuration(Number(e.target.value) * 60)}
                       required
                     />
-                    <div className="flex flex-wrap gap-2">
-                      {[15, 30, 45, 60].map((mins) => (
-                        <Button
-                          key={mins}
-                          type="button"
-                          variant={newTurnDuration === mins * 60 ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => setNewTurnDuration(mins * 60)}
-                          className="text-xs"
-                        >
-                          {mins} min
-                        </Button>
-                      ))}
-                    </div>
                   </div>
 
                   <div className="space-y-2">
