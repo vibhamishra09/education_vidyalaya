@@ -1623,6 +1623,50 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		}
 	}, [isMobileViewport])
 
+	// Mobile: Restore mic/camera after Android tab switch
+	// Android browsers suspend media tracks when the page is hidden.
+	// When the user returns, we re-enable tracks that were active before the switch.
+	const micBeforeHideRef = useRef<boolean>(false)
+	const cameraBeforeHideRef = useRef<boolean>(false)
+	useEffect(() => {
+		const handleMobileVisibilityChange = async () => {
+			if (!localParticipant) return
+
+			if (document.hidden) {
+				// Tab going hidden — remember current track states
+				micBeforeHideRef.current = localParticipant.isMicrophoneEnabled
+				cameraBeforeHideRef.current = localParticipant.isCameraEnabled
+			} else {
+				// Tab becoming visible again — restore tracks that were active
+				// Small delay to let the browser fully resume
+				await new Promise(r => setTimeout(r, 500))
+
+				if (micBeforeHideRef.current && !localParticipant.isMicrophoneEnabled) {
+					try {
+						await localParticipant.setMicrophoneEnabled(true)
+						console.log('[MobileVisibility] Mic restored after tab switch')
+					} catch (err) {
+						console.warn('[MobileVisibility] Failed to restore mic:', err)
+					}
+				}
+
+				if (cameraBeforeHideRef.current && !localParticipant.isCameraEnabled) {
+					try {
+						await localParticipant.setCameraEnabled(true)
+						console.log('[MobileVisibility] Camera restored after tab switch')
+					} catch (err) {
+						console.warn('[MobileVisibility] Failed to restore camera:', err)
+					}
+				}
+			}
+		}
+
+		document.addEventListener('visibilitychange', handleMobileVisibilityChange)
+		return () => {
+			document.removeEventListener('visibilitychange', handleMobileVisibilityChange)
+		}
+	}, [localParticipant])
+
 	return (
 		<>
 			<div className="flex-1 flex relative bg-[#09090b] overflow-hidden h-full w-full">
