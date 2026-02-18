@@ -74,7 +74,7 @@ export class CreateStudyRoomDto {
 
   @IsInt()
   @Min(2)
-  @Max(10)
+  @Max(100)
   maxParticipants: number;
 
   @IsOptional()
@@ -126,7 +126,7 @@ export class UpdateStudyRoomDto {
   @IsOptional()
   @IsInt()
   @Min(2)
-  @Max(10)
+  @Max(100)
   maxParticipants?: number;
 
   @IsOptional()
