@@ -1262,7 +1262,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	// Update stable order when participants join/leave (not on speaking status changes)
 	useEffect(() => {
 		const currentParticipantIds = new Set(
-			cameraTracks.map(track => track.participant.identity)
+			allParticipants.map((participant) => participant.identity)
 		)
 		
 		// Check if participants have actually joined or left (not just speaking status changed)
@@ -1273,7 +1273,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		
 		if (participantIdsChanged) {
 			// Find local participant identity
-			const localParticipantId = cameraTracks.find(t => t.participant.isLocal)?.participant.identity
+			const localParticipantId = allParticipants.find((participant) => participant.isLocal)?.identity
 			
 			// Get current stable order
 			const currentStableOrder = [...stableOrderRef.current]
@@ -1324,21 +1324,21 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			// Update previous participant IDs for next comparison
 			previousParticipantIdsRef.current = new Set(currentParticipantIds)
 		}
-	}, [cameraTracks])
+	}, [allParticipants])
 	
-	// Sort camera tracks using stable order: local participant first, then stable order of others
-	const sortedCameraTracks = useMemo(() => {
-		if (cameraTracks.length === 0) return []
+	// Sort participants using stable order: local participant first, then stable order of others
+	const sortedParticipants = useMemo(() => {
+		if (allParticipants.length === 0) return []
 		
 		// Find local participant
-		const localTrack = cameraTracks.find(t => t.participant.isLocal)
-		const otherTracks = cameraTracks.filter(t => !t.participant.isLocal)
+		const localEntry = allParticipants.find((participant) => participant.isLocal)
+		const otherParticipants = allParticipants.filter((participant) => !participant.isLocal)
 		
-		// Sort other tracks according to stable order
-		const sortedOthers = [...otherTracks].sort((a, b) => {
+		// Sort other participants according to stable order
+		const sortedOthers = [...otherParticipants].sort((a, b) => {
 			const stableOrder = stableOrderRef.current
-			const aIndex = stableOrder.indexOf(a.participant.identity)
-			const bIndex = stableOrder.indexOf(b.participant.identity)
+			const aIndex = stableOrder.indexOf(a.identity)
+			const bIndex = stableOrder.indexOf(b.identity)
 			
 			// If both are in stable order, maintain their relative positions
 			if (aIndex !== -1 && bIndex !== -1) {
@@ -1349,56 +1349,50 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			if (aIndex !== -1) return -1
 			if (bIndex !== -1) return 1
 			
-			// If neither is in stable order (edge case - should be handled by useEffect)
-			// Use identity as fallback for consistent ordering
-			return a.participant.identity.localeCompare(b.participant.identity)
+			// If neither is in stable order, use identity as fallback for consistent ordering
+			return a.identity.localeCompare(b.identity)
 		})
 		
 		// Return local first, then sorted others
-		return localTrack ? [localTrack, ...sortedOthers] : sortedOthers
+		return localEntry ? [localEntry, ...sortedOthers] : sortedOthers
+	}, [allParticipants])
+
+	// Build a quick lookup for camera tracks by participant identity.
+	const cameraTrackByParticipantId = useMemo(() => {
+		return new Map(cameraTracks.map((track) => [track.participant.identity, track]))
 	}, [cameraTracks])
 
 	// Separate focused track from other tracks
 	// Screen share gets highest priority in focus view
 	const { focusedTrack, isScreenShareFocused } = useMemo(() => {
 		if (layoutMode === 'grid') {
-			return { focusedTrack: null, otherTracks: cameraTracks, isScreenShareFocused: false }
-		}
-		
-		// Check if no tracks at all (no camera and no screen share)
-		if (sortedCameraTracks.length === 0 && !activeScreenShare) {
-			return { focusedTrack: null, otherTracks: sortedCameraTracks, isScreenShareFocused: false }
+			return { focusedTrack: null, isScreenShareFocused: false }
 		}
 		
 		// Priority 1: If someone is screen sharing, show that as the main view
 		if (activeScreenShare) {
-			// Show all camera tracks as thumbnails when screen sharing
 			return { 
 				focusedTrack: activeScreenShare, 
-				otherTracks: sortedCameraTracks, // All camera tracks go to thumbnails
 				isScreenShareFocused: true 
 			}
 		}
 		
-		// Priority 2: Show focused participant's camera
+		// Priority 2: Show focused participant's camera if they have one.
 		if (!focusedParticipant) {
-			return { focusedTrack: null, otherTracks: sortedCameraTracks, isScreenShareFocused: false }
+			return { focusedTrack: null, isScreenShareFocused: false }
 		}
 		
-		const focused = sortedCameraTracks.find(
-			t => t.participant.identity === focusedParticipant.identity
-		)
-		const others = sortedCameraTracks.filter(
-			t => t.participant.identity !== focusedParticipant.identity
-		)
+		const focused = cameraTrackByParticipantId.get(focusedParticipant.identity) || null
 		
-		// If no focused track found but we have tracks, use the first one
-		if (!focused && sortedCameraTracks.length > 0) {
-			return { focusedTrack: sortedCameraTracks[0], otherTracks: sortedCameraTracks.slice(1), isScreenShareFocused: false }
+		return { focusedTrack: focused, isScreenShareFocused: false }
+	}, [focusedParticipant, layoutMode, activeScreenShare, cameraTrackByParticipantId])
+
+	const focusedParticipantForDisplay = useMemo(() => {
+		if (isScreenShareFocused && focusedTrack) {
+			return focusedTrack.participant
 		}
-		
-		return { focusedTrack: focused || null, otherTracks: others, isScreenShareFocused: false }
-	}, [sortedCameraTracks, focusedParticipant, layoutMode, activeScreenShare, cameraTracks])
+		return focusedTrack?.participant || focusedParticipant || null
+	}, [focusedTrack, focusedParticipant, isScreenShareFocused])
 
 	const toggleAudio = () => {
 		// Toggle audio output (mute/unmute all remote audio)
@@ -1453,7 +1447,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				window.removeEventListener('resize', checkScroll)
 			}
 		}
-	}, [checkScroll, sortedCameraTracks.length]) // Re-check when tracks change
+	}, [checkScroll, sortedParticipants.length]) // Re-check when participants change
 
 	const scrollThumbnails = (direction: 'left' | 'right') => {
 		if (thumbnailsRef.current) {
@@ -2352,28 +2346,30 @@ const VideoRoomContent = memo(function VideoRoomContent({
 								</button>
 
 								<div className="focus-thumbnails" ref={thumbnailsRef}>
-									{sortedCameraTracks
-										.filter((track) => {
-											// Exclude the focused participant from thumbnails to avoid showing them twice
-											const isFocused = focusedTrack?.participant?.identity === track.participant.identity
+									{sortedParticipants
+										.filter((participant) => {
+											// Exclude the focused participant from thumbnails to avoid showing them twice.
+											const isFocused = focusedParticipantForDisplay?.identity === participant.identity
 											return !isFocused || isScreenShareFocused
 										})
-										.map((track) => {
-										const isLocal = track.participant.isLocal
-										const isMuted = !track.participant.isMicrophoneEnabled
-										const hasVideo = isTrackReference(track) && track.publication?.track
-										const avatarUrl = getParticipantAvatar(track.participant)
-										const name = track.participant.isLocal ? 'You' : (track.participant.name || track.participant.identity)
+										.map((participant) => {
+										const isLocal = participant.isLocal
+										const isMuted = !participant.isMicrophoneEnabled
+										const participantCameraTrack = cameraTrackByParticipantId.get(participant.identity)
+										const isVideoTrackRef = !!participantCameraTrack && isTrackReference(participantCameraTrack)
+										const hasVideo = isVideoTrackRef && !!participantCameraTrack.publication?.track
+										const avatarUrl = getParticipantAvatar(participant)
+										const name = participant.isLocal ? 'You' : (participant.name || participant.identity)
 										
 										return (
 											<div 
-												key={`thumb-${track.participant.identity}`}
+												key={`thumb-${participant.identity}`}
 												className={`focus-thumbnail ${
-													track.participant.isSpeaking ? 'speaking' : ''
+													participant.isSpeaking ? 'speaking' : ''
 												} ${
-													pinnedParticipantId === track.participant.identity ? 'pinned' : ''
+													pinnedParticipantId === participant.identity ? 'pinned' : ''
 												}`}
-												onClick={() => handleThumbnailClick(track.participant.identity)}
+												onClick={() => handleThumbnailClick(participant.identity)}
 											>
 												{/* Video/Avatar Container */}
 												<div className="focus-thumbnail-video-container">
@@ -2382,7 +2378,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 														{avatarUrl ? (
 															<Image
 																src={avatarUrl}
-																alt={track.participant.name || 'Participant'}
+																alt={participant.name || 'Participant'}
 																width={40}
 																height={40}
 																className="w-10 h-10 rounded-full object-cover"
@@ -2394,10 +2390,10 @@ const VideoRoomContent = memo(function VideoRoomContent({
 														)}
 													</div>
 													{/* Video layer on top - ONLY render when there's actual video track */}
-													{hasVideo && (
+													{hasVideo && isVideoTrackRef && (
 														<div className="absolute inset-0 z-[2]">
 															<VideoTrack 
-																trackRef={track} 
+																trackRef={participantCameraTrack} 
 																className={`w-full h-full object-cover ${isLocal ? 'scale-x-[-1]' : ''}`} 
 															/>
 														</div>
@@ -2422,7 +2418,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 												{/* Name below video */}
 												<div className="focus-thumbnail-name">
 													<span>{name}</span>
-													{track.participant.isSpeaking && (
+													{participant.isSpeaking && (
 														<div className="w-1.5 h-1.5 rounded-full bg-[#00DC6E] animate-pulse ml-1.5" />
 													)}
 												</div>
@@ -2430,7 +2426,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 										)
 									})}
 									{/* View All button - switch to grid view */}
-									{sortedCameraTracks.length > 1 && (
+									{sortedParticipants.length > 1 && (
 										<button
 											onClick={() => setLayoutMode('grid')}
 											className="focus-view-more"
@@ -2455,17 +2451,17 @@ const VideoRoomContent = memo(function VideoRoomContent({
 
 							{/* Main focused video wrapper - centers the video */}
 							<div className="focus-main-wrapper">
-								{focusedTrack ? (
+								{focusedParticipantForDisplay ? (
 									<div className="flex flex-col w-full h-full max-h-full">
 										<div className={`focus-main-video relative group flex-1 min-h-0`}>
 											{/* Always show avatar background */}
 											<div className="absolute inset-0 flex items-center justify-center bg-gradient-to-b from-[#252525] to-[#1a1a1a] z-[1]">
 												{(() => {
-													const avatarUrl = getParticipantAvatar(focusedTrack.participant)
+													const avatarUrl = getParticipantAvatar(focusedParticipantForDisplay)
 													return avatarUrl ? (
 														<Image
 															src={avatarUrl}
-															alt={focusedTrack.participant.name || 'Participant'}
+															alt={focusedParticipantForDisplay.name || 'Participant'}
 															width={112}
 															height={112}
 															className="w-28 h-28 rounded-full object-cover shadow-2xl"
@@ -2482,7 +2478,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 												<div className="absolute inset-0 z-[2]">
 													<VideoTrack 
 														trackRef={focusedTrack} 
-														className={`w-full h-full object-contain ${focusedTrack.participant.isLocal && !isScreenShareFocused ? 'scale-x-[-1]' : ''}`} 
+														className={`w-full h-full object-contain ${focusedParticipantForDisplay.isLocal && !isScreenShareFocused ? 'scale-x-[-1]' : ''}`} 
 													/>
 												</div>
 											)}
@@ -2491,19 +2487,19 @@ const VideoRoomContent = memo(function VideoRoomContent({
 											<div className="absolute top-4 right-4 flex items-center gap-2 z-20">
 												<div
 													className={`w-8 h-8 rounded-full flex items-center justify-center ${
-														focusedTrack.participant.isMicrophoneEnabled
+														focusedParticipantForDisplay.isMicrophoneEnabled
 															? 'bg-black/60 border border-white/20'
 															: 'bg-sky-500'
 													}`}
-													title={focusedTrack.participant.isMicrophoneEnabled ? 'Unmuted' : 'Muted'}
+													title={focusedParticipantForDisplay.isMicrophoneEnabled ? 'Unmuted' : 'Muted'}
 												>
-													{focusedTrack.participant.isMicrophoneEnabled ? (
+													{focusedParticipantForDisplay.isMicrophoneEnabled ? (
 														<Mic className="h-4 w-4 text-white" />
 													) : (
 														<MicOff className="h-4 w-4 text-white" />
 													)}
 												</div>
-												{!focusedTrack.participant.isCameraEnabled && !isScreenShareFocused && (
+												{!focusedParticipantForDisplay.isCameraEnabled && !isScreenShareFocused && (
 													<div className="w-8 h-8 bg-sky-500 rounded-full flex items-center justify-center" title="Camera off">
 														<VideoOff className="h-4 w-4 text-white" />
 													</div>
@@ -2518,13 +2514,13 @@ const VideoRoomContent = memo(function VideoRoomContent({
 														size="sm"
 														onClick={togglePinFocused}
 														className={`h-9 px-4 rounded-lg border ${
-															pinnedParticipantId === focusedTrack?.participant?.identity
+															pinnedParticipantId === focusedParticipantForDisplay.identity
 																? 'bg-[#3b82f6] text-white hover:bg-[#2563eb] border-[#3b82f6]'
 																: 'bg-black/60 text-white hover:bg-black/80 border-white/10 backdrop-blur-sm'
 														}`}
-														title={pinnedParticipantId === focusedTrack?.participant?.identity ? 'Unpin' : 'Pin this video'}
+														title={pinnedParticipantId === focusedParticipantForDisplay.identity ? 'Unpin' : 'Pin this video'}
 													>
-														{pinnedParticipantId === focusedTrack?.participant?.identity ? (
+														{pinnedParticipantId === focusedParticipantForDisplay.identity ? (
 															<>
 																<PinOff className="h-4 w-4 mr-1.5" /> Unpin
 															</>
@@ -2563,9 +2559,9 @@ const VideoRoomContent = memo(function VideoRoomContent({
 										<div className="h-10 shrink-0 flex items-center justify-between px-2 pt-1.5">
 											<div className="flex items-center gap-2">
 												<span className="text-white text-sm font-medium">
-													{focusedTrack.participant.isLocal ? 'You' : (focusedTrack.participant.name || focusedTrack.participant.identity)}
+													{focusedParticipantForDisplay.isLocal ? 'You' : (focusedParticipantForDisplay.name || focusedParticipantForDisplay.identity)}
 												</span>
-												{focusedTrack.participant.isSpeaking && (
+												{focusedParticipantForDisplay.isSpeaking && (
 													<div className="flex items-center gap-1.5 ml-1">
 														<div className="w-1.5 h-1.5 rounded-full bg-[#00DC6E] animate-pulse" />
 													</div>
@@ -2600,25 +2596,27 @@ const VideoRoomContent = memo(function VideoRoomContent({
 					) : (
 						<div className="grid-mode h-full w-full">
 							{/* Custom Grid layout with pin buttons */}
-							<div className="custom-grid" data-count={Math.min(sortedCameraTracks.length, 9)}>
-								{sortedCameraTracks.map((track) => {
-									const isLocal = track.participant.isLocal
-									const hasVideo = isTrackReference(track) && track.publication?.track
-									const isMuted = !track.participant.isMicrophoneEnabled
-									const isVideoOff = !track.participant.isCameraEnabled
-									const avatarUrl = getParticipantAvatar(track.participant)
+							<div className="custom-grid" data-count={Math.min(sortedParticipants.length, 9)}>
+								{sortedParticipants.map((participant) => {
+									const isLocal = participant.isLocal
+									const participantCameraTrack = cameraTrackByParticipantId.get(participant.identity)
+									const isVideoTrackRef = !!participantCameraTrack && isTrackReference(participantCameraTrack)
+									const hasVideo = isVideoTrackRef && !!participantCameraTrack.publication?.track
+									const isMuted = !participant.isMicrophoneEnabled
+									const isVideoOff = !participant.isCameraEnabled
+									const avatarUrl = getParticipantAvatar(participant)
 									return (
 										<div 
-											key={`grid-${track.participant.identity}`}
+											key={`grid-${participant.identity}`}
 											className={`custom-grid-tile group`}
 										>
-											<div className={`custom-grid-tile-content ${track.participant.isSpeaking ? 'speaking' : ''}`}>
+											<div className={`custom-grid-tile-content ${participant.isSpeaking ? 'speaking' : ''}`}>
 												{/* Avatar background layer - always visible */}
 												<div className="absolute inset-0 flex items-center justify-center bg-gradient-to-b from-[#252525] to-[#1a1a1a] z-[1]">
 													{avatarUrl ? (
 														<Image
 															src={avatarUrl}
-															alt={track.participant.name || 'Participant'}
+															alt={participant.name || 'Participant'}
 															width={80}
 															height={80}
 															className="w-20 h-20 rounded-full object-cover shadow-lg"
@@ -2630,10 +2628,10 @@ const VideoRoomContent = memo(function VideoRoomContent({
 													)}
 												</div>
 												{/* Video layer on top - ONLY render when there's actual video track */}
-												{hasVideo && (
+												{hasVideo && isVideoTrackRef && (
 													<div className="absolute inset-0 z-[2] flex items-center justify-center">
 														<VideoTrack 
-															trackRef={track} 
+															trackRef={participantCameraTrack} 
 															className={`w-full h-full object-contain ${isLocal ? 'scale-x-[-1]' : ''}`} 
 														/>
 													</div>
@@ -2642,7 +2640,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 												<button
 													onClick={(e) => {
 														e.stopPropagation()
-														pinAndSwitchToPresenter(track.participant.identity)
+														pinAndSwitchToPresenter(participant.identity)
 													}}
 													className="absolute top-3 right-3 w-8 h-8 bg-black/60 hover:bg-black/80 backdrop-blur-sm rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all z-20 border border-white/10"
 													title="Pin and switch to speaker view"
@@ -2650,7 +2648,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 													<Pin className="h-4 w-4 text-white" />
 												</button>
 												{/* Speaking indicator */}
-												{track.participant.isSpeaking && (
+												{participant.isSpeaking && (
 													<div className="absolute top-3 left-3 flex items-center gap-1.5 bg-[#00DC6E]/90 backdrop-blur-sm px-2 py-1 rounded-full z-20">
 														<div className="w-2 h-2 rounded-full bg-white animate-pulse" />
 														<span className="text-white text-[10px] font-medium">Speaking</span>
@@ -2661,7 +2659,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 											{/* Bottom bar with name and audio/video status - NOW BELOW THE VIDEO */}
 											<div className="flex items-center justify-between px-2 pt-1 h-8 md:h-8 shrink-0">
 												<span className="text-white text-xs md:text-sm font-medium truncate max-w-[65%]">
-													{isLocal ? 'You' : (track.participant.name || track.participant.identity)}
+													{isLocal ? 'You' : (participant.name || participant.identity)}
 												</span>
 												<div className="flex items-center gap-1 md:gap-1.5">
 													{/* Mic status icon */}
