@@ -555,7 +555,7 @@ export function CreateStudyRoomClient() {
                       <input
                         type="range"
                         min="2"
-                        max="10"
+                        max="100"
                         step="1"
                         value={formData.maxParticipants}
                         onChange={(e) => updateField("maxParticipants", e.target.value)}
