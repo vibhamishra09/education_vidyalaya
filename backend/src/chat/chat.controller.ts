@@ -10,6 +10,7 @@ import {
 import { ChatService } from './chat.service';
 import { ClerkAuthGuard } from '../common/guards/clerk-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { MessageAudienceType } from '@prisma/client';
 
 @UseGuards(ClerkAuthGuard)
 @Controller('api/chat')
@@ -48,13 +49,20 @@ export class ChatController {
   @Get('channels/:id/messages')
   async getMessages(
     @Param('id') channelId: string,
+    @CurrentUser() userId: string,
     @Query('limit') limit?: string,
     @Query('cursor') cursor?: string,
   ) {
+    const user = await this.chatService.getUserByClerkId(userId);
+    if (!user) {
+      throw new Error('User not found');
+    }
+
     return this.chatService.getMessages(
       channelId,
       limit ? Number(limit) : 50,
       cursor,
+      user.id,
     );
   }
 
@@ -62,14 +70,25 @@ export class ChatController {
   async sendMessage(
     @Param('id') channelId: string,
     @CurrentUser() userId: string,
-    @Body() body: { content: string },
+    @Body()
+    body: {
+      content: string;
+      audienceType?: MessageAudienceType;
+      targetUserId?: string;
+    },
   ) {
     // Get user DB ID from clerkId
     const user = await this.chatService.getUserByClerkId(userId);
     if (!user) {
       throw new Error('User not found');
     }
-    return this.chatService.sendMessage(channelId, user.id, body.content);
+    return this.chatService.sendMessage(
+      channelId,
+      user.id,
+      body.content,
+      body.audienceType ?? MessageAudienceType.EVERYONE,
+      body.targetUserId,
+    );
   }
 
   @Get('channel-by-room/:roomName')

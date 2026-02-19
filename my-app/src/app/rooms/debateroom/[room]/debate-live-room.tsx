@@ -13,6 +13,7 @@ import {
   useSpeakingParticipants,
 } from '@livekit/components-react';
 import { Track, RoomOptions, VideoPresets, RemoteParticipant } from 'livekit-client';
+import { KrispNoiseFilter, isKrispNoiseFilterSupported } from '@livekit/track-processors';
 import { io, Socket } from 'socket.io-client';
 import type { TrackReferenceOrPlaceholder } from '@livekit/components-react';
 import '@livekit/components-styles';
@@ -546,6 +547,19 @@ function DebateLiveContent({
       room.off('disconnected', handleDisconnected);
     };
   }, [room]);
+
+  // Apply Krisp AI noise suppression to microphone track
+  useEffect(() => {
+    if (!localParticipant || !isKrispNoiseFilterSupported()) return;
+    const micPublication = localParticipant.microphoneTrackPublications.values().next().value;
+    const micTrack = micPublication?.track;
+    if (!micTrack) return;
+    const filter = KrispNoiseFilter();
+    micTrack.setProcessor(filter).catch(() => {});
+    return () => {
+      micTrack.stopProcessor().catch(() => {});
+    };
+  }, [localParticipant]);
 
   // Log a concise connection snapshot in development only.
   useEffect(() => {

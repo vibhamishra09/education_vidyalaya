@@ -4,11 +4,13 @@ import { io, Socket } from 'socket.io-client'
 import { useUser, useAuth } from '@clerk/nextjs'
 import apiClient from '@/lib/api-client'
 import { MessageList } from '@/components/chat/MessageList'
-import { MessageInput } from '@/components/chat/MessageInput'
+import { ChatRecipient, MessageAudienceType, MessageInput } from '@/components/chat/MessageInput'
 
 type Message = { 
 	id: string
 	senderId: string
+	audienceType?: MessageAudienceType
+	targetUserId?: string | null
 	content: string
 	createdAt: string
 	sender?: {
@@ -16,6 +18,11 @@ type Message = {
 		name: string
 		avatar?: string | null
 	}
+	targetUser?: {
+		id: string
+		name: string
+		avatar?: string | null
+	} | null
 }
 
 // Keep chat history in-memory per channel so closing/reopening the panel
@@ -42,9 +49,19 @@ interface ChatWidgetProps {
 	channelId: string | null | undefined
 	className?: string
 	chatDisabled?: boolean
+	recipients?: ChatRecipient[]
+	hostUserId?: string | null
+	currentUserDbId?: string | null
 }
 
-export function ChatWidget({ channelId, className = '', chatDisabled = false }: ChatWidgetProps) {
+export function ChatWidget({
+	channelId,
+	className = '',
+	chatDisabled = false,
+	recipients = [],
+	hostUserId,
+	currentUserDbId,
+}: ChatWidgetProps) {
 	const { user, isLoaded } = useUser()
 	const { getToken } = useAuth()
 	const userId = user?.id
@@ -326,12 +343,21 @@ export function ChatWidget({ channelId, className = '', chatDisabled = false }: 
 		)
 	}
 
-	const onSend = async (text: string) => {
+	const onSend = async (
+		text: string,
+		audienceType: MessageAudienceType,
+		targetUserId?: string,
+	) => {
 		if (!socketRef.current || !socketRef.current.connected) {
 			setError('Not connected to chat server')
 			return
 		}
-		socketRef.current.emit('message:send', { channelId, content: text })
+		socketRef.current.emit('message:send', {
+			channelId,
+			content: text,
+			audienceType,
+			targetUserId,
+		})
 	}
 
 	return (
@@ -364,11 +390,20 @@ export function ChatWidget({ channelId, className = '', chatDisabled = false }: 
 			)}
 			{/* Messages area - scrollable */}
 			<div className="flex-1 overflow-y-auto min-h-0">
-				<MessageList messages={messages} />
+				<MessageList
+					messages={messages}
+					currentUserId={currentUserDbId || undefined}
+					hostUserId={hostUserId}
+				/>
 			</div>
 			{/* Input area - always at bottom */}
 			<div className="border-t border-white/10 flex-shrink-0">
-				<MessageInput onSend={onSend} disabled={chatDisabled} />
+				<MessageInput
+					onSend={onSend}
+					disabled={chatDisabled}
+					recipients={recipients}
+					hostUserId={hostUserId}
+				/>
 			</div>
 		</div>
 	)

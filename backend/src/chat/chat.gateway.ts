@@ -10,6 +10,7 @@ import { Server, Socket } from 'socket.io';
 import { ChatService } from './chat.service';
 import { createClerkClient } from '@clerk/backend';
 import { PermissionsService } from '../session-moderation/permissions.service';
+import { MessageAudienceType } from '@prisma/client';
 
 @WebSocketGateway({
   cors: {
@@ -53,6 +54,35 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private chatService: ChatService,
     private permissionsService: PermissionsService,
   ) {}
+
+  private normalizeAudienceType(
+    audienceType?: MessageAudienceType,
+  ): MessageAudienceType {
+    if (!audienceType) return MessageAudienceType.EVERYONE;
+    if (Object.values(MessageAudienceType).includes(audienceType)) {
+      return audienceType;
+    }
+    return MessageAudienceType.EVERYONE;
+  }
+
+  private emitScopedMessage(
+    channelId: string,
+    message: { audienceType: MessageAudienceType; senderId: string; targetUserId?: string | null },
+  ) {
+    if (message.audienceType === MessageAudienceType.EVERYONE) {
+      this.server.to(channelId).emit('message:new', message);
+      return;
+    }
+
+    const recipients = new Set<string>([message.senderId]);
+    if (message.targetUserId) {
+      recipients.add(message.targetUserId);
+    }
+
+    for (const userId of recipients) {
+      this.server.to(`user:${userId}`).emit('message:new', message);
+    }
+  }
 
   async handleConnection(client: Socket) {
     try {
@@ -99,6 +129,16 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
         client.data.userId = auth.userId;
         client.data.clerkId = auth.userId;
+
+        const user = await this.chatService.getUserByClerkId(auth.userId);
+        if (!user) {
+          this.logger.debug('No user found for clerkId:', auth.userId);
+          client.disconnect();
+          return;
+        }
+
+        client.data.dbUserId = user.id;
+        client.join(`user:${user.id}`);
         client.emit('authenticated');
         this.logger.debug('WebSocket authenticated for user:', auth.userId);
       } catch (verifyError: any) {
@@ -119,10 +159,23 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   @SubscribeMessage('join:channel')
   async handleJoinChannel(client: Socket, payload: { channelId: string }) {
-    if (!client.data.userId) {
+    if (!client.data.userId || !client.data.dbUserId) {
       client.emit('error', { message: 'Not authenticated' });
       return;
     }
+
+    const isMember = await this.chatService.isChannelMember(
+      payload.channelId,
+      client.data.dbUserId,
+    );
+    if (!isMember) {
+      client.emit('error', {
+        code: 'NOT_CHANNEL_MEMBER',
+        message: 'Not a member of this channel',
+      });
+      return;
+    }
+
     client.join(payload.channelId);
     client.emit('joined:channel', { channelId: payload.channelId });
   }
@@ -130,9 +183,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('message:send')
   async handleMessageSend(
     client: Socket,
-    payload: { channelId: string; content: string },
+    payload: {
+      channelId: string;
+      content: string;
+      audienceType?: MessageAudienceType;
+      targetUserId?: string;
+    },
   ) {
-    if (!client.data.userId) {
+    if (!client.data.userId || !client.data.dbUserId) {
       client.emit('error', { message: 'Not authenticated' });
       return;
     }
@@ -158,20 +216,16 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         }
       }
 
-      // Get user DB ID from clerkId
-      const user = await this.chatService.getUserByClerkId(client.data.userId);
-
-      if (!user) {
-        client.emit('error', { message: 'User not found' });
-        return;
-      }
+      const audienceType = this.normalizeAudienceType(payload.audienceType);
 
       const message = await this.chatService.sendMessage(
         payload.channelId,
-        user.id,
+        client.data.dbUserId,
         payload.content,
+        audienceType,
+        payload.targetUserId,
       );
-      this.server.to(payload.channelId).emit('message:new', message);
+      this.emitScopedMessage(payload.channelId, message);
     } catch (error: any) {
       this.logger.debug('Error sending message:', error);
       client.emit('error', {
