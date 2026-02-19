@@ -38,6 +38,7 @@ export class DebateRoomsController {
       query.page || 1,
       query.limit || 10,
       query.trending,
+      query.sort,
     );
   }
 
