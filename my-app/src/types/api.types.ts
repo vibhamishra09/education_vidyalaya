@@ -275,10 +275,15 @@ export interface StudyRoomCard {
   participantCount: number;
   createdBy: PublicUser;
   skills: (string | Skill)[];
-  gmeetLink?: string;
   hostAvgRating?: number | null;
   hostReviewCount?: number;
   hostTotalSessions?: number;
+  isRecurring?: boolean;
+  recurrenceMode?: StudyRoomRecurrenceMode | null;
+  seriesId?: string | null;
+  seriesRootId?: string | null;
+  occurrenceIndex?: number | null;
+  timezone?: string | null;
 }
 
 export interface StudyRoom extends StudyRoomCard {
@@ -287,6 +292,27 @@ export interface StudyRoom extends StudyRoomCard {
   reviews: ReviewCard[];
   summary?: string;
   chatChannelId?: string | null;
+  occurrencesCreated?: number;
+}
+
+export enum StudyRoomRecurrenceMode {
+  DAILY = 'DAILY',
+  WEEKLY = 'WEEKLY',
+  CUSTOM_DATES = 'CUSTOM_DATES',
+}
+
+export enum StudyRoomEditScope {
+  SINGLE = 'SINGLE',
+  THIS_AND_FUTURE = 'THIS_AND_FUTURE',
+  ENTIRE_SERIES = 'ENTIRE_SERIES',
+}
+
+export interface StudyRoomRecurrenceDto {
+  mode: StudyRoomRecurrenceMode;
+  interval?: number;
+  weekdays?: number[];
+  customDates?: string[];
+  repeatUntil: string;
 }
 
 export interface CreateStudyRoomDto {
@@ -299,8 +325,8 @@ export interface CreateStudyRoomDto {
   duration: number;
   maxParticipants: number;
   joiningFee?: number;
-  gmeetLink?: string;
   timezone: string;
+  recurrence?: StudyRoomRecurrenceDto;
 }
 
 export interface UpdateStudyRoomDto {
@@ -313,7 +339,10 @@ export interface UpdateStudyRoomDto {
   duration?: number;
   maxParticipants?: number;
   joiningFee?: number;
-  gmeetLink?: string;
+  status?: SessionStatus;
+  timezone?: string;
+  editScope?: StudyRoomEditScope;
+  recurrence?: StudyRoomRecurrenceDto;
 }
 
 // Peer Session Types
