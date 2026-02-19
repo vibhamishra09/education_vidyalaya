@@ -47,6 +47,7 @@ interface ChatWidgetProps {
 export function ChatWidget({ channelId, className = '', chatDisabled = false }: ChatWidgetProps) {
 	const { user, isLoaded } = useUser()
 	const { getToken } = useAuth()
+	const userId = user?.id
 	const [messages, setMessages] = useState<Message[]>(() => {
 		if (!channelId) return []
 		return channelMessageCache.get(channelId) || []
@@ -101,7 +102,7 @@ export function ChatWidget({ channelId, className = '', chatDisabled = false }: 
 	}, [channelId])
 
 	useEffect(() => {
-		if (!channelId || !isLoaded || !user || !getToken) {
+		if (!channelId || !isLoaded || !userId || !getToken) {
 			if (socketRef.current) {
 				socketRef.current.disconnect()
 				socketRef.current = null
@@ -150,18 +151,39 @@ export function ChatWidget({ channelId, className = '', chatDisabled = false }: 
 				socketInstance = s
 				socketRef.current = s
 				
-				s.on('connect', () => {
-					console.log('✅ [Chat] Socket connected, joining channel:', activeChannelId)
+				let joinedForCurrentSocket = false
+				let joinFallbackTimer: ReturnType<typeof setTimeout> | null = null
+				const joinChannel = () => {
+					if (joinedForCurrentSocket) return
+					joinedForCurrentSocket = true
+					console.log('✅ [Chat] Joining channel:', activeChannelId)
 					s.emit('join:channel', { channelId: activeChannelId })
-					if (isMounted) {
-						setIsConnecting(false)
-						setError(null)
+					if (joinFallbackTimer) {
+						clearTimeout(joinFallbackTimer)
+						joinFallbackTimer = null
 					}
+				}
+
+				s.on('connect', () => {
+					console.log('✅ [Chat] Socket connected:', activeChannelId)
+					joinedForCurrentSocket = false
+
+					// Wait for explicit server auth signal to avoid join/auth race.
+					joinFallbackTimer = setTimeout(() => {
+						console.warn('⚠️ [Chat] Auth handshake timeout, joining with fallback')
+						joinChannel()
+					}, 400)
+				})
+
+				s.on('authenticated', () => {
+					console.log('✅ [Chat] Socket authenticated')
+					joinChannel()
 				})
 				
 				s.on('joined:channel', () => {
 					console.log('✅ [Chat] Successfully joined channel:', activeChannelId)
 					if (isMounted) {
+						setIsConnecting(false)
 						setError(null) // Clear any previous errors
 					}
 				})
@@ -237,6 +259,11 @@ export function ChatWidget({ channelId, className = '', chatDisabled = false }: 
 					if (reason === 'io client disconnect') {
 						reconnectAttempts = 0
 					}
+					joinedForCurrentSocket = false
+					if (joinFallbackTimer) {
+						clearTimeout(joinFallbackTimer)
+						joinFallbackTimer = null
+					}
 				})
 				
 				// Clear error on successful reconnect
@@ -267,7 +294,7 @@ export function ChatWidget({ channelId, className = '', chatDisabled = false }: 
 			}
 			socketRef.current = null
 		}
-	}, [channelId, isLoaded, user, getToken])
+	}, [channelId, isLoaded, userId, getToken])
 
 	useEffect(() => {
 		if (!channelId) return
