@@ -192,6 +192,11 @@ export class BrowseService {
     skills?: string[],
     page: number = 1,
     limit: number = 12,
+    peerHasSocialLinks?: boolean,
+    studyStatus?: SessionStatus,
+    studyFreeOnly?: boolean,
+    includeTrendingStudyRooms?: boolean,
+    trendingLimit: number = 4,
   ) {
     const skip = (page - 1) * limit;
 
@@ -221,13 +226,18 @@ export class BrowseService {
         },
       };
     }
+    if (peerHasSocialLinks) {
+      peerWhere.socialLinks = { not: null };
+    }
 
     // Build study room where clause for counting
     // Include both UPCOMING and ONGOING study rooms
     const studyRoomWhere: any = {
-      sessionStatus: {
-        in: [SessionStatus.UPCOMING, SessionStatus.ONGOING],
-      },
+      sessionStatus: studyStatus
+        ? studyStatus
+        : {
+            in: [SessionStatus.UPCOMING, SessionStatus.ONGOING],
+          },
     };
     if (search) {
       studyRoomWhere.OR = [
@@ -255,6 +265,9 @@ export class BrowseService {
           skill: { name: { in: skills } },
         },
       };
+    }
+    if (studyFreeOnly) {
+      studyRoomWhere.joiningFee = 0;
     }
 
     // Get counts for both tabs (always calculated for search results display)
@@ -307,10 +320,11 @@ export class BrowseService {
             rating: avgRating,
             reviewCount: reviews.length,
             totalSessions,
-            socialLinks: user.socialLinks as any[] || [],
+            socialLinks: (user.socialLinks as any[]) || [],
           };
         }),
         studyRooms: [],
+        trendingStudyRooms: [],
         counts: {
           peers: peerCount,
           studyRooms: studyRoomCount,
@@ -355,7 +369,6 @@ export class BrowseService {
         orderBy: { date: 'asc' },
       });
 
-      // Map and sort study rooms: prioritize ongoing rooms first
       const mappedStudyRooms = studyRooms.map((room) => {
         const hostReviews = room.createdBy.reviewsReceived;
         const hostAvgRating =
@@ -389,21 +402,14 @@ export class BrowseService {
         };
       });
 
-      // Sort: ongoing rooms first, then by date
-      mappedStudyRooms.sort((a, b) => {
-        if (a.sessionStatus === SessionStatus.ONGOING && b.sessionStatus !== SessionStatus.ONGOING) {
-          return -1;
-        }
-        if (a.sessionStatus !== SessionStatus.ONGOING && b.sessionStatus === SessionStatus.ONGOING) {
-          return 1;
-        }
-        // Both have same status priority, sort by date
-        return new Date(a.date).getTime() - new Date(b.date).getTime();
-      });
+      const trendingStudyRooms = includeTrendingStudyRooms
+        ? await this.getTrendingStudyRooms(trendingLimit)
+        : [];
 
       return {
         peers: [],
         studyRooms: mappedStudyRooms,
+        trendingStudyRooms,
         counts: {
           peers: peerCount,
           studyRooms: studyRoomCount,
@@ -417,5 +423,72 @@ export class BrowseService {
         },
       };
     }
+  }
+
+  private async getTrendingStudyRooms(limit: number) {
+    const rooms = await this.prisma.studyRoom.findMany({
+      where: {
+        sessionStatus: {
+          in: [SessionStatus.UPCOMING, SessionStatus.ONGOING],
+        },
+      },
+      take: limit,
+      include: {
+        createdBy: {
+          select: {
+            id: true,
+            name: true,
+            avatar: true,
+            reviewsReceived: {
+              select: { rating: true },
+            },
+            _count: {
+              select: {
+                studyRooms: {
+                  where: { sessionStatus: SessionStatus.DONE },
+                },
+                peerSessionsReceived: {
+                  where: { sessionStatus: SessionStatus.DONE },
+                },
+              },
+            },
+          },
+        },
+        skills: { include: { skill: { select: { name: true } } } },
+        learners: true,
+      },
+      orderBy: [{ learners: { _count: 'desc' } }, { date: 'asc' }],
+    });
+
+    return rooms.map((room) => {
+      const hostReviews = room.createdBy.reviewsReceived;
+      const hostAvgRating =
+        hostReviews.length > 0
+          ? hostReviews.reduce((sum, r) => sum + r.rating, 0) / hostReviews.length
+          : null;
+      const hostTotalSessions =
+        room.createdBy._count.studyRooms + room.createdBy._count.peerSessionsReceived;
+
+      return {
+        id: room.id,
+        title: room.title,
+        description: room.description,
+        sessionStatus: room.sessionStatus,
+        date: room.date,
+        duration: room.duration,
+        maxParticipants: room.maxParticipants,
+        joiningFee: room.joiningFee,
+        participantCount: room.learners.length,
+        createdBy: {
+          id: room.createdBy.id,
+          name: room.createdBy.name,
+          avatar: room.createdBy.avatar,
+        },
+        skills: room.skills.map((s) => s.skill.name),
+        hostAvgRating,
+        hostReviewCount: hostReviews.length,
+        hostTotalSessions,
+      };
+    });
   }
 }

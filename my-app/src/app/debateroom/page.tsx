@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Navigation } from '@/components/layout/navigation';
 import { Footer } from '@/components/layout/footer';
 import { Button } from '@/components/ui/button';
@@ -50,6 +50,7 @@ export default function DebateRoomsPage() {
   // Filters
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<DebateStatus | 'ALL'>('ALL');
+  const [trendingOnly, setTrendingOnly] = useState(false);
   const [page, setPage] = useState(1);
 
   const filters: DebateRoomFilters = {
@@ -57,9 +58,15 @@ export default function DebateRoomsPage() {
     status: statusFilter !== 'ALL' ? statusFilter : undefined,
     page,
     limit: 12,
+    trending: trendingOnly || undefined,
+    sort: trendingOnly ? 'hybrid' : 'newest',
   };
 
   const { data, isLoading, error } = useDebateRooms(filters);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter, trendingOnly]);
 
   // Create dialog state
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -367,7 +374,28 @@ export default function DebateRoomsPage() {
               <SelectItem value={DebateStatus.ENDED}>Ended</SelectItem>
             </SelectContent>
           </Select>
+
+          <Button
+            variant={trendingOnly ? 'default' : 'outline'}
+            className={cn(
+              "h-11 rounded-2xl",
+              trendingOnly
+                ? "bg-green-600 hover:bg-green-700 text-white"
+                : "border-muted bg-muted/20"
+            )}
+            onClick={() => setTrendingOnly((prev) => !prev)}
+          >
+            {trendingOnly ? 'Trending: On' : 'Trending: Off'}
+          </Button>
         </div>
+
+        {trendingOnly && (
+          <div className="mb-4">
+            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+              Trending uses hybrid sort: LIVE first, then upcoming soonest, then participation.
+            </Badge>
+          </div>
+        )}
 
         {/* Loading State */}
         {isLoading && (

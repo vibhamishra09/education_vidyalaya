@@ -11,11 +11,22 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, X, Loader2, Sparkles, ArrowLeft, Swords } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Search, X, Sparkles, ArrowLeft, Swords } from "lucide-react";
 import { useBrowse, useBrowseRecommendations } from "@/hooks/use-browse";
 import { useSkills } from "@/hooks/use-skills";
 import { useCurrentUser } from "@/hooks/use-users";
-import { Skill, BrowseFilters, BrowsePeer, StudyRoomCard } from "@/types/api.types";
+import {
+  Skill,
+  BrowseFilters,
+  SessionStatus,
+} from "@/types/api.types";
 import { useTabPersistence, useLocalStorage } from "@/hooks/use-local-storage";
 import { cn } from "@/lib/utils";
 
@@ -48,11 +59,13 @@ function BrowsePageContent() {
   );
   
   const [currentPage, setCurrentPage] = useState(1);
-  const [allPeers, setAllPeers] = useState<BrowsePeer[]>([]);
-  const [allStudyRooms, setAllStudyRooms] = useState<StudyRoomCard[]>([]);
-  const [hasMore, setHasMore] = useState(false);
   const [peerCount, setPeerCount] = useState<number>(0);
   const [studyRoomCount, setStudyRoomCount] = useState<number>(0);
+  const [peerHasSocialLinks, setPeerHasSocialLinks] = useState<"all" | "withSocial">("all");
+  const [studyStatus, setStudyStatus] = useState<
+    "all" | SessionStatus.UPCOMING | SessionStatus.ONGOING
+  >("all");
+  const [studyFreeOnly, setStudyFreeOnly] = useState<"all" | "free">("all");
 
   // Get current user for recommendations
   const { data: currentUserData } = useCurrentUser();
@@ -74,9 +87,14 @@ function BrowsePageContent() {
   // Reset pagination when filters change
   useEffect(() => {
     setCurrentPage(1);
-    setAllPeers([]);
-    setAllStudyRooms([]);
-  }, [activeTab, searchQuery, selectedSkills]);
+  }, [
+    activeTab,
+    searchQuery,
+    selectedSkills,
+    peerHasSocialLinks,
+    studyStatus,
+    studyFreeOnly,
+  ]);
 
   // Fetch data from API
   const browseFilters: BrowseFilters = {
@@ -92,37 +110,42 @@ function BrowsePageContent() {
   if (selectedSkills.length > 0) {
     browseFilters.skills = selectedSkills.map(s => s.name);
   }
+
+  if (activeTab === "peers" && peerHasSocialLinks === "withSocial") {
+    browseFilters.peerHasSocialLinks = true;
+  }
+
+  if (activeTab === "studyRooms" && studyStatus !== "all") {
+    browseFilters.studyStatus = studyStatus;
+  }
+
+  if (activeTab === "studyRooms" && studyFreeOnly === "free") {
+    browseFilters.studyFreeOnly = true;
+  }
+
+  if (
+    activeTab === "studyRooms" &&
+    !searchQuery &&
+    selectedSkills.length === 0 &&
+    currentPage === 1
+  ) {
+    browseFilters.includeTrendingStudyRooms = true;
+    browseFilters.trendingLimit = 4;
+  }
   
   const { data: browseData, isLoading: browseLoading, error: browseError } = useBrowse(browseFilters);
 
   const { data: skillsData, isLoading: skillsLoading } = useSkills(undefined, 20);
 
-  // Accumulate data as pages load
+  // Update counts from API response
   useEffect(() => {
     if (browseData) {
-      // Update counts from API response
       if (browseData.counts) {
         setPeerCount(browseData.counts.peers);
         setStudyRoomCount(browseData.counts.studyRooms);
       }
-
-      if (activeTab === "peers") {
-        if (currentPage === 1) {
-          setAllPeers(browseData.peers);
-        } else {
-          setAllPeers((prev) => [...prev, ...browseData.peers]);
-        }
-        setHasMore(browseData.pagination.hasMore);
-      } else {
-        if (currentPage === 1) {
-          setAllStudyRooms(browseData.studyRooms);
-        } else {
-          setAllStudyRooms((prev) => [...prev, ...browseData.studyRooms]);
-        }
-        setHasMore(browseData.pagination.hasMore);
-      }
     }
-  }, [browseData, activeTab, currentPage]);
+  }, [browseData]);
 
   const toggleSkill = (skill: Skill) => {
     setSelectedSkills((prev) =>
@@ -136,12 +159,9 @@ function BrowsePageContent() {
     setSelectedSkills((prev) => prev.filter((s) => s.id !== skillId));
   };
 
-  const loadMore = () => {
-    setCurrentPage((prev) => prev + 1);
-  };
-
-  const peers = allPeers;
-  const studyRooms = allStudyRooms;
+  const peers = browseData?.peers || [];
+  const studyRooms = browseData?.studyRooms || [];
+  const trendingStudyRooms = browseData?.trendingStudyRooms || [];
   const skills = skillsData?.skills || [];
 
   // Fetch recommendations based on user's "want to learn" skills
@@ -311,6 +331,58 @@ function BrowsePageContent() {
 
         {/* Skill Filters */}
         <div className="mb-8">
+          <div className="flex flex-wrap gap-3 mb-4">
+            {activeTab === "peers" && (
+              <Select
+                value={peerHasSocialLinks}
+                onValueChange={(value) => setPeerHasSocialLinks(value as "all" | "withSocial")}
+              >
+                <SelectTrigger className="w-[210px] h-9 rounded-xl border-muted bg-muted/20">
+                  <SelectValue placeholder="Peer filter" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All peers</SelectItem>
+                  <SelectItem value="withSocial">With social links</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+
+            {activeTab === "studyRooms" && (
+              <>
+                <Select
+                  value={studyStatus}
+                  onValueChange={(value) =>
+                    setStudyStatus(
+                      value as "all" | SessionStatus.UPCOMING | SessionStatus.ONGOING
+                    )
+                  }
+                >
+                  <SelectTrigger className="w-[190px] h-9 rounded-xl border-muted bg-muted/20">
+                    <SelectValue placeholder="Session status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All statuses</SelectItem>
+                    <SelectItem value={SessionStatus.UPCOMING}>Upcoming</SelectItem>
+                    <SelectItem value={SessionStatus.ONGOING}>Ongoing</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select
+                  value={studyFreeOnly}
+                  onValueChange={(value) => setStudyFreeOnly(value as "all" | "free")}
+                >
+                  <SelectTrigger className="w-[170px] h-9 rounded-xl border-muted bg-muted/20">
+                    <SelectValue placeholder="Fee" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All fees</SelectItem>
+                    <SelectItem value="free">Free only</SelectItem>
+                  </SelectContent>
+                </Select>
+              </>
+            )}
+          </div>
+
           <div className="flex flex-wrap gap-2 mb-4">
             {skillsLoading ? (
               Array.from({ length: 6 }).map((_, index) => (
@@ -361,6 +433,49 @@ function BrowsePageContent() {
             </div>
           )}
         </div>
+
+          {activeTab === "studyRooms" &&
+            trendingStudyRooms.length > 0 &&
+            !searchQuery &&
+            selectedSkills.length === 0 &&
+            studyStatus === "all" &&
+            studyFreeOnly === "all" && (
+              <div className="mb-8">
+                <div className="flex items-center gap-2 mb-3">
+                  <Sparkles className="h-4 w-4 text-green-600" />
+                  <h3 className="text-sm font-semibold text-foreground">Trending Study Rooms</h3>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {trendingStudyRooms.map((room) => (
+                    <StudyRoomCardComponent
+                      key={`trending-${room.id}`}
+                      roomId={room.id}
+                      status={room.sessionStatus === "ONGOING" ? "live" : "scheduled"}
+                      title={room.title}
+                      description={room.description}
+                      date={room.date}
+                      duration={room.duration}
+                      participants={{
+                        current: room.participantCount,
+                        max: room.maxParticipants,
+                      }}
+                      host={{
+                        id: room.createdBy.id,
+                        name: room.createdBy.name,
+                        avatar: room.createdBy.avatar,
+                      }}
+                      category={
+                        typeof room.skills[0] === "string"
+                          ? room.skills[0]
+                          : room.skills[0]?.name || "General"
+                      }
+                      actionLabel="Join Room"
+                      onAction={() => router.push(`/studyroom/${room.id}`)}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
 
           <div className="mt-6">
             {browseLoading ? (
@@ -413,24 +528,30 @@ function BrowsePageContent() {
                         </div>
                       )}
                     </div>
-                    {hasMore && (
-                      <div className="mt-6 flex justify-center">
-                        <Button
-                          onClick={loadMore}
-                          disabled={browseLoading}
-                          variant="outline"
-                        >
-                          {browseLoading ? (
-                            <>
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                              Loading...
-                            </>
-                          ) : (
-                            "Load More"
-                          )}
-                        </Button>
-                      </div>
-                    )}
+                    {browseData?.pagination.totalPages &&
+                      browseData.pagination.totalPages > 1 && (
+                        <div className="mt-6 flex justify-center">
+                          <div className="flex items-center gap-2">
+                            <Button
+                              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                              disabled={currentPage === 1 || browseLoading}
+                              variant="outline"
+                            >
+                              Previous
+                            </Button>
+                            <span className="text-sm text-muted-foreground px-2">
+                              Page {browseData.pagination.page} of {browseData.pagination.totalPages}
+                            </span>
+                            <Button
+                              onClick={() => setCurrentPage((p) => p + 1)}
+                              disabled={!browseData.pagination.hasMore || browseLoading}
+                              variant="outline"
+                            >
+                              Next
+                            </Button>
+                          </div>
+                        </div>
+                      )}
                   </>
                 )}
 
@@ -466,24 +587,30 @@ function BrowsePageContent() {
                         </div>
                       )}
                     </div>
-                    {hasMore && (
-                      <div className="mt-6 flex justify-center">
-                        <Button
-                          onClick={loadMore}
-                          disabled={browseLoading}
-                          variant="outline"
-                        >
-                          {browseLoading ? (
-                            <>
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                              Loading...
-                            </>
-                          ) : (
-                            "Load More"
-                          )}
-                        </Button>
-                      </div>
-                    )}
+                    {browseData?.pagination.totalPages &&
+                      browseData.pagination.totalPages > 1 && (
+                        <div className="mt-6 flex justify-center">
+                          <div className="flex items-center gap-2">
+                            <Button
+                              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                              disabled={currentPage === 1 || browseLoading}
+                              variant="outline"
+                            >
+                              Previous
+                            </Button>
+                            <span className="text-sm text-muted-foreground px-2">
+                              Page {browseData.pagination.page} of {browseData.pagination.totalPages}
+                            </span>
+                            <Button
+                              onClick={() => setCurrentPage((p) => p + 1)}
+                              disabled={!browseData.pagination.hasMore || browseLoading}
+                              variant="outline"
+                            >
+                              Next
+                            </Button>
+                          </div>
+                        </div>
+                      )}
                   </>
                 )}
               </>
