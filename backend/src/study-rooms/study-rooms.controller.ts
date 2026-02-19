@@ -13,7 +13,11 @@ import { LoggerService } from '../common/logger/logger.service';
 import { ClerkAuthGuard } from '../common/guards/clerk-auth.guard';
 import { OptionalClerkAuthGuard } from '../common/guards/optional-clerk-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { CreateStudyRoomDto, UpdateStudyRoomDto } from './dto/study-room.dto';
+import {
+  CreateStudyRoomDto,
+  StudyRoomEditScope,
+  UpdateStudyRoomDto,
+} from './dto/study-room.dto';
 import { StudyRoomQueryDto } from './dto/study-room-query.dto';
 import { SessionFeedbackDto } from '../common/dto/session-feedback.dto';
 
@@ -141,6 +145,20 @@ export class StudyRoomsController {
     @CurrentUser() userId: string,
   ) {
     return this.studyRoomsService.joinStudyRoom(studyRoomId, userId);
+  }
+
+  @Post(':studyRoomId/cancel')
+  @UseGuards(ClerkAuthGuard)
+  async cancelStudyRoom(
+    @Param('studyRoomId') studyRoomId: string,
+    @CurrentUser() userId: string,
+    @Body('editScope') editScope?: StudyRoomEditScope,
+  ) {
+    return this.studyRoomsService.cancelStudyRoom(
+      studyRoomId,
+      userId,
+      editScope ?? StudyRoomEditScope.SINGLE,
+    );
   }
 
   @Post(':studyRoomId/complete')

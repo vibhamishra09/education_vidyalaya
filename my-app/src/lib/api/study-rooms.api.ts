@@ -6,6 +6,7 @@ import {
   UpdateStudyRoomDto,
   StudyRoomFilters,
   SessionFeedbackSubmission,
+  StudyRoomEditScope,
 } from '@/types/api.types';
 import { cleanQueryParams } from '../utils/api-utils';
 
@@ -45,6 +46,17 @@ export const studyRoomsApi = {
   // Join study room
   joinStudyRoom: async (studyRoomId: string): Promise<{ success: boolean; message: string }> => {
     const response = await apiClient.post(`/api/study-rooms/${studyRoomId}/join`);
+    return response.data;
+  },
+
+  // Cancel study room (single occurrence, future occurrences, or entire series)
+  cancelStudyRoom: async (
+    studyRoomId: string,
+    editScope: StudyRoomEditScope = StudyRoomEditScope.SINGLE,
+  ): Promise<{ success: boolean; message: string; updatedCount: number }> => {
+    const response = await apiClient.post(`/api/study-rooms/${studyRoomId}/cancel`, {
+      editScope,
+    });
     return response.data;
   },
 
