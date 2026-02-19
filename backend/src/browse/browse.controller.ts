@@ -16,6 +16,11 @@ export class BrowseController {
       query.skills,
       query.page || 1,
       query.limit || 12,
+      query.peerHasSocialLinks,
+      query.studyStatus,
+      query.studyFreeOnly,
+      query.includeTrendingStudyRooms,
+      query.trendingLimit,
     );
   }
 

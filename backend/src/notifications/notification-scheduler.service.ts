@@ -25,14 +25,21 @@ export class NotificationSchedulerService {
     this.logger.log('Checking for session reminders...');
 
     const now = new Date();
+    const reminderWindowMs = 5 * 60 * 1000; // cron runs every 5 minutes
     const oneDayFromNow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
     const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
     const fiveMinutesFromNow = new Date(now.getTime() + 5 * 60 * 1000);
+    const oneDayWindowStart = new Date(oneDayFromNow.getTime() - reminderWindowMs);
+    const oneHourWindowStart = new Date(
+      oneHourFromNow.getTime() - reminderWindowMs,
+    );
 
     // Find upcoming peer sessions
     await this.sendPeerSessionReminders(
       now,
+      oneDayWindowStart,
       oneDayFromNow,
+      oneHourWindowStart,
       oneHourFromNow,
       fiveMinutesFromNow,
     );
@@ -40,7 +47,9 @@ export class NotificationSchedulerService {
     // Find upcoming study rooms
     await this.sendStudyRoomReminders(
       now,
+      oneDayWindowStart,
       oneDayFromNow,
+      oneHourWindowStart,
       oneHourFromNow,
       fiveMinutesFromNow,
     );
@@ -62,16 +71,18 @@ export class NotificationSchedulerService {
 
   private async sendPeerSessionReminders(
     now: Date,
+    oneDayWindowStart: Date,
     oneDayFromNow: Date,
+    oneHourWindowStart: Date,
     oneHourFromNow: Date,
     fiveMinutesFromNow: Date,
   ) {
-    // Find sessions starting within 24 hours that haven't been reminded yet
+    // Send only in the "24h before start" 5-minute window
     const upcomingSessions24h = await this.prisma.peerSession.findMany({
       where: {
         sessionStatus: SessionStatus.UPCOMING,
         date: {
-          gte: now,
+          gte: oneDayWindowStart,
           lte: oneDayFromNow,
         },
         reminder24hSent: false,
@@ -82,12 +93,12 @@ export class NotificationSchedulerService {
       },
     });
 
-    // Find sessions starting within 1 hour that haven't been reminded yet
+    // Send only in the "1h before start" 5-minute window
     const upcomingSessions1h = await this.prisma.peerSession.findMany({
       where: {
         sessionStatus: SessionStatus.UPCOMING,
         date: {
-          gte: now,
+          gte: oneHourWindowStart,
           lte: oneHourFromNow,
         },
         reminder1hSent: false,
@@ -116,6 +127,13 @@ export class NotificationSchedulerService {
 
     // Send 24-hour reminders
     for (const session of upcomingSessions24h) {
+      if (session.date <= new Date()) {
+        this.logger.warn(
+          `Skipping 24-hour peer session reminder for past session ${session.id}`,
+        );
+        continue;
+      }
+
       const locked = await this.prisma.peerSession.updateMany({
         where: { id: session.id, reminder24hSent: false },
         data: { reminder24hSent: true },
@@ -154,6 +172,13 @@ export class NotificationSchedulerService {
 
     // Send 1-hour reminders (URGENT)
     for (const session of upcomingSessions1h) {
+      if (session.date <= new Date()) {
+        this.logger.warn(
+          `Skipping 1-hour peer session reminder for past session ${session.id}`,
+        );
+        continue;
+      }
+
       const locked = await this.prisma.peerSession.updateMany({
         where: { id: session.id, reminder1hSent: false },
         data: { reminder1hSent: true },
@@ -169,7 +194,7 @@ export class NotificationSchedulerService {
         session.requestedById,
         message1h,
         'Session Starting Soon!',
-        NotifType.URGENT,
+        NotifType.NORMAL,
         {
           actionType: 'SESSION_REMINDER_1H',
           peerSessionId: session.id,
@@ -181,7 +206,7 @@ export class NotificationSchedulerService {
         session.requestedToId,
         message1h,
         'Session Starting Soon!',
-        NotifType.URGENT,
+        NotifType.NORMAL,
         {
           actionType: 'SESSION_REMINDER_1H',
           peerSessionId: session.id,
@@ -192,6 +217,13 @@ export class NotificationSchedulerService {
 
     // Send 5-minute reminders (URGENT)
     for (const session of upcomingSessions5m) {
+      if (session.date <= new Date()) {
+        this.logger.warn(
+          `Skipping 5-minute peer session reminder for past session ${session.id}`,
+        );
+        continue;
+      }
+
       const locked = await this.prisma.peerSession.updateMany({
         where: { id: session.id, reminder5mSent: false },
         data: { reminder5mSent: true },
@@ -201,7 +233,7 @@ export class NotificationSchedulerService {
         continue;
       }
 
-      const message5m = `Your peer session "${session.title}" starts in 5 minutes!`;
+      const message5m = `Your peer session "${session.title}" starts now!`;
 
       await this.notificationsService.createAndPushNotification(
         session.requestedById,
@@ -235,16 +267,18 @@ export class NotificationSchedulerService {
 
   private async sendStudyRoomReminders(
     now: Date,
+    oneDayWindowStart: Date,
     oneDayFromNow: Date,
+    oneHourWindowStart: Date,
     oneHourFromNow: Date,
     fiveMinutesFromNow: Date,
   ) {
-    // Find study rooms starting within 24 hours that haven't been reminded yet
+    // Send only in the "24h before start" 5-minute window
     const upcomingRooms24h = await this.prisma.studyRoom.findMany({
       where: {
         sessionStatus: SessionStatus.UPCOMING,
         date: {
-          gte: now,
+          gte: oneDayWindowStart,
           lte: oneDayFromNow,
         },
         reminder24hSent: false,
@@ -259,12 +293,12 @@ export class NotificationSchedulerService {
       },
     });
 
-    // Find study rooms starting within 1 hour that haven't been reminded yet
+    // Send only in the "1h before start" 5-minute window
     const upcomingRooms1h = await this.prisma.studyRoom.findMany({
       where: {
         sessionStatus: SessionStatus.UPCOMING,
         date: {
-          gte: now,
+          gte: oneHourWindowStart,
           lte: oneHourFromNow,
         },
         reminder1hSent: false,
@@ -301,6 +335,13 @@ export class NotificationSchedulerService {
 
     // Send 24-hour reminders
     for (const room of upcomingRooms24h) {
+      if (room.date <= new Date()) {
+        this.logger.warn(
+          `Skipping 24-hour study room reminder for past session ${room.id}`,
+        );
+        continue;
+      }
+
       const locked = await this.prisma.studyRoom.updateMany({
         where: { id: room.id, reminder24hSent: false },
         data: { reminder24hSent: true },
@@ -343,6 +384,13 @@ export class NotificationSchedulerService {
 
     // Send 1-hour reminders (URGENT)
     for (const room of upcomingRooms1h) {
+      if (room.date <= new Date()) {
+        this.logger.warn(
+          `Skipping 1-hour study room reminder for past session ${room.id}`,
+        );
+        continue;
+      }
+
       const locked = await this.prisma.studyRoom.updateMany({
         where: { id: room.id, reminder1hSent: false },
         data: { reminder1hSent: true },
@@ -359,7 +407,7 @@ export class NotificationSchedulerService {
         room.createdById,
         message1h,
         'Study Room Starting Soon!',
-        NotifType.URGENT,
+        NotifType.NORMAL,
         {
           actionType: 'STUDYROOM_REMINDER_1H',
           studyRoomId: room.id,
@@ -373,7 +421,7 @@ export class NotificationSchedulerService {
           learner.userId,
           message1h,
           'Study Room Starting Soon!',
-          NotifType.URGENT,
+          NotifType.NORMAL,
           {
             actionType: 'STUDYROOM_REMINDER_1H',
             studyRoomId: room.id,
@@ -385,6 +433,13 @@ export class NotificationSchedulerService {
 
     // Send 5-minute reminders (URGENT)
     for (const room of upcomingRooms5m) {
+      if (room.date <= new Date()) {
+        this.logger.warn(
+          `Skipping 5-minute study room reminder for past session ${room.id}`,
+        );
+        continue;
+      }
+
       const locked = await this.prisma.studyRoom.updateMany({
         where: { id: room.id, reminder5mSent: false },
         data: { reminder5mSent: true },
@@ -394,7 +449,7 @@ export class NotificationSchedulerService {
         continue;
       }
 
-      const message5m = `Study room "${room.title}" starts in 5 minutes!`;
+      const message5m = `Study room "${room.title}" starts now!`;
 
       // Notify creator
       await this.notificationsService.createAndPushNotification(

@@ -31,6 +31,12 @@ export enum DebateSideDto {
   AGAINST = 'AGAINST',
 }
 
+export enum DebateRoomSortDto {
+  HYBRID = 'hybrid',
+  NEWEST = 'newest',
+  UPCOMING = 'upcoming',
+}
+
 export class CreateDebateRoomDto {
   @IsString()
   topic: string;
@@ -150,6 +156,10 @@ export class DebateRoomQueryDto {
   @Transform(({ value }) => value === 'true' || value === true)
   @IsBoolean()
   trending?: boolean;
+
+  @IsOptional()
+  @IsEnum(DebateRoomSortDto)
+  sort?: DebateRoomSortDto;
 }
 
 export class UpsertModeratorEvaluationDto {
