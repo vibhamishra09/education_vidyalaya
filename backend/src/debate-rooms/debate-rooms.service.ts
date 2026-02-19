@@ -155,6 +155,7 @@ export class DebateRoomsService {
     page: number = 1,
     limit: number = 10,
     trending?: boolean,
+    sort: 'hybrid' | 'newest' | 'upcoming' = 'newest',
   ) {
     const where: Prisma.DebateRoomWhereInput = {};
 
@@ -165,30 +166,99 @@ export class DebateRoomsService {
       ];
     }
 
-    if (status) {
+    if (!trending && status) {
       where.status = status;
     }
 
-    // For trending, show scheduled debates in the future
-    if (trending) {
-      where.scheduledAt = {
-        gte: new Date(), // Only future scheduled debates
-      };
-      // Also ensure status is WAITING for trending
-      where.status = DebateStatus.WAITING;
-    }
-
     const skip = (page - 1) * limit;
+    const include = this.getDebateRoomInclude();
 
-    // Determine orderBy based on trending
-    let orderBy: Prisma.DebateRoomOrderByWithRelationInput;
     if (trending) {
-      // For trending, order by scheduledAt (upcoming first)
-      orderBy = { scheduledAt: 'asc' };
-    } else {
-      // Default: order by creation date (newest first)
-      orderBy = { createdAt: 'desc' };
+      const now = new Date();
+      const liveWhere: Prisma.DebateRoomWhereInput = {
+        ...where,
+        status: DebateStatus.LIVE,
+      };
+      const waitingWhere: Prisma.DebateRoomWhereInput = {
+        ...where,
+        status: DebateStatus.WAITING,
+        scheduledAt: {
+          gte: now,
+        },
+      };
+
+      const [liveTotal, waitingTotal] = await Promise.all([
+        this.prisma.debateRoom.count({ where: liveWhere }),
+        this.prisma.debateRoom.count({ where: waitingWhere }),
+      ]);
+
+      const total = liveTotal + waitingTotal;
+      if (total === 0) {
+        return {
+          debateRooms: [],
+          total: 0,
+          page,
+          limit,
+          totalPages: 0,
+        };
+      }
+
+      let remainingSkip = skip;
+      let remainingTake = limit;
+      const rooms: any[] = [];
+
+      const liveSkip = Math.min(remainingSkip, liveTotal);
+      remainingSkip -= liveSkip;
+      const liveTake = Math.max(0, Math.min(remainingTake, liveTotal - liveSkip));
+
+      if (liveTake > 0) {
+        const liveRooms = await this.prisma.debateRoom.findMany({
+          where: liveWhere,
+          skip: liveSkip,
+          take: liveTake,
+          orderBy: [{ participants: { _count: 'desc' } }, { createdAt: 'desc' }],
+          include,
+        });
+        rooms.push(...liveRooms);
+        remainingTake -= liveRooms.length;
+      }
+
+      if (remainingTake > 0) {
+        const waitingSkip = Math.max(0, remainingSkip);
+        const waitingTake = Math.max(
+          0,
+          Math.min(remainingTake, waitingTotal - waitingSkip),
+        );
+
+        if (waitingTake > 0) {
+          const waitingRooms = await this.prisma.debateRoom.findMany({
+            where: waitingWhere,
+            skip: waitingSkip,
+            take: waitingTake,
+            orderBy: [
+              { scheduledAt: 'asc' },
+              { participants: { _count: 'desc' } },
+              { createdAt: 'desc' },
+            ],
+            include,
+          });
+          rooms.push(...waitingRooms);
+        }
+      }
+
+      return {
+        debateRooms: rooms.map((r) => this.mapToResponse(r)),
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      };
     }
+
+    const orderBy: Prisma.DebateRoomOrderByWithRelationInput[] =
+      sort === 'upcoming'
+        ? [{ scheduledAt: 'asc' }, { createdAt: 'desc' }]
+        : [{ createdAt: 'desc' }];
 
     const [rooms, total] = await Promise.all([
       this.prisma.debateRoom.findMany({
@@ -196,7 +266,7 @@ export class DebateRoomsService {
         skip,
         take: limit,
         orderBy,
-        include: this.getDebateRoomInclude(),
+        include,
       }),
       this.prisma.debateRoom.count({ where }),
     ]);

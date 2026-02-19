@@ -214,15 +214,34 @@ export class NotificationsService {
       });
 
       const emailSubject = options?.pushTitle || 'High Priority Notification - Webyalaya';
-      await this.emailService.sendEmailNotification(
-        userId,
-        emailSubject,
-        message,
-      );
+      try {
+        const emailSent = await this.emailService.sendEmailNotification(
+          userId,
+          emailSubject,
+          message,
+        );
 
-      this.logger.debug(
-        '✅ [NotificationsService] Email notification sent successfully',
-      );
+        if (!emailSent) {
+          this.logger.error(
+            '❌ [NotificationsService] Email notification failed to send',
+            JSON.stringify({
+              userId,
+              notificationId: notification.id,
+              emailSubject,
+              actionType: options?.actionType,
+            }),
+          );
+        } else {
+          this.logger.debug(
+            '✅ [NotificationsService] Email notification sent successfully',
+          );
+        }
+      } catch (error) {
+        this.logger.error(
+          '❌ [NotificationsService] Unexpected error while sending email notification',
+          error instanceof Error ? error.stack : String(error),
+        );
+      }
     }
 
     return notification;

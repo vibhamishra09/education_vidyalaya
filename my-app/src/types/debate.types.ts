@@ -57,6 +57,7 @@ export interface DebateRoomFilters {
   page?: number;
   limit?: number;
   trending?: boolean;
+  sort?: 'hybrid' | 'newest' | 'upcoming';
 }
 
 // Response Types
