@@ -18,11 +18,15 @@ import {
 } from "@/components/ui/dialog";
 import { 
   ArrowLeft, Users, Loader2, Coins, CheckCircle2, AlertCircle,
-  RotateCcw, Sparkles, Calendar, Video, Layers, 
+  RotateCcw, Sparkles, Calendar, Layers, 
   Banknote, Plus,
   Clock, Upload, X, Image as ImageIcon
 } from "lucide-react";
-import { CreateStudyRoomDto, StudyRoom } from "@/types/api.types";
+import {
+  CreateStudyRoomDto,
+  StudyRoom,
+  StudyRoomRecurrenceMode,
+} from "@/types/api.types";
 import { ShareButton } from "@/components/share/share-button";
 import { useFormPersistence } from "@/hooks/use-local-storage";
 import { useCreateStudyRoom } from "@/hooks/use-study-rooms";
@@ -31,6 +35,7 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { uploadFile, validateImageFile } from "@/lib/upload";
+import { setAuthToken } from "@/lib/api-client";
 
 interface StudyRoomFormData {
   title: string;
@@ -42,7 +47,12 @@ interface StudyRoomFormData {
   duration: string;
   maxParticipants: string;
   joiningFee: string;
-  gmeetLink: string;
+  recurrenceEnabled: boolean;
+  recurrenceMode: StudyRoomRecurrenceMode;
+  recurrenceInterval: string;
+  recurrenceWeekdays: number[];
+  recurrenceCustomDates: string;
+  recurrenceRepeatUntil: string;
 }
 
 const initialFormData: StudyRoomFormData = {
@@ -54,8 +64,77 @@ const initialFormData: StudyRoomFormData = {
   duration: "60",
   maxParticipants: "5",
   joiningFee: "0",
-  gmeetLink: "",
+  recurrenceEnabled: false,
+  recurrenceMode: StudyRoomRecurrenceMode.DAILY,
+  recurrenceInterval: "1",
+  recurrenceWeekdays: [],
+  recurrenceCustomDates: "",
+  recurrenceRepeatUntil: "",
 };
+
+const weekdayOptions = [
+  { value: 0, label: "Sun" },
+  { value: 1, label: "Mon" },
+  { value: 2, label: "Tue" },
+  { value: 3, label: "Wed" },
+  { value: 4, label: "Thu" },
+  { value: 5, label: "Fri" },
+  { value: 6, label: "Sat" },
+];
+
+function parseDateOnly(value: string): Date | null {
+  if (!value) return null;
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return null;
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
+function estimateOccurrences(formData: StudyRoomFormData): number {
+  if (!formData.recurrenceEnabled || !formData.date || !formData.recurrenceRepeatUntil) {
+    return 1;
+  }
+
+  const start = parseDateOnly(formData.date);
+  const end = parseDateOnly(formData.recurrenceRepeatUntil);
+  if (!start || !end || end < start) return 0;
+
+  const interval = Math.max(1, parseInt(formData.recurrenceInterval || "1"));
+  const dayMs = 24 * 60 * 60 * 1000;
+  const resultDates = new Set<string>();
+
+  if (formData.recurrenceMode === StudyRoomRecurrenceMode.CUSTOM_DATES) {
+    const rawDates = formData.recurrenceCustomDates
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+    rawDates.push(formData.date);
+    for (const dateStr of rawDates) {
+      const current = parseDateOnly(dateStr);
+      if (!current) continue;
+      if (current >= start && current <= end) {
+        resultDates.add(current.toISOString().split("T")[0]);
+      }
+    }
+    return resultDates.size;
+  }
+
+  for (let cursor = new Date(start); cursor <= end; cursor = new Date(cursor.getTime() + dayMs)) {
+    const diffDays = Math.floor((cursor.getTime() - start.getTime()) / dayMs);
+    if (formData.recurrenceMode === StudyRoomRecurrenceMode.DAILY) {
+      if (diffDays % interval === 0) {
+        resultDates.add(cursor.toISOString().split("T")[0]);
+      }
+      continue;
+    }
+
+    const weekIndex = Math.floor(diffDays / 7);
+    if (weekIndex % interval === 0 && formData.recurrenceWeekdays.includes(cursor.getUTCDay())) {
+      resultDates.add(cursor.toISOString().split("T")[0]);
+    }
+  }
+
+  return resultDates.size;
+}
 
 export function CreateStudyRoomClient() {
   const router = useRouter();
@@ -88,9 +167,18 @@ export function CreateStudyRoomClient() {
         ...prev,
         date: now.toISOString().split("T")[0],
         time: now.toTimeString().slice(0, 5),
+        recurrenceEnabled: false,
       }));
     }
   }, [isInstantRoom, setFormData]);
+
+  useEffect(() => {
+    if (!formData.date || formData.recurrenceRepeatUntil) return;
+    const date = new Date(formData.date);
+    date.setDate(date.getDate() + 30);
+    const repeatUntil = date.toISOString().split("T")[0];
+    updateField("recurrenceRepeatUntil", repeatUntil);
+  }, [formData.date, formData.recurrenceRepeatUntil, updateField]);
 
   // Load image preview from persisted form data
   useEffect(() => {
@@ -131,20 +219,18 @@ export function CreateStudyRoomClient() {
     try {
       // Get auth token
       const token = await getToken();
-      if (!token) {
-        setError('Please sign in to upload images.');
-        return;
+      if (token) {
+        setAuthToken(token);
       }
 
       // Create preview
       const previewUrl = URL.createObjectURL(file);
       setImagePreview(previewUrl);
 
-      // Upload file with token
-      const fileUrl = await uploadFile(file, 'document', token);
+      // Upload file
+      const fileUrl = await uploadFile(file, 'document');
       updateField("imageUrl", fileUrl);
     } catch (error) {
-      console.error('Upload error:', error);
       setError('Failed to upload image. Please try again.');
       setImagePreview(null);
     } finally {
@@ -184,6 +270,33 @@ export function CreateStudyRoomClient() {
         return;
     }
 
+    if (!isInstantRoom && formData.recurrenceEnabled) {
+      if (!formData.recurrenceRepeatUntil) {
+        setError("Please select repeat-until date");
+        return;
+      }
+      if (formData.recurrenceMode === StudyRoomRecurrenceMode.WEEKLY && formData.recurrenceWeekdays.length === 0) {
+        setError("Please select at least one weekday for weekly recurrence");
+        return;
+      }
+      if (
+        formData.recurrenceMode === StudyRoomRecurrenceMode.CUSTOM_DATES &&
+        formData.recurrenceCustomDates.split(",").map((d) => d.trim()).filter(Boolean).length === 0
+      ) {
+        setError("Please provide custom dates separated by commas (YYYY-MM-DD)");
+        return;
+      }
+      const occurrenceCount = estimateOccurrences(formData);
+      if (occurrenceCount === 0) {
+        setError("No valid occurrences were found for the selected recurrence.");
+        return;
+      }
+      if (occurrenceCount > 366) {
+        setError("Recurrence creates too many sessions. Please shorten the range.");
+        return;
+      }
+    }
+
     setError(null);
     const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
@@ -197,9 +310,27 @@ export function CreateStudyRoomClient() {
       duration: parseInt(formData.duration),
       maxParticipants: parseInt(formData.maxParticipants),
       joiningFee: parseFloat(formData.joiningFee),
-      gmeetLink: formData.gmeetLink || undefined,
       timezone: userTimezone,
     };
+
+    if (!isInstantRoom && formData.recurrenceEnabled) {
+      createData.recurrence = {
+        mode: formData.recurrenceMode,
+        interval: Math.max(1, parseInt(formData.recurrenceInterval || "1")),
+        repeatUntil: formData.recurrenceRepeatUntil,
+        ...(formData.recurrenceMode === StudyRoomRecurrenceMode.WEEKLY
+          ? { weekdays: formData.recurrenceWeekdays }
+          : {}),
+        ...(formData.recurrenceMode === StudyRoomRecurrenceMode.CUSTOM_DATES
+          ? {
+              customDates: formData.recurrenceCustomDates
+                .split(",")
+                .map((entry) => entry.trim())
+                .filter(Boolean),
+            }
+          : {}),
+      };
+    }
 
     // Refresh time for instant rooms to avoid "past time" errors if user took too long
     if (isInstantRoom) {
@@ -489,19 +620,129 @@ export function CreateStudyRoomClient() {
                     )}
                   </AnimatePresence>
 
-                  <div className="space-y-2 pt-2 border-t border-dashed">
-                    <Label className="flex items-center gap-2 text-xs font-semibold uppercase text-muted-foreground mt-2">
-                       <Video className="h-3.5 w-3.5" /> 
-                       Google Meet Link <span className="text-[10px] normal-case bg-muted px-1.5 rounded-sm">Optional</span>
-                    </Label>
-                    <Input
-                      type="url"
-                      placeholder="https://meet.google.com/abc-defg-hij"
-                      value={formData.gmeetLink}
-                      onChange={(e) => updateField("gmeetLink", e.target.value)}
-                      className="font-mono text-sm"
-                    />
-                  </div>
+                  {!isInstantRoom && (
+                    <div className="space-y-4 pt-2 border-t border-dashed">
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border">
+                        <div className="space-y-0.5">
+                          <Label className="text-sm font-semibold cursor-pointer">Repeat Schedule</Label>
+                          <p className="text-xs text-muted-foreground">
+                            Daily, weekly, or custom dates up to one year
+                          </p>
+                        </div>
+                        <Switch
+                          checked={formData.recurrenceEnabled}
+                          onCheckedChange={(checked) => updateField("recurrenceEnabled", checked)}
+                        />
+                      </div>
+
+                      {formData.recurrenceEnabled && (
+                        <div className="space-y-4 p-4 rounded-lg border bg-background/50">
+                          <div className="space-y-2">
+                            <Label className="text-xs font-semibold uppercase text-muted-foreground">
+                              Repeat Type
+                            </Label>
+                            <div className="grid grid-cols-3 gap-2">
+                              {[
+                                { label: "Daily", value: StudyRoomRecurrenceMode.DAILY },
+                                { label: "Weekly", value: StudyRoomRecurrenceMode.WEEKLY },
+                                { label: "Custom", value: StudyRoomRecurrenceMode.CUSTOM_DATES },
+                              ].map((mode) => (
+                                <Button
+                                  key={mode.value}
+                                  type="button"
+                                  variant={formData.recurrenceMode === mode.value ? "default" : "outline"}
+                                  className="h-9 text-xs"
+                                  onClick={() => updateField("recurrenceMode", mode.value)}
+                                >
+                                  {mode.label}
+                                </Button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="grid sm:grid-cols-2 gap-3">
+                            <div className="space-y-2">
+                              <Label className="text-xs font-semibold uppercase text-muted-foreground">
+                                Every
+                              </Label>
+                              <Input
+                                type="number"
+                                min="1"
+                                max="30"
+                                value={formData.recurrenceInterval}
+                                onChange={(e) => updateField("recurrenceInterval", e.target.value)}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="text-xs font-semibold uppercase text-muted-foreground">
+                                Repeat Until
+                              </Label>
+                              <Input
+                                type="date"
+                                value={formData.recurrenceRepeatUntil}
+                                min={formData.date || new Date().toISOString().split("T")[0]}
+                                max={(() => {
+                                  const base = formData.date ? new Date(formData.date) : new Date();
+                                  base.setDate(base.getDate() + 365);
+                                  return base.toISOString().split("T")[0];
+                                })()}
+                                onChange={(e) => updateField("recurrenceRepeatUntil", e.target.value)}
+                              />
+                            </div>
+                          </div>
+
+                          {formData.recurrenceMode === StudyRoomRecurrenceMode.WEEKLY && (
+                            <div className="space-y-2">
+                              <Label className="text-xs font-semibold uppercase text-muted-foreground">
+                                Weekdays
+                              </Label>
+                              <div className="grid grid-cols-7 gap-2">
+                                {weekdayOptions.map((day) => {
+                                  const selected = formData.recurrenceWeekdays.includes(day.value);
+                                  return (
+                                    <Button
+                                      key={day.value}
+                                      type="button"
+                                      variant={selected ? "default" : "outline"}
+                                      className="h-8 px-0 text-[11px]"
+                                      onClick={() => {
+                                        const next = selected
+                                          ? formData.recurrenceWeekdays.filter((d) => d !== day.value)
+                                          : [...formData.recurrenceWeekdays, day.value];
+                                        updateField("recurrenceWeekdays", next.sort((a, b) => a - b));
+                                      }}
+                                    >
+                                      {day.label}
+                                    </Button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {formData.recurrenceMode === StudyRoomRecurrenceMode.CUSTOM_DATES && (
+                            <div className="space-y-2">
+                              <Label className="text-xs font-semibold uppercase text-muted-foreground">
+                                Custom Dates
+                              </Label>
+                              <Textarea
+                                rows={3}
+                                placeholder="YYYY-MM-DD, YYYY-MM-DD, ..."
+                                value={formData.recurrenceCustomDates}
+                                onChange={(e) => updateField("recurrenceCustomDates", e.target.value)}
+                                className="font-mono text-xs"
+                              />
+                            </div>
+                          )}
+
+                          <p className="text-xs text-muted-foreground">
+                            This will create approximately {estimateOccurrences(formData)} sessions.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                 </CardContent>
               </Card>
             </div>
@@ -593,7 +834,7 @@ export function CreateStudyRoomClient() {
                       />
                       <div className="flex justify-between text-xs text-muted-foreground mt-2 px-1">
                         <span>2</span>
-                        <span>10</span>
+                        <span>100</span>
                       </div>
                     </div>
                   </div>
