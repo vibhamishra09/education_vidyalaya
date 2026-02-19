@@ -2803,33 +2803,48 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				{/* CENTER: Main Controls */}
 				<div className="flex items-center gap-1 md:gap-3 flex-1 justify-center">
 					
-					{/* Share Screen */}
-					<div className="flex flex-col items-center justify-center group">
-						<button
-							onClick={async () => {
-								try {
-									const newState = !isScreenShareEnabled
-									if (newState) {
-										// Enable screen share with audio capture
-										const optionsWithAudio = { 
-											audio: {
-												echoCancellation: true,
-												noiseSuppression: true,
-												autoGainControl: true,
-											}
-										}
-										await localParticipant?.setScreenShareEnabled(newState, optionsWithAudio)
-									} else {
-										await localParticipant?.setScreenShareEnabled(newState)
+					{/* Share Screen - hidden on mobile (getDisplayMedia not supported) */}
+					{!isMobileViewport && (
+						<div className="flex flex-col items-center justify-center group">
+							<button
+								onClick={async () => {
+									if (!navigator.mediaDevices?.getDisplayMedia) {
+										showError('Not Supported', 'Screen sharing is not supported on this device or browser.')
+										return
 									}
-								} catch {}
-							}}
-							className={`h-9 w-9 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl hover:bg-sky-500/20 transition-all ${isScreenShareEnabled ? 'bg-sky-500/20 text-sky-400' : 'text-white/80 hover:text-sky-400'}`}
-							title="Share Screen"
-						>
-							{isScreenShareEnabled ? <MonitorOff className="h-4 w-4 md:h-5 md:w-5 font-bold" /> : <MonitorUp className="h-4 w-4 md:h-5 md:w-5" />}
-						</button>
-					</div>
+									try {
+										const newState = !isScreenShareEnabled
+										if (newState) {
+											// Enable screen share with audio capture
+											const optionsWithAudio = {
+												audio: {
+													echoCancellation: true,
+													noiseSuppression: true,
+													autoGainControl: true,
+												}
+											}
+											await localParticipant?.setScreenShareEnabled(newState, optionsWithAudio)
+										} else {
+											await localParticipant?.setScreenShareEnabled(newState)
+										}
+									} catch (err) {
+										const error = err as DOMException
+										if (error?.name === 'NotAllowedError') {
+											showError('Permission Denied', 'Screen sharing permission was denied.')
+										} else if (error?.name === 'NotSupportedError') {
+											showError('Not Supported', 'Screen sharing is not supported on this device or browser.')
+										} else {
+											showError('Screen Share Failed', 'Could not start screen sharing. Please try again.')
+										}
+									}
+								}}
+								className={`h-9 w-9 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl hover:bg-sky-500/20 transition-all ${isScreenShareEnabled ? 'bg-sky-500/20 text-sky-400' : 'text-white/80 hover:text-sky-400'}`}
+								title="Share Screen"
+							>
+								{isScreenShareEnabled ? <MonitorOff className="h-4 w-4 md:h-5 md:w-5 font-bold" /> : <MonitorUp className="h-4 w-4 md:h-5 md:w-5" />}
+							</button>
+						</div>
+					)}
 
 					{/* Chat */}
 					<div className="flex flex-col items-center justify-center group">
