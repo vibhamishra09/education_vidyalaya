@@ -1,4 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { MessageAudienceType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -87,12 +93,33 @@ export class ChatService {
     });
   }
 
-  async getMessages(channelId: string, limit = 100, cursor?: string) {
-    const where = { channelId };
+  async getMessages(
+    channelId: string,
+    limit = 100,
+    cursor?: string,
+    viewerUserId?: string,
+  ) {
+    const where = viewerUserId
+      ? {
+          channelId,
+          OR: [
+            { audienceType: MessageAudienceType.EVERYONE },
+            { senderId: viewerUserId },
+            { targetUserId: viewerUserId },
+          ],
+        }
+      : { channelId };
     const messages = await this.prisma.message.findMany({
       where,
       include: {
         sender: {
+          select: {
+            id: true,
+            name: true,
+            avatar: true,
+          },
+        },
+        targetUser: {
           select: {
             id: true,
             name: true,
@@ -108,18 +135,109 @@ export class ChatService {
     return messages;
   }
 
-  async sendMessage(channelId: string, senderId: string, content: string) {
-    // ensure membership
+  async isChannelMember(channelId: string, userId: string): Promise<boolean> {
     const member = await this.prisma.channelMember.findFirst({
-      where: { channelId, userId: senderId },
+      where: { channelId, userId },
+      select: { id: true },
     });
-    if (!member) {
+    return !!member;
+  }
+
+  async getChannelHostUserId(channelId: string): Promise<string | null> {
+    const sessionInfo = await this.getSessionInfoFromChannelId(channelId);
+    if (!sessionInfo) return null;
+
+    if (sessionInfo.externalType === 'studyRoom') {
+      const room = await this.prisma.studyRoom.findUnique({
+        where: { id: sessionInfo.externalId },
+        select: { createdById: true },
+      });
+      return room?.createdById ?? null;
+    }
+
+    if (sessionInfo.externalType === 'peerSession') {
+      const session = await this.prisma.peerSession.findUnique({
+        where: { id: sessionInfo.externalId },
+        select: { requestedToId: true },
+      });
+      return session?.requestedToId ?? null;
+    }
+
+    return null;
+  }
+
+  private async resolveTargetUserId(
+    channelId: string,
+    audienceType: MessageAudienceType,
+    targetUserId?: string,
+  ): Promise<string | null> {
+    if (audienceType === MessageAudienceType.EVERYONE) {
+      return null;
+    }
+
+    if (audienceType === MessageAudienceType.HOST) {
+      const hostUserId = await this.getChannelHostUserId(channelId);
+      if (!hostUserId) {
+        throw new NotFoundException('Host not found for this channel');
+      }
+      return hostUserId;
+    }
+
+    if (!targetUserId) {
+      throw new BadRequestException('targetUserId is required for USER audience');
+    }
+
+    const targetIsMember = await this.isChannelMember(channelId, targetUserId);
+    if (!targetIsMember) {
+      throw new ForbiddenException('Target user is not a member of this channel');
+    }
+
+    return targetUserId;
+  }
+
+  async sendMessage(
+    channelId: string,
+    senderId: string,
+    content: string,
+    audienceType: MessageAudienceType = MessageAudienceType.EVERYONE,
+    targetUserId?: string,
+  ) {
+    // ensure membership
+    const isMember = await this.isChannelMember(channelId, senderId);
+    if (!isMember) {
       throw new NotFoundException('Not a member of this channel');
     }
+
+    const resolvedTargetUserId = await this.resolveTargetUserId(
+      channelId,
+      audienceType,
+      targetUserId,
+    );
+
+    if (
+      audienceType !== MessageAudienceType.EVERYONE &&
+      resolvedTargetUserId === senderId
+    ) {
+      throw new BadRequestException('Cannot send scoped message to yourself');
+    }
+
     return this.prisma.message.create({
-      data: { channelId, senderId, content },
+      data: {
+        channelId,
+        senderId,
+        content,
+        audienceType,
+        targetUserId: resolvedTargetUserId,
+      },
       include: {
         sender: {
+          select: {
+            id: true,
+            name: true,
+            avatar: true,
+          },
+        },
+        targetUser: {
           select: {
             id: true,
             name: true,
@@ -133,7 +251,7 @@ export class ChatService {
   async getUserByClerkId(clerkId: string) {
     return this.prisma.user.findUnique({
       where: { clerkId },
-      select: { id: true },
+      select: { id: true, name: true, avatar: true },
     });
   }
 

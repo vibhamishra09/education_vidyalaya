@@ -8,6 +8,12 @@ import apiClient from '@/lib/api-client'
 import { Loader2, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
+type ChatIdentity = {
+	id: string
+	name: string
+	avatar?: string | null
+}
+
 export default function RoomPage() {
 	const params = useParams<{ room: string }>()
 	const router = useRouter()
@@ -27,6 +33,8 @@ export default function RoomPage() {
 	const [error, setError] = useState<string | null>(null)
 	const [loading, setLoading] = useState(true)
 	const [sessionEnded, setSessionEnded] = useState(false)
+	const [chatRecipients, setChatRecipients] = useState<ChatIdentity[]>([])
+	const [hostUser, setHostUser] = useState<ChatIdentity | null>(null)
 
 	useEffect(() => {
 		let mounted = true
@@ -121,6 +129,30 @@ export default function RoomPage() {
 						...data,
 						sessionType: isStudyRoom ? 'studyRoom' : 'peerSession',
 					})
+
+					const uniqueRecipients = new Map<string, ChatIdentity>()
+					const pushRecipient = (user: unknown) => {
+						if (!user || typeof user !== 'object') return
+						const identity = user as ChatIdentity
+						if (!identity.id || !identity.name) return
+						uniqueRecipients.set(identity.id, identity)
+					}
+
+					if (isStudyRoom) {
+						const createdBy = (data as { createdBy?: ChatIdentity }).createdBy
+						const participants =
+							(data as { participants?: ChatIdentity[] }).participants || []
+						pushRecipient(createdBy)
+						participants.forEach(pushRecipient)
+						if (createdBy) setHostUser(createdBy)
+					} else if (isPeerSession) {
+						const requestedBy = (data as { requestedBy?: ChatIdentity }).requestedBy
+						const requestedTo = (data as { requestedTo?: ChatIdentity }).requestedTo
+						pushRecipient(requestedBy)
+						pushRecipient(requestedTo)
+						if (requestedTo) setHostUser(requestedTo)
+					}
+					setChatRecipients(Array.from(uniqueRecipients.values()))
 
 					// Check if current user is the host
 					try {
@@ -238,7 +270,17 @@ export default function RoomPage() {
 	}
 
 	const serverUrl = process.env.NEXT_PUBLIC_LIVEKIT_WS_URL as string
-	return <EnhancedVideoRoom token={token} serverUrl={serverUrl} channelId={channelId} sessionData={sessionData} isHost={isHost} />
+	return (
+		<EnhancedVideoRoom
+			token={token}
+			serverUrl={serverUrl}
+			channelId={channelId}
+			sessionData={sessionData}
+			isHost={isHost}
+			chatRecipients={chatRecipients}
+			hostUser={hostUser}
+		/>
+	)
 }
 
 
