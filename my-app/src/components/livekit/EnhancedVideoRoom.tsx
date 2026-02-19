@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react'
 import { LiveKitRoom, useParticipants, useTracks, RoomAudioRenderer, useSpeakingParticipants, VideoTrack, useLocalParticipant, isTrackReference } from '@livekit/components-react'
 import { Track, RoomOptions, VideoPresets, LocalVideoTrack } from 'livekit-client'
 import '@livekit/components-styles'
-import { BackgroundProcessor, BackgroundBlur, VirtualBackground, BackgroundOptions } from '@livekit/track-processors'
+import { BackgroundProcessor, BackgroundBlur, VirtualBackground, BackgroundOptions, KrispNoiseFilter, isKrispNoiseFilterSupported } from '@livekit/track-processors'
 import { ChatWidget } from '@/components/chat/ChatWidget'
 import { Button } from '@/components/ui/button'
 import { 
@@ -29,6 +29,7 @@ import { useSessionExtension } from '@/hooks/use-session-extension'
 import { ExtensionRequestDialog } from '@/components/study-room/extension-request-dialog'
 import { EndMeetingDialog } from '@/components/study-room/end-meeting-dialog'
 import { useSessionModeration, RoomPermissions, PermissionRequest, ParticipantPermissionRequest } from '@/hooks/use-session-moderation'
+import { ChatRecipient } from '@/components/chat/MessageInput'
 
 // Stable virtual backgrounds constant to avoid re-creating array each render
 const VIRTUAL_BACKGROUNDS = [
@@ -77,15 +78,31 @@ interface SessionData {
 	[key: string]: unknown;
 }
 
+interface ChatIdentity {
+	id: string
+	name: string
+	avatar?: string | null
+}
+
 interface EnhancedVideoRoomProps {
 	token: string
 	serverUrl: string
 	channelId?: string | null
 	sessionData?: SessionData | null
 	isHost?: boolean
+	chatRecipients?: ChatRecipient[]
+	hostUser?: ChatIdentity | null
 }
 
-export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, isHost = false }: EnhancedVideoRoomProps) {
+export function EnhancedVideoRoom({
+	token,
+	serverUrl,
+	channelId,
+	sessionData,
+	isHost = false,
+	chatRecipients = [],
+	hostUser,
+}: EnhancedVideoRoomProps) {
 	const [showChat, setShowChat] = useState(false) // Start hidden on mobile
 	const [showParticipants, setShowParticipants] = useState(false)
 	const [isFullscreen, setIsFullscreen] = useState(false)
@@ -585,6 +602,8 @@ export function EnhancedVideoRoom({ token, serverUrl, channelId, sessionData, is
 					pendingParticipantRequests={pendingParticipantRequests}
 					clearParticipantRequest={clearParticipantRequest}
 					isMobileViewport={isMobileViewport}
+					chatRecipients={chatRecipients}
+					hostUser={hostUser}
 				/>
 		</LiveKitRoom>
 
@@ -686,6 +705,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	pendingParticipantRequests,
 	clearParticipantRequest,
 	isMobileViewport,
+	chatRecipients,
+	hostUser,
 }: {
 	isUserActive: boolean
 	showChat: boolean
@@ -738,6 +759,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	pendingParticipantRequests?: ParticipantPermissionRequest[]
 	clearParticipantRequest?: (userId: string, type: 'audio' | 'video') => void
 	isMobileViewport?: boolean
+	chatRecipients?: ChatRecipient[]
+	hostUser?: ChatIdentity | null
 }) {
 	// Room context removed to avoid race conditions, using localParticipant hook instead
 	const params = useParams<{ room: string }>()
@@ -816,6 +839,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	const localParticipantRef = useRef(localParticipant)
 	// Prevent concurrent effect applications
 	const isApplyingEffectRef = useRef(false)
+	// Krisp noise filter ref for cleanup
+	const krispFilterRef = useRef<ReturnType<typeof KrispNoiseFilter> | null>(null)
 	
 	// Helper function to get avatar URL from participant metadata
 	const getParticipantAvatar = useCallback((participant: { metadata?: string | null }): string | null => {
@@ -1253,6 +1278,21 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			}
 		}
 	}, [localParticipant])
+
+	// Apply Krisp AI noise suppression to microphone track
+	useEffect(() => {
+		if (!localParticipant || !isKrispNoiseFilterSupported()) return
+		const micPublication = localParticipant.microphoneTrackPublications.values().next().value
+		const micTrack = micPublication?.track
+		if (!micTrack) return
+		const filter = KrispNoiseFilter()
+		krispFilterRef.current = filter
+		micTrack.setProcessor(filter).catch(() => {})
+		return () => {
+			micTrack.stopProcessor().catch(() => {})
+			krispFilterRef.current = null
+		}
+	}, [localParticipant, isMicrophoneEnabled])
 	
 	// Stable ordering system: Maintain positions for visible participants
 	// Only reorder when participants join/leave, not when speaking status changes
@@ -3066,6 +3106,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 									<ChatWidget 
 										channelId={channelId} 
 										chatDisabled={chatDisabled}
+										recipients={chatRecipients}
+										hostUserId={hostUser?.id}
 										className="flex-1 min-h-0 overflow-hidden" 
 									/>
 								) : (

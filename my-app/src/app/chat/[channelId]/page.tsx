@@ -7,7 +7,14 @@ import apiClient from '@/lib/api-client'
 import { MessageList } from '@/components/chat/MessageList'
 import { MessageInput } from '@/components/chat/MessageInput'
 
-type Message = { id: string; senderId: string; content: string; createdAt: string }
+type Message = {
+	id: string
+	senderId: string
+	content: string
+	createdAt: string
+	audienceType?: 'EVERYONE' | 'HOST' | 'USER'
+	targetUserId?: string | null
+}
 
 export default function ChannelPage() {
 	const { channelId } = useParams<{ channelId: string }>()
@@ -111,12 +118,16 @@ export default function ChannelPage() {
 	if (!user) return <div className="p-4">Please sign in.</div>
 	if (error) return <div className="p-4 text-red-600">Error: {error}</div>
 
-	const onSend = async (text: string) => {
+	const onSend = async (
+		text: string,
+		audienceType: 'EVERYONE' | 'HOST' | 'USER' = 'EVERYONE',
+		targetUserId?: string,
+	) => {
 		if (!socket || !socket.connected) {
 			setError('Not connected to chat server')
 			return
 		}
-		socket.emit('message:send', { channelId, content: text })
+		socket.emit('message:send', { channelId, content: text, audienceType, targetUserId })
 	}
 
 	return (
