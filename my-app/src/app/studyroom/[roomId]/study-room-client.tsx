@@ -15,15 +15,15 @@ import {
   Calendar,
   Coins,
   Loader2,
-  ExternalLink,
   Check,
 } from "lucide-react";
-import { useStudyRoomDetails, useJoinStudyRoom } from "@/hooks/use-study-rooms";
+import { useStudyRoomDetails, useJoinStudyRoom, useCancelStudyRoom } from "@/hooks/use-study-rooms";
 import { useAuth } from "@clerk/nextjs";
 import { setAuthToken } from "@/lib/api-client";
 import { useToast } from "@/contexts/toast-context";
 import Link from "next/link";
 import { SessionStatus } from "@/types";
+import { StudyRoomEditScope } from "@/types/api.types";
 import { ReviewsSection } from "@/components/reviews/reviews-section";
 import { formatCoins } from "@/lib/utils/coin-format";
 import { ShareButton } from "@/components/share/share-button";
@@ -41,6 +41,7 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
   const { data: room, isLoading, error } = useStudyRoomDetails(roomId);
   console.log(room);
   const joinStudyRoom = useJoinStudyRoom();
+  const cancelStudyRoom = useCancelStudyRoom(roomId);
 
   // Check if video call can be joined (within 5 minutes of start time)
   useEffect(() => {
@@ -108,6 +109,28 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
       }
     } finally {
       setIsJoining(false);
+    }
+  };
+
+  const handleCancelRoom = async () => {
+    if (!room) return;
+    const hasSeries = !!room.seriesId;
+    let scope = StudyRoomEditScope.SINGLE;
+
+    if (hasSeries) {
+      const selected = window.prompt(
+        "Cancel scope: type 1 for this session, 2 for this and future, 3 for entire series",
+        "1",
+      );
+      if (selected === "2") scope = StudyRoomEditScope.THIS_AND_FUTURE;
+      if (selected === "3") scope = StudyRoomEditScope.ENTIRE_SERIES;
+    }
+
+    try {
+      await cancelStudyRoom.mutateAsync(scope);
+      showSuccess("Cancelled", "Study room cancellation applied successfully.");
+    } catch {
+      showError("Cancel Failed", "Could not cancel this study room.");
     }
   };
 
@@ -274,20 +297,6 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
                     </div>
                 )}
                 
-                {/* External Link */}
-                {room.gmeetLink && room.gmeetLink !== "https://meet.google.com/your-meeting-code" && (
-                    <div className="p-3 rounded-lg bg-blue-500/5 border border-blue-500/10 inline-block">
-                         <a 
-                            href={room.gmeetLink} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-2 text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors"
-                          >
-                            <ExternalLink className="h-3.5 w-3.5" />
-                            Join via Google Meet
-                          </a>
-                    </div>
-                )}
             </div>
 
             {/* Right Column: Action Card & Status */}
@@ -365,6 +374,19 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
                                     variant="outline"
                                     className="w-full rounded-lg h-9 hover:bg-primary/5 text-xs text-green-600 border-green-200/50 hover:text-green-700"
                                 />
+                                {role === "teacher" &&
+                                  (room.sessionStatus === SessionStatus.UPCOMING ||
+                                    room.sessionStatus === SessionStatus.ONGOING) && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="w-full h-9 rounded-lg text-xs border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                                      onClick={handleCancelRoom}
+                                      disabled={cancelStudyRoom.isPending}
+                                    >
+                                      {cancelStudyRoom.isPending ? "Cancelling..." : "Cancel Session"}
+                                    </Button>
+                                  )}
                             </div>
                         </CardContent>
                     </Card>

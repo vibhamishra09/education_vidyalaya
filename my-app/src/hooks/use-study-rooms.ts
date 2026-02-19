@@ -4,6 +4,7 @@ import { studyRoomsApi } from '@/lib/api';
 import { setAuthToken } from '@/lib/api-client';
 import {
   CreateStudyRoomDto,
+  StudyRoomEditScope,
   UpdateStudyRoomDto,
   StudyRoomFilters,
 } from '@/types/api.types';
@@ -130,6 +131,28 @@ export function useJoinStudyRoom() {
           type: 'active'
         }),
       ]);
+    },
+  });
+}
+
+// Cancel study room
+export function useCancelStudyRoom(studyRoomId: string) {
+  const queryClient = useQueryClient();
+  const { getToken, isLoaded } = useAuth();
+
+  return useMutation({
+    mutationFn: async (scope: StudyRoomEditScope = StudyRoomEditScope.SINGLE) => {
+      if (isLoaded) {
+        const token = await getToken();
+        if (token) {
+          setAuthToken(token);
+        }
+      }
+      return studyRoomsApi.cancelStudyRoom(studyRoomId, scope);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: studyRoomKeys.detail(studyRoomId) });
+      queryClient.invalidateQueries({ queryKey: studyRoomKeys.lists() });
     },
   });
 }

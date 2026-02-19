@@ -69,6 +69,14 @@ model StudyRoom {
   description     String?
   imageUrl        String?
   sessionStatus   SessionStatus
+  isRecurring     Boolean                @default(false)
+  recurrenceMode  StudyRoomRecurrenceMode?
+  seriesId        String?
+  seriesRootId    String?
+  occurrenceIndex Int?
+  recurrenceEndDate DateTime?
+  occurrenceDateLocal DateTime?
+  timezone        String?
   date            DateTime
   duration        Int
   maxParticipants Int
@@ -90,6 +98,9 @@ model StudyRoom {
 
   @@index([createdById])
   @@index([sessionStatus, date])
+  @@index([seriesId, date])
+  @@index([seriesId, occurrenceIndex])
+  @@index([seriesId, sessionStatus, date])
 }
 
 model PeerSession {
@@ -266,6 +277,12 @@ enum PaymentStatus {
 enum NotifType {
   URGENT
   NORMAL
+}
+
+enum StudyRoomRecurrenceMode {
+  DAILY
+  WEEKLY
+  CUSTOM_DATES
 }
 
 enum MessageAudienceType {

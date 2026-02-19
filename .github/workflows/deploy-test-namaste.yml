@@ -14,10 +14,6 @@ env:
   ECR_REPOSITORY: webyalaya-test-backend-app
   ECS_CLUSTER: webyalaya-test-backend-cluster
   ECS_SERVICE: webyalaya-test-backend-task-service
-  MIGRATION_TASK_DEF: webyalaya-test-backend-migrate-task
-  MIGRATION_SG_NAME: webyalaya-test-backend-sg
-  SUBNET_TAG_KEY: Name
-  SUBNET_TAG_VALUE: webyalaya-subnet
 
 permissions:
   contents: read
@@ -30,8 +26,6 @@ jobs:
     outputs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
-      prisma_migrations: ${{ steps.prisma_migrations.outputs.changed }}
-      skip_migrate: ${{ steps.skip_migrate.outputs.skip }}
       skip_deploy: ${{ steps.skip_deploy.outputs.skip }}
     steps:
       - name: Checkout code
@@ -48,61 +42,6 @@ jobs:
               - 'backend/**'
             frontend:
               - 'my-app/**'
-      - name: Lookup last successful test deploy SHA
-        id: last_success
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const [owner, repo] = process.env.GITHUB_REPOSITORY.split('/');
-            const branch = context.ref.replace('refs/heads/', '');
-            const { data } = await github.rest.actions.listWorkflowRuns({
-              owner,
-              repo,
-              workflow_id: 'deploy-test-namaste.yml',
-              branch,
-              status: 'success',
-              per_page: 1
-            });
-            const sha = data.workflow_runs?.[0]?.head_sha ?? '';
-            core.info(`Last successful test deploy SHA: ${sha || 'none found'}`);
-            core.setOutput('sha', sha);
-      - name: Detect Prisma migration changes since last test deploy
-        id: prisma_migrations
-        run: |
-          LAST_SUCCESS="${{ steps.last_success.outputs.sha }}"
-          TARGET_PATH="backend/prisma/migrations"
-
-          if [ ! -d "$TARGET_PATH" ]; then
-            echo "No migrations directory present. Treating as no change."
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          if [ -z "$LAST_SUCCESS" ]; then
-            echo "No prior successful test deployment. Running migrations."
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          if git diff --quiet "$LAST_SUCCESS" HEAD -- "$TARGET_PATH"; then
-            echo "No Prisma migration changes detected."
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "Prisma migration changes detected."
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          fi
-      - name: Detect skip-prisma-migrate directive in commit message
-        id: skip_migrate
-        run: |
-          COMMIT_MSG="${{ github.event.head_commit.message }}"
-          if echo "$COMMIT_MSG" | grep -iq "\[skip prisma migrate\]"; then
-            echo "Skip prisma migrate directive found."
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "No skip directive found."
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          fi
       - name: Detect skip-test-namaste directive in commit message
         id: skip_deploy
         run: |
@@ -118,8 +57,6 @@ jobs:
         run: |
           echo "Backend changes detected: ${{ steps.filter.outputs.backend }}"
           echo "Frontend changes detected: ${{ steps.filter.outputs.frontend }}"
-          echo "Prisma migrations changed: ${{ steps.prisma_migrations.outputs.changed }}"
-          echo "Skip prisma migrate flag: ${{ steps.skip_migrate.outputs.skip }}"
           echo "Skip test-namaste deploy flag: ${{ steps.skip_deploy.outputs.skip }}"
 
   deploy-backend:
@@ -185,58 +122,6 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:test-$IMAGE_TAG
 
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY" >> $GITHUB_OUTPUT
-
-      - name: Run Prisma Migrations in ECS
-        if: needs.changes.outputs.prisma_migrations == 'true' && needs.changes.outputs.skip_migrate != 'true' && needs.changes.outputs.skip_deploy != 'true'
-        run: |
-          TASK_DEF="${{ env.MIGRATION_TASK_DEF }}"
-          CLUSTER="${{ env.ECS_CLUSTER }}"
-          LAUNCH_TYPE="FARGATE"
-
-          SECURITY_GROUPS=$(aws ec2 describe-security-groups \
-            --filters Name=group-name,Values="${{ env.MIGRATION_SG_NAME }}" \
-            --query 'SecurityGroups[0].GroupId' --output text)
-
-          SUBNETS=$(aws ec2 describe-subnets \
-            --filters "Name=tag:${{ env.SUBNET_TAG_KEY }},Values=${{ env.SUBNET_TAG_VALUE }}" \
-            --query 'Subnets[*].SubnetId' --output text | tr '\t' ',')
-            
-          if [ -z "$SECURITY_GROUPS" ] || [ -z "$SUBNETS" ]; then
-              echo "Failed to look up necessary network IDs. SG: $SECURITY_GROUPS, Subnets: $SUBNETS"
-              exit 1
-          fi
-
-          echo "Found Security Group ID: $SECURITY_GROUPS"
-          echo "Found Subnet IDs: $SUBNETS"
-          
-          echo "Starting migration task for Task Definition: $TASK_DEF"
-
-          TASK_ARN=$(aws ecs run-task \
-            --cluster "$CLUSTER" \
-            --launch-type "$LAUNCH_TYPE" \
-            --task-definition "$TASK_DEF" \
-            --count 1 \
-            --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SECURITY_GROUPS],assignPublicIp=DISABLED}" \
-            --query 'tasks[0].taskArn' --output text)
-
-          if [ -z "$TASK_ARN" ] || [ "$TASK_ARN" == "None" ]; then
-              echo "Failed to start migration task. Exiting."
-              exit 1
-          fi
-          
-          echo "Started migration task ARN: $TASK_ARN"
-
-          aws ecs wait tasks-stopped --cluster "$CLUSTER" --tasks "$TASK_ARN"
-
-          EXIT_CODE=$(aws ecs describe-tasks --cluster "$CLUSTER" --tasks "$TASK_ARN" \
-            --query 'tasks[0].containers[0].exitCode' --output text)
-
-          if [ "$EXIT_CODE" != "0" ]; then
-            echo "Migration task failed with exit code $EXIT_CODE"
-            exit 1 
-          fi
-
-          echo "Migration task succeeded. Proceeding with service deployment."
 
       - name: Force ECS to pull latest image
         run: |
