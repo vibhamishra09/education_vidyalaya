@@ -3002,9 +3002,9 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			</div>
 
 			{/* Unified Sidebar - Tabbed Interface */}
-			{(showChat || showParticipants) && (
-				<>
-					{/* Mobile Overlay Backdrop */}
+			<>
+				{/* Mobile Overlay Backdrop */}
+				{(showChat || showParticipants) && (
 					<div
 						className="fixed inset-0 bg-black/60 z-40 md:hidden"
 						onClick={() => {
@@ -3012,9 +3012,14 @@ const VideoRoomContent = memo(function VideoRoomContent({
 							setShowParticipants(false)
 						}}
 					/>
-					
-					{/* Sidebar Container */}
-					<div className="fixed md:absolute right-0 top-0 bottom-0 w-full sm:w-[85%] md:w-96 bg-[#1a1a1a]/95 md:bg-[#1a1a1a]/95 backdrop-blur-md border-l border-white/10 z-[60] shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
+				)}
+				
+				{/* Sidebar Container */}
+				<div className={`fixed md:absolute right-0 top-0 bottom-0 w-full sm:w-[85%] md:w-96 bg-[#1a1a1a]/95 md:bg-[#1a1a1a]/95 backdrop-blur-md border-l border-white/10 z-[60] shadow-2xl flex flex-col transition-all duration-300 ${
+					(showChat || showParticipants)
+						? 'translate-x-0 opacity-100 pointer-events-auto'
+						: 'translate-x-full opacity-0 pointer-events-none'
+				}`}>
 						{/* Drag handle for mobile */}
 						<div className="md:hidden flex justify-center py-2 relative z-10">
 							<div className="w-10 h-1 bg-white/30 rounded-full" />
@@ -3055,31 +3060,30 @@ const VideoRoomContent = memo(function VideoRoomContent({
 
 						{/* Content Area */}
 						<div className="flex-1 flex flex-col overflow-hidden relative">
-							{showChat ? (
-								/* Chat View */
-								<div className="absolute inset-0 flex flex-col bg-gradient-to-b from-[#0a0a0a] to-[#0f0f0f]">
-									{channelId ? (
-										<ChatWidget 
-											channelId={channelId} 
-											chatDisabled={chatDisabled}
-											className="flex-1 min-h-0 overflow-hidden" 
-										/>
-									) : (
-										<div className="flex-1 flex items-center justify-center p-6">
-											<div className="text-center space-y-3">
-												<div className="h-12 w-12 rounded-full bg-white/5 flex items-center justify-center mx-auto">
-													<MessageSquare className="h-6 w-6 text-white/30" />
-												</div>
-												<p className="text-white/50 text-sm font-medium">
-													Chat is not available for this session
-												</p>
+							{/* Chat View */}
+							<div className={`absolute inset-0 flex flex-col bg-gradient-to-b from-[#0a0a0a] to-[#0f0f0f] ${showChat ? '' : 'hidden'}`}>
+								{channelId ? (
+									<ChatWidget 
+										channelId={channelId} 
+										chatDisabled={chatDisabled}
+										className="flex-1 min-h-0 overflow-hidden" 
+									/>
+								) : (
+									<div className="flex-1 flex items-center justify-center p-6">
+										<div className="text-center space-y-3">
+											<div className="h-12 w-12 rounded-full bg-white/5 flex items-center justify-center mx-auto">
+												<MessageSquare className="h-6 w-6 text-white/30" />
 											</div>
+											<p className="text-white/50 text-sm font-medium">
+												Chat is not available for this session
+											</p>
 										</div>
-									)}
-								</div>
-							) : (
-								/* Participants View */
-								<div className="absolute inset-0 flex flex-col bg-gradient-to-b from-[#0a0a0a] to-[#0f0f0f]">
+									</div>
+								)}
+							</div>
+
+							{/* Participants View */}
+							<div className={`absolute inset-0 flex flex-col bg-gradient-to-b from-[#0a0a0a] to-[#0f0f0f] ${showChat ? 'hidden' : ''}`}>
 									{/* Host Controls Section - Only visible to hosts */}
 									{isHost && (
 										<div className="px-4 py-3 border-b border-white/10 bg-gradient-to-br from-[#1f1f1f] to-[#1a1a1a] flex-shrink-0">
@@ -3195,11 +3199,9 @@ const VideoRoomContent = memo(function VideoRoomContent({
 										/>
 									</div>
 								</div>
-							)}
 						</div>
 					</div>
-				</>
-			)}
+			</>
 		</div>
 
 		{/* Background Effects Popup - Floating Panel */}
