@@ -99,6 +99,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
         client.data.userId = auth.userId;
         client.data.clerkId = auth.userId;
+        client.emit('authenticated');
         this.logger.debug('WebSocket authenticated for user:', auth.userId);
       } catch (verifyError: any) {
         this.logger.debug(
