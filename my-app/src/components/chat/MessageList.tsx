@@ -5,6 +5,8 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 type Message = { 
 	id: string
 	senderId: string
+	audienceType?: 'EVERYONE' | 'HOST' | 'USER'
+	targetUserId?: string | null
 	content: string
 	createdAt: string
 	sender?: {
@@ -12,9 +14,22 @@ type Message = {
 		name: string
 		avatar?: string | null
 	}
+	targetUser?: {
+		id: string
+		name: string
+		avatar?: string | null
+	} | null
 }
 
-export function MessageList({ messages }: { messages: Message[] }) {
+export function MessageList({
+	messages,
+	currentUserId,
+	hostUserId,
+}: {
+	messages: Message[]
+	currentUserId?: string
+	hostUserId?: string | null
+}) {
 	const bottomRef = useRef<HTMLDivElement | null>(null)
 	const containerRef = useRef<HTMLDivElement | null>(null)
 	
@@ -49,6 +64,16 @@ export function MessageList({ messages }: { messages: Message[] }) {
 					const senderName = m.sender?.name || 'Unknown User'
 					const senderAvatar = m.sender?.avatar
 					const initials = senderName.charAt(0).toUpperCase()
+					const audienceType = m.audienceType || 'EVERYONE'
+					const targetLabel =
+						audienceType === 'EVERYONE'
+							? 'Everyone'
+							: audienceType === 'HOST'
+								? 'Host'
+								: m.targetUser?.name || 'User'
+					const isPrivateToCurrentUser =
+						audienceType !== 'EVERYONE' &&
+						(currentUserId === m.senderId || currentUserId === m.targetUserId)
 
 					return (
 						<div key={m.id} className="flex gap-3 hover:bg-white/5 rounded-lg p-2 transition-colors group">
@@ -60,10 +85,23 @@ export function MessageList({ messages }: { messages: Message[] }) {
 							</Avatar>
 							<div className="flex-1 min-w-0">
 								<div className="flex items-baseline gap-2 mb-1">
-								<span className="font-semibold text-sm text-white/95 truncate">{senderName}</span>
-								<span className="text-[10px] text-white/50 flex-shrink-0">{formatTime(m.createdAt)}</span>
-							</div>
-							<div className="text-sm text-white/85 break-words leading-relaxed">
+									<span className="font-semibold text-sm text-white/95 truncate">
+										{senderName}
+										{hostUserId && m.senderId === hostUserId ? ' (Host)' : ''}
+									</span>
+									<span className="text-[10px] text-white/50 flex-shrink-0">{formatTime(m.createdAt)}</span>
+								</div>
+								<div className="flex items-center gap-2 mb-1">
+									<span className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-white/70">
+										To {targetLabel}
+									</span>
+									{isPrivateToCurrentUser && (
+										<span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-300">
+											Private
+										</span>
+									)}
+								</div>
+								<div className="text-sm text-white/85 break-words leading-relaxed">
 									{m.content}
 								</div>
 							</div>

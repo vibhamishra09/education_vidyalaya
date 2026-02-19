@@ -49,6 +49,7 @@ model User {
   userSkills            UserSkill[]
   channelMemberships ChannelMember[]
   messagesSent       Message[]
+  messagesTargeted   Message[]               @relation("TargetedMessages")
   availability          UserAvailability[]
   blockedSlots          BlockedTimeSlot[]
   achievements          UserAchievement[]
@@ -267,6 +268,12 @@ enum NotifType {
   NORMAL
 }
 
+enum MessageAudienceType {
+  EVERYONE
+  HOST
+  USER
+}
+
 model Channel {
   id        String          @id @default(cuid())
   name      String
@@ -295,11 +302,17 @@ model Message {
   id        String   @id @default(cuid())
   channelId String
   senderId  String
+  audienceType MessageAudienceType @default(EVERYONE)
+  targetUserId String?
   content   String
   createdAt DateTime @default(now())
 
   channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
   sender    User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  targetUser User?   @relation("TargetedMessages", fields: [targetUserId], references: [id], onDelete: SetNull)
+
+  @@index([channelId, createdAt])
+  @@index([channelId, targetUserId, createdAt])
 }
 
 model UserAvailability {
