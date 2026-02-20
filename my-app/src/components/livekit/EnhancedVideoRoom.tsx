@@ -3,7 +3,8 @@ import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react'
 import { LiveKitRoom, useParticipants, useTracks, RoomAudioRenderer, useSpeakingParticipants, VideoTrack, useLocalParticipant, isTrackReference } from '@livekit/components-react'
 import { Track, RoomOptions, VideoPresets, LocalVideoTrack } from 'livekit-client'
 import '@livekit/components-styles'
-import { BackgroundProcessor, BackgroundBlur, VirtualBackground, BackgroundOptions, KrispNoiseFilter, isKrispNoiseFilterSupported } from '@livekit/track-processors'
+import { BackgroundProcessor, BackgroundBlur, VirtualBackground, BackgroundOptions } from '@livekit/track-processors'
+import { KrispNoiseFilter, isKrispNoiseFilterSupported } from '@livekit/krisp-noise-filter'
 import { ChatWidget } from '@/components/chat/ChatWidget'
 import { Button } from '@/components/ui/button'
 import { 
@@ -1282,8 +1283,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	// Apply Krisp AI noise suppression to microphone track
 	useEffect(() => {
 		if (!localParticipant || !isKrispNoiseFilterSupported()) return
-		const micPublication = localParticipant.microphoneTrackPublications.values().next().value
-		const micTrack = micPublication?.track
+		const micPublication = localParticipant.getTrackPublication(Track.Source.Microphone)
+		const micTrack = micPublication?.audioTrack
 		if (!micTrack) return
 		const filter = KrispNoiseFilter()
 		krispFilterRef.current = filter
