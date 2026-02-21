@@ -13,7 +13,7 @@ const isPublicRoute = createRouteMatcher([
 const isApiRoute = createRouteMatcher(['/api(.*)']);
 
 export default clerkMiddleware(async (auth, req: NextRequest) => {
-  const { isAuthenticated, sessionClaims, redirectToSignIn, getToken, userId } = await auth();
+  const { isAuthenticated, sessionClaims, redirectToSignIn } = await auth();
 
   // Allow all API routes to pass through without onboarding checks
   if (isApiRoute(req)) {
@@ -24,51 +24,11 @@ export default clerkMiddleware(async (auth, req: NextRequest) => {
   // - If they have already completed onboarding, redirect them away (e.g., to home).
   // - Otherwise, let them proceed so they can finish onboarding.
   if (isAuthenticated && isOnboardingRoute(req)) {
-    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-    console.info(
-      `[OnboardingRoute] Running backend onboarding-status check for userId=${userId ?? 'unknown'}`,
-    );
-
-    try {
-      const token = await getToken();
-      if (token) {
-        const response = await fetch(`${backendUrl}/api/users/onboarding-status`, {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          cache: 'no-store',
-        });
-
-        if (response.ok) {
-          const data = (await response.json()) as { onboardingComplete?: boolean };
-          console.info(
-            `[OnboardingRoute] Backend onboarding-status result for userId=${userId ?? 'unknown'}: onboardingComplete=${data.onboardingComplete === true}`,
-          );
-          if (data.onboardingComplete === true) {
-            // If onboarding is complete, redirect away from onboarding page
-            return NextResponse.redirect(new URL('/', req.url));
-          }
-          return NextResponse.next();
-        }
-
-        console.warn(
-          `[OnboardingRoute] Backend onboarding-status check failed for userId=${userId ?? 'unknown'} with status=${response.status}. Falling back to session claims.`,
-        );
-      }
-    } catch {
-      // Fallback to Clerk session claims below when backend check is unavailable.
-      console.warn(
-        `[OnboardingRoute] Backend onboarding-status check threw for userId=${userId ?? 'unknown'}. Falling back to session claims.`,
-      );
-    }
-
-    // Fallback for transient backend failures while preserving current behavior.
     if (sessionClaims?.metadata?.onboardingComplete) {
+      // If onboarding is complete, redirect away from onboarding page
       return NextResponse.redirect(new URL('/', req.url));
     }
-
+    // Otherwise, let the user proceed to onboarding
     return NextResponse.next();
   }
 

@@ -86,10 +86,4 @@ export class UsersController {
       skillsIWant: skillsIWant || [],
     });
   }
-
-  @Get('users/onboarding-status')
-  @UseGuards(ClerkAuthGuard)
-  async getOnboardingStatus(@CurrentUser() userId: string) {
-    return this.usersService.syncOnboardingMetadata(userId);
-  }
 }
