@@ -95,27 +95,19 @@ export class OptionalClerkAuthGuard implements CanActivate {
 
     // Update Clerk metadata to mark onboarding as complete when upgraded to production
     try {
-      // First, get the user to merge existing metadata
-      const clerkUser = await this.clerkClient.users.getUser(clerkId);
-      const existingMetadata = (clerkUser.publicMetadata as Record<string, any>) || {};
-      
-      // Merge with existing metadata
       await this.clerkClient.users.updateUser(clerkId, {
         publicMetadata: {
-          ...existingMetadata,
           onboardingComplete: true,
         },
       });
       this.logger.debug(
         `[OptionalIdentitySync] Updated Clerk metadata: onboardingComplete=true for clerkId ${clerkId}`,
       );
-    } catch (error: any) {
+    } catch (error) {
       // Log error but don't fail the upgrade process
-      const errorMessage = error?.message || error?.toString() || 'Unknown error';
-      const errorStack = error?.stack || '';
       this.logger.warn(
-        `[OptionalIdentitySync] Failed to update Clerk metadata for clerkId ${clerkId}: ${errorMessage}`,
-        errorStack,
+        `[OptionalIdentitySync] Failed to update Clerk metadata for clerkId ${clerkId}:`,
+        error,
       );
     }
   }

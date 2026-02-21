@@ -103,14 +103,8 @@ export class ClerkAuthGuard implements CanActivate {
 
     // Update Clerk metadata to mark onboarding as complete when upgraded to production
     try {
-      // First, get the user to merge existing metadata
-      const clerkUser = await this.clerkClient.users.getUser(clerkId);
-      const existingMetadata = (clerkUser.publicMetadata as Record<string, any>) || {};
-      
-      // Merge with existing metadata
       await this.clerkClient.users.updateUser(clerkId, {
         publicMetadata: {
-          ...existingMetadata,
           onboardingComplete: true,
         },
       });
@@ -120,18 +114,15 @@ export class ClerkAuthGuard implements CanActivate {
       console.log(
         `[IdentitySync] Updated Clerk metadata: onboardingComplete=true for clerkId ${clerkId}`,
       );
-    } catch (error: any) {
+    } catch (error) {
       // Log error but don't fail the upgrade process
-      const errorMessage = error?.message || error?.toString() || 'Unknown error';
-      const errorStack = error?.stack || '';
       this.logger.warn(
-        `[IdentitySync] Failed to update Clerk metadata for clerkId ${clerkId}: ${errorMessage}`,
-        errorStack,
+        `[IdentitySync] Failed to update Clerk metadata for clerkId ${clerkId}:`,
+        error,
       );
       console.warn(
         `[IdentitySync] Failed to update Clerk metadata for clerkId ${clerkId}:`,
-        errorMessage,
-        errorStack,
+        error,
       );
     }
   }
@@ -206,21 +197,10 @@ export class ClerkAuthGuard implements CanActivate {
       return true;
     } catch (error) {
       if (error instanceof UnauthorizedException) {
-        // Log the specific unauthorized error for debugging
-        this.logger.warn(`[ClerkAuthGuard] Authentication failed: ${error.message}`, {
-          url: request.url,
-          method: request.method,
-          hasAuthHeader: !!request.headers.authorization,
-        });
         throw error;
       }
 
-      this.logger.warn('Clerk authentication error:', {
-        error: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-        url: request.url,
-        method: request.method,
-      });
+      this.logger.debug('Clerk authentication error:', error);
       throw new UnauthorizedException('Invalid or expired token');
     }
   }
