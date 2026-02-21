@@ -92,24 +92,6 @@ export class OptionalClerkAuthGuard implements CanActivate {
         upgradedToProduction: true,
       },
     });
-
-    // Update Clerk metadata to mark onboarding as complete when upgraded to production
-    try {
-      await this.clerkClient.users.updateUser(clerkId, {
-        publicMetadata: {
-          onboardingComplete: true,
-        },
-      });
-      this.logger.debug(
-        `[OptionalIdentitySync] Updated Clerk metadata: onboardingComplete=true for clerkId ${clerkId}`,
-      );
-    } catch (error) {
-      // Log error but don't fail the upgrade process
-      this.logger.warn(
-        `[OptionalIdentitySync] Failed to update Clerk metadata for clerkId ${clerkId}:`,
-        error,
-      );
-    }
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
