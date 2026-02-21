@@ -20,6 +20,7 @@ model User {
   wallet                String?                // Hedera wallet address
   hourlyRate            Decimal?               @db.Decimal(36, 16)
   clerkId               String                 @unique
+  upgradedToProduction  Boolean                @default(false) @map("upgraded_to_production")
   createdAt             DateTime               @default(now())
   onboarded             Boolean                @default(false)
   updatedAt             DateTime               @updatedAt
