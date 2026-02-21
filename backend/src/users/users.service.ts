@@ -1,5 +1,4 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException, Logger } from '@nestjs/common';
-import { createClerkClient } from '@clerk/backend';
 import { Prisma, SessionStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateUserDto } from './dto/user.dto';
@@ -7,55 +6,8 @@ import { UpdateUserDto } from './dto/user.dto';
 @Injectable()
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
-  private clerkClient;
 
-  constructor(private prisma: PrismaService) {
-    this.clerkClient = createClerkClient({
-      secretKey: process.env.CLERK_SECRET_KEY,
-      publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
-    });
-  }
-
-  async syncOnboardingMetadata(clerkId: string): Promise<{ onboardingComplete: boolean }> {
-    const user = await this.prisma.user.findUnique({
-      where: { clerkId },
-      select: { onboarded: true },
-    });
-
-    const onboardingComplete = user?.onboarded === true;
-    this.logger.log(
-      `[OnboardingSync] Evaluated DB onboarding status for clerkId ${clerkId}: ${onboardingComplete}`,
-    );
-
-    try {
-      const clerkUser = await this.clerkClient.users.getUser(clerkId);
-      const existingMetadata = (clerkUser.publicMetadata as Record<string, unknown>) || {};
-      const currentOnboardingFlag = existingMetadata.onboardingComplete === true;
-
-      if (currentOnboardingFlag !== onboardingComplete) {
-        await this.clerkClient.users.updateUser(clerkId, {
-          publicMetadata: {
-            ...existingMetadata,
-            onboardingComplete,
-          },
-        });
-        this.logger.log(
-          `[OnboardingSync] Updated Clerk public metadata for clerkId ${clerkId}: onboardingComplete=${onboardingComplete}`,
-        );
-      } else {
-        this.logger.log(
-          `[OnboardingSync] Clerk public metadata already in sync for clerkId ${clerkId}: onboardingComplete=${onboardingComplete}`,
-        );
-      }
-    } catch (error: any) {
-      const errorMessage = error?.message || error?.toString() || 'Unknown error';
-      this.logger.warn(
-        `[OnboardingSync] Failed to sync Clerk public metadata for clerkId ${clerkId}: ${errorMessage}`,
-      );
-    }
-
-    return { onboardingComplete };
-  }
+  constructor(private prisma: PrismaService) {}
 
   async getCurrentUser(clerkUserId: string) {
     const user = await this.prisma.user.findUnique({
