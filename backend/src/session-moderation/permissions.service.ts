@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { MessageAudienceType } from '@prisma/client';
 import { redisClient } from '../redis/redis.provider';
 import { LoggerService } from '../common/logger';
 
@@ -7,28 +8,36 @@ import { LoggerService } from '../common/logger';
  * 
  * Redis Data Structure:
  * - Global Room Settings: room:{sessionId}:settings (Hash)
- *   Fields: lockAudio (string "true"/"false"), lockVideo, chatDisabled
+ *   Fields: lockAudio (string "true"/"false"), lockVideo, chatDisabled, hideParticipantList
  * 
  * - Individual Overrides: room:{sessionId}:permissions:{userId} (Hash)
- *   Fields: canAudio, canVideo, canChat (string "true"/"false")
+ *   Fields: canAudio, canVideo, canChat, canChatEveryone, canChatHost, canChatUser (string "true"/"false")
  */
 
 export interface RoomSettings {
   lockAudio: boolean;
   lockVideo: boolean;
   chatDisabled: boolean;
+  hideParticipantList: boolean;
 }
 
 export interface UserPermissions {
   canAudio: boolean;
   canVideo: boolean;
   canChat: boolean;
+  canChatEveryone: boolean;
+  canChatHost: boolean;
+  canChatUser: boolean;
 }
 
 export interface ComputedPermissions {
   allowAudio: boolean;
   allowVideo: boolean;
   allowChat: boolean;
+  allowChatEveryone: boolean;
+  allowChatHost: boolean;
+  allowChatUser: boolean;
+  allowParticipantList: boolean;
 }
 
 @Injectable()
@@ -67,6 +76,7 @@ export class PermissionsService {
         lockAudio: settings.lockAudio === 'true',
         lockVideo: settings.lockVideo === 'true',
         chatDisabled: settings.chatDisabled === 'true',
+        hideParticipantList: settings.hideParticipantList === 'true',
       };
     } catch (error) {
       this.logger.error(`Error getting room settings for ${sessionId}:`, error);
@@ -75,6 +85,7 @@ export class PermissionsService {
         lockAudio: false,
         lockVideo: false,
         chatDisabled: false,
+        hideParticipantList: false,
       };
     }
   }
@@ -95,6 +106,9 @@ export class PermissionsService {
       }
       if (settings.chatDisabled !== undefined) {
         updates.chatDisabled = settings.chatDisabled.toString();
+      }
+      if (settings.hideParticipantList !== undefined) {
+        updates.hideParticipantList = settings.hideParticipantList.toString();
       }
       
       if (Object.keys(updates).length > 0) {
@@ -132,6 +146,15 @@ export class PermissionsService {
       if (permissions.canChat !== undefined) {
         result.canChat = permissions.canChat === 'true';
       }
+      if (permissions.canChatEveryone !== undefined) {
+        result.canChatEveryone = permissions.canChatEveryone === 'true';
+      }
+      if (permissions.canChatHost !== undefined) {
+        result.canChatHost = permissions.canChatHost === 'true';
+      }
+      if (permissions.canChatUser !== undefined) {
+        result.canChatUser = permissions.canChatUser === 'true';
+      }
       
       return result;
     } catch (error) {
@@ -156,6 +179,15 @@ export class PermissionsService {
       }
       if (permissions.canChat !== undefined) {
         updates.canChat = permissions.canChat.toString();
+      }
+      if (permissions.canChatEveryone !== undefined) {
+        updates.canChatEveryone = permissions.canChatEveryone.toString();
+      }
+      if (permissions.canChatHost !== undefined) {
+        updates.canChatHost = permissions.canChatHost.toString();
+      }
+      if (permissions.canChatUser !== undefined) {
+        updates.canChatUser = permissions.canChatUser.toString();
       }
       
       if (Object.keys(updates).length > 0) {
@@ -200,6 +232,10 @@ export class PermissionsService {
           allowAudio: true,
           allowVideo: true,
           allowChat: true,
+          allowChatEveryone: true,
+          allowChatHost: true,
+          allowChatUser: true,
+          allowParticipantList: true,
         };
       }
       
@@ -211,6 +247,11 @@ export class PermissionsService {
       // Compute effective permissions
       // Priority: User override > Global setting
       // Note: lockAudio=true means audio is NOT allowed (inverted logic)
+      const allowChat =
+        userOverrides?.canChat !== undefined
+          ? userOverrides.canChat
+          : !roomSettings.chatDisabled;
+
       return {
         allowAudio: userOverrides?.canAudio !== undefined 
           ? userOverrides.canAudio 
@@ -218,9 +259,11 @@ export class PermissionsService {
         allowVideo: userOverrides?.canVideo !== undefined 
           ? userOverrides.canVideo 
           : !roomSettings.lockVideo,
-        allowChat: userOverrides?.canChat !== undefined 
-          ? userOverrides.canChat 
-          : !roomSettings.chatDisabled,
+        allowChat,
+        allowChatEveryone: allowChat && (userOverrides?.canChatEveryone ?? true),
+        allowChatHost: allowChat && (userOverrides?.canChatHost ?? true),
+        allowChatUser: allowChat && (userOverrides?.canChatUser ?? true),
+        allowParticipantList: !roomSettings.hideParticipantList,
       };
     } catch (error) {
       this.logger.error(`Error computing permissions for ${sessionId}/${userId}:`, error);
@@ -229,6 +272,10 @@ export class PermissionsService {
         allowAudio: true,
         allowVideo: true,
         allowChat: true,
+        allowChatEveryone: true,
+        allowChatHost: true,
+        allowChatUser: true,
+        allowParticipantList: true,
       };
     }
   }
@@ -250,6 +297,29 @@ export class PermissionsService {
       case 'video':
         return computed.allowVideo;
       case 'chat':
+        return computed.allowChat;
+    }
+  }
+
+  async hasAudiencePermission(
+    sessionId: string,
+    userId: string,
+    audienceType: MessageAudienceType,
+    isHost: boolean = false,
+  ): Promise<boolean> {
+    const computed = await this.getComputedPermissions(sessionId, userId, isHost);
+    if (!computed.allowChat) {
+      return false;
+    }
+
+    switch (audienceType) {
+      case MessageAudienceType.EVERYONE:
+        return computed.allowChatEveryone;
+      case MessageAudienceType.HOST:
+        return computed.allowChatHost;
+      case MessageAudienceType.USER:
+        return computed.allowChatUser;
+      default:
         return computed.allowChat;
     }
   }

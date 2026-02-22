@@ -198,6 +198,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     try {
       // Get session info from channel to check chat permissions
       const sessionInfo = await this.chatService.getSessionInfoFromChannelId(payload.channelId);
+      const hostDbUserId = sessionInfo
+        ? await this.chatService.getChannelHostUserId(payload.channelId)
+        : null;
+      const isHostSender = !!hostDbUserId && hostDbUserId === client.data.dbUserId;
       
       if (sessionInfo) {
         // Check if user has chat permission for this session
@@ -205,6 +209,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
           sessionInfo.externalId,
           client.data.userId,
           'chat',
+          isHostSender,
         );
         
         if (!canChat) {
@@ -217,6 +222,22 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       }
 
       const audienceType = this.normalizeAudienceType(payload.audienceType);
+
+      if (sessionInfo) {
+        const canSendToAudience = await this.permissionsService.hasAudiencePermission(
+          sessionInfo.externalId,
+          client.data.userId,
+          audienceType,
+          isHostSender,
+        );
+        if (!canSendToAudience) {
+          client.emit('error', {
+            code: 'CHAT_SCOPE_RESTRICTED',
+            message: 'The host has restricted this chat target for you',
+          });
+          return;
+        }
+      }
 
       const message = await this.chatService.sendMessage(
         payload.channelId,

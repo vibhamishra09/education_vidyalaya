@@ -287,8 +287,21 @@ export interface StudyRoomCard {
 }
 
 export interface StudyRoom extends StudyRoomCard {
-  participants: PublicUser[];
+  participants: (PublicUser & { role?: 'PARTICIPANT' | 'COHOST'; clerkId?: string })[];
+  guestParticipants?: Array<{
+    id: string;
+    name: string;
+    email: string;
+    role: 'PARTICIPANT' | 'COHOST';
+    livekitIdentity: string;
+  }>;
   role: 'teacher' | 'learner' | 'empty';
+  allowExternalUsers?: boolean;
+  externalAutoAccept?: boolean;
+  externalPasscode?: string | null;
+  externalInvites?: Array<{ email: string; role: 'PARTICIPANT' | 'COHOST' }>;
+  pendingExternalJoinRequests?: number;
+  cohostCount?: number;
   reviews: ReviewCard[];
   summary?: string;
   chatChannelId?: string | null;
@@ -327,6 +340,10 @@ export interface CreateStudyRoomDto {
   joiningFee?: number;
   timezone: string;
   recurrence?: StudyRoomRecurrenceDto;
+  allowExternalUsers?: boolean;
+  externalAutoAccept?: boolean;
+  externalPasscode?: string;
+  externalInvites?: Array<{ email: string; role: 'PARTICIPANT' | 'COHOST' }>;
 }
 
 export interface UpdateStudyRoomDto {
@@ -343,6 +360,10 @@ export interface UpdateStudyRoomDto {
   timezone?: string;
   editScope?: StudyRoomEditScope;
   recurrence?: StudyRoomRecurrenceDto;
+  allowExternalUsers?: boolean;
+  externalAutoAccept?: boolean;
+  externalPasscode?: string;
+  externalInvites?: Array<{ email: string; role: 'PARTICIPANT' | 'COHOST' }>;
 }
 
 // Peer Session Types

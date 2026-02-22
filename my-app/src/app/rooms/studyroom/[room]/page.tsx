@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@clerk/nextjs'
 import axios from 'axios'
 import { EnhancedVideoRoom } from '@/components/livekit/EnhancedVideoRoom'
@@ -16,6 +16,7 @@ type ChatIdentity = {
 
 export default function RoomPage() {
 	const params = useParams<{ room: string }>()
+	const searchParams = useSearchParams()
 	const router = useRouter()
 	const roomName = params.room
 	const { getToken } = useAuth()
@@ -35,13 +36,15 @@ export default function RoomPage() {
 	const [sessionEnded, setSessionEnded] = useState(false)
 	const [chatRecipients, setChatRecipients] = useState<ChatIdentity[]>([])
 	const [hostUser, setHostUser] = useState<ChatIdentity | null>(null)
+	const [currentUserDbId, setCurrentUserDbId] = useState<string | null>(null)
+	const guestAccessToken = searchParams.get('guestAccessToken')
 
 	useEffect(() => {
 		let mounted = true
 		async function initialize() {
 			try {
-				const clerkToken = await getToken()
-				if (!clerkToken) {
+				const clerkToken = guestAccessToken ? null : await getToken()
+				if (!clerkToken && !guestAccessToken) {
 					throw new Error('Not authenticated')
 				}
 
@@ -56,32 +59,45 @@ export default function RoomPage() {
 						? roomName.slice('peersession-'.length)
 						: roomName.split('-')[1]
 
+						// Fetch current user DB ID in parallel to enable self-message filtering
+				if (clerkToken) {
+					apiClient.get('/api/users/me', {
+						headers: { Authorization: `Bearer ${clerkToken}` },
+					}).then((res) => {
+						if (mounted && res.data?.id) setCurrentUserDbId(res.data.id as string)
+					}).catch(() => null)
+				}
+
 				// Fetch LiveKit token, channel ID, and session data
 				const promises: Promise<{ data: { token?: string; channelId?: string; [key: string]: unknown } } | null>[] = [
 					axios.post(
-						`${process.env.NEXT_PUBLIC_API_URL}/api/livekit/token`,
-						{ roomName },
+						`${process.env.NEXT_PUBLIC_API_URL}/api/livekit/${guestAccessToken ? 'guest-token' : 'token'}`,
+						guestAccessToken ? { roomName, guestAccessToken } : { roomName },
 						{
 							headers: {
-								Authorization: `Bearer ${clerkToken}`,
+								...(clerkToken ? { Authorization: `Bearer ${clerkToken}` } : {}),
 							},
 						}
 					),
-					apiClient.get(`/api/chat/channel-by-room/${roomName}`, {
-						headers: {
-							Authorization: `Bearer ${clerkToken}`,
-						},
-					}).catch(() => null), // Channel might not exist, that's OK
+					clerkToken
+						? apiClient.get(`/api/chat/channel-by-room/${roomName}`, {
+								headers: {
+									Authorization: `Bearer ${clerkToken}`,
+								},
+						  }).catch(() => null)
+						: Promise.resolve(null), // Channel might not exist, that's OK
 				]
 
 				// Add session data fetch if it's a study room or peer session
 				if (isStudyRoom && roomId) {
 					promises.push(
-						apiClient.get(`/api/study-rooms/${roomId}`, {
-							headers: {
-								Authorization: `Bearer ${clerkToken}`,
-							},
-						})
+						clerkToken
+							? apiClient.get(`/api/study-rooms/${roomId}`, {
+									headers: {
+										Authorization: `Bearer ${clerkToken}`,
+									},
+							  })
+							: apiClient.get(`/api/study-rooms/${roomId}`)
 					)
 				} else if (isPeerSession && roomId) {
 					promises.push(
@@ -101,6 +117,9 @@ export default function RoomPage() {
 				}
 				if (results[1]?.data?.channelId) {
 					setChannelId(results[1].data.channelId as string)
+				}
+				if (results[0]?.data && guestAccessToken && mounted) {
+					setIsHost(Boolean((results[0] as { data?: { isHost?: boolean } }).data?.isHost))
 				}
 				if (results[2]?.data) {
 					// Add session type to sessionData
@@ -159,13 +178,15 @@ export default function RoomPage() {
 						const endpoint = isStudyRoom 
 							? `/api/study-rooms/${roomId}/is-host`
 							: `/api/peer-sessions/${roomId}/is-host`
-						const hostResponse = await apiClient.get(endpoint, {
-							headers: {
-								Authorization: `Bearer ${clerkToken}`,
-							},
-						})
-						if (mounted) {
-							setIsHost(hostResponse.data.isHost || false)
+						if (clerkToken) {
+							const hostResponse = await apiClient.get(endpoint, {
+								headers: {
+									Authorization: `Bearer ${clerkToken}`,
+								},
+							})
+							if (mounted) {
+								setIsHost(hostResponse.data.isHost || false)
+							}
 						}
 					} catch {
 						// If host check fails, default to false (safer)
@@ -188,7 +209,7 @@ export default function RoomPage() {
 		return () => {
 			mounted = false
 		}
-	}, [roomName, getToken])
+	}, [roomName, getToken, guestAccessToken])
 
 	if (loading) {
 		return (
@@ -279,6 +300,8 @@ export default function RoomPage() {
 			isHost={isHost}
 			chatRecipients={chatRecipients}
 			hostUser={hostUser}
+			currentUserDbId={currentUserDbId}
+			externalAccessToken={guestAccessToken}
 		/>
 	)
 }

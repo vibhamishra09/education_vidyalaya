@@ -29,7 +29,7 @@ import { useSpeechRecognition } from '@/hooks/use-speech-recognition'
 import { useSessionExtension } from '@/hooks/use-session-extension'
 import { ExtensionRequestDialog } from '@/components/study-room/extension-request-dialog'
 import { EndMeetingDialog } from '@/components/study-room/end-meeting-dialog'
-import { useSessionModeration, RoomPermissions, PermissionRequest, ParticipantPermissionRequest } from '@/hooks/use-session-moderation'
+import { useSessionModeration, RoomPermissions, PermissionRequest, ParticipantPermissionRequest, ParticipantChatLocks, RoomSettings } from '@/hooks/use-session-moderation'
 import { ChatRecipient } from '@/components/chat/MessageInput'
 
 // Stable virtual backgrounds constant to avoid re-creating array each render
@@ -93,6 +93,8 @@ interface EnhancedVideoRoomProps {
 	isHost?: boolean
 	chatRecipients?: ChatRecipient[]
 	hostUser?: ChatIdentity | null
+	currentUserDbId?: string | null
+	externalAccessToken?: string | null
 }
 
 export function EnhancedVideoRoom({
@@ -103,6 +105,8 @@ export function EnhancedVideoRoom({
 	isHost = false,
 	chatRecipients = [],
 	hostUser,
+	currentUserDbId,
+	externalAccessToken,
 }: EnhancedVideoRoomProps) {
 	const [showChat, setShowChat] = useState(false) // Start hidden on mobile
 	const [showParticipants, setShowParticipants] = useState(false)
@@ -177,11 +181,15 @@ export function EnhancedVideoRoom({
 	// Get auth token on mount
 	useEffect(() => {
 		async function fetchToken() {
+			if (externalAccessToken) {
+				setAuthToken(externalAccessToken)
+				return
+			}
 			const token = await getToken()
 			setAuthToken(token)
 		}
 		fetchToken()
-	}, [getToken])
+	}, [getToken, externalAccessToken])
 
 	// Store showSuccess in ref to avoid recreating handleWarning callback
 	const showSuccessRef = useRef(showSuccess)
@@ -228,12 +236,15 @@ export function EnhancedVideoRoom({
 		meetingEnded,
 		chatDisabled,
 		permissions, // Room-wide permissions (Lock system)
+		roomSettings,
 		endMeetingForAll,
 		lockAudio,
 		lockVideo,
 		lockChat,
 		lockUserAudio,
 		lockUserVideo,
+		lockUserChatAudience,
+		hideParticipantList,
 		muteAll,
 		unmuteAll,
 		muteParticipant,
@@ -259,6 +270,7 @@ export function EnhancedVideoRoom({
 		// Pending participant requests (for host UI)
 		pendingParticipantRequests,
 		clearParticipantRequest,
+		participantChatLocks,
 	} = useSessionModeration({
 		sessionId: sessionData?.id || null,
 		sessionType: sessionData?.sessionType || null,
@@ -585,11 +597,14 @@ export function EnhancedVideoRoom({
 					onToggleChat={toggleChatDisabled}
 					chatDisabled={chatDisabled}
 					permissions={permissions}
+					roomSettings={roomSettings}
 					onLockAudio={lockAudio}
 					onLockVideo={lockVideo}
 					onLockChat={lockChat}
+					onHideParticipantList={hideParticipantList}
 					onLockUserAudio={lockUserAudio}
 					onLockUserVideo={lockUserVideo}
+					onLockUserChatAudience={lockUserChatAudience}
 					onRequestAudioOn={handleRequestAudioOn}
 					onRequestVideoOn={handleRequestVideoOn}
 					pendingPermissionRequest={pendingPermissionRequest}
@@ -602,9 +617,30 @@ export function EnhancedVideoRoom({
 					hostRespondParticipantVideo={hostRespondParticipantVideo}
 					pendingParticipantRequests={pendingParticipantRequests}
 					clearParticipantRequest={clearParticipantRequest}
+					participantChatLocks={participantChatLocks}
 					isMobileViewport={isMobileViewport}
 					chatRecipients={chatRecipients}
 					hostUser={hostUser}
+					currentUserDbId={currentUserDbId}
+					onPromoteToCohost={async (participantIdentity, role) => {
+						if (sessionData?.sessionType !== 'studyRoom' || !sessionData?.id) return
+						const authTokenValue = await getToken()
+						await fetch(
+							`${process.env.NEXT_PUBLIC_API_URL}/api/study-rooms/${sessionData.id}/participants/role`,
+							{
+								method: 'POST',
+								headers: {
+									'Content-Type': 'application/json',
+									...(authTokenValue ? { Authorization: `Bearer ${authTokenValue}` } : {}),
+								},
+								body: JSON.stringify({ participantIdentity, role }),
+							},
+						)
+						showSuccess(
+							role === 'COHOST' ? 'Cohost assigned' : 'Cohost removed',
+							'Participant role updated',
+						)
+					}}
 				/>
 		</LiveKitRoom>
 
@@ -688,11 +724,14 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	onToggleChat,
 	chatDisabled,
 	permissions,
+	roomSettings,
 	onLockAudio,
 	onLockVideo,
 	onLockChat,
+	onHideParticipantList,
 	onLockUserAudio,
 	onLockUserVideo,
+	onLockUserChatAudience,
 	onRequestAudioOn,
 	onRequestVideoOn,
 	pendingPermissionRequest,
@@ -708,6 +747,9 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	isMobileViewport,
 	chatRecipients,
 	hostUser,
+	currentUserDbId,
+	participantChatLocks,
+	onPromoteToCohost,
 }: {
 	isUserActive: boolean
 	showChat: boolean
@@ -742,11 +784,18 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	onToggleChat?: (disabled: boolean) => void
 	chatDisabled?: boolean
 	permissions?: RoomPermissions
+	roomSettings?: RoomSettings
 	onLockAudio?: (locked: boolean) => void
 	onLockVideo?: (locked: boolean) => void
 	onLockChat?: (locked: boolean) => void
+	onHideParticipantList?: (hidden: boolean) => void
 	onLockUserAudio?: (targetUserId: string, locked: boolean) => void
 	onLockUserVideo?: (targetUserId: string, locked: boolean) => void
+	onLockUserChatAudience?: (
+		targetUserId: string,
+		audience: 'everyone' | 'host' | 'user',
+		locked: boolean,
+	) => void
 	onRequestAudioOn?: (targetUserId: string) => void
 	onRequestVideoOn?: (targetUserId: string) => void
 	pendingPermissionRequest?: PermissionRequest | null
@@ -762,6 +811,12 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	isMobileViewport?: boolean
 	chatRecipients?: ChatRecipient[]
 	hostUser?: ChatIdentity | null
+	currentUserDbId?: string | null
+	participantChatLocks?: Record<string, ParticipantChatLocks>
+	onPromoteToCohost?: (
+		participantIdentity: string,
+		role: 'PARTICIPANT' | 'COHOST',
+	) => void
 }) {
 	// Room context removed to avoid race conditions, using localParticipant hook instead
 	const params = useParams<{ room: string }>()
@@ -769,6 +824,14 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	
 	// Get participants list for name lookup
 	const allParticipants = useParticipants()
+	const canViewParticipantList = isHost || permissions?.allowParticipantList !== false
+
+	useEffect(() => {
+		if (canViewParticipantList) return
+		if (showParticipants) {
+			setShowParticipants(false)
+		}
+	}, [canViewParticipantList, showParticipants, setShowParticipants])
 	
 	// Get local participant state directly - most reliable source of truth
 	const { localParticipant, isCameraEnabled, isMicrophoneEnabled, isScreenShareEnabled } = useLocalParticipant()
@@ -2888,7 +2951,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 					)}
 
 					{/* Chat */}
-					<div className="flex flex-col items-center justify-center group">
+					<div className={`flex flex-col items-center justify-center group ${!canViewParticipantList ? 'hidden' : ''}`}>
 						<button
 							onClick={() => {
 								if (!showChat) setShowParticipants(false)
@@ -2905,11 +2968,13 @@ const VideoRoomContent = memo(function VideoRoomContent({
 					<div className="flex flex-col items-center justify-center group">
 						<button
 							onClick={() => {
+								if (!canViewParticipantList) return
 								if (!showParticipants) setShowChat(false)
 								setShowParticipants(!showParticipants)
 							}}
+							disabled={!canViewParticipantList}
 							className={`h-11 w-11 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl hover:bg-sky-500/20 active:scale-95 transition-all relative ${showParticipants ? 'bg-sky-500/20 text-sky-400' : 'text-white/80 hover:text-sky-400'}`}
-							title="Participants"
+							title={canViewParticipantList ? 'Participants' : 'Participant list is hidden by host'}
 						>
 							<Users className="h-5 w-5 md:h-5 md:w-5" />
 							{allParticipants && allParticipants.length > 0 && (
@@ -3109,6 +3174,12 @@ const VideoRoomContent = memo(function VideoRoomContent({
 										chatDisabled={chatDisabled}
 										recipients={chatRecipients}
 										hostUserId={hostUser?.id}
+										currentUserDbId={currentUserDbId}
+										allowedAudiences={{
+											EVERYONE: permissions?.allowChatEveryone ?? true,
+											HOST: permissions?.allowChatHost ?? true,
+											USER: permissions?.allowChatUser ?? true,
+										}}
 										className="flex-1 min-h-0 overflow-hidden" 
 									/>
 								) : (
@@ -3137,7 +3208,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 												<h3 className="text-xs font-bold text-white/90 uppercase tracking-wider">Restrict Participants</h3>
 											</div>
 											
-											<div className="grid grid-cols-3 gap-2">
+											<div className="grid grid-cols-4 gap-2">
 												{/* Mute All / Unmute All Toggle */}
 												<Button
 													onClick={() => {
@@ -3221,6 +3292,34 @@ const VideoRoomContent = memo(function VideoRoomContent({
 														{(chatDisabled || permissions?.allowChat === false) ? 'Unlock Chat' : 'Lock Chat'}
 													</span>
 												</Button>
+												<Button
+													onClick={() => {
+														const isCurrentlyHidden = roomSettings?.hideParticipantList === true
+														onHideParticipantList?.(!isCurrentlyHidden)
+														showSuccess(
+															isCurrentlyHidden ? 'Participant List Visible' : 'Participant List Hidden',
+															isCurrentlyHidden
+																? 'Participants can now open the participant list'
+																: 'Participants can no longer open the participant list',
+														)
+													}}
+													variant="ghost"
+													className={`flex flex-col items-center justify-center h-auto py-2 gap-1 rounded-lg border transition-all ${
+														roomSettings?.hideParticipantList
+															? 'bg-sky-500/10 text-sky-500 border-sky-500/20 hover:bg-sky-500/20'
+															: 'bg-white/5 text-white/70 border-white/5 hover:bg-white/10 hover:text-white'
+													}`}
+													title={
+														roomSettings?.hideParticipantList
+															? 'Show participant list to participants'
+															: 'Hide participant list from participants'
+													}
+												>
+													{roomSettings?.hideParticipantList ? <Lock className="h-4 w-4" /> : <Users className="h-4 w-4" />}
+													<span className="text-[10px] font-medium">
+														{roomSettings?.hideParticipantList ? 'Show List' : 'Hide List'}
+													</span>
+												</Button>
 											</div>
 										</div>
 									)}
@@ -3234,11 +3333,14 @@ const VideoRoomContent = memo(function VideoRoomContent({
 											onEnableVideoParticipant={onEnableVideoParticipant}
 											onLockUserAudio={onLockUserAudio}
 											onLockUserVideo={onLockUserVideo}
+											onLockUserChatAudience={onLockUserChatAudience}
 											onRequestAudioOn={onRequestAudioOn}
 											onRequestVideoOn={onRequestVideoOn}
+											participantChatLocks={participantChatLocks}
 											pendingParticipantRequests={pendingParticipantRequests}
 											onApproveAudioRequest={hostRespondParticipantAudio}
 											onApproveVideoRequest={hostRespondParticipantVideo}
+											onPromoteToCohost={onPromoteToCohost}
 										/>
 									</div>
 								</div>
@@ -3407,11 +3509,14 @@ function ParticipantList({
 	onEnableVideoParticipant: _onEnableVideoParticipant, // Unused
 	onLockUserAudio: _onLockUserAudio, // Unused
 	onLockUserVideo: _onLockUserVideo, // Unused
+	onLockUserChatAudience,
 	onRequestAudioOn,
 	onRequestVideoOn,
+	participantChatLocks,
 	pendingParticipantRequests,
 	onApproveAudioRequest,
 	onApproveVideoRequest,
+	onPromoteToCohost,
 }: {
 	isHost: boolean
 	onMuteParticipant?: (targetUserId: string) => void
@@ -3420,11 +3525,21 @@ function ParticipantList({
 	onEnableVideoParticipant?: (targetUserId: string) => void
 	onLockUserAudio?: (targetUserId: string, locked: boolean) => void
 	onLockUserVideo?: (targetUserId: string, locked: boolean) => void
+	onLockUserChatAudience?: (
+		targetUserId: string,
+		audience: 'everyone' | 'host' | 'user',
+		locked: boolean,
+	) => void
 	onRequestAudioOn?: (targetUserId: string) => void
 	onRequestVideoOn?: (targetUserId: string) => void
+	participantChatLocks?: Record<string, ParticipantChatLocks>
 	pendingParticipantRequests?: ParticipantPermissionRequest[]
 	onApproveAudioRequest?: (userId: string, accepted: boolean) => void
 	onApproveVideoRequest?: (userId: string, accepted: boolean) => void
+	onPromoteToCohost?: (
+		participantIdentity: string,
+		role: 'PARTICIPANT' | 'COHOST',
+	) => void
 }) {
 	const participants = useParticipants()
 	const { localParticipant } = useLocalParticipant()
@@ -3481,6 +3596,11 @@ function ParticipantList({
 				const hasAReq = hasAudioRequest(participant.identity)
 				const hasVReq = hasVideoRequest(participant.identity)
 				const canControl = isHost && !isLocal
+				const chatLocks = participantChatLocks?.[participant.identity] || {
+					everyone: false,
+					host: false,
+					user: false,
+				}
 				const gradient = getAvatarColor(participant.identity)
 				
 				// Helper to get avatar
@@ -3629,6 +3749,70 @@ function ParticipantList({
 									>
 										{isMicOn ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
 									</button>
+									{canControl && (
+										<div className="ml-1 flex items-center gap-1">
+											<button
+												onClick={() =>
+													onPromoteToCohost?.(participant.identity, 'COHOST')
+												}
+												className="px-1.5 py-1 rounded text-[9px] font-semibold bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30"
+												title="Make cohost"
+											>
+												Co
+											</button>
+											<button
+												onClick={() =>
+													onLockUserChatAudience?.(
+														participant.identity,
+														'everyone',
+														!chatLocks.everyone,
+													)
+												}
+												className={`px-1.5 py-1 rounded text-[9px] font-semibold ${
+													chatLocks.everyone
+														? 'bg-red-500/20 text-red-300'
+														: 'bg-white/10 text-white/60 hover:text-white'
+												}`}
+												title="Restrict messages to Everyone"
+											>
+												E
+											</button>
+											<button
+												onClick={() =>
+													onLockUserChatAudience?.(
+														participant.identity,
+														'host',
+														!chatLocks.host,
+													)
+												}
+												className={`px-1.5 py-1 rounded text-[9px] font-semibold ${
+													chatLocks.host
+														? 'bg-red-500/20 text-red-300'
+														: 'bg-white/10 text-white/60 hover:text-white'
+												}`}
+												title="Restrict messages to Host"
+											>
+												H
+											</button>
+											<button
+												onClick={() =>
+													onLockUserChatAudience?.(
+														participant.identity,
+														'user',
+														!chatLocks.user,
+													)
+												}
+												className={`px-1.5 py-1 rounded text-[9px] font-semibold ${
+													chatLocks.user
+														? 'bg-red-500/20 text-red-300'
+														: 'bg-white/10 text-white/60 hover:text-white'
+												}`}
+												title="Restrict messages to specific users"
+											>
+												U
+											</button>
+										</div>
+									)}
 								</div>
 							)}
 						</div>
