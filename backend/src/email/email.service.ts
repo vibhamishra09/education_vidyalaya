@@ -97,6 +97,45 @@ export class EmailService {
     }
   }
 
+  async sendDirectEmailNotification(
+    email: string,
+    subject: string,
+    message: string,
+    recipientName: string = 'User',
+  ): Promise<boolean> {
+    try {
+      const command = new SendEmailCommand({
+        Source: this.fromEmail,
+        Destination: {
+          ToAddresses: [email],
+        },
+        Message: {
+          Subject: {
+            Data: subject,
+            Charset: 'UTF-8',
+          },
+          Body: {
+            Html: {
+              Data: this.formatEmailHtml(recipientName, message),
+              Charset: 'UTF-8',
+            },
+          },
+        },
+      });
+      await this.sesClient.send(command);
+      return true;
+    } catch (error) {
+      this.logger.error({
+        message: 'Error sending direct email notification',
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        email,
+        subject,
+      });
+      return false;
+    }
+  }
+
   /**
    * Format email message as HTML
    */

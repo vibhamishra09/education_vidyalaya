@@ -6,6 +6,7 @@ import { ChatModule } from '../chat/chat.module';
 import { StreaksModule } from '../streaks/streaks.module';
 import { AchievementsModule } from '../achievements/achievements.module';
 import { TranscriptsModule } from '../transcripts/transcripts.module';
+import { EmailModule } from '../email/email.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { TranscriptsModule } from '../transcripts/transcripts.module';
     StreaksModule,
     AchievementsModule,
     TranscriptsModule,
+    EmailModule,
   ],
   controllers: [StudyRoomsController],
   providers: [StudyRoomsService],

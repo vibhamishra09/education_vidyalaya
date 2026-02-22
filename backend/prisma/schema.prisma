@@ -77,6 +77,9 @@ model StudyRoom {
   recurrenceEndDate DateTime?
   occurrenceDateLocal DateTime?
   timezone        String?
+  allowExternalUsers Boolean             @default(false)
+  externalPasscode   String?
+  externalAutoAccept Boolean             @default(false)
   date            DateTime
   duration        Int
   maxParticipants Int
@@ -93,6 +96,10 @@ model StudyRoom {
   notifications   Notification[]
   createdBy       User                   @relation("UserOwnsStudyRooms", fields: [createdById], references: [id])
   learners        StudyRoomParticipant[]
+  externalInvites StudyRoomExternalInvite[]
+  externalJoinRequests StudyRoomExternalJoinRequest[]
+  guestParticipants StudyRoomGuestParticipant[]
+  guestAccessTokens StudyRoomGuestAccessToken[]
   skills          StudyRoomSkill[]
   feedbacks       SessionFeedback[]
 
@@ -222,11 +229,71 @@ model StudyRoomParticipant {
   id          String    @id @default(cuid())
   userId      String
   studyRoomId String
+  role        StudyRoomParticipantRole @default(PARTICIPANT)
   studyRoom   StudyRoom @relation(fields: [studyRoomId], references: [id])
   user        User      @relation(fields: [userId], references: [id])
 
   @@unique([userId, studyRoomId])
   @@index([studyRoomId])
+}
+
+model StudyRoomExternalInvite {
+  id          String    @id @default(cuid())
+  studyRoomId String
+  email       String
+  role        ExternalInviteRole @default(PARTICIPANT)
+  createdAt   DateTime @default(now())
+  studyRoom   StudyRoom @relation(fields: [studyRoomId], references: [id], onDelete: Cascade)
+
+  @@unique([studyRoomId, email])
+  @@index([studyRoomId])
+}
+
+model StudyRoomExternalJoinRequest {
+  id          String    @id @default(cuid())
+  studyRoomId String
+  name        String
+  email       String
+  status      ExternalJoinRequestStatus @default(PENDING)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  decidedAt   DateTime?
+  decidedBy   String?
+  studyRoom   StudyRoom @relation(fields: [studyRoomId], references: [id], onDelete: Cascade)
+
+  @@index([studyRoomId, status])
+  @@index([email])
+}
+
+model StudyRoomGuestParticipant {
+  id          String    @id @default(cuid())
+  studyRoomId String
+  name        String
+  email       String
+  role        StudyRoomParticipantRole @default(PARTICIPANT)
+  livekitIdentity String @unique
+  createdAt   DateTime @default(now())
+  approvedBy  String?
+  studyRoom   StudyRoom @relation(fields: [studyRoomId], references: [id], onDelete: Cascade)
+  accessTokens StudyRoomGuestAccessToken[]
+
+  @@unique([studyRoomId, email])
+  @@index([studyRoomId])
+}
+
+model StudyRoomGuestAccessToken {
+  id          String   @id @default(cuid())
+  token       String   @unique
+  studyRoomId String
+  guestParticipantId String
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  usedAt      DateTime?
+  studyRoom   StudyRoom @relation(fields: [studyRoomId], references: [id], onDelete: Cascade)
+  guestParticipant StudyRoomGuestParticipant @relation(fields: [guestParticipantId], references: [id], onDelete: Cascade)
+
+  @@index([studyRoomId])
+  @@index([guestParticipantId])
 }
 
 model Notification {
@@ -283,6 +350,22 @@ enum StudyRoomRecurrenceMode {
   DAILY
   WEEKLY
   CUSTOM_DATES
+}
+
+enum StudyRoomParticipantRole {
+  PARTICIPANT
+  COHOST
+}
+
+enum ExternalInviteRole {
+  PARTICIPANT
+  COHOST
+}
+
+enum ExternalJoinRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 enum MessageAudienceType {

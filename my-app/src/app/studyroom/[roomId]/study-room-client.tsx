@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
 import {
   ArrowLeft,
   Users,
@@ -17,8 +18,16 @@ import {
   Loader2,
   Check,
 } from "lucide-react";
-import { useStudyRoomDetails, useJoinStudyRoom, useCancelStudyRoom } from "@/hooks/use-study-rooms";
-import { useAuth } from "@clerk/nextjs";
+import {
+  useStudyRoomDetails,
+  useJoinStudyRoom,
+  useCancelStudyRoom,
+  useRequestExternalJoin,
+  useExternalJoinRequests,
+  useResolveExternalJoinRequest,
+  useToggleExternalAutoAccept,
+} from "@/hooks/use-study-rooms";
+import { useAuth, useUser } from "@clerk/nextjs";
 import { setAuthToken } from "@/lib/api-client";
 import { useToast } from "@/contexts/toast-context";
 import Link from "next/link";
@@ -34,6 +43,7 @@ interface StudyRoomClientProps {
 
 export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
   const { getToken } = useAuth();
+  const { isSignedIn } = useUser();
   const { showSuccess, showError } = useToast();
   const [isJoining, setIsJoining] = useState(false);
   const [canJoinVideoCall, setCanJoinVideoCall] = useState(false);
@@ -41,7 +51,14 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
   const { data: room, isLoading, error } = useStudyRoomDetails(roomId);
   console.log(room);
   const joinStudyRoom = useJoinStudyRoom();
+  const requestExternalJoin = useRequestExternalJoin();
   const cancelStudyRoom = useCancelStudyRoom(roomId);
+  const { data: externalRequests } = useExternalJoinRequests(roomId);
+  const resolveExternalJoin = useResolveExternalJoinRequest(roomId);
+  const toggleAutoAccept = useToggleExternalAutoAccept(roomId);
+  const [guestName, setGuestName] = useState("");
+  const [guestEmail, setGuestEmail] = useState("");
+  const [guestPasscode, setGuestPasscode] = useState("");
 
   // Check if video call can be joined (within 5 minutes of start time)
   useEffect(() => {
@@ -112,6 +129,33 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
     }
   };
 
+  const handleGuestJoin = async () => {
+    if (!room) return;
+    if (!guestName.trim() || !guestEmail.trim() || !guestPasscode.trim()) {
+      showError("Missing details", "Name, email and passcode are required.");
+      return;
+    }
+    try {
+      setIsJoining(true);
+      const result = await requestExternalJoin.mutateAsync({
+        studyRoomId: roomId,
+        name: guestName.trim(),
+        email: guestEmail.trim(),
+        passcode: guestPasscode.trim(),
+      });
+      if (result.status === "PENDING") {
+        showSuccess("Request sent", "Host will review your join request.");
+        return;
+      }
+      const guestUrl = `/rooms/studyroom/studyroom-${roomId}?guestAccessToken=${encodeURIComponent(result.guestAccessToken)}&guestName=${encodeURIComponent(guestName.trim())}`;
+      window.location.href = guestUrl;
+    } catch {
+      showError("Join failed", "Could not submit external join request.");
+    } finally {
+      setIsJoining(false);
+    }
+  };
+
   const handleCancelRoom = async () => {
     if (!room) return;
     const hasSeries = !!room.seriesId;
@@ -177,6 +221,7 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
   // Use the role from the API response directly
   const role = room.role || "empty";
   const isFull = room.participantCount >= room.maxParticipants;
+  const pendingRequests = externalRequests?.requests || [];
 
 
   const formattedDate = new Date(room.date).toLocaleDateString("en-US", {
@@ -335,7 +380,7 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
                             </div>
 
                             <div className="pt-1 space-y-2.5">
-                                {role === "empty" && !isFull && (
+                                {role === "empty" && !isFull && isSignedIn && (
                                     <Button 
                                         size="default" 
                                         className="w-full font-semibold text-sm h-10 shadow-md shadow-primary/20 transition-all hover:scale-[1.01] active:scale-[0.99] rounded-lg bg-green-600 hover:bg-green-700 text-white"
@@ -352,6 +397,37 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
                                         )}
                                     </Button>
                                 )}
+
+                                {role === "empty" &&
+                                  !isFull &&
+                                  !isSignedIn &&
+                                  room.allowExternalUsers && (
+                                    <div className="space-y-2 rounded-lg border p-3">
+                                      <Input
+                                        placeholder="Your name"
+                                        value={guestName}
+                                        onChange={(e) => setGuestName(e.target.value)}
+                                      />
+                                      <Input
+                                        placeholder="Your email"
+                                        value={guestEmail}
+                                        onChange={(e) => setGuestEmail(e.target.value)}
+                                      />
+                                      <Input
+                                        placeholder="Passcode"
+                                        value={guestPasscode}
+                                        onChange={(e) => setGuestPasscode(e.target.value)}
+                                      />
+                                      <Button
+                                        size="default"
+                                        className="w-full bg-green-600 hover:bg-green-700 text-white"
+                                        onClick={handleGuestJoin}
+                                        disabled={isJoining}
+                                      >
+                                        {isJoining ? "Requesting..." : "Join as Guest"}
+                                      </Button>
+                                    </div>
+                                  )}
                                 
                                 {isFull && role === "empty" && (
                                     <Button size="default" disabled variant="secondary" className="w-full h-10 rounded-lg opacity-80 text-sm">
@@ -387,6 +463,68 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
                                       {cancelStudyRoom.isPending ? "Cancelling..." : "Cancel Session"}
                                     </Button>
                                   )}
+
+                                {role === "teacher" && room.allowExternalUsers && (
+                                  <div className="space-y-2 rounded-lg border border-blue-200/40 bg-blue-50/40 p-3">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-xs font-semibold text-blue-700">
+                                        External Join Requests: {pendingRequests.length}
+                                      </span>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-7 text-[11px]"
+                                        onClick={() =>
+                                          toggleAutoAccept.mutate(
+                                            !room.externalAutoAccept,
+                                          )
+                                        }
+                                      >
+                                        Auto Accept: {room.externalAutoAccept ? "On" : "Off"}
+                                      </Button>
+                                    </div>
+                                    {pendingRequests.slice(0, 2).map((request) => (
+                                      <div
+                                        key={request.id}
+                                        className="rounded-md border bg-white p-2"
+                                      >
+                                        <p className="text-xs font-medium">
+                                          {request.name}
+                                        </p>
+                                        <p className="text-[11px] text-muted-foreground">
+                                          {request.email}
+                                        </p>
+                                        <div className="mt-2 flex gap-2">
+                                          <Button
+                                            size="sm"
+                                            className="h-7 bg-green-600 text-white hover:bg-green-700"
+                                            onClick={() =>
+                                              resolveExternalJoin.mutate({
+                                                requestId: request.id,
+                                                approve: true,
+                                              })
+                                            }
+                                          >
+                                            Accept
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="h-7"
+                                            onClick={() =>
+                                              resolveExternalJoin.mutate({
+                                                requestId: request.id,
+                                                approve: false,
+                                              })
+                                            }
+                                          >
+                                            Reject
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
                             </div>
                         </CardContent>
                     </Card>

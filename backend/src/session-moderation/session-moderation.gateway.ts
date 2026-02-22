@@ -12,6 +12,7 @@ import { StudyRoomsService } from '../study-rooms/study-rooms.service';
 import { PeerSessionsService } from '../peer-sessions/peer-sessions.service';
 import { PermissionsService } from './permissions.service';
 import { LoggerService } from '../common/logger';
+import { PrismaService } from '../prisma/prisma.service';
 
 @WebSocketGateway({
   cors: {
@@ -53,6 +54,7 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
     private studyRoomsService: StudyRoomsService,
     private peerSessionsService: PeerSessionsService,
     private permissionsService: PermissionsService,
+    private prisma: PrismaService,
     private readonly logger: LoggerService,
   ) {
     this.logger.setContext(SessionModerationGateway.name);}
@@ -97,9 +99,22 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
         client.data.userId = auth.userId; // clerkId
         this.logger.log(`🔌 Session Moderation Socket connected - User: ${auth.userId}, Client: ${client.id}`);
       } catch (verifyError: any) {
-        this.logger.error('Token verification failed:', verifyError.message || verifyError);
-        client.disconnect();
-        return;
+        const guestAccess = await this.prisma.studyRoomGuestAccessToken.findUnique({
+          where: { token },
+          include: {
+            guestParticipant: true,
+          },
+        });
+        if (!guestAccess || guestAccess.expiresAt < new Date()) {
+          this.logger.error('Token verification failed:', verifyError.message || verifyError);
+          client.disconnect();
+          return;
+        }
+        client.data.userId = guestAccess.guestParticipant.livekitIdentity;
+        client.data.guest = true;
+        this.logger.log(
+          `🔌 Session Moderation Socket connected - Guest: ${guestAccess.guestParticipant.livekitIdentity}, Client: ${client.id}`,
+        );
       }
     } catch (error) {
       this.logger.error('WebSocket connection error:', error);
