@@ -53,6 +53,10 @@ interface StudyRoomFormData {
   recurrenceWeekdays: number[];
   recurrenceCustomDates: string;
   recurrenceRepeatUntil: string;
+  allowExternalUsers: boolean;
+  externalAutoAccept: boolean;
+  externalPasscode: string;
+  externalInviteList: string;
 }
 
 const initialFormData: StudyRoomFormData = {
@@ -70,6 +74,10 @@ const initialFormData: StudyRoomFormData = {
   recurrenceWeekdays: [],
   recurrenceCustomDates: "",
   recurrenceRepeatUntil: "",
+  allowExternalUsers: false,
+  externalAutoAccept: false,
+  externalPasscode: "",
+  externalInviteList: "",
 };
 
 const weekdayOptions = [
@@ -311,7 +319,34 @@ export function CreateStudyRoomClient() {
       maxParticipants: parseInt(formData.maxParticipants),
       joiningFee: parseFloat(formData.joiningFee),
       timezone: userTimezone,
+      allowExternalUsers: formData.allowExternalUsers,
+      externalAutoAccept: formData.allowExternalUsers
+        ? formData.externalAutoAccept
+        : false,
+      externalPasscode:
+        formData.allowExternalUsers && formData.externalPasscode.trim()
+          ? formData.externalPasscode.trim()
+          : undefined,
     };
+
+    if (formData.allowExternalUsers && formData.externalInviteList.trim()) {
+      const parsedInvites = formData.externalInviteList
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line) => {
+          const [emailPart, rolePart] = line.split(",").map((p) => p.trim());
+          return {
+            email: emailPart,
+            role:
+              rolePart?.toUpperCase() === "COHOST" ? "COHOST" : "PARTICIPANT",
+          } as { email: string; role: "PARTICIPANT" | "COHOST" };
+        })
+        .filter((invite) => invite.email.includes("@"));
+      if (parsedInvites.length > 0) {
+        createData.externalInvites = parsedInvites;
+      }
+    }
 
     if (!isInstantRoom && formData.recurrenceEnabled) {
       createData.recurrence = {
@@ -888,6 +923,74 @@ export function CreateStudyRoomClient() {
                     <p className="text-xs text-muted-foreground">
                       Set to 0 for a free session.
                     </p>
+                  </div>
+
+                  <div className="space-y-4 border-t border-dashed pt-4">
+                    <div className="flex items-center justify-between rounded-lg border bg-muted/20 p-3">
+                      <div className="space-y-0.5">
+                        <Label className="text-sm font-semibold">
+                          Allow External Users
+                        </Label>
+                        <p className="text-xs text-muted-foreground">
+                          Guests can join with passcode without login
+                        </p>
+                      </div>
+                      <Switch
+                        checked={formData.allowExternalUsers}
+                        onCheckedChange={(checked) =>
+                          updateField("allowExternalUsers", checked)
+                        }
+                      />
+                    </div>
+
+                    {formData.allowExternalUsers && (
+                      <div className="space-y-3 rounded-lg border bg-background/50 p-3">
+                        <div className="space-y-1">
+                          <Label className="text-xs font-semibold uppercase text-muted-foreground">
+                            Passcode (optional)
+                          </Label>
+                          <Input
+                            placeholder="Leave blank to auto-generate"
+                            value={formData.externalPasscode}
+                            onChange={(e) =>
+                              updateField("externalPasscode", e.target.value)
+                            }
+                          />
+                        </div>
+
+                        <div className="flex items-center justify-between rounded-lg border bg-muted/20 p-2.5">
+                          <div>
+                            <Label className="text-xs font-semibold">
+                              Auto Accept Guests
+                            </Label>
+                            <p className="text-[11px] text-muted-foreground">
+                              Directly admit non-invited users with valid passcode
+                            </p>
+                          </div>
+                          <Switch
+                            checked={formData.externalAutoAccept}
+                            onCheckedChange={(checked) =>
+                              updateField("externalAutoAccept", checked)
+                            }
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <Label className="text-xs font-semibold uppercase text-muted-foreground">
+                            Invite Emails (one per line: email, role)
+                          </Label>
+                          <Textarea
+                            rows={5}
+                            placeholder={"alice@mail.com, participant\nbob@mail.com, cohost"}
+                            value={formData.externalInviteList}
+                            onChange={(e) =>
+                              updateField("externalInviteList", e.target.value)
+                            }
+                            className="font-mono text-xs"
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>

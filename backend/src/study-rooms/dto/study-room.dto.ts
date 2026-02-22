@@ -10,6 +10,8 @@ import {
   IsEnum,
   ValidateNested,
   ArrayUnique,
+  IsBoolean,
+  IsEmail,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { SessionStatus } from '@prisma/client';
@@ -24,6 +26,30 @@ export enum StudyRoomEditScope {
   SINGLE = 'SINGLE',
   THIS_AND_FUTURE = 'THIS_AND_FUTURE',
   ENTIRE_SERIES = 'ENTIRE_SERIES',
+}
+
+export enum StudyRoomParticipantRoleDto {
+  PARTICIPANT = 'PARTICIPANT',
+  COHOST = 'COHOST',
+}
+
+export class ExternalInviteInputDto {
+  @IsEmail()
+  email: string;
+
+  @IsEnum(StudyRoomParticipantRoleDto)
+  role: StudyRoomParticipantRoleDto;
+}
+
+export class ExternalJoinRequestDto {
+  @IsString()
+  name: string;
+
+  @IsEmail()
+  email: string;
+
+  @IsString()
+  passcode: string;
 }
 
 export class StudyRoomRecurrenceDto {
@@ -64,6 +90,15 @@ export class StudyRoomDto {
   duration: number;
   maxParticipants: number;
   joiningFee: number;
+  allowExternalUsers?: boolean;
+  externalAutoAccept?: boolean;
+  externalPasscode?: string | null;
+  externalInvites?: Array<{
+    email: string;
+    role: StudyRoomParticipantRoleDto;
+  }>;
+  pendingExternalJoinRequests?: number;
+  cohostCount?: number;
   isRecurring?: boolean;
   recurrenceMode?: StudyRoomRecurrenceMode;
   seriesId?: string;
@@ -77,6 +112,13 @@ export class StudyRoomDto {
   };
   skills: { id: string; name: string }[];
   participants: { id: string; name: string; avatar?: string }[];
+  guestParticipants?: Array<{
+    id: string;
+    name: string;
+    email: string;
+    role: StudyRoomParticipantRoleDto;
+    livekitIdentity: string;
+  }>;
   participantCount: number;
 }
 
@@ -150,6 +192,24 @@ export class CreateStudyRoomDto {
   @ValidateNested()
   @Type(() => StudyRoomRecurrenceDto)
   recurrence?: StudyRoomRecurrenceDto;
+
+  @IsOptional()
+  @IsBoolean()
+  allowExternalUsers?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  externalAutoAccept?: boolean;
+
+  @IsOptional()
+  @IsString()
+  externalPasscode?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ExternalInviteInputDto)
+  externalInvites?: ExternalInviteInputDto[];
 }
 
 export class UpdateStudyRoomDto {
@@ -211,4 +271,40 @@ export class UpdateStudyRoomDto {
   @ValidateNested()
   @Type(() => StudyRoomRecurrenceDto)
   recurrence?: StudyRoomRecurrenceDto;
+
+  @IsOptional()
+  @IsBoolean()
+  allowExternalUsers?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  externalAutoAccept?: boolean;
+
+  @IsOptional()
+  @IsString()
+  externalPasscode?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ExternalInviteInputDto)
+  externalInvites?: ExternalInviteInputDto[];
+}
+
+export class ToggleExternalAutoAcceptDto {
+  @IsBoolean()
+  enabled: boolean;
+}
+
+export class ResolveExternalJoinRequestDto {
+  @IsBoolean()
+  approve: boolean;
+}
+
+export class PromoteParticipantRoleDto {
+  @IsString()
+  participantIdentity: string;
+
+  @IsEnum(StudyRoomParticipantRoleDto)
+  role: StudyRoomParticipantRoleDto;
 }

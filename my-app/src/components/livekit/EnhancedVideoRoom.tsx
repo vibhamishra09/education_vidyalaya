@@ -94,6 +94,7 @@ interface EnhancedVideoRoomProps {
 	chatRecipients?: ChatRecipient[]
 	hostUser?: ChatIdentity | null
 	currentUserDbId?: string | null
+	externalAccessToken?: string | null
 }
 
 export function EnhancedVideoRoom({
@@ -105,6 +106,7 @@ export function EnhancedVideoRoom({
 	chatRecipients = [],
 	hostUser,
 	currentUserDbId,
+	externalAccessToken,
 }: EnhancedVideoRoomProps) {
 	const [showChat, setShowChat] = useState(false) // Start hidden on mobile
 	const [showParticipants, setShowParticipants] = useState(false)
@@ -179,11 +181,15 @@ export function EnhancedVideoRoom({
 	// Get auth token on mount
 	useEffect(() => {
 		async function fetchToken() {
+			if (externalAccessToken) {
+				setAuthToken(externalAccessToken)
+				return
+			}
 			const token = await getToken()
 			setAuthToken(token)
 		}
 		fetchToken()
-	}, [getToken])
+	}, [getToken, externalAccessToken])
 
 	// Store showSuccess in ref to avoid recreating handleWarning callback
 	const showSuccessRef = useRef(showSuccess)
@@ -616,6 +622,25 @@ export function EnhancedVideoRoom({
 					chatRecipients={chatRecipients}
 					hostUser={hostUser}
 					currentUserDbId={currentUserDbId}
+					onPromoteToCohost={async (participantIdentity, role) => {
+						if (sessionData?.sessionType !== 'studyRoom' || !sessionData?.id) return
+						const authTokenValue = await getToken()
+						await fetch(
+							`${process.env.NEXT_PUBLIC_API_URL}/api/study-rooms/${sessionData.id}/participants/role`,
+							{
+								method: 'POST',
+								headers: {
+									'Content-Type': 'application/json',
+									...(authTokenValue ? { Authorization: `Bearer ${authTokenValue}` } : {}),
+								},
+								body: JSON.stringify({ participantIdentity, role }),
+							},
+						)
+						showSuccess(
+							role === 'COHOST' ? 'Cohost assigned' : 'Cohost removed',
+							'Participant role updated',
+						)
+					}}
 				/>
 		</LiveKitRoom>
 
@@ -724,6 +749,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	hostUser,
 	currentUserDbId,
 	participantChatLocks,
+	onPromoteToCohost,
 }: {
 	isUserActive: boolean
 	showChat: boolean
@@ -787,6 +813,10 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	hostUser?: ChatIdentity | null
 	currentUserDbId?: string | null
 	participantChatLocks?: Record<string, ParticipantChatLocks>
+	onPromoteToCohost?: (
+		participantIdentity: string,
+		role: 'PARTICIPANT' | 'COHOST',
+	) => void
 }) {
 	// Room context removed to avoid race conditions, using localParticipant hook instead
 	const params = useParams<{ room: string }>()
@@ -3310,6 +3340,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 											pendingParticipantRequests={pendingParticipantRequests}
 											onApproveAudioRequest={hostRespondParticipantAudio}
 											onApproveVideoRequest={hostRespondParticipantVideo}
+											onPromoteToCohost={onPromoteToCohost}
 										/>
 									</div>
 								</div>
@@ -3485,6 +3516,7 @@ function ParticipantList({
 	pendingParticipantRequests,
 	onApproveAudioRequest,
 	onApproveVideoRequest,
+	onPromoteToCohost,
 }: {
 	isHost: boolean
 	onMuteParticipant?: (targetUserId: string) => void
@@ -3504,6 +3536,10 @@ function ParticipantList({
 	pendingParticipantRequests?: ParticipantPermissionRequest[]
 	onApproveAudioRequest?: (userId: string, accepted: boolean) => void
 	onApproveVideoRequest?: (userId: string, accepted: boolean) => void
+	onPromoteToCohost?: (
+		participantIdentity: string,
+		role: 'PARTICIPANT' | 'COHOST',
+	) => void
 }) {
 	const participants = useParticipants()
 	const { localParticipant } = useLocalParticipant()
@@ -3715,6 +3751,15 @@ function ParticipantList({
 									</button>
 									{canControl && (
 										<div className="ml-1 flex items-center gap-1">
+											<button
+												onClick={() =>
+													onPromoteToCohost?.(participant.identity, 'COHOST')
+												}
+												className="px-1.5 py-1 rounded text-[9px] font-semibold bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30"
+												title="Make cohost"
+											>
+												Co
+											</button>
 											<button
 												onClick={() =>
 													onLockUserChatAudience?.(
