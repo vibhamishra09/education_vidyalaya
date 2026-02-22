@@ -25,10 +25,24 @@ export class ClerkAuthGuard implements CanActivate {
         throw new UnauthorizedException('No authorization token provided');
       }
 
-      // Construct a proper URL for Clerk's authenticateRequest
-      const protocol = request.protocol || 'http';
-      const host = request.get('host') || 'localhost:3001';
-      const fullUrl = `${protocol}://${host}${request.url}`;
+      // Build a proxy-aware URL for Clerk authentication checks.
+      const forwardedProtoHeader = request.get('x-forwarded-proto');
+      const forwardedHostHeader = request.get('x-forwarded-host');
+      const protocol =
+        (typeof forwardedProtoHeader === 'string'
+          ? forwardedProtoHeader.split(',')[0]?.trim()
+          : undefined) ||
+        request.protocol ||
+        'http';
+      const host =
+        (typeof forwardedHostHeader === 'string'
+          ? forwardedHostHeader.split(',')[0]?.trim()
+          : undefined) ||
+        request.get('host') ||
+        'localhost:3001';
+      const requestPath = request.originalUrl || request.url || '/';
+      const fullUrl = `${protocol}://${host}${requestPath}`;
+      this.logger.debug(`Clerk authenticateRequest fullUrl=${fullUrl}`);
 
       // Create a new request object with the full URL
       const clerkRequest = new Request(fullUrl, {
@@ -70,6 +84,11 @@ export class ClerkAuthGuard implements CanActivate {
         throw error;
       }
 
+      if (process.env.NODE_ENV !== 'production') {
+        this.logger.debug(
+          `Clerk auth context protocol=${request.protocol} host=${request.get('host')} x-forwarded-proto=${request.get('x-forwarded-proto')} x-forwarded-host=${request.get('x-forwarded-host')}`,
+        );
+      }
       this.logger.debug('Clerk authentication error:', error);
       throw new UnauthorizedException('Invalid or expired token');
     }
