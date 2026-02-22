@@ -7,6 +7,10 @@ export interface RoomPermissions {
   allowAudio: boolean;
   allowVideo: boolean;
   allowChat: boolean;
+  allowChatEveryone: boolean;
+  allowChatHost: boolean;
+  allowChatUser: boolean;
+  allowParticipantList: boolean;
 }
 
 // Room settings stored in Redis (host view)
@@ -14,6 +18,13 @@ export interface RoomSettings {
   lockAudio: boolean;
   lockVideo: boolean;
   chatDisabled: boolean;
+  hideParticipantList: boolean;
+}
+
+export interface ParticipantChatLocks {
+  everyone: boolean;
+  host: boolean;
+  user: boolean;
 }
 
 // Request from host to turn on audio/video
@@ -47,6 +58,10 @@ export function useSessionModeration({ sessionId, sessionType, isHost, token, us
     allowAudio: true,
     allowVideo: true,
     allowChat: true,
+    allowChatEveryone: true,
+    allowChatHost: true,
+    allowChatUser: true,
+    allowParticipantList: true,
   });
   
   // Room settings from Redis (for host UI)
@@ -54,7 +69,10 @@ export function useSessionModeration({ sessionId, sessionType, isHost, token, us
     lockAudio: false,
     lockVideo: false,
     chatDisabled: false,
+    hideParticipantList: false,
   });
+
+  const [participantChatLocks, setParticipantChatLocks] = useState<Record<string, ParticipantChatLocks>>({});
   
   // Host status from server
   const [isHostFromServer, setIsHostFromServer] = useState(false);
@@ -183,6 +201,31 @@ export function useSessionModeration({ sessionId, sessionType, isHost, token, us
           console.log('[moderation] permissions-updated (user-specific): setting chatDisabled to', newChatDisabled);
           setChatDisabled(newChatDisabled);
         }
+      }
+      if (data.targetUserId && data.permissions) {
+        const targetUserId = data.targetUserId;
+        setParticipantChatLocks((prev) => {
+          const existing = prev[targetUserId] || {
+            everyone: false,
+            host: false,
+            user: false,
+          };
+          const next = {
+            everyone:
+              data.permissions.allowChatEveryone !== undefined
+                ? !data.permissions.allowChatEveryone
+                : existing.everyone,
+            host:
+              data.permissions.allowChatHost !== undefined
+                ? !data.permissions.allowChatHost
+                : existing.host,
+            user:
+              data.permissions.allowChatUser !== undefined
+                ? !data.permissions.allowChatUser
+                : existing.user,
+          };
+          return { ...prev, [targetUserId]: next };
+        });
       }
     });
 
@@ -346,6 +389,51 @@ export function useSessionModeration({ sessionId, sessionType, isHost, token, us
     });
   }, [socket, sessionId, sessionType]);
 
+  const lockUserChatAudience = useCallback(
+    (targetUserId: string, audience: 'everyone' | 'host' | 'user', locked: boolean) => {
+      if (!socket || !sessionId || !sessionType) return;
+      const permissionPatch: Partial<RoomPermissions> = {};
+      if (audience === 'everyone') permissionPatch.allowChatEveryone = !locked;
+      if (audience === 'host') permissionPatch.allowChatHost = !locked;
+      if (audience === 'user') permissionPatch.allowChatUser = !locked;
+
+      socket.emit('update-permissions', {
+        sessionId,
+        sessionType,
+        permissions: permissionPatch,
+        targetUserId,
+      });
+
+      setParticipantChatLocks((prev) => {
+        const existing = prev[targetUserId] || {
+          everyone: false,
+          host: false,
+          user: false,
+        };
+        return {
+          ...prev,
+          [targetUserId]: {
+            ...existing,
+            [audience]: locked,
+          },
+        };
+      });
+    },
+    [socket, sessionId, sessionType],
+  );
+
+  const hideParticipantList = useCallback(
+    (hidden: boolean) => {
+      if (!socket || !sessionId || !sessionType) return;
+      socket.emit('update-permissions', {
+        sessionId,
+        sessionType,
+        permissions: { allowParticipantList: !hidden },
+      });
+    },
+    [socket, sessionId, sessionType],
+  );
+
   const muteAll = useCallback(() => {
     if (!socket || !sessionId || !sessionType) return;
     socket.emit('moderation-mute', { sessionId, sessionType, action: 'mute' });
@@ -476,6 +564,8 @@ export function useSessionModeration({ sessionId, sessionType, isHost, token, us
     lockChat,
     lockUserAudio,
     lockUserVideo,
+    lockUserChatAudience,
+    hideParticipantList,
     // Immediate actions (mute/unmute)
     muteAll,
     unmuteAll,
@@ -507,5 +597,6 @@ export function useSessionModeration({ sessionId, sessionType, isHost, token, us
     // Pending participant requests (for host to see in participant list)
     pendingParticipantRequests,
     clearParticipantRequest,
+    participantChatLocks,
   };
 }

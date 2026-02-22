@@ -35,6 +35,7 @@ export default function RoomPage() {
 	const [sessionEnded, setSessionEnded] = useState(false)
 	const [chatRecipients, setChatRecipients] = useState<ChatIdentity[]>([])
 	const [hostUser, setHostUser] = useState<ChatIdentity | null>(null)
+	const [currentUserDbId, setCurrentUserDbId] = useState<string | null>(null)
 
 	useEffect(() => {
 		let mounted = true
@@ -55,6 +56,13 @@ export default function RoomPage() {
 					: isPeerSession 
 						? roomName.slice('peersession-'.length)
 						: roomName.split('-')[1]
+
+						// Fetch current user DB ID in parallel to enable self-message filtering
+				apiClient.get('/api/users/me', {
+					headers: { Authorization: `Bearer ${clerkToken}` },
+				}).then((res) => {
+					if (mounted && res.data?.id) setCurrentUserDbId(res.data.id as string)
+				}).catch(() => null)
 
 				// Fetch LiveKit token, channel ID, and session data
 				const promises: Promise<{ data: { token?: string; channelId?: string; [key: string]: unknown } } | null>[] = [
@@ -279,6 +287,7 @@ export default function RoomPage() {
 			isHost={isHost}
 			chatRecipients={chatRecipients}
 			hostUser={hostUser}
+			currentUserDbId={currentUserDbId}
 		/>
 	)
 }
