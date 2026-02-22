@@ -10,7 +10,7 @@ import { Server, Socket } from 'socket.io';
 import { createClerkClient } from '@clerk/backend';
 import { StudyRoomsService } from '../study-rooms/study-rooms.service';
 import { PeerSessionsService } from '../peer-sessions/peer-sessions.service';
-import { PermissionsService } from './permissions.service';
+import { PermissionsService, FlashQuestion } from './permissions.service';
 import { LoggerService } from '../common/logger';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -781,6 +781,360 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
     } catch (error: any) {
       this.logger.error('Error toggling chat:', error);
       client.emit('moderation-error', { message: error?.message || 'Failed to toggle chat' });
+    }
+  }
+
+  // ─── Flash Message / Question List Events ────────────────────────────────
+
+  /**
+   * Host uploads or replaces their question list for the session.
+   * Each host has their own independent list stored in Redis under:
+   *   flash:{sessionId}:host:{hostClerkId}:questions
+   */
+  @SubscribeMessage('flash:upload-list')
+  async handleFlashUploadList(
+    client: Socket,
+    payload: {
+      sessionId: string;
+      sessionType: 'studyRoom' | 'peerSession';
+      questions: Array<{
+        id: string;
+        text: string;
+        duration?: number;      // seconds to display (0 = manual dismiss)
+        position?: 'top' | 'center' | 'bottom';
+        fontSize?: 'sm' | 'md' | 'lg' | 'xl';
+        bgColor?: string;
+      }>;
+    },
+  ) {
+    if (!client.data.userId) {
+      client.emit('moderation-error', { message: 'Not authenticated' });
+      return;
+    }
+    const { sessionId, sessionType, questions } = payload;
+    if (!sessionId || !sessionType || !Array.isArray(questions)) {
+      client.emit('moderation-error', { message: 'Invalid payload' });
+      return;
+    }
+
+    try {
+      const isHost = await this.verifyIsHost(sessionId, sessionType, client.data.userId);
+      if (!isHost) {
+        client.emit('moderation-error', { message: 'Only hosts can manage question lists' });
+        return;
+      }
+
+      await this.permissionsService.setFlashQuestions(sessionId, client.data.userId, questions);
+
+      // Confirm to the uploading host
+      client.emit('flash:list-updated', {
+        hostId: client.data.userId,
+        questions,
+        currentIndex: 0,
+      });
+      this.logger.log(`Host ${client.data.userId} uploaded ${questions.length} questions for session ${sessionId}`);
+    } catch (error: any) {
+      this.logger.error('Error uploading flash question list:', error);
+      client.emit('moderation-error', { message: error?.message || 'Failed to upload questions' });
+    }
+  }
+
+  /**
+   * Host edits a single question in their list (text or metadata).
+   */
+  @SubscribeMessage('flash:update-question')
+  async handleFlashUpdateQuestion(
+    client: Socket,
+    payload: {
+      sessionId: string;
+      sessionType: 'studyRoom' | 'peerSession';
+      questionId: string;
+      updates: {
+        text?: string;
+        duration?: number;
+        position?: 'top' | 'center' | 'bottom';
+        fontSize?: 'sm' | 'md' | 'lg' | 'xl';
+        bgColor?: string;
+      };
+    },
+  ) {
+    if (!client.data.userId) {
+      client.emit('moderation-error', { message: 'Not authenticated' });
+      return;
+    }
+    const { sessionId, sessionType, questionId, updates } = payload;
+    if (!sessionId || !sessionType || !questionId) {
+      client.emit('moderation-error', { message: 'Invalid payload' });
+      return;
+    }
+
+    try {
+      const isHost = await this.verifyIsHost(sessionId, sessionType, client.data.userId);
+      if (!isHost) {
+        client.emit('moderation-error', { message: 'Only hosts can edit questions' });
+        return;
+      }
+
+      const questions = await this.permissionsService.getFlashQuestions(sessionId, client.data.userId);
+      const idx = questions.findIndex((q) => q.id === questionId);
+      if (idx === -1) {
+        client.emit('moderation-error', { message: 'Question not found' });
+        return;
+      }
+      questions[idx] = { ...questions[idx], ...updates };
+      await this.permissionsService.setFlashQuestions(sessionId, client.data.userId, questions);
+
+      client.emit('flash:list-updated', {
+        hostId: client.data.userId,
+        questions,
+      });
+    } catch (error: any) {
+      this.logger.error('Error updating flash question:', error);
+      client.emit('moderation-error', { message: error?.message || 'Failed to update question' });
+    }
+  }
+
+  /**
+   * Host reorders their question list.
+   * orderedIds is the full list of question IDs in the new desired order.
+   */
+  @SubscribeMessage('flash:reorder')
+  async handleFlashReorder(
+    client: Socket,
+    payload: {
+      sessionId: string;
+      sessionType: 'studyRoom' | 'peerSession';
+      orderedIds: string[];
+    },
+  ) {
+    if (!client.data.userId) {
+      client.emit('moderation-error', { message: 'Not authenticated' });
+      return;
+    }
+    const { sessionId, sessionType, orderedIds } = payload;
+    if (!sessionId || !sessionType || !Array.isArray(orderedIds)) {
+      client.emit('moderation-error', { message: 'Invalid payload' });
+      return;
+    }
+
+    try {
+      const isHost = await this.verifyIsHost(sessionId, sessionType, client.data.userId);
+      if (!isHost) {
+        client.emit('moderation-error', { message: 'Only hosts can reorder questions' });
+        return;
+      }
+
+      const questions = await this.permissionsService.getFlashQuestions(sessionId, client.data.userId);
+      const byId = new Map(questions.map((q) => [q.id, q]));
+      const reordered = orderedIds.map((id) => byId.get(id)).filter(Boolean) as typeof questions;
+      await this.permissionsService.setFlashQuestions(sessionId, client.data.userId, reordered);
+
+      client.emit('flash:list-updated', {
+        hostId: client.data.userId,
+        questions: reordered,
+      });
+    } catch (error: any) {
+      this.logger.error('Error reordering flash questions:', error);
+      client.emit('moderation-error', { message: error?.message || 'Failed to reorder questions' });
+    }
+  }
+
+  /**
+   * Host deletes a question from their list.
+   */
+  @SubscribeMessage('flash:delete-question')
+  async handleFlashDeleteQuestion(
+    client: Socket,
+    payload: {
+      sessionId: string;
+      sessionType: 'studyRoom' | 'peerSession';
+      questionId: string;
+    },
+  ) {
+    if (!client.data.userId) {
+      client.emit('moderation-error', { message: 'Not authenticated' });
+      return;
+    }
+    const { sessionId, sessionType, questionId } = payload;
+    if (!sessionId || !sessionType || !questionId) {
+      client.emit('moderation-error', { message: 'Invalid payload' });
+      return;
+    }
+
+    try {
+      const isHost = await this.verifyIsHost(sessionId, sessionType, client.data.userId);
+      if (!isHost) {
+        client.emit('moderation-error', { message: 'Only hosts can delete questions' });
+        return;
+      }
+
+      const questions = await this.permissionsService.getFlashQuestions(sessionId, client.data.userId);
+      const filtered = questions.filter((q) => q.id !== questionId);
+      await this.permissionsService.setFlashQuestions(sessionId, client.data.userId, filtered);
+
+      client.emit('flash:list-updated', {
+        hostId: client.data.userId,
+        questions: filtered,
+      });
+    } catch (error: any) {
+      this.logger.error('Error deleting flash question:', error);
+      client.emit('moderation-error', { message: error?.message || 'Failed to delete question' });
+    }
+  }
+
+  /**
+   * Host flashes a message to ALL participants in the room.
+   * Can be from the pre-uploaded list ("next" mode) or a live ad-hoc message.
+   */
+  @SubscribeMessage('flash:show')
+  async handleFlashShow(
+    client: Socket,
+    payload: {
+      sessionId: string;
+      sessionType: 'studyRoom' | 'peerSession';
+      /** Provide questionId to advance through the list, or provide text for ad-hoc */
+      questionId?: string;
+      text?: string;
+      duration?: number;
+      position?: 'top' | 'center' | 'bottom';
+      fontSize?: 'sm' | 'md' | 'lg' | 'xl';
+      bgColor?: string;
+    },
+  ) {
+    if (!client.data.userId) {
+      client.emit('moderation-error', { message: 'Not authenticated' });
+      return;
+    }
+    const { sessionId, sessionType } = payload;
+    if (!sessionId || !sessionType) {
+      client.emit('moderation-error', { message: 'Invalid payload' });
+      return;
+    }
+
+    try {
+      const isHost = await this.verifyIsHost(sessionId, sessionType, client.data.userId);
+      if (!isHost) {
+        client.emit('moderation-error', { message: 'Only hosts can flash messages' });
+        return;
+      }
+
+      let flashData: {
+        id: string;
+        text: string;
+        duration: number;
+        position: 'top' | 'center' | 'bottom';
+        fontSize: 'sm' | 'md' | 'lg' | 'xl';
+        bgColor?: string;
+        hostId: string;
+      };
+
+      if (payload.questionId) {
+        // Fetch from host's stored list
+        const questions = await this.permissionsService.getFlashQuestions(sessionId, client.data.userId);
+        const q = questions.find((q) => q.id === payload.questionId);
+        if (!q) {
+          client.emit('moderation-error', { message: 'Question not found' });
+          return;
+        }
+        flashData = {
+          id: q.id,
+          text: q.text,
+          duration: q.duration ?? 0,
+          position: q.position ?? 'center',
+          fontSize: q.fontSize ?? 'lg',
+          bgColor: q.bgColor,
+          hostId: client.data.userId,
+        };
+      } else if (payload.text) {
+        // Ad-hoc message
+        flashData = {
+          id: `adhoc-${Date.now()}`,
+          text: payload.text,
+          duration: payload.duration ?? 0,
+          position: payload.position ?? 'center',
+          fontSize: payload.fontSize ?? 'lg',
+          bgColor: payload.bgColor,
+          hostId: client.data.userId,
+        };
+      } else {
+        client.emit('moderation-error', { message: 'Must provide questionId or text' });
+        return;
+      }
+
+      // Broadcast to ALL participants in the room
+      this.server.to(sessionId).emit('flash:message', flashData);
+      this.logger.log(`Host ${client.data.userId} flashed message in session ${sessionId}: "${flashData.text.slice(0, 50)}"`);
+    } catch (error: any) {
+      this.logger.error('Error showing flash message:', error);
+      client.emit('moderation-error', { message: error?.message || 'Failed to show flash message' });
+    }
+  }
+
+  /**
+   * Host dismisses the currently displayed flash message for all participants.
+   */
+  @SubscribeMessage('flash:dismiss')
+  async handleFlashDismiss(
+    client: Socket,
+    payload: { sessionId: string; sessionType: 'studyRoom' | 'peerSession' },
+  ) {
+    if (!client.data.userId) {
+      client.emit('moderation-error', { message: 'Not authenticated' });
+      return;
+    }
+    const { sessionId, sessionType } = payload;
+    if (!sessionId || !sessionType) {
+      client.emit('moderation-error', { message: 'Invalid payload' });
+      return;
+    }
+
+    try {
+      const isHost = await this.verifyIsHost(sessionId, sessionType, client.data.userId);
+      if (!isHost) {
+        client.emit('moderation-error', { message: 'Only hosts can dismiss flash messages' });
+        return;
+      }
+
+      this.server.to(sessionId).emit('flash:dismissed', { hostId: client.data.userId });
+    } catch (error: any) {
+      this.logger.error('Error dismissing flash message:', error);
+      client.emit('moderation-error', { message: error?.message || 'Failed to dismiss flash message' });
+    }
+  }
+
+  /**
+   * Host gets their current question list (e.g. on page refresh).
+   */
+  @SubscribeMessage('flash:get-list')
+  async handleFlashGetList(
+    client: Socket,
+    payload: { sessionId: string; sessionType: 'studyRoom' | 'peerSession' },
+  ) {
+    if (!client.data.userId) {
+      client.emit('moderation-error', { message: 'Not authenticated' });
+      return;
+    }
+    const { sessionId, sessionType } = payload;
+    if (!sessionId || !sessionType) {
+      client.emit('moderation-error', { message: 'Invalid payload' });
+      return;
+    }
+
+    try {
+      const isHost = await this.verifyIsHost(sessionId, sessionType, client.data.userId);
+      if (!isHost) {
+        client.emit('moderation-error', { message: 'Only hosts can view question lists' });
+        return;
+      }
+
+      const questions = await this.permissionsService.getFlashQuestions(sessionId, client.data.userId);
+      client.emit('flash:list-updated', {
+        hostId: client.data.userId,
+        questions,
+      });
+    } catch (error: any) {
+      this.logger.error('Error getting flash question list:', error);
+      client.emit('moderation-error', { message: error?.message || 'Failed to get questions' });
     }
   }
 }
