@@ -52,6 +52,7 @@ interface ChatWidgetProps {
 	recipients?: ChatRecipient[]
 	hostUserId?: string | null
 	currentUserDbId?: string | null
+	allowedAudiences?: Partial<Record<MessageAudienceType, boolean>>
 }
 
 export function ChatWidget({
@@ -61,6 +62,7 @@ export function ChatWidget({
 	recipients = [],
 	hostUserId,
 	currentUserDbId,
+	allowedAudiences,
 }: ChatWidgetProps) {
 	const { user, isLoaded } = useUser()
 	const { getToken } = useAuth()
@@ -257,6 +259,8 @@ export function ChatWidget({
 						if (errorData.code === 'CHAT_DISABLED') {
 							// Don't show error - chatDisabled prop will handle the UI
 							console.log('ℹ️ [Chat] Chat is disabled by host')
+						} else if (errorData.code === 'CHAT_SCOPE_RESTRICTED') {
+							setError('Host has restricted this chat target for you')
 						} else if (errorData.code === 'RECONNECTING') {
 							// Normal reconnection, don't show error
 							console.log('🔄 [Chat] Reconnecting...')
@@ -403,6 +407,8 @@ export function ChatWidget({
 					disabled={chatDisabled}
 					recipients={recipients}
 					hostUserId={hostUserId}
+					currentUserDbId={currentUserDbId}
+					allowedAudiences={allowedAudiences}
 				/>
 			</div>
 		</div>

@@ -155,6 +155,7 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
         lockAudio: roomSettings.lockAudio,
         lockVideo: roomSettings.lockVideo,
         chatDisabled: roomSettings.chatDisabled,
+        hideParticipantList: roomSettings.hideParticipantList,
       },
       isHost,
     });
@@ -175,7 +176,15 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
     payload: { 
       sessionId: string; 
       sessionType: 'studyRoom' | 'peerSession';
-      permissions: { allowAudio?: boolean; allowVideo?: boolean; allowChat?: boolean };
+      permissions: {
+        allowAudio?: boolean;
+        allowVideo?: boolean;
+        allowChat?: boolean;
+        allowChatEveryone?: boolean;
+        allowChatHost?: boolean;
+        allowChatUser?: boolean;
+        allowParticipantList?: boolean;
+      };
       targetUserId?: string; // If set, only update this user's permissions
     }
   ) {
@@ -199,10 +208,26 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
 
       if (targetUserId) {
         // Update per-user override in Redis
-        const userPerms: { canAudio?: boolean; canVideo?: boolean; canChat?: boolean } = {};
+        const userPerms: {
+          canAudio?: boolean;
+          canVideo?: boolean;
+          canChat?: boolean;
+          canChatEveryone?: boolean;
+          canChatHost?: boolean;
+          canChatUser?: boolean;
+        } = {};
         if (permissions.allowAudio !== undefined) userPerms.canAudio = permissions.allowAudio;
         if (permissions.allowVideo !== undefined) userPerms.canVideo = permissions.allowVideo;
         if (permissions.allowChat !== undefined) userPerms.canChat = permissions.allowChat;
+        if (permissions.allowChatEveryone !== undefined) {
+          userPerms.canChatEveryone = permissions.allowChatEveryone;
+        }
+        if (permissions.allowChatHost !== undefined) {
+          userPerms.canChatHost = permissions.allowChatHost;
+        }
+        if (permissions.allowChatUser !== undefined) {
+          userPerms.canChatUser = permissions.allowChatUser;
+        }
         
         await this.permissionsService.setUserPermissions(sessionId, targetUserId, userPerms);
         
@@ -222,10 +247,18 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
         });
       } else {
         // Update room-wide settings in Redis
-        const roomSettings: { lockAudio?: boolean; lockVideo?: boolean; chatDisabled?: boolean } = {};
+        const roomSettings: {
+          lockAudio?: boolean;
+          lockVideo?: boolean;
+          chatDisabled?: boolean;
+          hideParticipantList?: boolean;
+        } = {};
         if (permissions.allowAudio !== undefined) roomSettings.lockAudio = !permissions.allowAudio;
         if (permissions.allowVideo !== undefined) roomSettings.lockVideo = !permissions.allowVideo;
         if (permissions.allowChat !== undefined) roomSettings.chatDisabled = !permissions.allowChat;
+        if (permissions.allowParticipantList !== undefined) {
+          roomSettings.hideParticipantList = !permissions.allowParticipantList;
+        }
         
         await this.permissionsService.setRoomSettings(sessionId, roomSettings);
         
@@ -238,6 +271,7 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
             allowAudio: !updatedSettings.lockAudio,
             allowVideo: !updatedSettings.lockVideo,
             allowChat: !updatedSettings.chatDisabled,
+            allowParticipantList: !updatedSettings.hideParticipantList,
           },
         });
         
