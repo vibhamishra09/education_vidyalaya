@@ -615,6 +615,7 @@ export function EnhancedVideoRoom({
 					isMobileViewport={isMobileViewport}
 					chatRecipients={chatRecipients}
 					hostUser={hostUser}
+					currentUserDbId={currentUserDbId}
 				/>
 		</LiveKitRoom>
 
@@ -721,6 +722,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	isMobileViewport,
 	chatRecipients,
 	hostUser,
+	currentUserDbId,
 	participantChatLocks,
 }: {
 	isUserActive: boolean
@@ -783,6 +785,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	isMobileViewport?: boolean
 	chatRecipients?: ChatRecipient[]
 	hostUser?: ChatIdentity | null
+	currentUserDbId?: string | null
 	participantChatLocks?: Record<string, ParticipantChatLocks>
 }) {
 	// Room context removed to avoid race conditions, using localParticipant hook instead

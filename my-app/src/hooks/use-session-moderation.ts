@@ -203,8 +203,9 @@ export function useSessionModeration({ sessionId, sessionType, isHost, token, us
         }
       }
       if (data.targetUserId && data.permissions) {
+        const targetUserId = data.targetUserId;
         setParticipantChatLocks((prev) => {
-          const existing = prev[data.targetUserId!] || {
+          const existing = prev[targetUserId] || {
             everyone: false,
             host: false,
             user: false,
@@ -223,7 +224,7 @@ export function useSessionModeration({ sessionId, sessionType, isHost, token, us
                 ? !data.permissions.allowChatUser
                 : existing.user,
           };
-          return { ...prev, [data.targetUserId]: next };
+          return { ...prev, [targetUserId]: next };
         });
       }
     });
