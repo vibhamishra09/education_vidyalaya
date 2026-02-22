@@ -2,6 +2,20 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { toast } from 'sonner';
 
+// Flash message types
+export interface FlashQuestion {
+  id: string;
+  text: string;
+  duration?: number;      // seconds (0 = manual dismiss)
+  position?: 'top' | 'center' | 'bottom';
+  fontSize?: 'sm' | 'md' | 'lg' | 'xl';
+  bgColor?: string;
+}
+
+export interface ActiveFlashMessage extends FlashQuestion {
+  hostId: string;
+}
+
 // Room permissions interface for the "Lock" system
 export interface RoomPermissions {
   allowAudio: boolean;
@@ -85,7 +99,12 @@ export function useSessionModeration({ sessionId, sessionType, isHost, token, us
   
   // Pending requests from participants (for host to see)
   const [pendingParticipantRequests, setPendingParticipantRequests] = useState<ParticipantPermissionRequest[]>([]);
-  
+
+  // Flash message state
+  const [activeFlashMessage, setActiveFlashMessage] = useState<ActiveFlashMessage | null>(null);
+  // Host's own question list (only populated for hosts)
+  const [flashQuestions, setFlashQuestions] = useState<FlashQuestion[]>([]);
+
   const connectingRef = useRef(false);
   const userIdRef = useRef(userId);
   
@@ -324,6 +343,29 @@ export function useSessionModeration({ sessionId, sessionType, isHost, token, us
       setError(data?.message || 'Moderation error');
     });
 
+    // Flash message events
+    s.on('flash:message', (data: ActiveFlashMessage) => {
+      console.log('[moderation] flash:message received', data);
+      setActiveFlashMessage(data);
+      // Auto-dismiss after duration if specified
+      if (data.duration && data.duration > 0) {
+        setTimeout(() => {
+          setActiveFlashMessage((current) => (current?.id === data.id ? null : current));
+        }, data.duration * 1000);
+      }
+    });
+
+    s.on('flash:dismissed', () => {
+      console.log('[moderation] flash:dismissed');
+      setActiveFlashMessage(null);
+    });
+
+    // Host receives their question list (after upload, edit, reorder, or get-list)
+    s.on('flash:list-updated', (data: { hostId: string; questions: FlashQuestion[] }) => {
+      console.log('[moderation] flash:list-updated', data.questions.length, 'questions');
+      setFlashQuestions(data.questions);
+    });
+
     return () => {
       connectingRef.current = false;
       s.disconnect();
@@ -548,6 +590,61 @@ export function useSessionModeration({ sessionId, sessionType, isHost, token, us
     setPendingParticipantRequests(prev => prev.filter(r => !(r.userId === userId && r.type === type)));
   }, []);
 
+  // ─── Flash Message Actions ────────────────────────────────────────────────
+
+  /** Host uploads / replaces their full question list */
+  const flashUploadList = useCallback((questions: FlashQuestion[]) => {
+    if (!socket || !sessionId || !sessionType) return;
+    socket.emit('flash:upload-list', { sessionId, sessionType, questions });
+  }, [socket, sessionId, sessionType]);
+
+  /** Host updates a single question's text or metadata */
+  const flashUpdateQuestion = useCallback((questionId: string, updates: Partial<Omit<FlashQuestion, 'id'>>) => {
+    if (!socket || !sessionId || !sessionType) return;
+    socket.emit('flash:update-question', { sessionId, sessionType, questionId, updates });
+  }, [socket, sessionId, sessionType]);
+
+  /** Host reorders the list by providing new ordered IDs */
+  const flashReorder = useCallback((orderedIds: string[]) => {
+    if (!socket || !sessionId || !sessionType) return;
+    socket.emit('flash:reorder', { sessionId, sessionType, orderedIds });
+  }, [socket, sessionId, sessionType]);
+
+  /** Host deletes a question */
+  const flashDeleteQuestion = useCallback((questionId: string) => {
+    if (!socket || !sessionId || !sessionType) return;
+    socket.emit('flash:delete-question', { sessionId, sessionType, questionId });
+  }, [socket, sessionId, sessionType]);
+
+  /** Host flashes a specific question from their list to all participants */
+  const flashShowQuestion = useCallback((questionId: string) => {
+    if (!socket || !sessionId || !sessionType) return;
+    socket.emit('flash:show', { sessionId, sessionType, questionId });
+  }, [socket, sessionId, sessionType]);
+
+  /** Host flashes an ad-hoc message to all participants */
+  const flashShowAdHoc = useCallback((text: string, meta?: Omit<FlashQuestion, 'id' | 'text'>) => {
+    if (!socket || !sessionId || !sessionType) return;
+    socket.emit('flash:show', { sessionId, sessionType, text, ...meta });
+  }, [socket, sessionId, sessionType]);
+
+  /** Host dismisses the current flash message for everyone */
+  const flashDismiss = useCallback(() => {
+    if (!socket || !sessionId || !sessionType) return;
+    socket.emit('flash:dismiss', { sessionId, sessionType });
+  }, [socket, sessionId, sessionType]);
+
+  /** Host refreshes their question list from the server */
+  const flashGetList = useCallback(() => {
+    if (!socket || !sessionId || !sessionType) return;
+    socket.emit('flash:get-list', { sessionId, sessionType });
+  }, [socket, sessionId, sessionType]);
+
+  /** Participant locally dismisses the flash overlay (does NOT dismiss for others) */
+  const dismissFlashMessage = useCallback(() => {
+    setActiveFlashMessage(null);
+  }, []);
+
   return {
     socket,
     isConnected,
@@ -598,5 +695,18 @@ export function useSessionModeration({ sessionId, sessionType, isHost, token, us
     pendingParticipantRequests,
     clearParticipantRequest,
     participantChatLocks,
+    // Flash message state
+    activeFlashMessage,
+    flashQuestions,
+    // Flash message actions (host only)
+    flashUploadList,
+    flashUpdateQuestion,
+    flashReorder,
+    flashDeleteQuestion,
+    flashShowQuestion,
+    flashShowAdHoc,
+    flashDismiss,
+    flashGetList,
+    dismissFlashMessage,
   };
 }
