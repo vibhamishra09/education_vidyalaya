@@ -40,6 +40,15 @@ export interface ComputedPermissions {
   allowParticipantList: boolean;
 }
 
+export interface FlashQuestion {
+  id: string;
+  text: string;
+  duration?: number;      // seconds (0 = manual dismiss)
+  position?: 'top' | 'center' | 'bottom';
+  fontSize?: 'sm' | 'md' | 'lg' | 'xl';
+  bgColor?: string;
+}
+
 @Injectable()
 export class PermissionsService {
   constructor(private readonly logger: LoggerService) {
@@ -324,18 +333,58 @@ export class PermissionsService {
     }
   }
 
+  // ─── Flash Message / Question List ──────────────────────────────────────
+
+  private getFlashQuestionsKey(sessionId: string, hostId: string): string {
+    return `flash:${sessionId}:host:${hostId}:questions`;
+  }
+
+  /**
+   * Persist a host's question list to Redis.
+   */
+  async setFlashQuestions(sessionId: string, hostId: string, questions: FlashQuestion[]): Promise<void> {
+    try {
+      const key = this.getFlashQuestionsKey(sessionId, hostId);
+      await redisClient.set(key, JSON.stringify(questions), { EX: this.PERMISSIONS_TTL });
+      this.logger.debug(`Flash questions saved for ${sessionId}/${hostId}: ${questions.length} items`);
+    } catch (error) {
+      this.logger.error(`Error saving flash questions for ${sessionId}/${hostId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Retrieve a host's question list from Redis. Returns [] if nothing stored.
+   */
+  async getFlashQuestions(sessionId: string, hostId: string): Promise<FlashQuestion[]> {
+    try {
+      const key = this.getFlashQuestionsKey(sessionId, hostId);
+      const raw = await redisClient.get(key);
+      if (!raw) return [];
+      return JSON.parse(raw) as FlashQuestion[];
+    } catch (error) {
+      this.logger.error(`Error getting flash questions for ${sessionId}/${hostId}:`, error);
+      return [];
+    }
+  }
+
   /**
    * Clean up all permissions for a session (call when session ends)
    */
   async cleanupSession(sessionId: string): Promise<void> {
     try {
-      // Get all keys matching this session
-      const pattern = `room:${sessionId}:*`;
-      const keys = await redisClient.keys(pattern);
-      
-      if (keys.length > 0) {
-        await redisClient.del(keys);
-        this.logger.debug(`Cleaned up ${keys.length} keys for session ${sessionId}`);
+      // Get all keys matching this session (permissions + flash messages)
+      const roomPattern = `room:${sessionId}:*`;
+      const flashPattern = `flash:${sessionId}:*`;
+      const [roomKeys, flashKeys] = await Promise.all([
+        redisClient.keys(roomPattern),
+        redisClient.keys(flashPattern),
+      ]);
+      const allKeys = [...roomKeys, ...flashKeys];
+
+      if (allKeys.length > 0) {
+        await redisClient.del(allKeys);
+        this.logger.debug(`Cleaned up ${allKeys.length} keys for session ${sessionId}`);
       }
     } catch (error) {
       this.logger.error(`Error cleaning up session ${sessionId}:`, error);

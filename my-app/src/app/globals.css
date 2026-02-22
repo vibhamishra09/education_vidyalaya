@@ -698,3 +698,9 @@
 .cl-spinner {
   animation: spin 1s linear infinite;
 }
+
+/* Flash message progress bar animation */
+@keyframes shrink-x {
+  from { width: 100%; }
+  to   { width: 0%; }
+}
