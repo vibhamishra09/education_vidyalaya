@@ -15,7 +15,11 @@ import { OptionalClerkAuthGuard } from '../common/guards/optional-clerk-auth.gua
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import {
   CreateStudyRoomDto,
+  ExternalJoinRequestDto,
+  PromoteParticipantRoleDto,
+  ResolveExternalJoinRequestDto,
   StudyRoomEditScope,
+  ToggleExternalAutoAcceptDto,
   UpdateStudyRoomDto,
 } from './dto/study-room.dto';
 import { StudyRoomQueryDto } from './dto/study-room-query.dto';
@@ -145,6 +149,64 @@ export class StudyRoomsController {
     @CurrentUser() userId: string,
   ) {
     return this.studyRoomsService.joinStudyRoom(studyRoomId, userId);
+  }
+
+  @Post(':studyRoomId/external/request')
+  async requestExternalJoin(
+    @Param('studyRoomId') studyRoomId: string,
+    @Body() dto: ExternalJoinRequestDto,
+  ) {
+    return this.studyRoomsService.requestExternalJoin(studyRoomId, dto);
+  }
+
+  @Get(':studyRoomId/external/requests')
+  @UseGuards(ClerkAuthGuard)
+  async listExternalJoinRequests(
+    @Param('studyRoomId') studyRoomId: string,
+    @CurrentUser() userId: string,
+  ) {
+    return this.studyRoomsService.listPendingExternalJoinRequests(studyRoomId, userId);
+  }
+
+  @Post(':studyRoomId/external/requests/:requestId/resolve')
+  @UseGuards(ClerkAuthGuard)
+  async resolveExternalJoinRequest(
+    @Param('studyRoomId') studyRoomId: string,
+    @Param('requestId') requestId: string,
+    @CurrentUser() userId: string,
+    @Body() dto: ResolveExternalJoinRequestDto,
+  ) {
+    return this.studyRoomsService.resolveExternalJoinRequest(
+      studyRoomId,
+      requestId,
+      userId,
+      dto.approve,
+    );
+  }
+
+  @Post(':studyRoomId/external/auto-accept')
+  @UseGuards(ClerkAuthGuard)
+  async toggleExternalAutoAccept(
+    @Param('studyRoomId') studyRoomId: string,
+    @CurrentUser() userId: string,
+    @Body() dto: ToggleExternalAutoAcceptDto,
+  ) {
+    return this.studyRoomsService.setExternalAutoAccept(studyRoomId, userId, dto.enabled);
+  }
+
+  @Post(':studyRoomId/participants/role')
+  @UseGuards(ClerkAuthGuard)
+  async updateParticipantRole(
+    @Param('studyRoomId') studyRoomId: string,
+    @CurrentUser() userId: string,
+    @Body() dto: PromoteParticipantRoleDto,
+  ) {
+    return this.studyRoomsService.updateParticipantRole(
+      studyRoomId,
+      userId,
+      dto.participantIdentity,
+      dto.role,
+    );
   }
 
   @Post(':studyRoomId/cancel')

@@ -2,16 +2,19 @@ import { Body, Controller, Post, Req, UseGuards } from '@nestjs/common';
 import { LivekitService } from './livekit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ClerkAuthGuard } from '../common/guards/clerk-auth.guard';
+import { StudyRoomsService } from '../study-rooms/study-rooms.service';
+import { StudyRoomParticipantRole } from '@prisma/client';
 
-@UseGuards(ClerkAuthGuard)
 @Controller('api/livekit')
 export class LivekitController {
   constructor(
     private readonly livekit: LivekitService,
     private readonly prisma: PrismaService,
+    private readonly studyRoomsService: StudyRoomsService,
   ) {}
 
   @Post('token')
+  @UseGuards(ClerkAuthGuard)
   async token(
     @Body()
     body: {
@@ -45,5 +48,44 @@ export class LivekitController {
       subscribe: body.subscribe,
     });
     return { token };
+  }
+
+  @Post('guest-token')
+  async guestToken(
+    @Body()
+    body: {
+      roomName: string;
+      guestAccessToken: string;
+    },
+  ) {
+    const roomId = body.roomName.startsWith('studyroom-')
+      ? body.roomName.replace('studyroom-', '')
+      : body.roomName;
+    const guestToken = await this.studyRoomsService.validateGuestAccessToken(
+      roomId,
+      body.guestAccessToken,
+    );
+
+    const metadata = JSON.stringify({
+      avatar: null,
+      guest: true,
+      role: guestToken.guestParticipant.role,
+    });
+    const token = await this.livekit.createToken({
+      roomName: body.roomName,
+      identity: guestToken.guestParticipant.livekitIdentity,
+      name: guestToken.guestParticipant.name,
+      metadata,
+      publish: true,
+      subscribe: true,
+    });
+
+    return {
+      token,
+      role: guestToken.guestParticipant.role,
+      isHost: guestToken.guestParticipant.role === StudyRoomParticipantRole.COHOST,
+      identity: guestToken.guestParticipant.livekitIdentity,
+      name: guestToken.guestParticipant.name,
+    };
   }
 }
