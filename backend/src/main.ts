@@ -23,10 +23,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     bufferLogs: true,
   });
-
-  // Respect forwarded protocol/host headers when running behind a reverse proxy.
-  app.getHttpAdapter().getInstance().set('trust proxy', 1);
-
+  
   const logger = app.get(LoggerService);
   logger.setContext('Bootstrap');
 
