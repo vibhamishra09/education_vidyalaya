@@ -302,6 +302,17 @@ export interface StudyRoom extends StudyRoomCard {
   externalInvites?: Array<{ email: string; role: 'PARTICIPANT' | 'COHOST' }>;
   pendingExternalJoinRequests?: number;
   cohostCount?: number;
+  emailDelivery?: {
+    attempted: number;
+    sent: number;
+    failed: number;
+    failures: Array<{
+      email: string;
+      role: 'PARTICIPANT' | 'COHOST';
+      errorCode?: string;
+      errorMessage?: string;
+    }>;
+  };
   reviews: ReviewCard[];
   summary?: string;
   chatChannelId?: string | null;

@@ -72,6 +72,18 @@ type StudyRoomWithRelations = {
   }>;
 };
 
+type InviteEmailDeliverySummary = {
+  attempted: number;
+  sent: number;
+  failed: number;
+  failures: Array<{
+    email: string;
+    role: StudyRoomParticipantRoleDto;
+    errorCode?: string;
+    errorMessage?: string;
+  }>;
+};
+
 @Injectable()
 export class StudyRoomsService {
   constructor(
@@ -144,18 +156,58 @@ export class StudyRoomsService {
     roomTitle: string,
     passcode: string,
     invites: ExternalInviteInputDto[],
-  ) {
-    if (invites.length === 0) return;
+  ): Promise<InviteEmailDeliverySummary> {
+    if (invites.length === 0) {
+      return {
+        attempted: 0,
+        sent: 0,
+        failed: 0,
+        failures: [],
+      };
+    }
     const roomLink = `${process.env.FRONTEND_URL || process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/studyroom/${roomId}`;
-    await Promise.all(
-      invites.map((invite) =>
-        this.emailService.sendDirectEmailNotification(
-          this.normalizeEmail(invite.email),
+    const results = await Promise.all(
+      invites.map(async (invite) => {
+        const normalizedEmail = this.normalizeEmail(invite.email);
+        const result = await this.emailService.sendDirectEmailNotification(
+          normalizedEmail,
           `Invite to join "${roomTitle}"`,
           `You are invited as ${invite.role.toLowerCase()} to join "${roomTitle}". Use passcode ${passcode} and open ${roomLink} to join.`,
-        ),
-      ),
+        );
+        return {
+          email: normalizedEmail,
+          role: invite.role,
+          ...result,
+        };
+      }),
     );
+
+    const failures = results
+      .filter((item) => !item.success)
+      .map((item) => ({
+        email: item.email,
+        role: item.role,
+        errorCode: item.errorCode,
+        errorMessage: item.errorMessage,
+      }));
+
+    const summary: InviteEmailDeliverySummary = {
+      attempted: results.length,
+      sent: results.filter((item) => item.success).length,
+      failed: failures.length,
+      failures,
+    };
+
+    this.logger.log({
+      message: '📨 External invite email delivery summary',
+      roomId,
+      roomTitle,
+      attempted: summary.attempted,
+      sent: summary.sent,
+      failed: summary.failed,
+      failedRecipients: summary.failures,
+    });
+    return summary;
   }
 
   async getStudyRooms(
@@ -1054,8 +1106,9 @@ export class StudyRoomsService {
     }
 
     const details = await this.getStudyRoomDetails(createdRooms[0].id, userId);
+    let emailDelivery: InviteEmailDeliverySummary | undefined;
     if (allowExternalUsers && externalPasscode && normalizedExternalInvites.length > 0) {
-      await this.sendExternalInviteEmails(
+      emailDelivery = await this.sendExternalInviteEmails(
         createdRooms[0].id,
         createDto.title,
         externalPasscode,
@@ -1067,6 +1120,7 @@ export class StudyRoomsService {
       seriesId,
       occurrencesCreated: createdRooms.length,
       isRecurring: !!createDto.recurrence,
+      emailDelivery,
     };
   }
 
