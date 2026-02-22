@@ -53,10 +53,9 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
   const joinStudyRoom = useJoinStudyRoom();
   const requestExternalJoin = useRequestExternalJoin();
   const cancelStudyRoom = useCancelStudyRoom(roomId);
-  const { data: externalRequests } = useExternalJoinRequests(roomId);
+  const { data: externalRequests } = useExternalJoinRequests(roomId, !!isSignedIn);
   const resolveExternalJoin = useResolveExternalJoinRequest(roomId);
   const toggleAutoAccept = useToggleExternalAutoAccept(roomId);
-  const [guestName, setGuestName] = useState("");
   const [guestEmail, setGuestEmail] = useState("");
   const [guestPasscode, setGuestPasscode] = useState("");
 
@@ -131,15 +130,21 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
 
   const handleGuestJoin = async () => {
     if (!room) return;
-    if (!guestName.trim() || !guestEmail.trim() || !guestPasscode.trim()) {
-      showError("Missing details", "Name, email and passcode are required.");
+    if (!guestEmail.trim() || !guestPasscode.trim()) {
+      showError("Missing details", "Email and passcode are required.");
       return;
     }
     try {
       setIsJoining(true);
+      const derivedGuestName =
+        guestEmail
+          .trim()
+          .split("@")[0]
+          ?.replace(/[._-]+/g, " ")
+          .trim() || "Guest";
       const result = await requestExternalJoin.mutateAsync({
         studyRoomId: roomId,
-        name: guestName.trim(),
+        name: derivedGuestName,
         email: guestEmail.trim(),
         passcode: guestPasscode.trim(),
       });
@@ -147,7 +152,7 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
         showSuccess("Request sent", "Host will review your join request.");
         return;
       }
-      const guestUrl = `/rooms/studyroom/studyroom-${roomId}?guestAccessToken=${encodeURIComponent(result.guestAccessToken)}&guestName=${encodeURIComponent(guestName.trim())}`;
+      const guestUrl = `/rooms/studyroom/studyroom-${roomId}?guestAccessToken=${encodeURIComponent(result.guestAccessToken)}&guestName=${encodeURIComponent(derivedGuestName)}`;
       window.location.href = guestUrl;
     } catch {
       showError("Join failed", "Could not submit external join request.");
@@ -404,17 +409,13 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
                                   room.allowExternalUsers && (
                                     <div className="space-y-2 rounded-lg border p-3">
                                       <Input
-                                        placeholder="Your name"
-                                        value={guestName}
-                                        onChange={(e) => setGuestName(e.target.value)}
-                                      />
-                                      <Input
                                         placeholder="Your email"
                                         value={guestEmail}
                                         onChange={(e) => setGuestEmail(e.target.value)}
                                       />
                                       <Input
-                                        placeholder="Passcode"
+                                        type="password"
+                                        placeholder="Meeting password"
                                         value={guestPasscode}
                                         onChange={(e) => setGuestPasscode(e.target.value)}
                                       />
