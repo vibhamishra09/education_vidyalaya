@@ -22,7 +22,6 @@ import {
   useStudyRoomDetails,
   useJoinStudyRoom,
   useCancelStudyRoom,
-  useRequestExternalJoin,
   useExternalJoinRequests,
   useResolveExternalJoinRequest,
   useToggleExternalAutoAccept,
@@ -36,6 +35,7 @@ import { StudyRoomEditScope } from "@/types/api.types";
 import { ReviewsSection } from "@/components/reviews/reviews-section";
 import { formatCoins } from "@/lib/utils/coin-format";
 import { ShareButton } from "@/components/share/share-button";
+import { studyRoomsApi } from "@/lib/api/study-rooms.api";
 
 interface StudyRoomClientProps {
   roomId: string;
@@ -51,13 +51,17 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
   const { data: room, isLoading, error } = useStudyRoomDetails(roomId);
   console.log(room);
   const joinStudyRoom = useJoinStudyRoom();
-  const requestExternalJoin = useRequestExternalJoin();
   const cancelStudyRoom = useCancelStudyRoom(roomId);
   const { data: externalRequests } = useExternalJoinRequests(roomId, !!isSignedIn);
   const resolveExternalJoin = useResolveExternalJoinRequest(roomId);
   const toggleAutoAccept = useToggleExternalAutoAccept(roomId);
   const [guestEmail, setGuestEmail] = useState("");
   const [guestPasscode, setGuestPasscode] = useState("");
+  const [pendingGuestApproval, setPendingGuestApproval] = useState<{
+    name: string;
+    email: string;
+    passcode: string;
+  } | null>(null);
   const [isPasscodeCopied, setIsPasscodeCopied] = useState(false);
 
   // Check if video call can be joined (within 5 minutes of start time)
@@ -90,6 +94,37 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
 
     return () => clearInterval(interval);
   }, [room]);
+
+  useEffect(() => {
+    if (!pendingGuestApproval) return;
+
+    let stopped = false;
+    const pollForApproval = async () => {
+      try {
+        const result = await studyRoomsApi.requestExternalJoin(roomId, {
+          name: pendingGuestApproval.name,
+          email: pendingGuestApproval.email,
+          passcode: pendingGuestApproval.passcode,
+        });
+        if (stopped) return;
+        if (result.status === "APPROVED") {
+          setPendingGuestApproval(null);
+          showSuccess("Approved", "Host approved your request. Joining now...");
+          const guestUrl = `/rooms/studyroom/studyroom-${roomId}?guestAccessToken=${encodeURIComponent(result.guestAccessToken)}&guestName=${encodeURIComponent(pendingGuestApproval.name)}`;
+          window.location.href = guestUrl;
+        }
+      } catch {
+        // Keep polling quietly while waiting for approval.
+      }
+    };
+
+    pollForApproval();
+    const interval = setInterval(pollForApproval, 3000);
+    return () => {
+      stopped = true;
+      clearInterval(interval);
+    };
+  }, [pendingGuestApproval, roomId, showSuccess]);
 
   // Handle joining study room
   const handleJoinRoom = async () => {
@@ -143,14 +178,18 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
           .split("@")[0]
           ?.replace(/[._-]+/g, " ")
           .trim() || "Guest";
-      const result = await requestExternalJoin.mutateAsync({
-        studyRoomId: roomId,
+      const result = await studyRoomsApi.requestExternalJoin(roomId, {
         name: derivedGuestName,
         email: guestEmail.trim(),
         passcode: guestPasscode.trim(),
       });
       if (result.status === "PENDING") {
-        showSuccess("Request sent", "Host will review your join request.");
+        setPendingGuestApproval({
+          name: derivedGuestName,
+          email: guestEmail.trim(),
+          passcode: guestPasscode.trim(),
+        });
+        showSuccess("Request sent", "Waiting for host approval...");
         return;
       }
       const guestUrl = `/rooms/studyroom/studyroom-${roomId}?guestAccessToken=${encodeURIComponent(result.guestAccessToken)}&guestName=${encodeURIComponent(derivedGuestName)}`;
@@ -436,10 +475,19 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
                                         size="default"
                                         className="w-full bg-green-600 hover:bg-green-700 text-white"
                                         onClick={handleGuestJoin}
-                                        disabled={isJoining}
+                                        disabled={isJoining || !!pendingGuestApproval}
                                       >
-                                        {isJoining ? "Requesting..." : "Join as Guest"}
+                                        {isJoining
+                                          ? "Requesting..."
+                                          : pendingGuestApproval
+                                            ? "Waiting for approval..."
+                                            : "Join as Guest"}
                                       </Button>
+                                      {pendingGuestApproval && (
+                                        <p className="text-[11px] text-muted-foreground">
+                                          Your request is pending. You will be joined automatically once the host approves.
+                                        </p>
+                                      )}
                                     </div>
                                   )}
                                 

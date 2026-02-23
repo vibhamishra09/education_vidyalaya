@@ -1575,6 +1575,39 @@ export class StudyRoomsService {
     if (!studyRoom.externalPasscode || studyRoom.externalPasscode !== dto.passcode) {
       throw new BadRequestException('Invalid passcode');
     }
+    const normalizedEmail = this.normalizeEmail(dto.email);
+    const invite = studyRoom.externalInvites.find(
+      (item) => item.email === normalizedEmail,
+    );
+    const existingGuestParticipant = studyRoom.guestParticipants.find(
+      (item) => item.email === normalizedEmail,
+    );
+
+    // If this guest was already approved previously, issue a fresh access token and let them in instantly.
+    if (existingGuestParticipant) {
+      const role = invite
+        ? this.toParticipantRole(invite.role)
+        : existingGuestParticipant.role;
+      const participant = await this.prisma.studyRoomGuestParticipant.update({
+        where: { id: existingGuestParticipant.id },
+        data: {
+          name: dto.name.trim(),
+          role,
+        },
+      });
+      const guestAccessToken = await this.issueGuestAccessToken(
+        studyRoomId,
+        participant.id,
+      );
+      return {
+        status: 'APPROVED',
+        message: 'Approved. You can join now.',
+        guestAccessToken,
+        participantIdentity: participant.livekitIdentity,
+        role: participant.role,
+      };
+    }
+
     if (
       studyRoom.learners.length + studyRoom.guestParticipants.length >=
       studyRoom.maxParticipants
@@ -1585,12 +1618,24 @@ export class StudyRoomsService {
       });
     }
 
-    const normalizedEmail = this.normalizeEmail(dto.email);
-    const invite = studyRoom.externalInvites.find(
-      (item) => item.email === normalizedEmail,
-    );
     const shouldApprove = !!invite || studyRoom.externalAutoAccept;
     if (!shouldApprove) {
+      const existingPendingRequest =
+        await this.prisma.studyRoomExternalJoinRequest.findFirst({
+          where: {
+            studyRoomId,
+            email: normalizedEmail,
+            status: ExternalJoinRequestStatus.PENDING,
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+      if (existingPendingRequest) {
+        return {
+          status: 'PENDING',
+          message: 'Join request sent to host for approval',
+        };
+      }
+
       await this.prisma.studyRoomExternalJoinRequest.create({
         data: {
           studyRoomId,

@@ -4,7 +4,6 @@ import { LiveKitRoom, useParticipants, useTracks, RoomAudioRenderer, useSpeaking
 import { Track, RoomOptions, VideoPresets, LocalVideoTrack } from 'livekit-client'
 import '@livekit/components-styles'
 import { BackgroundProcessor, BackgroundBlur, VirtualBackground, BackgroundOptions } from '@livekit/track-processors'
-import { KrispNoiseFilter, isKrispNoiseFilterSupported } from '@livekit/krisp-noise-filter'
 import { ChatWidget } from '@/components/chat/ChatWidget'
 import { Button } from '@/components/ui/button'
 import { 
@@ -1164,7 +1163,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	// Prevent concurrent effect applications
 	const isApplyingEffectRef = useRef(false)
 	// Krisp noise filter ref for cleanup
-	const krispFilterRef = useRef<ReturnType<typeof KrispNoiseFilter> | null>(null)
+	const krispFilterRef = useRef<unknown | null>(null)
 	
 	// Helper function to get avatar URL from participant metadata
 	const getParticipantAvatar = useCallback((participant: { metadata?: string | null }): string | null => {
@@ -1605,16 +1604,38 @@ const VideoRoomContent = memo(function VideoRoomContent({
 
 	// Apply Krisp AI noise suppression to microphone track
 	useEffect(() => {
-		if (!localParticipant || !isKrispNoiseFilterSupported()) return
-		const micPublication = localParticipant.getTrackPublication(Track.Source.Microphone)
-		const micTrack = micPublication?.audioTrack
-		if (!micTrack) return
-		const filter = KrispNoiseFilter()
-		krispFilterRef.current = filter
-		micTrack.setProcessor(filter).catch(() => {})
+		if (!localParticipant || typeof window === 'undefined') return
+		let cancelled = false
+		let cleanup: (() => void) | null = null
+
+		const applyKrispFilter = async () => {
+			try {
+				const { KrispNoiseFilter, isKrispNoiseFilterSupported } = await import(
+					'@livekit/krisp-noise-filter'
+				)
+				if (cancelled || !isKrispNoiseFilterSupported()) return
+
+				const micPublication = localParticipant.getTrackPublication(Track.Source.Microphone)
+				const micTrack = micPublication?.audioTrack
+				if (!micTrack) return
+
+				const filter = KrispNoiseFilter()
+				krispFilterRef.current = filter
+				await micTrack.setProcessor(filter)
+				cleanup = () => {
+					micTrack.stopProcessor().catch(() => {})
+					krispFilterRef.current = null
+				}
+			} catch {
+				// Ignore unsupported/runtime errors and continue without Krisp.
+			}
+		}
+
+		applyKrispFilter()
+
 		return () => {
-			micTrack.stopProcessor().catch(() => {})
-			krispFilterRef.current = null
+			cancelled = true
+			cleanup?.()
 		}
 	}, [localParticipant, isMicrophoneEnabled])
 	
