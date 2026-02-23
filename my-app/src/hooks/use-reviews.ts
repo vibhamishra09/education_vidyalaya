@@ -2,7 +2,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@clerk/nextjs';
 import { reviewsApi } from '@/lib/api';
 import { setAuthToken } from '@/lib/api-client';
-import { CreateReviewDto, ReviewFilters } from '@/types/api.types';
+import { CreateReviewDto, ReviewFilters, ReviewsResponse } from '@/types/api.types';
+import type { UseQueryOptions } from '@tanstack/react-query';
 
 // Query Keys
 export const reviewKeys = {
@@ -15,10 +16,14 @@ export const reviewKeys = {
 };
 
 // Get reviews
-export function useReviews(filters?: ReviewFilters) {
+export function useReviews(
+  filters?: ReviewFilters,
+  options?: Omit<UseQueryOptions<ReviewsResponse, Error>, 'queryKey' | 'queryFn'>
+) {
   return useQuery({
     queryKey: reviewKeys.list(filters),
     queryFn: () => reviewsApi.getReviews(filters),
+    ...options,
   });
 }
 
