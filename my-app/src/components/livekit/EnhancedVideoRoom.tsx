@@ -2847,6 +2847,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 										.map((participant) => {
 										const isLocal = participant.isLocal
 										const isMuted = !participant.isMicrophoneEnabled
+										const isVideoOff = !participant.isCameraEnabled
 										const participantCameraTrack = cameraTrackByParticipantId.get(participant.identity)
 										const isVideoTrackRef = !!participantCameraTrack && isTrackReference(participantCameraTrack)
 										const hasVideo = isVideoTrackRef && !!participantCameraTrack.publication?.track
@@ -2890,21 +2891,27 @@ const VideoRoomContent = memo(function VideoRoomContent({
 															/>
 														</div>
 													)}
-													{/* Mobile-only mic state badge */}
-													<div className="absolute top-2 right-2 z-[3] md:hidden">
-														<div
-															className={`w-6 h-6 rounded-full flex items-center justify-center ${
-																isMuted ? 'bg-sky-500' : 'bg-black/60 border border-white/20'
-															}`}
-															title={isMuted ? 'Muted' : 'Unmuted'}
-														>
-															{isMuted ? (
-																<MicOff className="h-3 w-3 text-white" />
-															) : (
-																<Mic className="h-3 w-3 text-white" />
+													{/* Off-state badges */}
+													{(isMuted || isVideoOff) && (
+														<div className="absolute top-2 right-2 z-[3] flex items-center gap-1">
+															{isMuted && (
+																<div
+																	className="w-6 h-6 rounded-full flex items-center justify-center bg-sky-500"
+																	title="Muted"
+																>
+																	<MicOff className="h-3 w-3 text-white" />
+																</div>
+															)}
+															{isVideoOff && (
+																<div
+																	className="w-6 h-6 rounded-full flex items-center justify-center bg-sky-500"
+																	title="Camera off"
+																>
+																	<VideoOff className="h-3 w-3 text-white" />
+																</div>
 															)}
 														</div>
-													</div>
+													)}
 												</div>
 												
 												{/* Name below video */}
