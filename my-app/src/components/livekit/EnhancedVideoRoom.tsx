@@ -1659,6 +1659,43 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	// Only reorder when participants join/leave, not when speaking status changes
 	const stableOrderRef = useRef<string[]>([])
 	const previousParticipantIdsRef = useRef<Set<string>>(new Set())
+	const hasInitializedParticipantListRef = useRef(false)
+	const joinAlertAudioContextRef = useRef<AudioContext | null>(null)
+
+	const playParticipantJoinedSound = useCallback(() => {
+		if (typeof window === 'undefined') return
+		try {
+			const AudioCtx =
+				window.AudioContext ||
+				(window as Window & { webkitAudioContext?: typeof AudioContext })
+					.webkitAudioContext
+			if (!AudioCtx) return
+
+			if (!joinAlertAudioContextRef.current) {
+				joinAlertAudioContextRef.current = new AudioCtx()
+			}
+			const context = joinAlertAudioContextRef.current
+			if (context.state === 'suspended') {
+				void context.resume().catch(() => {})
+			}
+
+			const startAt = context.currentTime
+			const oscillator = context.createOscillator()
+			const gainNode = context.createGain()
+			oscillator.type = 'triangle'
+			oscillator.frequency.setValueAtTime(740, startAt)
+			oscillator.frequency.exponentialRampToValueAtTime(920, startAt + 0.18)
+			gainNode.gain.setValueAtTime(0.0001, startAt)
+			gainNode.gain.exponentialRampToValueAtTime(0.045, startAt + 0.02)
+			gainNode.gain.exponentialRampToValueAtTime(0.0001, startAt + 0.2)
+			oscillator.connect(gainNode)
+			gainNode.connect(context.destination)
+			oscillator.start(startAt)
+			oscillator.stop(startAt + 0.2)
+		} catch {
+			// Best-effort join tone; ignore browsers that block audio context.
+		}
+	}, [])
 	
 	// Update stable order when participants join/leave (not on speaking status changes)
 	useEffect(() => {
@@ -1683,6 +1720,9 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			const newParticipantIds = [...currentParticipantIds].filter(
 				id => !currentStableOrder.includes(id) && id !== localParticipantId
 			)
+			if (hasInitializedParticipantListRef.current && newParticipantIds.length > 0) {
+				playParticipantJoinedSound()
+			}
 			
 			// Remove participants who left
 			const updatedOrder = currentStableOrder.filter(id => currentParticipantIds.has(id))
@@ -1724,8 +1764,15 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			
 			// Update previous participant IDs for next comparison
 			previousParticipantIdsRef.current = new Set(currentParticipantIds)
+			hasInitializedParticipantListRef.current = true
 		}
-	}, [allParticipants])
+	}, [allParticipants, playParticipantJoinedSound])
+
+	useEffect(() => {
+		return () => {
+			joinAlertAudioContextRef.current?.close().catch(() => {})
+		}
+	}, [])
 	
 	// Sort participants using stable order: local participant first, then stable order of others
 	const sortedParticipants = useMemo(() => {
