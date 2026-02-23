@@ -58,6 +58,7 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
   const toggleAutoAccept = useToggleExternalAutoAccept(roomId);
   const [guestEmail, setGuestEmail] = useState("");
   const [guestPasscode, setGuestPasscode] = useState("");
+  const [isPasscodeCopied, setIsPasscodeCopied] = useState(false);
 
   // Check if video call can be joined (within 5 minutes of start time)
   useEffect(() => {
@@ -180,6 +181,18 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
       showSuccess("Cancelled", "Study room cancellation applied successfully.");
     } catch {
       showError("Cancel Failed", "Could not cancel this study room.");
+    }
+  };
+
+  const handleCopyPasscode = async () => {
+    if (!room?.externalPasscode) return;
+    try {
+      await navigator.clipboard.writeText(room.externalPasscode);
+      setIsPasscodeCopied(true);
+      setTimeout(() => setIsPasscodeCopied(false), 1500);
+      showSuccess("Copied", "Guest passcode copied to clipboard.");
+    } catch {
+      showError("Copy failed", "Could not copy passcode.");
     }
   };
 
@@ -467,6 +480,26 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
 
                                 {role === "teacher" && room.allowExternalUsers && (
                                   <div className="space-y-2 rounded-lg border border-blue-200/40 bg-blue-50/40 p-3">
+                                    {room.externalPasscode && (
+                                      <div className="rounded-md border bg-white p-2">
+                                        <p className="text-[11px] font-semibold text-muted-foreground">
+                                          Guest Passcode
+                                        </p>
+                                        <div className="mt-1 flex items-center justify-between gap-2">
+                                          <code className="rounded bg-muted px-2 py-1 text-xs font-semibold tracking-wide">
+                                            {room.externalPasscode}
+                                          </code>
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="h-7 text-[11px]"
+                                            onClick={handleCopyPasscode}
+                                          >
+                                            {isPasscodeCopied ? "Copied" : "Copy"}
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    )}
                                     <div className="flex items-center justify-between">
                                       <span className="text-xs font-semibold text-blue-700">
                                         External Join Requests: {pendingRequests.length}

@@ -108,38 +108,6 @@ export class StudyRoomsService {
     return Math.floor(100000 + Math.random() * 900000).toString();
   }
 
-  private getFrontendBaseUrl(): string {
-    const configuredUrl = (
-      process.env.FRONTEND_URL ||
-      process.env.NEXT_PUBLIC_BASE_URL ||
-      ''
-    ).trim();
-    const defaultProdUrl = 'https://webyalaya.com';
-    const defaultDevUrl = 'http://localhost:3000';
-
-    const sanitize = (url: string) => url.replace(/\/+$/, '');
-
-    if (!configuredUrl) {
-      return process.env.NODE_ENV === 'production' ? defaultProdUrl : defaultDevUrl;
-    }
-
-    try {
-      const parsed = new URL(configuredUrl);
-      const isLocalHost =
-        parsed.hostname === 'localhost' ||
-        parsed.hostname === '127.0.0.1' ||
-        parsed.hostname === '::1';
-
-      if (isLocalHost && process.env.NODE_ENV === 'production') {
-        return defaultProdUrl;
-      }
-
-      return sanitize(configuredUrl);
-    } catch {
-      return process.env.NODE_ENV === 'production' ? defaultProdUrl : defaultDevUrl;
-    }
-  }
-
   private toParticipantRole(
     role?: StudyRoomParticipantRoleDto | ExternalInviteRole | StudyRoomParticipantRole,
   ): StudyRoomParticipantRole {
@@ -197,7 +165,7 @@ export class StudyRoomsService {
         failures: [],
       };
     }
-    const roomLink = `${this.getFrontendBaseUrl()}/studyroom/${roomId}`;
+    const roomLink = `https://webyalaya.com/studyroom/${roomId}`;
     const results = await Promise.all(
       invites.map(async (invite) => {
         const normalizedEmail = this.normalizeEmail(invite.email);
