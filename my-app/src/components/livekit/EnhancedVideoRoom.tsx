@@ -104,6 +104,7 @@ interface EnhancedVideoRoomProps {
 	hostUser?: ChatIdentity | null
 	currentUserDbId?: string | null
 	externalAccessToken?: string | null
+	onParticipantListChange?: (participantIdentities: string[]) => void
 }
 
 export function EnhancedVideoRoom({
@@ -116,6 +117,7 @@ export function EnhancedVideoRoom({
 	hostUser,
 	currentUserDbId,
 	externalAccessToken,
+	onParticipantListChange,
 }: EnhancedVideoRoomProps) {
 	const [showChat, setShowChat] = useState(false) // Start hidden on mobile
 	const [showParticipants, setShowParticipants] = useState(false)
@@ -795,6 +797,7 @@ export function EnhancedVideoRoom({
 					chatRecipients={chatRecipients}
 					hostUser={hostUser}
 					currentUserDbId={currentUserDbId}
+					onParticipantListChange={onParticipantListChange}
 					// Flash message props
 					activeFlashMessage={activeFlashMessage}
 					flashQuestions={flashQuestions}
@@ -980,6 +983,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	chatRecipients,
 	hostUser,
 	currentUserDbId,
+	onParticipantListChange,
 	participantChatLocks,
 	onPromoteToCohost,
 	// Flash message
@@ -1056,6 +1060,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	chatRecipients?: ChatRecipient[]
 	hostUser?: ChatIdentity | null
 	currentUserDbId?: string | null
+	onParticipantListChange?: (participantIdentities: string[]) => void
 	participantChatLocks?: Record<string, ParticipantChatLocks>
 	onPromoteToCohost?: (
 		participantIdentity: string,
@@ -1084,6 +1089,17 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	// Get participants list for name lookup
 	const allParticipants = useParticipants()
 	const canViewParticipantList = isHost || permissions?.allowParticipantList !== false
+	const participantIdentitiesKey = useMemo(
+		() => allParticipants.map((participant) => participant.identity).sort().join('|'),
+		[allParticipants],
+	)
+
+	useEffect(() => {
+		if (!onParticipantListChange) return
+		onParticipantListChange(
+			participantIdentitiesKey ? participantIdentitiesKey.split('|') : [],
+		)
+	}, [onParticipantListChange, participantIdentitiesKey])
 
 	useEffect(() => {
 		if (canViewParticipantList) return
