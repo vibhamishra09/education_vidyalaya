@@ -3,6 +3,7 @@ import { PrismaService } from './prisma/prisma.service';
 import { SessionStatus } from '@prisma/client';
 import { LoggerService } from './common/logger';
 import { CacheService } from './redis/cache.service';
+import { isConnectionError } from './common/db-error-handler';
 
 @Injectable()
 export class AppService {
@@ -125,6 +126,21 @@ export class AppService {
             error: error instanceof Error ? error.message : String(error),
             stack: error instanceof Error ? error.stack : undefined,
           });
+
+          // Return fallback data for connection errors
+          if (isConnectionError(error)) {
+            this.logger.warn('[HomePage] Returning fallback platform stats due to connection error');
+            return {
+              usersOnboarded: 0,
+              studyRoomsHosted: 0,
+              sessionsCompleted: 0,
+              learningHours: 0,
+              reviewsGiven: 0,
+              averageRating: 0,
+            };
+          }
+
+          // Re-throw other errors
           throw error;
         }
       },

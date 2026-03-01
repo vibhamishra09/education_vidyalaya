@@ -14,6 +14,7 @@ import { AchievementsService } from '../achievements/achievements.service';
 import { TranscriptsService } from '../transcripts/transcripts.service';
 import { LoggerService } from '../common/logger/logger.service';
 import { CacheService } from '../redis/cache.service';
+import { isConnectionError } from '../common/db-error-handler';
 import {
   CreateStudyRoomDto,
   StudyRoomEditScope,
@@ -349,6 +350,23 @@ export class StudyRoomsService {
             error: error instanceof Error ? error.message : String(error),
             stack: error instanceof Error ? error.stack : undefined,
           });
+
+          // Handle database connection errors
+          if (isConnectionError(error)) {
+            this.logger.warn('[StudyRooms] Returning fallback empty study rooms due to connection error');
+            return {
+              studyRooms: [],
+              pagination: {
+                total: 0,
+                page,
+                limit,
+                totalPages: 0,
+                hasMore: false,
+              },
+            };
+          }
+
+          // Re-throw other errors
           throw error;
         }
       },
@@ -584,6 +602,27 @@ export class StudyRoomsService {
             error: error instanceof Error ? error.message : String(error),
             stack: error instanceof Error ? error.stack : undefined,
           });
+
+          // Handle database connection errors
+          if (isConnectionError(error)) {
+            this.logger.warn(
+              isHomePageRequest
+                ? '[HomePage] Returning fallback empty trending study rooms due to connection error'
+                : '[StudyRooms] Returning fallback empty trending study rooms due to connection error',
+            );
+            return {
+              studyRooms: [],
+              pagination: {
+                total: 0,
+                page: 1,
+                limit: normalizedLimit,
+                totalPages: 0,
+                hasMore: false,
+              },
+            };
+          }
+
+          // Re-throw other errors
           throw error;
         }
       },
@@ -708,7 +747,8 @@ export class StudyRoomsService {
   }
 
   async getStudyRoomDetails(studyRoomId: string, userId?: string) {
-    const [studyRoom, currentUser, channel] = await Promise.all([
+    try {
+      const [studyRoom, currentUser, channel] = await Promise.all([
       this.prisma.studyRoom.findUnique({
         where: { id: studyRoomId },
         include: {
@@ -865,6 +905,28 @@ export class StudyRoomsService {
       })),
       chatChannelId: channel?.id ?? null,
     };
+    } catch (error) {
+      // Handle database connection errors
+      if (isConnectionError(error)) {
+        this.logger.error(
+          `Database connection error in getStudyRoomDetails for room ${studyRoomId}:`,
+          error instanceof Error ? error.message : String(error),
+        );
+        
+        // Re-throw NotFoundException (room not found is a valid case)
+        if (error instanceof NotFoundException) {
+          throw error;
+        }
+        
+        // For connection errors, throw a more user-friendly error
+        throw new NotFoundException(
+          'Unable to fetch study room details. Please try again later.',
+        );
+      }
+      
+      // Re-throw other errors
+      throw error;
+    }
   }
 
   async createStudyRoom(userId: string, createDto: CreateStudyRoomDto) {

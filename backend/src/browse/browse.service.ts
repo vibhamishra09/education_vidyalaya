@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SessionStatus } from '@prisma/client';
 import { CacheService } from '../redis/cache.service';
 import { LoggerService } from '../common/logger';
+import { isConnectionError } from '../common/db-error-handler';
 
 @Injectable()
 export class BrowseService {
@@ -19,8 +20,9 @@ export class BrowseService {
    * Returns peers who can teach those skills and study rooms covering those topics.
    */
   async getRecommendations(userId: string, limit: number = 8) {
-    // First, get the user's "want to learn" skills
-    const userSkills = await this.prisma.userSkill.findMany({
+    try {
+      // First, get the user's "want to learn" skills
+      const userSkills = await this.prisma.userSkill.findMany({
       where: {
         userId,
         type: 'WANTS',
@@ -192,6 +194,25 @@ export class BrowseService {
       }),
       basedOnSkills: wantedSkillNames,
     };
+    } catch (error) {
+      // Handle database connection errors
+      if (isConnectionError(error)) {
+        this.logger.error(
+          `Database connection error in getRecommendations for user ${userId}:`,
+          error instanceof Error ? error.message : String(error),
+        );
+        
+        // Return empty result as fallback
+        return {
+          peers: [],
+          studyRooms: [],
+          basedOnSkills: [],
+        };
+      }
+      
+      // Re-throw other errors
+      throw error;
+    }
   }
 
   async getBrowseData(
@@ -226,7 +247,8 @@ export class BrowseService {
     return this.cacheService.getOrSet(
       cacheKey,
       async () => {
-        const skip = (page - 1) * limit;
+        try {
+          const skip = (page - 1) * limit;
 
         // Build peer where clause for counting
         const peerWhere: any = {};
@@ -450,6 +472,47 @@ export class BrowseService {
               hasMore: skip + limit < studyRoomCount,
             },
           };
+        }
+        } catch (error) {
+          // Handle database connection errors
+          if (isConnectionError(error)) {
+            this.logger.error(
+              `Database connection error in getBrowseData for tab ${tab}:`,
+              error instanceof Error ? error.message : String(error),
+            );
+            
+            // Return empty result as fallback
+            const emptyResult = tab === 'peers' 
+              ? {
+                  peers: [],
+                  counts: { peers: 0, studyRooms: 0 },
+                  pagination: {
+                    total: 0,
+                    page,
+                    limit,
+                    totalPages: 0,
+                    hasMore: false,
+                  },
+                }
+              : {
+                  peers: [],
+                  studyRooms: [],
+                  trendingStudyRooms: [],
+                  counts: { peers: 0, studyRooms: 0 },
+                  pagination: {
+                    total: 0,
+                    page,
+                    limit,
+                    totalPages: 0,
+                    hasMore: false,
+                  },
+                };
+            
+            return emptyResult;
+          }
+          
+          // Re-throw other errors
+          throw error;
         }
       },
       cacheTTL,

@@ -3,15 +3,19 @@ import {
   NotFoundException,
   ConflictException,
   ForbiddenException,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CreateReviewDto } from './dto/review.dto';
 import { NotifType, PaymentStatus } from '@prisma/client';
 import { CacheService } from '../redis/cache.service';
+import { isConnectionError } from '../common/db-error-handler';
 
 @Injectable()
 export class ReviewsService {
+  private readonly logger = new Logger(ReviewsService.name);
+
   constructor(
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
@@ -38,7 +42,8 @@ export class ReviewsService {
     return this.cacheService.getOrSet(
       cacheKey,
       async () => {
-        const where: any = {};
+        try {
+          const where: any = {};
 
         if (userId) {
           // Check if userId is a clerkId or database ID
@@ -95,6 +100,30 @@ export class ReviewsService {
             hasMore: skip + limit < total,
           },
         };
+        } catch (error) {
+          // Handle database connection errors
+          if (isConnectionError(error)) {
+            this.logger.error(
+              `Database connection error in getReviews:`,
+              error instanceof Error ? error.message : String(error),
+            );
+            
+            // Return empty reviews as fallback
+            return {
+              reviews: [],
+              pagination: {
+                total: 0,
+                page,
+                limit,
+                totalPages: 0,
+                hasMore: false,
+              },
+            };
+          }
+          
+          // Re-throw other errors
+          throw error;
+        }
       },
       cacheTTL,
     );
@@ -301,9 +330,10 @@ export class ReviewsService {
     return this.cacheService.getOrSet(
       cacheKey,
       async () => {
-        const skip = (page - 1) * limit;
+        try {
+          const skip = (page - 1) * limit;
 
-        const whereClause: any = {};
+          const whereClause: any = {};
         if (sessionType === 'studyRoom') {
           whereClause.studyRoomId = sessionId;
         } else {
@@ -345,6 +375,32 @@ export class ReviewsService {
             hasMore: skip + limit < total,
           },
         };
+        } catch (error) {
+          // Handle database connection errors
+          if (isConnectionError(error)) {
+            this.logger.error(
+              `Database connection error in getSessionReviews for session ${sessionId}:`,
+              error instanceof Error ? error.message : String(error),
+            );
+            
+            // Return empty reviews as fallback
+            return {
+              reviews: [],
+              avgRating: 0,
+              totalCount: 0,
+              pagination: {
+                total: 0,
+                page,
+                limit,
+                totalPages: 0,
+                hasMore: false,
+              },
+            };
+          }
+          
+          // Re-throw other errors
+          throw error;
+        }
       },
       cacheTTL,
     );

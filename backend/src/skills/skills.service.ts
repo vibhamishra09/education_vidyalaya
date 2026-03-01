@@ -1,10 +1,13 @@
-import { Injectable, ConflictException } from '@nestjs/common';
+import { Injectable, ConflictException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSkillDto } from './dto/skill.dto';
 import { CacheService } from '../redis/cache.service';
+import { isConnectionError } from '../common/db-error-handler';
 
 @Injectable()
 export class SkillsService {
+  private readonly logger = new Logger(SkillsService.name);
+
   constructor(
     private prisma: PrismaService,
     private readonly cacheService: CacheService,
@@ -22,7 +25,8 @@ export class SkillsService {
     return this.cacheService.getOrSet(
       cacheKey,
       async () => {
-        const where = search
+        try {
+          const where = search
           ? {
               OR: [
                 { name: { contains: search, mode: 'insensitive' as const } },
@@ -51,6 +55,30 @@ export class SkillsService {
             hasMore: offset + limit < total,
           },
         };
+        } catch (error) {
+          // Handle database connection errors
+          if (isConnectionError(error)) {
+            this.logger.error(
+              `Database connection error in getAllSkills:`,
+              error instanceof Error ? error.message : String(error),
+            );
+            
+            // Return empty result as fallback
+            return {
+              skills: [],
+              pagination: {
+                total: 0,
+                page: Math.floor(offset / limit) + 1,
+                limit,
+                totalPages: 0,
+                hasMore: false,
+              },
+            };
+          }
+          
+          // Re-throw other errors
+          throw error;
+        }
       },
       cacheTTL,
     );

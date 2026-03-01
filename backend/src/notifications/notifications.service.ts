@@ -4,6 +4,7 @@ import { NotifType } from '@prisma/client';
 import { PushNotificationService } from './push-notification.service';
 import { EmailService } from '../email/email.service';
 import { CacheService } from '../redis/cache.service';
+import { isConnectionError } from '../common/db-error-handler';
 
 @Injectable()
 export class NotificationsService {
@@ -36,8 +37,9 @@ export class NotificationsService {
     return this.cacheService.getOrSet(
       cacheKey,
       async () => {
-        // userId is actually clerkId, so we need to find the user by clerkId first
-        const user = await this.prisma.user.findUnique({
+        try {
+          // userId is actually clerkId, so we need to find the user by clerkId first
+          const user = await this.prisma.user.findUnique({
           where: { clerkId: userId },
           select: { id: true },
         });
@@ -77,6 +79,36 @@ export class NotificationsService {
             hasMore: skip + limit < total,
           },
         };
+        } catch (error) {
+          // Handle database connection errors
+          if (isConnectionError(error)) {
+            this.logger.error(
+              `Database connection error in getNotifications for user ${userId}:`,
+              error instanceof Error ? error.message : String(error),
+            );
+            
+            // Re-throw NotFoundException (user not found is a valid case)
+            if (error instanceof NotFoundException) {
+              throw error;
+            }
+            
+            // Return empty notifications as fallback
+            return {
+              notifications: [],
+              unreadCount: 0,
+              pagination: {
+                total: 0,
+                page,
+                limit,
+                totalPages: 0,
+                hasMore: false,
+              },
+            };
+          }
+          
+          // Re-throw other errors
+          throw error;
+        }
       },
       cacheTTL,
     );

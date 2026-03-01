@@ -3,6 +3,7 @@ import { Prisma, SessionStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateUserDto } from './dto/user.dto';
 import { CacheService } from '../redis/cache.service';
+import { isConnectionError } from '../common/db-error-handler';
 
 @Injectable()
 export class UsersService {
@@ -21,16 +22,17 @@ export class UsersService {
     return this.cacheService.getOrSet(
       cacheKey,
       async () => {
-        const user = await this.prisma.user.findUnique({
-          where: { clerkId: clerkUserId },
-          include: {
-            userSkills: {
-              include: {
-                skill: true,
+        try {
+          const user = await this.prisma.user.findUnique({
+            where: { clerkId: clerkUserId },
+            include: {
+              userSkills: {
+                include: {
+                  skill: true,
+                },
               },
             },
-          },
-        });
+          });
 
         const isNewUser = !user;
 
@@ -147,6 +149,28 @@ export class UsersService {
           },
           isNewUser,
         };
+        } catch (error) {
+          // Handle database connection errors
+          if (isConnectionError(error)) {
+            this.logger.error(
+              `Database connection error in getCurrentUser for ${clerkUserId}:`,
+              error instanceof Error ? error.message : String(error),
+            );
+            
+            // Re-throw NotFoundException (user not found is a valid case)
+            if (error instanceof NotFoundException) {
+              throw error;
+            }
+            
+            // For connection errors, throw a more user-friendly error
+            throw new NotFoundException(
+              'Unable to fetch user data. Please try again later.',
+            );
+          }
+          
+          // Re-throw other errors
+          throw error;
+        }
       },
       cacheTTL,
     );
@@ -275,16 +299,17 @@ export class UsersService {
     return this.cacheService.getOrSet(
       cacheKey,
       async () => {
-        const user = await this.prisma.user.findUnique({
-          where: { id: userId },
-          include: {
-            userSkills: {
-              include: {
-                skill: true,
+        try {
+          const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+            include: {
+              userSkills: {
+                include: {
+                  skill: true,
+                },
               },
             },
-          },
-        });
+          });
 
         if (!user) {
           throw new NotFoundException('User not found');
@@ -382,6 +407,28 @@ export class UsersService {
             reviewCount: reviewStats._count.rating ?? 0,
           },
         };
+        } catch (error) {
+          // Handle database connection errors
+          if (isConnectionError(error)) {
+            this.logger.error(
+              `Database connection error in getPublicUserProfile for user ${userId}:`,
+              error instanceof Error ? error.message : String(error),
+            );
+            
+            // Re-throw NotFoundException (user not found is a valid case)
+            if (error instanceof NotFoundException) {
+              throw error;
+            }
+            
+            // For connection errors, throw a more user-friendly error
+            throw new NotFoundException(
+              'Unable to fetch user profile. Please try again later.',
+            );
+          }
+          
+          // Re-throw other errors
+          throw error;
+        }
       },
       cacheTTL,
     );

@@ -18,6 +18,7 @@ import { StreaksService } from '../streaks/streaks.service';
 import { AchievementsService } from '../achievements/achievements.service';
 import { TranscriptsService } from '../transcripts/transcripts.service';
 import { CacheService } from '../redis/cache.service';
+import { isConnectionError } from '../common/db-error-handler';
 
 @Injectable()
 export class PeerSessionsService {
@@ -56,9 +57,10 @@ export class PeerSessionsService {
     return this.cacheService.getOrSet(
       cacheKey,
       async () => {
-        this.logger.debug('userId', userId);
-        // userId is actually clerkId, so we need to find the user by clerkId first
-        const user = await this.prisma.user.findUnique({
+        try {
+          this.logger.debug('userId', userId);
+          // userId is actually clerkId, so we need to find the user by clerkId first
+          const user = await this.prisma.user.findUnique({
           where: { clerkId: userId },
           select: { id: true },
         });
@@ -175,13 +177,43 @@ export class PeerSessionsService {
           hasMore: skip + limit < total,
         },
       };
-    },
-    cacheTTL,
-  );
+        } catch (error) {
+          // Handle database connection errors
+          if (isConnectionError(error)) {
+            this.logger.error(
+              `Database connection error in getPeerSessions for user ${userId}:`,
+              error instanceof Error ? error.message : String(error),
+            );
+            
+            // Re-throw BadRequestException (user not found is a valid case)
+            if (error instanceof BadRequestException) {
+              throw error;
+            }
+            
+            // Return empty sessions as fallback
+            return {
+              peerSessions: [],
+              pagination: {
+                total: 0,
+                page,
+                limit,
+                totalPages: 0,
+                hasMore: false,
+              },
+            };
+          }
+          
+          // Re-throw other errors
+          throw error;
+        }
+      },
+      cacheTTL,
+    );
   }
 
   async getPeerSessionDetails(peerSessionId: string, userId?: string) {
-    let peerSession = await this.prisma.peerSession.findUnique({
+    try {
+      let peerSession = await this.prisma.peerSession.findUnique({
       where: { id: peerSessionId },
       include: {
         requestedBy: {
@@ -301,6 +333,28 @@ export class PeerSessionsService {
       chatChannelId: channel?.id ?? null,
       role,
     };
+    } catch (error) {
+      // Handle database connection errors
+      if (isConnectionError(error)) {
+        this.logger.error(
+          `Database connection error in getPeerSessionDetails for session ${peerSessionId}:`,
+          error instanceof Error ? error.message : String(error),
+        );
+        
+        // Re-throw NotFoundException (session not found is a valid case)
+        if (error instanceof NotFoundException) {
+          throw error;
+        }
+        
+        // For connection errors, throw a more user-friendly error
+        throw new NotFoundException(
+          'Unable to fetch session details. Please try again later.',
+        );
+      }
+      
+      // Re-throw other errors
+      throw error;
+    }
   }
 
   async requestPeerSession(userId: string, requestDto: RequestSessionDto) {

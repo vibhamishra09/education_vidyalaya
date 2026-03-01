@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AchievementCategory, AchievementRarity, Prisma } from '@prisma/client';
 import { LoggerService } from '../common/logger';
 import { CacheService } from '../redis/cache.service';
+import { isConnectionError } from '../common/db-error-handler';
 
 @Injectable()
 export class AchievementsService {
@@ -32,14 +33,15 @@ export class AchievementsService {
     return this.cacheService.getOrSet(
       cacheKey,
       async () => {
-        let dbUserIdFinal: string;
-        
-        // If dbUserId is provided, use it directly to avoid lookup
-        if (dbUserId) {
-          dbUserIdFinal = dbUserId;
-        } else {
-          // userId is actually Clerk ID, convert to database ID
-          const user = await this.prisma.user.findUnique({
+        try {
+          let dbUserIdFinal: string;
+          
+          // If dbUserId is provided, use it directly to avoid lookup
+          if (dbUserId) {
+            dbUserIdFinal = dbUserId;
+          } else {
+            // userId is actually Clerk ID, convert to database ID
+            const user = await this.prisma.user.findUnique({
             where: { clerkId: userId },
             select: { id: true, name: true },
           });
@@ -111,13 +113,34 @@ export class AchievementsService {
       }
     }
 
-        return {
-          unlocked,
-          inProgress,
-          locked,
-          totalUnlocked: unlocked.length,
-          totalAvailable: allAchievements.length,
-        };
+          return {
+            unlocked,
+            inProgress,
+            locked,
+            totalUnlocked: unlocked.length,
+            totalAvailable: allAchievements.length,
+          };
+        } catch (error) {
+          // Handle database connection errors
+          if (isConnectionError(error)) {
+            this.logger.error(
+              `Database connection error in getUserAchievements for user ${userId}:`,
+              error instanceof Error ? error.message : String(error),
+            );
+            
+            // Return empty achievements as fallback
+            return {
+              unlocked: [],
+              inProgress: [],
+              locked: [],
+              totalUnlocked: 0,
+              totalAvailable: 0,
+            };
+          }
+          
+          // Re-throw other errors
+          throw error;
+        }
       },
       cacheTTL,
     );
