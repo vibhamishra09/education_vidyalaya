@@ -13,6 +13,7 @@ import { StreaksService } from '../streaks/streaks.service';
 import { AchievementsService } from '../achievements/achievements.service';
 import { TranscriptsService } from '../transcripts/transcripts.service';
 import { LoggerService } from '../common/logger/logger.service';
+import { CacheService } from '../redis/cache.service';
 import {
   CreateStudyRoomDto,
   StudyRoomEditScope,
@@ -81,6 +82,7 @@ export class StudyRoomsService {
     private achievementsService: AchievementsService,
     private transcriptsService: TranscriptsService,
     private readonly logger: LoggerService,
+    private readonly cacheService: CacheService,
   ) {
     this.logger.setContext(StudyRoomsService.name);
   }
@@ -166,7 +168,6 @@ export class StudyRoomsService {
     trending?: boolean,
     createdById?: string,
   ) {
-    const dbStartTime = Date.now();
     const isHomePageRequest = trending === true && limit === 6;
 
     if (trending) {
@@ -179,175 +180,208 @@ export class StudyRoomsService {
       return this.getTrendingStudyRooms(limit);
     }
 
-    this.logger.debug({
-      message: '[StudyRooms] Building query filters',
-      filters: {
-        search,
-        skills,
-        status,
-        dateFrom,
-        dateTo,
-        createdById,
-        page,
-        limit,
-      },
+    // Create cache key from query parameters
+    const cacheKey = this.cacheService.createKey('study-rooms:list', {
+      search,
+      skills: skills?.sort().join(','),
+      status,
+      dateFrom,
+      dateTo,
+      page,
+      limit,
+      createdById,
     });
 
-    const where: any = {};
+    // Cache for 2 minutes - study rooms list changes frequently
+    const cacheTTL = 120;
 
-    if (search) {
-      where.OR = [
-        { title: { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } },
-      ];
-    }
-
-    if (status) {
-      where.sessionStatus = status;
-    }
-
-    if (dateFrom || dateTo) {
-      where.date = {};
-      if (dateFrom) where.date.gte = new Date(dateFrom);
-      if (dateTo) where.date.lte = new Date(dateTo);
-    }
-
-    if (skills && skills.length > 0) {
-      where.skills = {
-        some: {
-          skill: {
-            name: { in: skills },
+    return this.cacheService.getOrSet(
+      cacheKey,
+      async () => {
+        const dbStartTime = Date.now();
+        this.logger.debug({
+          message: '[StudyRooms] Building query filters',
+          filters: {
+            search,
+            skills,
+            status,
+            dateFrom,
+            dateTo,
+            createdById,
+            page,
+            limit,
           },
-        },
-      };
-    }
+        });
 
-    if (createdById) {
-      where.createdById = createdById;
-    }
+        const where: any = {};
 
-    const skip = (page - 1) * limit;
+        if (search) {
+          where.OR = [
+            { title: { contains: search, mode: 'insensitive' } },
+            { description: { contains: search, mode: 'insensitive' } },
+          ];
+        }
 
-    try {
-      const [studyRooms, total] = await Promise.all([
-        this.prisma.studyRoom.findMany({
-          where,
-          skip,
-          take: limit,
-          include: {
-            createdBy: {
-              select: {
-                id: true,
-                name: true,
-                avatar: true,
-                reviewsReceived: {
-                  select: { rating: true },
-                },
-                _count: {
-                  select: {
-                    studyRooms: {
-                      where: { sessionStatus: SessionStatus.DONE },
-                    },
-                    peerSessionsReceived: {
-                      where: { sessionStatus: SessionStatus.DONE },
-                    },
-                  },
-                },
+        if (status) {
+          where.sessionStatus = status;
+        }
+
+        if (dateFrom || dateTo) {
+          where.date = {};
+          if (dateFrom) where.date.gte = new Date(dateFrom);
+          if (dateTo) where.date.lte = new Date(dateTo);
+        }
+
+        if (skills && skills.length > 0) {
+          where.skills = {
+            some: {
+              skill: {
+                name: { in: skills },
               },
             },
-            skills: {
+          };
+        }
+
+        if (createdById) {
+          where.createdById = createdById;
+        }
+
+        const skip = (page - 1) * limit;
+
+        try {
+          const [studyRooms, total] = await Promise.all([
+            this.prisma.studyRoom.findMany({
+              where,
+              skip,
+              take: limit,
               include: {
-                skill: {
-                  select: {
-                    id: true,
-                    name: true,
-                  },
-                },
-              },
-            },
-            learners: {
-              select: {
-                user: {
+                createdBy: {
                   select: {
                     id: true,
                     name: true,
                     avatar: true,
+                    reviewsReceived: {
+                      select: { rating: true },
+                    },
+                    _count: {
+                      select: {
+                        studyRooms: {
+                          where: { sessionStatus: SessionStatus.DONE },
+                        },
+                        peerSessionsReceived: {
+                          where: { sessionStatus: SessionStatus.DONE },
+                        },
+                      },
+                    },
+                  },
+                },
+                skills: {
+                  include: {
+                    skill: {
+                      select: {
+                        id: true,
+                        name: true,
+                      },
+                    },
+                  },
+                },
+                learners: {
+                  select: {
+                    user: {
+                      select: {
+                        id: true,
+                        name: true,
+                        avatar: true,
+                      },
+                    },
                   },
                 },
               },
+              orderBy: { date: 'asc' },
+            }),
+            this.prisma.studyRoom.count({ where }),
+          ]);
+
+          const dbDuration = Date.now() - dbStartTime;
+          this.logger.debug({
+            message: '[StudyRooms] Database query completed',
+            dbDuration: `${dbDuration}ms`,
+            results: {
+              studyRoomsCount: studyRooms.length,
+              total,
             },
-          },
-          orderBy: { date: 'asc' },
-        }),
-        this.prisma.studyRoom.count({ where }),
-      ]);
+          });
 
-      const dbDuration = Date.now() - dbStartTime;
-      this.logger.debug({
-        message: '[StudyRooms] Database query completed',
-        dbDuration: `${dbDuration}ms`,
-        results: {
-          studyRoomsCount: studyRooms.length,
-          total,
-        },
-      });
+          const studyRoomCards = studyRooms.map((room) => {
+            const hostReviews = (room.createdBy as any).reviewsReceived || [];
+            const hostAvgRating =
+              hostReviews.length > 0
+                ? hostReviews.reduce((sum: number, r: { rating: number }) => sum + r.rating, 0) /
+                  hostReviews.length
+                : undefined;
+            const hostTotalSessions =
+              ((room.createdBy as any)._count?.studyRooms || 0) +
+              ((room.createdBy as any)._count?.peerSessionsReceived || 0);
 
-      const studyRoomCards = studyRooms.map((room) => {
-        const hostReviews = (room.createdBy as any).reviewsReceived || [];
-        const hostAvgRating =
-          hostReviews.length > 0
-            ? hostReviews.reduce((sum: number, r: { rating: number }) => sum + r.rating, 0) /
-              hostReviews.length
-            : undefined;
-        const hostTotalSessions =
-          ((room.createdBy as any)._count?.studyRooms || 0) +
-          ((room.createdBy as any)._count?.peerSessionsReceived || 0);
+            return this.buildStudyRoomCard(room, {
+              avgRating: hostAvgRating,
+              reviewCount: hostReviews.length,
+              totalSessions: hostTotalSessions,
+            });
+          });
 
-        return this.buildStudyRoomCard(room, {
-          avgRating: hostAvgRating,
-          reviewCount: hostReviews.length,
-          totalSessions: hostTotalSessions,
-        });
-      });
-
-      return {
-        studyRooms: studyRoomCards,
-        pagination: {
-          total,
-          page,
-          limit,
-          totalPages: Math.ceil(total / limit),
-          hasMore: skip + limit < total,
-        },
-      };
-    } catch (error) {
-      const dbDuration = Date.now() - dbStartTime;
-      this.logger.error({
-        message: '[StudyRooms] Database query failed',
-        dbDuration: `${dbDuration}ms`,
-        filters: { search, skills, status, page, limit },
-        error: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-      });
-      throw error;
-    }
+          return {
+            studyRooms: studyRoomCards,
+            pagination: {
+              total,
+              page,
+              limit,
+              totalPages: Math.ceil(total / limit),
+              hasMore: skip + limit < total,
+            },
+          };
+        } catch (error) {
+          const dbDuration = Date.now() - dbStartTime;
+          this.logger.error({
+            message: '[StudyRooms] Database query failed',
+            dbDuration: `${dbDuration}ms`,
+            filters: { search, skills, status, page, limit },
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+          });
+          throw error;
+        }
+      },
+      cacheTTL,
+    );
   }
 
   private async getTrendingStudyRooms(limit?: number) {
-    const dbStartTime = Date.now();
     const normalizedLimit = Math.max(1, limit ?? 6);
     const now = new Date();
     const isHomePageRequest = limit === 6;
 
-    this.logger.debug({
-      message: isHomePageRequest
-        ? '[HomePage] Fetching trending study rooms from database'
-        : '[StudyRooms] Fetching trending study rooms from database',
+    // Create cache key for trending rooms
+    const cacheKey = this.cacheService.createKey('study-rooms:trending', {
       limit: normalizedLimit,
     });
 
-    try {
-      const teacherRatings = await this.prisma.review.groupBy({
+    // Cache for 3 minutes - trending rooms change less frequently
+    const cacheTTL = 180;
+
+    return this.cacheService.getOrSet(
+      cacheKey,
+      async () => {
+        const dbStartTime = Date.now();
+        this.logger.debug({
+          message: isHomePageRequest
+            ? '[HomePage] Fetching trending study rooms from database'
+            : '[StudyRooms] Fetching trending study rooms from database',
+          limit: normalizedLimit,
+        });
+
+        try {
+          const teacherRatings = await this.prisma.review.groupBy({
         by: ['revieweeId'],
         where: {
           reviewee: {
@@ -365,193 +399,196 @@ export class StudyRoomsService {
         take: normalizedLimit * 4,
       });
 
-      this.logger.debug({
-        message: isHomePageRequest
-          ? '[HomePage] Teacher ratings query completed'
-          : '[StudyRooms] Teacher ratings query completed',
-        teacherRatingsCount: teacherRatings.length,
-      });
+          this.logger.debug({
+            message: isHomePageRequest
+              ? '[HomePage] Teacher ratings query completed'
+              : '[StudyRooms] Teacher ratings query completed',
+            teacherRatingsCount: teacherRatings.length,
+          });
 
-      if (teacherRatings.length === 0) {
-        this.logger.debug({
-          message: isHomePageRequest
-            ? '[HomePage] No teacher ratings found, using fallback'
-            : '[StudyRooms] No teacher ratings found, using fallback',
-        });
-        return this.getFallbackTrendingRooms(normalizedLimit, now);
-      }
+          if (teacherRatings.length === 0) {
+            this.logger.debug({
+              message: isHomePageRequest
+                ? '[HomePage] No teacher ratings found, using fallback'
+                : '[StudyRooms] No teacher ratings found, using fallback',
+            });
+            return this.getFallbackTrendingRooms(normalizedLimit, now);
+          }
 
-      const MIN_AVG_RATING = 4;
-      const prioritizedTeachers = teacherRatings.filter(
-        (teacher) =>
-          (teacher._avg.rating ?? 0) >= MIN_AVG_RATING &&
-          (teacher._count.rating ?? 0) > 0,
-      );
+          const MIN_AVG_RATING = 4;
+          const prioritizedTeachers = teacherRatings.filter(
+            (teacher) =>
+              (teacher._avg.rating ?? 0) >= MIN_AVG_RATING &&
+              (teacher._count.rating ?? 0) > 0,
+          );
 
-      const orderedTeachers =
-        prioritizedTeachers.length >= normalizedLimit
-          ? prioritizedTeachers
-          : teacherRatings;
+          const orderedTeachers =
+            prioritizedTeachers.length >= normalizedLimit
+              ? prioritizedTeachers
+              : teacherRatings;
 
-      this.logger.debug({
-        message: isHomePageRequest
-          ? '[HomePage] Fetching study rooms for prioritized teachers'
-          : '[StudyRooms] Fetching study rooms for prioritized teachers',
-        prioritizedCount: prioritizedTeachers.length,
-        orderedCount: orderedTeachers.length,
-      });
+          this.logger.debug({
+            message: isHomePageRequest
+              ? '[HomePage] Fetching study rooms for prioritized teachers'
+              : '[StudyRooms] Fetching study rooms for prioritized teachers',
+            prioritizedCount: prioritizedTeachers.length,
+            orderedCount: orderedTeachers.length,
+          });
 
-      const roomEntries = await Promise.all(
-        orderedTeachers.map(async (teacher) => {
-          const room = await this.prisma.studyRoom.findFirst({
-            where: {
-              createdById: teacher.revieweeId,
-              sessionStatus: SessionStatus.UPCOMING,
-              date: { gte: now },
-            },
-            include: {
-              createdBy: {
-                select: {
-                  id: true,
-                  name: true,
-                  avatar: true,
-                  _count: {
-                    select: {
-                      studyRooms: {
-                        where: { sessionStatus: SessionStatus.DONE },
-                      },
-                      peerSessionsReceived: {
-                        where: { sessionStatus: SessionStatus.DONE },
-                      },
-                    },
-                  },
+          const roomEntries = await Promise.all(
+            orderedTeachers.map(async (teacher) => {
+              const room = await this.prisma.studyRoom.findFirst({
+                where: {
+                  createdById: teacher.revieweeId,
+                  sessionStatus: SessionStatus.UPCOMING,
+                  date: { gte: now },
                 },
-              },
-              skills: {
                 include: {
-                  skill: {
-                    select: {
-                      id: true,
-                      name: true,
-                    },
-                  },
-                },
-              },
-              learners: {
-                select: {
-                  user: {
+                  createdBy: {
                     select: {
                       id: true,
                       name: true,
                       avatar: true,
+                      _count: {
+                        select: {
+                          studyRooms: {
+                            where: { sessionStatus: SessionStatus.DONE },
+                          },
+                          peerSessionsReceived: {
+                            where: { sessionStatus: SessionStatus.DONE },
+                          },
+                        },
+                      },
+                    },
+                  },
+                  skills: {
+                    include: {
+                      skill: {
+                        select: {
+                          id: true,
+                          name: true,
+                        },
+                      },
+                    },
+                  },
+                  learners: {
+                    select: {
+                      user: {
+                        select: {
+                          id: true,
+                          name: true,
+                          avatar: true,
+                        },
+                      },
                     },
                   },
                 },
-              },
+                orderBy: { date: 'asc' },
+              });
+
+              if (!room) {
+                return null;
+              }
+
+              const totalSessions =
+                ((room.createdBy as any)._count?.studyRooms || 0) +
+                ((room.createdBy as any)._count?.peerSessionsReceived || 0);
+
+              return {
+                room,
+                rating: teacher._avg.rating ?? 0,
+                reviewCount: teacher._count.rating ?? 0,
+                totalSessions,
+              };
+            }),
+          );
+
+          const uniqueRooms: Array<{
+            room: StudyRoomWithRelations;
+            rating: number;
+            reviewCount: number;
+            totalSessions: number;
+          }> = [];
+          const seenRoomIds = new Set<string>();
+
+          for (const entry of roomEntries) {
+            if (!entry || seenRoomIds.has(entry.room.id)) {
+              continue;
+            }
+
+            seenRoomIds.add(entry.room.id);
+            uniqueRooms.push(entry);
+
+            if (uniqueRooms.length >= normalizedLimit * 2) {
+              break;
+            }
+          }
+
+          if (uniqueRooms.length === 0) {
+            this.logger.debug({
+              message: isHomePageRequest
+                ? '[HomePage] No unique rooms found, using fallback'
+                : '[StudyRooms] No unique rooms found, using fallback',
+            });
+            return this.getFallbackTrendingRooms(normalizedLimit, now);
+          }
+
+          const sortedRooms = uniqueRooms
+            .sort((a, b) => {
+              if (b.rating !== a.rating) {
+                return b.rating - a.rating;
+              }
+
+              if (b.reviewCount !== a.reviewCount) {
+                return b.reviewCount - a.reviewCount;
+              }
+
+              return a.room.date.getTime() - b.room.date.getTime();
+            })
+            .slice(0, normalizedLimit);
+
+          const studyRoomCards = sortedRooms.map(({ room, rating, reviewCount, totalSessions }) =>
+            this.buildStudyRoomCard(room, { avgRating: rating, reviewCount, totalSessions }),
+          );
+
+          const dbDuration = Date.now() - dbStartTime;
+          this.logger.debug({
+            message: isHomePageRequest
+              ? '[HomePage] Trending study rooms query completed'
+              : '[StudyRooms] Trending study rooms query completed',
+            dbDuration: `${dbDuration}ms`,
+            results: {
+              studyRoomsCount: studyRoomCards.length,
+              uniqueRoomsFound: uniqueRooms.length,
             },
-            orderBy: { date: 'asc' },
           });
 
-          if (!room) {
-            return null;
-          }
-
-          const totalSessions =
-            ((room.createdBy as any)._count?.studyRooms || 0) +
-            ((room.createdBy as any)._count?.peerSessionsReceived || 0);
-
           return {
-            room,
-            rating: teacher._avg.rating ?? 0,
-            reviewCount: teacher._count.rating ?? 0,
-            totalSessions,
+            studyRooms: studyRoomCards,
+            pagination: {
+              total: studyRoomCards.length,
+              page: 1,
+              limit: normalizedLimit,
+              totalPages: 1,
+              hasMore: false,
+            },
           };
-        }),
-      );
-
-      const uniqueRooms: Array<{
-        room: StudyRoomWithRelations;
-        rating: number;
-        reviewCount: number;
-        totalSessions: number;
-      }> = [];
-      const seenRoomIds = new Set<string>();
-
-      for (const entry of roomEntries) {
-        if (!entry || seenRoomIds.has(entry.room.id)) {
-          continue;
+        } catch (error) {
+          const dbDuration = Date.now() - dbStartTime;
+          this.logger.error({
+            message: isHomePageRequest
+              ? '[HomePage] Trending study rooms query failed'
+              : '[StudyRooms] Trending study rooms query failed',
+            dbDuration: `${dbDuration}ms`,
+            limit: normalizedLimit,
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+          });
+          throw error;
         }
-
-        seenRoomIds.add(entry.room.id);
-        uniqueRooms.push(entry);
-
-        if (uniqueRooms.length >= normalizedLimit * 2) {
-          break;
-        }
-      }
-
-      if (uniqueRooms.length === 0) {
-        this.logger.debug({
-          message: isHomePageRequest
-            ? '[HomePage] No unique rooms found, using fallback'
-            : '[StudyRooms] No unique rooms found, using fallback',
-        });
-        return this.getFallbackTrendingRooms(normalizedLimit, now);
-      }
-
-      const sortedRooms = uniqueRooms
-        .sort((a, b) => {
-          if (b.rating !== a.rating) {
-            return b.rating - a.rating;
-          }
-
-          if (b.reviewCount !== a.reviewCount) {
-            return b.reviewCount - a.reviewCount;
-          }
-
-          return a.room.date.getTime() - b.room.date.getTime();
-        })
-        .slice(0, normalizedLimit);
-
-      const studyRoomCards = sortedRooms.map(({ room, rating, reviewCount, totalSessions }) =>
-        this.buildStudyRoomCard(room, { avgRating: rating, reviewCount, totalSessions }),
-      );
-
-      const dbDuration = Date.now() - dbStartTime;
-      this.logger.debug({
-        message: isHomePageRequest
-          ? '[HomePage] Trending study rooms query completed'
-          : '[StudyRooms] Trending study rooms query completed',
-        dbDuration: `${dbDuration}ms`,
-        results: {
-          studyRoomsCount: studyRoomCards.length,
-          uniqueRoomsFound: uniqueRooms.length,
-        },
-      });
-
-      return {
-        studyRooms: studyRoomCards,
-        pagination: {
-          total: studyRoomCards.length,
-          page: 1,
-          limit: normalizedLimit,
-          totalPages: 1,
-          hasMore: false,
-        },
-      };
-    } catch (error) {
-      const dbDuration = Date.now() - dbStartTime;
-      this.logger.error({
-        message: isHomePageRequest
-          ? '[HomePage] Trending study rooms query failed'
-          : '[StudyRooms] Trending study rooms query failed',
-        dbDuration: `${dbDuration}ms`,
-        limit: normalizedLimit,
-        error: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-      });
-      throw error;
-    }
+      },
+      cacheTTL,
+    );
   }
 
   private async getFallbackTrendingRooms(limit: number, fromDate: Date) {

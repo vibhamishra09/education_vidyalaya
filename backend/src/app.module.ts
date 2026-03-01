@@ -31,6 +31,7 @@ import { SessionModerationModule } from './session-moderation/session-moderation
 import { LoggingInterceptor } from './logging.interceptor';
 import { SentryModule } from './common/sentry';
 import { LoggerModule } from './common/logger';
+import { CacheModule } from './redis/cache.module';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { LoggerModule } from './common/logger';
       },
     }),
     SentryModule.forRoot(),
+    CacheModule,
     PrismaModule,
     UsersModule,
     SkillsModule,
