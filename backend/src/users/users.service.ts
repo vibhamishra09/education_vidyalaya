@@ -2,140 +2,154 @@ import { Injectable, NotFoundException, ConflictException, BadRequestException, 
 import { Prisma, SessionStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateUserDto } from './dto/user.dto';
+import { CacheService } from '../redis/cache.service';
 
 @Injectable()
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly cacheService: CacheService,
+  ) {}
 
   async getCurrentUser(clerkUserId: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { clerkId: clerkUserId },
-      include: {
-        userSkills: {
+    // Cache for 60 seconds - user profile changes infrequently
+    const cacheKey = this.cacheService.createKey('user:current', { clerkUserId });
+    const cacheTTL = 60;
+
+    return this.cacheService.getOrSet(
+      cacheKey,
+      async () => {
+        const user = await this.prisma.user.findUnique({
+          where: { clerkId: clerkUserId },
           include: {
-            skill: true,
+            userSkills: {
+              include: {
+                skill: true,
+              },
+            },
           },
-        },
-      },
-    });
+        });
 
-    const isNewUser = !user;
+        const isNewUser = !user;
 
-    if (!user) {
-      throw new NotFoundException(
-        'User not found. Please complete onboarding first.',
-      );
-    }
+        if (!user) {
+          throw new NotFoundException(
+            'User not found. Please complete onboarding first.',
+          );
+        }
 
-    const hasSkills = user.userSkills
-      .filter((us) => us.type === 'HAS')
-      .map((us) => us.skill.name);
+        const hasSkills = user.userSkills
+          .filter((us) => us.type === 'HAS')
+          .map((us) => us.skill.name);
 
-    const wantSkills = user.userSkills
-      .filter((us) => us.type === 'WANTS')
-      .map((us) => us.skill.name);
+        const wantSkills = user.userSkills
+          .filter((us) => us.type === 'WANTS')
+          .map((us) => us.skill.name);
 
-    // Fetch public stats for the current user
-    const acceptedStatuses = [
-      SessionStatus.UPCOMING,
-      SessionStatus.ONGOING,
-      SessionStatus.DONE,
-    ];
+        // Fetch public stats for the current user
+        const acceptedStatuses = [
+          SessionStatus.UPCOMING,
+          SessionStatus.ONGOING,
+          SessionStatus.DONE,
+        ];
 
-    const [
-      peerSessionsTaught,
-      studyRoomsHosted,
-      totalSessionRequests,
-      acceptedSessions,
-      reviewStats,
-      peerSessionsAsLearner,
-      studyRoomsAsLearner,
-    ] = await Promise.all([
-      // Count peer sessions where user is the teacher (received)
-      this.prisma.peerSession.count({
-        where: {
-          requestedToId: user.id,
-          sessionStatus: SessionStatus.DONE,
-        },
-      }),
-      // Count study rooms where user is the creator/host
-      this.prisma.studyRoom.count({
-        where: {
-          createdById: user.id,
-          sessionStatus: SessionStatus.DONE,
-        },
-      }),
-      this.prisma.peerSession.count({
-        where: { requestedToId: user.id },
-      }),
-      this.prisma.peerSession.count({
-        where: {
-          requestedToId: user.id,
-          sessionStatus: {
-            in: acceptedStatuses,
-          },
-        },
-      }),
-      this.prisma.review.aggregate({
-        where: { revieweeId: user.id },
-        _avg: { rating: true },
-        _count: { rating: true },
-      }),
-      // Count peer sessions where user is the learner (requester)
-      this.prisma.peerSession.count({
-        where: {
-          requestedById: user.id,
-          sessionStatus: SessionStatus.DONE,
-        },
-      }),
-      // Count study rooms where user is a participant (not creator)
-      this.prisma.studyRoomParticipant.count({
-        where: {
-          userId: user.id,
-          studyRoom: {
-            sessionStatus: SessionStatus.DONE,
-            createdById: { not: user.id }, // Exclude rooms user created (taught)
-          },
-        },
-      }),
-    ]);
-
-    // Total sessions taught includes both peer sessions and study rooms hosted
-    const sessionsTaught = peerSessionsTaught + studyRoomsHosted;
-    const sessionsAttendedAsLearner = peerSessionsAsLearner + studyRoomsAsLearner;
-
-    const acceptanceRate =
-      totalSessionRequests > 0 ? acceptedSessions / totalSessionRequests : 0;
-
-    return {
-      user: {
-        id: user.id,
-        name: user.name,
-        username: user.username,
-        email: user.email,
-        avatar: user.avatar,
-        bio: user.bio,
-        location: user.location,
-        school: user.school,
-        coins: user.coins,
-        hourlyRate: user.hourlyRate,
-        hasSkills,
-        wantSkills,
-        socialLinks: user.socialLinks as any[] || [],
-        publicStats: {
-          sessionsTaught,
-          sessionsAttendedAsLearner,
+        const [
+          peerSessionsTaught,
+          studyRoomsHosted,
           totalSessionRequests,
           acceptedSessions,
-          acceptanceRate,
-          avgRating: reviewStats._avg.rating ?? 0,
-          reviewCount: reviewStats._count.rating ?? 0,
-        },
+          reviewStats,
+          peerSessionsAsLearner,
+          studyRoomsAsLearner,
+        ] = await Promise.all([
+          // Count peer sessions where user is the teacher (received)
+          this.prisma.peerSession.count({
+            where: {
+              requestedToId: user.id,
+              sessionStatus: SessionStatus.DONE,
+            },
+          }),
+          // Count study rooms where user is the creator/host
+          this.prisma.studyRoom.count({
+            where: {
+              createdById: user.id,
+              sessionStatus: SessionStatus.DONE,
+            },
+          }),
+          this.prisma.peerSession.count({
+            where: { requestedToId: user.id },
+          }),
+          this.prisma.peerSession.count({
+            where: {
+              requestedToId: user.id,
+              sessionStatus: {
+                in: acceptedStatuses,
+              },
+            },
+          }),
+          this.prisma.review.aggregate({
+            where: { revieweeId: user.id },
+            _avg: { rating: true },
+            _count: { rating: true },
+          }),
+          // Count peer sessions where user is the learner (requester)
+          this.prisma.peerSession.count({
+            where: {
+              requestedById: user.id,
+              sessionStatus: SessionStatus.DONE,
+            },
+          }),
+          // Count study rooms where user is a participant (not creator)
+          this.prisma.studyRoomParticipant.count({
+            where: {
+              userId: user.id,
+              studyRoom: {
+                sessionStatus: SessionStatus.DONE,
+                createdById: { not: user.id }, // Exclude rooms user created (taught)
+              },
+            },
+          }),
+        ]);
+
+        // Total sessions taught includes both peer sessions and study rooms hosted
+        const sessionsTaught = peerSessionsTaught + studyRoomsHosted;
+        const sessionsAttendedAsLearner = peerSessionsAsLearner + studyRoomsAsLearner;
+
+        const acceptanceRate =
+          totalSessionRequests > 0 ? acceptedSessions / totalSessionRequests : 0;
+
+        return {
+          user: {
+            id: user.id,
+            name: user.name,
+            username: user.username,
+            email: user.email,
+            avatar: user.avatar,
+            bio: user.bio,
+            location: user.location,
+            school: user.school,
+            coins: user.coins,
+            hourlyRate: user.hourlyRate,
+            hasSkills,
+            wantSkills,
+            socialLinks: user.socialLinks as any[] || [],
+            publicStats: {
+              sessionsTaught,
+              sessionsAttendedAsLearner,
+              totalSessionRequests,
+              acceptedSessions,
+              acceptanceRate,
+              avgRating: reviewStats._avg.rating ?? 0,
+              reviewCount: reviewStats._count.rating ?? 0,
+            },
+          },
+          isNewUser,
+        };
       },
-      isNewUser,
-    };
+      cacheTTL,
+    );
   }
 
   async updateUserProfile(userId: string, updateDto: UpdateUserDto) {
@@ -245,118 +259,132 @@ export class UsersService {
       }
     }
 
+    // Invalidate cache for this user
+    await this.cacheService.delete(this.cacheService.createKey('user:current', { clerkUserId: userId }));
+    await this.cacheService.deletePattern(`user:public:${userId}*`);
+
     // Return updated user with skills
     return this.getCurrentUser(userId);
   }
 
   async getPublicUserProfile(userId: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      include: {
-        userSkills: {
+    // Cache for 2 minutes - public profiles change less frequently
+    const cacheKey = this.cacheService.createKey('user:public', { userId });
+    const cacheTTL = 120;
+
+    return this.cacheService.getOrSet(
+      cacheKey,
+      async () => {
+        const user = await this.prisma.user.findUnique({
+          where: { id: userId },
           include: {
-            skill: true,
+            userSkills: {
+              include: {
+                skill: true,
+              },
+            },
           },
-        },
+        });
+
+        if (!user) {
+          throw new NotFoundException('User not found');
+        }
+
+        const hasSkills = user.userSkills
+          .filter((us) => us.type === 'HAS')
+          .map((us) => us.skill.name);
+
+        const wantSkills = user.userSkills
+          .filter((us) => us.type === 'WANTS')
+          .map((us) => us.skill.name);
+
+        const acceptedStatuses = [
+          SessionStatus.UPCOMING,
+          SessionStatus.ONGOING,
+          SessionStatus.DONE,
+        ];
+
+        const [
+          sessionsTaught,
+          totalSessionRequests,
+          acceptedSessions,
+          reviewStats,
+          peerSessionsAsLearner,
+          studyRoomsAsLearner,
+        ] = await Promise.all([
+          this.prisma.peerSession.count({
+            where: {
+              requestedToId: user.id,
+              sessionStatus: SessionStatus.DONE,
+            },
+          }),
+          this.prisma.peerSession.count({
+            where: { requestedToId: user.id },
+          }),
+          this.prisma.peerSession.count({
+            where: {
+              requestedToId: user.id,
+              sessionStatus: {
+                in: acceptedStatuses,
+              },
+            },
+          }),
+          this.prisma.review.aggregate({
+            where: { revieweeId: user.id },
+            _avg: { rating: true },
+            _count: { rating: true },
+          }),
+          // Count peer sessions where user is the learner (requester)
+          this.prisma.peerSession.count({
+            where: {
+              requestedById: user.id,
+              sessionStatus: SessionStatus.DONE,
+            },
+          }),
+          // Count study rooms where user is a participant (not creator)
+          this.prisma.studyRoomParticipant.count({
+            where: {
+              userId: user.id,
+              studyRoom: {
+                sessionStatus: SessionStatus.DONE,
+                createdById: { not: user.id }, // Exclude rooms user created (taught)
+              },
+            },
+          }),
+        ]);
+
+        const sessionsAttendedAsLearner = peerSessionsAsLearner + studyRoomsAsLearner;
+
+        const acceptanceRate =
+          totalSessionRequests > 0 ? acceptedSessions / totalSessionRequests : 0;
+
+        return {
+          id: user.id,
+          name: user.name,
+          username: user.username,
+          email: user.email,
+          avatar: user.avatar,
+          bio: user.bio,
+          location: user.location,
+          school: user.school,
+          coins: user.coins,
+          hourlyRate: user.hourlyRate,
+          hasSkills,
+          wantSkills,
+          socialLinks: user.socialLinks as any[] || [],
+          publicStats: {
+            sessionsTaught,
+            sessionsAttendedAsLearner,
+            totalSessionRequests,
+            acceptedSessions,
+            acceptanceRate,
+            avgRating: reviewStats._avg.rating ?? 0,
+            reviewCount: reviewStats._count.rating ?? 0,
+          },
+        };
       },
-    });
-
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
-    const hasSkills = user.userSkills
-      .filter((us) => us.type === 'HAS')
-      .map((us) => us.skill.name);
-
-    const wantSkills = user.userSkills
-      .filter((us) => us.type === 'WANTS')
-      .map((us) => us.skill.name);
-
-    const acceptedStatuses = [
-      SessionStatus.UPCOMING,
-      SessionStatus.ONGOING,
-      SessionStatus.DONE,
-    ];
-
-    const [
-      sessionsTaught,
-      totalSessionRequests,
-      acceptedSessions,
-      reviewStats,
-      peerSessionsAsLearner,
-      studyRoomsAsLearner,
-    ] = await Promise.all([
-      this.prisma.peerSession.count({
-        where: {
-          requestedToId: user.id,
-          sessionStatus: SessionStatus.DONE,
-        },
-      }),
-      this.prisma.peerSession.count({
-        where: { requestedToId: user.id },
-      }),
-      this.prisma.peerSession.count({
-        where: {
-          requestedToId: user.id,
-          sessionStatus: {
-            in: acceptedStatuses,
-          },
-        },
-      }),
-      this.prisma.review.aggregate({
-        where: { revieweeId: user.id },
-        _avg: { rating: true },
-        _count: { rating: true },
-      }),
-      // Count peer sessions where user is the learner (requester)
-      this.prisma.peerSession.count({
-        where: {
-          requestedById: user.id,
-          sessionStatus: SessionStatus.DONE,
-        },
-      }),
-      // Count study rooms where user is a participant (not creator)
-      this.prisma.studyRoomParticipant.count({
-        where: {
-          userId: user.id,
-          studyRoom: {
-            sessionStatus: SessionStatus.DONE,
-            createdById: { not: user.id }, // Exclude rooms user created (taught)
-          },
-        },
-      }),
-    ]);
-
-    const sessionsAttendedAsLearner = peerSessionsAsLearner + studyRoomsAsLearner;
-
-    const acceptanceRate =
-      totalSessionRequests > 0 ? acceptedSessions / totalSessionRequests : 0;
-
-    return {
-      id: user.id,
-      name: user.name,
-      username: user.username,
-      email: user.email,
-      avatar: user.avatar,
-      bio: user.bio,
-      location: user.location,
-      school: user.school,
-      coins: user.coins,
-      hourlyRate: user.hourlyRate,
-      hasSkills,
-      wantSkills,
-      socialLinks: user.socialLinks as any[] || [],
-      publicStats: {
-        sessionsTaught,
-        sessionsAttendedAsLearner,
-        totalSessionRequests,
-        acceptedSessions,
-        acceptanceRate,
-        avgRating: reviewStats._avg.rating ?? 0,
-        reviewCount: reviewStats._count.rating ?? 0,
-      },
-    };
+      cacheTTL,
+    );
   }
 
   async checkUsernameAvailability(

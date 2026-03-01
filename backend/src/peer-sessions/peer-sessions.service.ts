@@ -17,6 +17,7 @@ import { AvailabilityService } from '../availability/availability.service';
 import { StreaksService } from '../streaks/streaks.service';
 import { AchievementsService } from '../achievements/achievements.service';
 import { TranscriptsService } from '../transcripts/transcripts.service';
+import { CacheService } from '../redis/cache.service';
 
 @Injectable()
 export class PeerSessionsService {
@@ -30,6 +31,7 @@ export class PeerSessionsService {
     private streaksService: StreaksService,
     private achievementsService: AchievementsService,
     private transcriptsService: TranscriptsService,
+    private readonly cacheService: CacheService,
   ) {}
 
   async getPeerSessions(
@@ -40,121 +42,142 @@ export class PeerSessionsService {
     page: number = 1,
     limit: number = 10,
   ) {
-    this.logger.debug('userId', userId);
-    // userId is actually clerkId, so we need to find the user by clerkId first
-    const user = await this.prisma.user.findUnique({
-      where: { clerkId: userId },
-      select: { id: true },
+    // Cache for 30 seconds - sessions change when status updates
+    const cacheKey = this.cacheService.createKey('peer-sessions:list', {
+      userId,
+      status,
+      requestedBy,
+      requestedTo,
+      page,
+      limit,
     });
+    const cacheTTL = 30;
 
-    if (!user) {
-      throw new BadRequestException({
-        code: 'USER_NOT_FOUND',
-        message: 'User not found',
-      });
-    }
+    return this.cacheService.getOrSet(
+      cacheKey,
+      async () => {
+        this.logger.debug('userId', userId);
+        // userId is actually clerkId, so we need to find the user by clerkId first
+        const user = await this.prisma.user.findUnique({
+          where: { clerkId: userId },
+          select: { id: true },
+        });
 
-    const where: any = {
-      OR: [{ requestedById: user.id }, { requestedToId: user.id }],
-    };
+        if (!user) {
+          throw new BadRequestException({
+            code: 'USER_NOT_FOUND',
+            message: 'User not found',
+          });
+        }
 
-    if (status) where.sessionStatus = status;
-    if (requestedBy) where.requestedById = requestedBy;
-    if (requestedTo) where.requestedToId = requestedTo;
+        const where: any = {
+          OR: [{ requestedById: user.id }, { requestedToId: user.id }],
+        };
 
-    const skip = (page - 1) * limit;
+        if (status) where.sessionStatus = status;
+        if (requestedBy) where.requestedById = requestedBy;
+        if (requestedTo) where.requestedToId = requestedTo;
 
-    // Sort by scheduled time (date) - ascending: earliest scheduled time first
-    const orderBy = { date: 'asc' as const };
+        const skip = (page - 1) * limit;
 
-    const [peerSessions, total] = await Promise.all([
-      this.prisma.peerSession.findMany({
-        where,
-        skip,
-        take: limit,
-        include: {
-          requestedBy: { select: { id: true, name: true, avatar: true } },
-          requestedTo: { select: { id: true, name: true, avatar: true } },
-          skills: { include: { skill: { select: { id: true, name: true } } } },
+        // Sort by scheduled time (date) - ascending: earliest scheduled time first
+        const orderBy = { date: 'asc' as const };
+
+        const [peerSessions, total] = await Promise.all([
+          this.prisma.peerSession.findMany({
+            where,
+            skip,
+            take: limit,
+            include: {
+              requestedBy: { select: { id: true, name: true, avatar: true } },
+              requestedTo: { select: { id: true, name: true, avatar: true } },
+              skills: { include: { skill: { select: { id: true, name: true } } } },
+            },
+            orderBy,
+          }),
+          this.prisma.peerSession.count({ where }),
+        ]);
+
+        // Auto-expire sessions that have passed their scheduled end time
+        const now = new Date();
+        const expiredSessions = peerSessions.filter((ps) => {
+          const sessionEndTime = new Date(ps.date.getTime() + ps.duration * 60000);
+          const isExpired = sessionEndTime < now;
+          const isNotInTerminalState = !['DONE', 'CANCELLED', 'NOT_COMPLETED'].includes(ps.sessionStatus);
+          return isExpired && isNotInTerminalState;
+        });
+
+        // Process expired sessions (no payment processing - payments are only processed after reviews)
+        for (const session of expiredSessions) {
+          this.logger.debug('⏰ [getPeerSessions] Auto-expiring session:', {
+            sessionId: session.id,
+            scheduledEnd: new Date(session.date.getTime() + session.duration * 60000).toISOString(),
+            currentStatus: session.sessionStatus,
+          });
+
+          // Update status to NOT_COMPLETED
+          await this.prisma.peerSession.update({
+            where: { id: session.id },
+            data: { sessionStatus: SessionStatus.NOT_COMPLETED },
+          });
+
+          // Invalidate cache for both users' session lists
+          await this.cacheService.deletePattern(`peer-sessions:list:*${session.requestedById}*`);
+          await this.cacheService.deletePattern(`peer-sessions:list:*${session.requestedToId}*`);
+
+          // Notify both parties
+          await this.notificationsService.createAndPushNotification(
+            session.requestedById,
+            `Your session with ${session.requestedTo.name} has expired and was not completed.`,
+            'Session Expired',
+            NotifType.NORMAL,
+            {
+              actionType: 'SESSION_EXPIRED',
+              peerSessionId: session.id,
+              actionData: { sessionId: session.id, sessionType: 'peerSession' },
+            },
+          );
+
+          await this.notificationsService.createAndPushNotification(
+            session.requestedToId,
+            `Your session with ${session.requestedBy.name} has expired and was not completed.`,
+            'Session Expired',
+            NotifType.NORMAL,
+            {
+              actionType: 'SESSION_EXPIRED',
+              peerSessionId: session.id,
+              actionData: { sessionId: session.id, sessionType: 'peerSession' },
+            },
+          );
+
+        // Update the status in the returned list
+        session.sessionStatus = SessionStatus.NOT_COMPLETED;
+      }
+
+      return {
+        peerSessions: peerSessions.map((ps) => ({
+          id: ps.id,
+          title: ps.title,
+          description: ps.description,
+          sessionStatus: ps.sessionStatus,
+          date: ps.date,
+          duration: ps.duration,
+          gmeetLink: ps.gmeetLink,
+          requestedBy: ps.requestedBy,
+          requestedTo: ps.requestedTo,
+          skills: ps.skills.map((s) => s.skill),
+        })),
+        pagination: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
+          hasMore: skip + limit < total,
         },
-        orderBy,
-      }),
-      this.prisma.peerSession.count({ where }),
-    ]);
-
-    // Auto-expire sessions that have passed their scheduled end time
-    const now = new Date();
-    const expiredSessions = peerSessions.filter((ps) => {
-      const sessionEndTime = new Date(ps.date.getTime() + ps.duration * 60000);
-      const isExpired = sessionEndTime < now;
-      const isNotInTerminalState = !['DONE', 'CANCELLED', 'NOT_COMPLETED'].includes(ps.sessionStatus);
-      return isExpired && isNotInTerminalState;
-    });
-
-    // Process expired sessions (no payment processing - payments are only processed after reviews)
-    for (const session of expiredSessions) {
-      this.logger.debug('⏰ [getPeerSessions] Auto-expiring session:', {
-        sessionId: session.id,
-        scheduledEnd: new Date(session.date.getTime() + session.duration * 60000).toISOString(),
-        currentStatus: session.sessionStatus,
-      });
-
-      // Update status to NOT_COMPLETED
-      await this.prisma.peerSession.update({
-        where: { id: session.id },
-        data: { sessionStatus: SessionStatus.NOT_COMPLETED },
-      });
-
-      // Notify both parties
-      await this.notificationsService.createAndPushNotification(
-        session.requestedById,
-        `Your session with ${session.requestedTo.name} has expired and was not completed.`,
-        'Session Expired',
-        NotifType.NORMAL,
-        {
-          actionType: 'SESSION_EXPIRED',
-          peerSessionId: session.id,
-          actionData: { sessionId: session.id, sessionType: 'peerSession' },
-        },
-      );
-
-      await this.notificationsService.createAndPushNotification(
-        session.requestedToId,
-        `Your session with ${session.requestedBy.name} has expired and was not completed.`,
-        'Session Expired',
-        NotifType.NORMAL,
-        {
-          actionType: 'SESSION_EXPIRED',
-          peerSessionId: session.id,
-          actionData: { sessionId: session.id, sessionType: 'peerSession' },
-        },
-      );
-
-      // Update the status in the returned list
-      session.sessionStatus = SessionStatus.NOT_COMPLETED;
-    }
-
-    return {
-      peerSessions: peerSessions.map((ps) => ({
-        id: ps.id,
-        title: ps.title,
-        description: ps.description,
-        sessionStatus: ps.sessionStatus,
-        date: ps.date,
-        duration: ps.duration,
-        gmeetLink: ps.gmeetLink,
-        requestedBy: ps.requestedBy,
-        requestedTo: ps.requestedTo,
-        skills: ps.skills.map((s) => s.skill),
-      })),
-      pagination: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
-        hasMore: skip + limit < total,
-      },
-    };
+      };
+    },
+    cacheTTL,
+  );
   }
 
   async getPeerSessionDetails(peerSessionId: string, userId?: string) {
@@ -469,10 +492,14 @@ export class PeerSessionsService {
       peerSession,
     );
 
-    await this.prisma.peerSession.update({
+    const updatedSession = await this.prisma.peerSession.update({
       where: { id: peerSessionId },
       data: { sessionStatus: updateDto.status },
     });
+
+    // Invalidate cache for both users' session lists
+    await this.cacheService.deletePattern(`peer-sessions:list:*${peerSession.requestedById}*`);
+    await this.cacheService.deletePattern(`peer-sessions:list:*${peerSession.requestedToId}*`);
 
     // Handle payment based on status
     if (
