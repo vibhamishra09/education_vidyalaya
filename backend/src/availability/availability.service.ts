@@ -3,8 +3,10 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { isConnectionError } from '../common/db-error-handler';
 import {
   UserAvailabilityDto,
   SetAvailabilityDto,
@@ -16,6 +18,8 @@ import {
 
 @Injectable()
 export class AvailabilityService {
+  private readonly logger = new Logger(AvailabilityService.name);
+
   constructor(private prisma: PrismaService) {}
 
   /**
@@ -39,21 +43,37 @@ export class AvailabilityService {
    * Note: userId can be either clerkId or database userId
    */
   async getUserAvailability(userId: string) {
-    // Try to find user by clerkId first, if not found, assume it's already a database userId
-    let dbUserId = userId;
-    const userByClerkId = await this.prisma.user.findUnique({
-      where: { clerkId: userId },
-      select: { id: true },
-    });
-    if (userByClerkId) {
-      dbUserId = userByClerkId.id;
-    }
-    const availability = await this.prisma.userAvailability.findMany({
-      where: { userId: dbUserId },
-      orderBy: { dayOfWeek: 'asc' },
-    });
+    try {
+      // Try to find user by clerkId first, if not found, assume it's already a database userId
+      let dbUserId = userId;
+      const userByClerkId = await this.prisma.user.findUnique({
+        where: { clerkId: userId },
+        select: { id: true },
+      });
+      if (userByClerkId) {
+        dbUserId = userByClerkId.id;
+      }
+      const availability = await this.prisma.userAvailability.findMany({
+        where: { userId: dbUserId },
+        orderBy: { dayOfWeek: 'asc' },
+      });
 
-    return { availability };
+      return { availability };
+    } catch (error) {
+      // Handle database connection errors
+      if (isConnectionError(error)) {
+        this.logger.error(
+          `Database connection error in getUserAvailability for user ${userId}:`,
+          error instanceof Error ? error.message : String(error),
+        );
+        
+        // Return empty availability as fallback
+        return { availability: [] };
+      }
+      
+      // Re-throw other errors
+      throw error;
+    }
   }
 
   /**

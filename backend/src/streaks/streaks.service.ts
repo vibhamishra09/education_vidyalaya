@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { DateTime } from 'luxon';
+import { isConnectionError } from '../common/db-error-handler';
 
 @Injectable()
 export class StreaksService {
@@ -227,13 +228,14 @@ export class StreaksService {
    * @returns Array of StreakDay objects
    */
   async getStreakHistory(userId: string, days: number = 14) {
-    // Get user's timezone
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { timezone: true },
-    });
+    try {
+      // Get user's timezone
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { timezone: true },
+      });
 
-    const timezone = user?.timezone || 'UTC';
+      const timezone = user?.timezone || 'UTC';
 
     // Calculate date range in user's timezone
     const endDate = DateTime.now().setZone(timezone).startOf('day');
@@ -286,7 +288,22 @@ export class StreaksService {
       currentDate = currentDate.plus({ days: 1 });
     }
 
-    return streakDays;
+      return streakDays;
+    } catch (error) {
+      // Handle database connection errors
+      if (isConnectionError(error)) {
+        this.logger.error(
+          `Database connection error in getStreakHistory for user ${userId}:`,
+          error instanceof Error ? error.message : String(error),
+        );
+        
+        // Return empty streak history as fallback
+        return [];
+      }
+      
+      // Re-throw other errors
+      throw error;
+    }
   }
 
   /**
@@ -295,30 +312,50 @@ export class StreaksService {
    * @returns Streak information
    */
   async getUserStreak(userId: string) {
-    // userId is already the database ID from dashboard service
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        currentStreak: true,
-        longestStreak: true,
-        lastActivityDate: true,
-        name: true,
-      },
-    });
+    try {
+      // userId is already the database ID from dashboard service
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          currentStreak: true,
+          longestStreak: true,
+          lastActivityDate: true,
+          name: true,
+        },
+      });
 
-    if (!user) {
-      this.logger.debug('⚠️ [StreaksService.getUserStreak] User not found:', userId);
+      if (!user) {
+        this.logger.debug('⚠️ [StreaksService.getUserStreak] User not found:', userId);
+        return {
+          currentStreak: 0,
+          longestStreak: 0,
+          lastActivityDate: null,
+        };
+      }
+
       return {
-        currentStreak: 0,
-        longestStreak: 0,
-        lastActivityDate: null,
+        currentStreak: user.currentStreak,
+        longestStreak: user.longestStreak,
+        lastActivityDate: user.lastActivityDate,
       };
+    } catch (error) {
+      // Handle database connection errors
+      if (isConnectionError(error)) {
+        this.logger.error(
+          `Database connection error in getUserStreak for user ${userId}:`,
+          error instanceof Error ? error.message : String(error),
+        );
+        
+        // Return default streak values as fallback
+        return {
+          currentStreak: 0,
+          longestStreak: 0,
+          lastActivityDate: null,
+        };
+      }
+      
+      // Re-throw other errors
+      throw error;
     }
-
-    return {
-      currentStreak: user.currentStreak,
-      longestStreak: user.longestStreak,
-      lastActivityDate: user.lastActivityDate,
-    };
   }
 }

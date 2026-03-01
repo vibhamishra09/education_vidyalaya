@@ -29,6 +29,7 @@ import { redisClient } from '../redis/redis.provider';
 import { DebateAiService } from './debate-ai.service';
 import { DebateMicControlService } from './debate-mic-control.service';
 import { LoggerService } from '../common/logger';
+import { isConnectionError } from '../common/db-error-handler';
 
 // Redis key prefixes
 const REDIS_KEYS = {
@@ -134,16 +135,39 @@ export class DebateRoomsService {
    * Get debate room details
    */
   async getDebateRoom(roomId: string, userId?: string): Promise<DebateRoomResponse> {
-    const debateRoom = await this.prisma.debateRoom.findUnique({
-      where: { id: roomId },
-      include: this.getDebateRoomInclude(),
-    });
+    try {
+      const debateRoom = await this.prisma.debateRoom.findUnique({
+        where: { id: roomId },
+        include: this.getDebateRoomInclude(),
+      });
 
-    if (!debateRoom) {
-      throw new NotFoundException('Debate room not found');
+      if (!debateRoom) {
+        throw new NotFoundException('Debate room not found');
+      }
+
+      return this.mapToResponse(debateRoom);
+    } catch (error) {
+      // Handle database connection errors
+      if (isConnectionError(error)) {
+        this.logger.error(
+          `Database connection error in getDebateRoom for room ${roomId}:`,
+          error instanceof Error ? error.message : String(error),
+        );
+        
+        // Re-throw NotFoundException (room not found is a valid case)
+        if (error instanceof NotFoundException) {
+          throw error;
+        }
+        
+        // For connection errors, throw a more user-friendly error
+        throw new NotFoundException(
+          'Unable to fetch debate room. Please try again later.',
+        );
+      }
+      
+      // Re-throw other errors
+      throw error;
     }
-
-    return this.mapToResponse(debateRoom);
   }
 
   /**
@@ -157,7 +181,8 @@ export class DebateRoomsService {
     trending?: boolean,
     sort: 'hybrid' | 'newest' | 'upcoming' = 'newest',
   ) {
-    const where: Prisma.DebateRoomWhereInput = {};
+    try {
+      const where: Prisma.DebateRoomWhereInput = {};
 
     if (search) {
       where.OR = [
@@ -271,13 +296,34 @@ export class DebateRoomsService {
       this.prisma.debateRoom.count({ where }),
     ]);
 
-    return {
-      debateRooms: rooms.map((r) => this.mapToResponse(r)),
-      total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit),
-    };
+      return {
+        debateRooms: rooms.map((r) => this.mapToResponse(r)),
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      };
+    } catch (error) {
+      // Handle database connection errors
+      if (isConnectionError(error)) {
+        this.logger.error(
+          `Database connection error in listDebateRooms:`,
+          error instanceof Error ? error.message : String(error),
+        );
+        
+        // Return empty debate rooms as fallback
+        return {
+          debateRooms: [],
+          total: 0,
+          page,
+          limit,
+          totalPages: 0,
+        };
+      }
+      
+      // Re-throw other errors
+      throw error;
+    }
   }
 
   /**
@@ -675,9 +721,10 @@ export class DebateRoomsService {
     moderatorClerkId: string,
     query?: ModeratorEvaluationsQueryDto,
   ) {
-    const { user } = await this.assertModeratorInRoom(roomId, moderatorClerkId);
+    try {
+      const { user } = await this.assertModeratorInRoom(roomId, moderatorClerkId);
 
-    return this.prisma.debateModeratorEvaluation.findMany({
+      return await this.prisma.debateModeratorEvaluation.findMany({
       where: {
         debateRoomId: roomId,
         moderatorId: user.id,
@@ -703,6 +750,21 @@ export class DebateRoomsService {
       },
       orderBy: [{ turnNumber: 'desc' }, { updatedAt: 'desc' }],
     });
+    } catch (error) {
+      // Handle database connection errors
+      if (isConnectionError(error)) {
+        this.logger.error(
+          `Database connection error in getModeratorEvaluations for room ${roomId}:`,
+          error instanceof Error ? error.message : String(error),
+        );
+        
+        // Return empty evaluations as fallback
+        return [];
+      }
+      
+      // Re-throw other errors (ForbiddenException, NotFoundException, etc.)
+      throw error;
+    }
   }
 
   /**
@@ -714,9 +776,10 @@ export class DebateRoomsService {
     participantId: string,
     turnNumber?: number,
   ) {
-    const { user } = await this.assertModeratorInRoom(roomId, moderatorClerkId);
+    try {
+      const { user } = await this.assertModeratorInRoom(roomId, moderatorClerkId);
 
-    return this.prisma.debateModeratorEvaluation.findMany({
+      return await this.prisma.debateModeratorEvaluation.findMany({
       where: {
         debateRoomId: roomId,
         moderatorId: user.id,
@@ -742,6 +805,21 @@ export class DebateRoomsService {
       },
       orderBy: [{ turnNumber: 'desc' }, { updatedAt: 'desc' }],
     });
+    } catch (error) {
+      // Handle database connection errors
+      if (isConnectionError(error)) {
+        this.logger.error(
+          `Database connection error in getParticipantEvaluations for room ${roomId}, participant ${participantId}:`,
+          error instanceof Error ? error.message : String(error),
+        );
+        
+        // Return empty evaluations as fallback
+        return [];
+      }
+      
+      // Re-throw other errors (ForbiddenException, NotFoundException, etc.)
+      throw error;
+    }
   }
 
   /**
@@ -1378,15 +1456,16 @@ export class DebateRoomsService {
    * Get debate results (respects privacy rules)
    */
   async getResults(roomId: string, userId: string): Promise<DebateResultsResponse> {
-    const user = await this.prisma.user.findUnique({
-      where: { clerkId: userId },
-    });
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { clerkId: userId },
+      });
 
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
 
-    const debateRoom = await this.prisma.debateRoom.findUnique({
+      const debateRoom = await this.prisma.debateRoom.findUnique({
       where: { id: roomId },
       include: {
         moderators: true,
@@ -1512,6 +1591,28 @@ export class DebateRoomsService {
       })),
       reports,
     };
+    } catch (error) {
+      // Handle database connection errors
+      if (isConnectionError(error)) {
+        this.logger.error(
+          `Database connection error in getResults for room ${roomId}:`,
+          error instanceof Error ? error.message : String(error),
+        );
+        
+        // Re-throw NotFoundException and BadRequestException (valid cases)
+        if (error instanceof NotFoundException || error instanceof BadRequestException) {
+          throw error;
+        }
+        
+        // For connection errors, throw a more user-friendly error
+        throw new NotFoundException(
+          'Unable to fetch debate results. Please try again later.',
+        );
+      }
+      
+      // Re-throw other errors
+      throw error;
+    }
   }
 
   private parseScoresJson(scores: Prisma.JsonValue): Record<string, number> {
@@ -1604,15 +1705,16 @@ export class DebateRoomsService {
    * Get LiveKit token for debate room
    */
   async getLivekitToken(roomId: string, userId: string): Promise<string> {
-    const user = await this.prisma.user.findUnique({
-      where: { clerkId: userId },
-    });
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { clerkId: userId },
+      });
 
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
 
-    const debateRoom = await this.prisma.debateRoom.findUnique({
+      const debateRoom = await this.prisma.debateRoom.findUnique({
       where: { id: roomId },
       include: {
         moderators: true,
@@ -1647,40 +1749,82 @@ export class DebateRoomsService {
       publishData: true, // Allow publishing chat messages
     });
 
-    return token;
+      return token;
+    } catch (error) {
+      // Handle database connection errors
+      if (isConnectionError(error)) {
+        this.logger.error(
+          `Database connection error in getLivekitToken for room ${roomId}, user ${userId}:`,
+          error instanceof Error ? error.message : String(error),
+        );
+        
+        // Re-throw NotFoundException and ForbiddenException (valid cases)
+        if (error instanceof NotFoundException || error instanceof ForbiddenException) {
+          throw error;
+        }
+        
+        // For connection errors, throw a more user-friendly error
+        throw new NotFoundException(
+          'Unable to generate access token. Please try again later.',
+        );
+      }
+      
+      // Re-throw other errors
+      throw error;
+    }
   }
 
   /**
    * Get current debate state from Redis
    */
   async getDebateState(roomId: string): Promise<DebateState | null> {
-    const stateStr = await redisClient.get(REDIS_KEYS.debateState(roomId));
-    if (!stateStr) return null;
-    const state = JSON.parse(stateStr);
-    
-    // Convert currentSpeakerId from database ID to Clerk ID if needed
-    if (state.currentSpeakerId && !state.currentSpeakerId.startsWith('user_')) {
-      try {
-        const user = await this.prisma.user.findUnique({
-          where: { id: state.currentSpeakerId },
-          select: { clerkId: true },
-        });
-        if (user) {
-          state.currentSpeakerId = user.clerkId;
-          // Update Redis with corrected ID
-          await redisClient.set(
-            REDIS_KEYS.debateState(roomId),
-            JSON.stringify(state),
-            { EX: 86400 },
-          );
+    try {
+      const stateStr = await redisClient.get(REDIS_KEYS.debateState(roomId));
+      if (!stateStr) return null;
+      const state = JSON.parse(stateStr);
+      
+      // Convert currentSpeakerId from database ID to Clerk ID if needed
+      if (state.currentSpeakerId && !state.currentSpeakerId.startsWith('user_')) {
+        try {
+          const user = await this.prisma.user.findUnique({
+            where: { id: state.currentSpeakerId },
+            select: { clerkId: true },
+          });
+          if (user) {
+            state.currentSpeakerId = user.clerkId;
+            // Update Redis with corrected ID
+            await redisClient.set(
+              REDIS_KEYS.debateState(roomId),
+              JSON.stringify(state),
+              { EX: 86400 },
+            );
+          }
+        } catch (error) {
+          // If conversion fails due to connection error, return state as-is
+          if (isConnectionError(error)) {
+            this.logger.warn(`Database connection error converting currentSpeakerId for room ${roomId}, returning state as-is`);
+          } else {
+            this.logger.warn(`Failed to convert currentSpeakerId for room ${roomId}:`, error);
+          }
         }
-      } catch (error) {
-        // If conversion fails, leave as is
-        this.logger.warn(`Failed to convert currentSpeakerId for room ${roomId}:`, error);
       }
+      
+      return state;
+    } catch (error) {
+      // Handle database connection errors
+      if (isConnectionError(error)) {
+        this.logger.error(
+          `Database connection error in getDebateState for room ${roomId}:`,
+          error instanceof Error ? error.message : String(error),
+        );
+        
+        // Return null as fallback (state not available)
+        return null;
+      }
+      
+      // Re-throw other errors
+      throw error;
     }
-    
-    return state;
   }
 
   /**
