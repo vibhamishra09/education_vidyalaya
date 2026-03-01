@@ -3,7 +3,7 @@ import { Prisma, SessionStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateUserDto } from './dto/user.dto';
 import { CacheService } from '../redis/cache.service';
-import { isConnectionError } from '../common/db-error-handler';
+import { isConnectionError, withQueryTimeout } from '../common/db-error-handler';
 
 @Injectable()
 export class UsersService {
@@ -23,16 +23,20 @@ export class UsersService {
       cacheKey,
       async () => {
         try {
-          const user = await this.prisma.user.findUnique({
-            where: { clerkId: clerkUserId },
-            include: {
-              userSkills: {
-                include: {
-                  skill: true,
+          const user = await withQueryTimeout(
+            this.prisma.user.findUnique({
+              where: { clerkId: clerkUserId },
+              include: {
+                userSkills: {
+                  include: {
+                    skill: true,
+                  },
                 },
               },
-            },
-          });
+            }),
+            25000, // 25 second timeout
+            `getCurrentUser - findUnique user ${clerkUserId}`,
+          );
 
         const isNewUser = !user;
 
@@ -57,15 +61,16 @@ export class UsersService {
           SessionStatus.DONE,
         ];
 
-        const [
-          peerSessionsTaught,
-          studyRoomsHosted,
-          totalSessionRequests,
-          acceptedSessions,
-          reviewStats,
-          peerSessionsAsLearner,
-          studyRoomsAsLearner,
-        ] = await Promise.all([
+          const [
+            peerSessionsTaught,
+            studyRoomsHosted,
+            totalSessionRequests,
+            acceptedSessions,
+            reviewStats,
+            peerSessionsAsLearner,
+            studyRoomsAsLearner,
+          ] = await withQueryTimeout(
+            Promise.all([
           // Count peer sessions where user is the teacher (received)
           this.prisma.peerSession.count({
             where: {
@@ -113,10 +118,13 @@ export class UsersService {
               },
             },
           }),
-        ]);
+            ]),
+            25000, // 25 second timeout
+            `getCurrentUser - Promise.all stats for user ${clerkUserId}`,
+          );
 
-        // Total sessions taught includes both peer sessions and study rooms hosted
-        const sessionsTaught = peerSessionsTaught + studyRoomsHosted;
+          // Total sessions taught includes both peer sessions and study rooms hosted
+          const sessionsTaught = peerSessionsTaught + studyRoomsHosted;
         const sessionsAttendedAsLearner = peerSessionsAsLearner + studyRoomsAsLearner;
 
         const acceptanceRate =
@@ -300,43 +308,48 @@ export class UsersService {
       cacheKey,
       async () => {
         try {
-          const user = await this.prisma.user.findUnique({
-            where: { id: userId },
-            include: {
-              userSkills: {
-                include: {
-                  skill: true,
+          const user = await withQueryTimeout(
+            this.prisma.user.findUnique({
+              where: { id: userId },
+              include: {
+                userSkills: {
+                  include: {
+                    skill: true,
+                  },
                 },
               },
-            },
-          });
+            }),
+            25000, // 25 second timeout
+            `getPublicUserProfile - findUnique user ${userId}`,
+          );
 
-        if (!user) {
-          throw new NotFoundException('User not found');
-        }
+          if (!user) {
+            throw new NotFoundException('User not found');
+          }
 
-        const hasSkills = user.userSkills
-          .filter((us) => us.type === 'HAS')
-          .map((us) => us.skill.name);
+          const hasSkills = user.userSkills
+            .filter((us) => us.type === 'HAS')
+            .map((us) => us.skill.name);
 
-        const wantSkills = user.userSkills
-          .filter((us) => us.type === 'WANTS')
-          .map((us) => us.skill.name);
+          const wantSkills = user.userSkills
+            .filter((us) => us.type === 'WANTS')
+            .map((us) => us.skill.name);
 
-        const acceptedStatuses = [
-          SessionStatus.UPCOMING,
-          SessionStatus.ONGOING,
-          SessionStatus.DONE,
-        ];
+          const acceptedStatuses = [
+            SessionStatus.UPCOMING,
+            SessionStatus.ONGOING,
+            SessionStatus.DONE,
+          ];
 
-        const [
-          sessionsTaught,
-          totalSessionRequests,
-          acceptedSessions,
-          reviewStats,
-          peerSessionsAsLearner,
-          studyRoomsAsLearner,
-        ] = await Promise.all([
+          const [
+            sessionsTaught,
+            totalSessionRequests,
+            acceptedSessions,
+            reviewStats,
+            peerSessionsAsLearner,
+            studyRoomsAsLearner,
+          ] = await withQueryTimeout(
+            Promise.all([
           this.prisma.peerSession.count({
             where: {
               requestedToId: user.id,
@@ -376,9 +389,12 @@ export class UsersService {
               },
             },
           }),
-        ]);
+            ]),
+            25000, // 25 second timeout
+            `getPublicUserProfile - Promise.all stats for user ${userId}`,
+          );
 
-        const sessionsAttendedAsLearner = peerSessionsAsLearner + studyRoomsAsLearner;
+          const sessionsAttendedAsLearner = peerSessionsAsLearner + studyRoomsAsLearner;
 
         const acceptanceRate =
           totalSessionRequests > 0 ? acceptedSessions / totalSessionRequests : 0;
