@@ -5,6 +5,8 @@ import { LoggerService } from '../common/logger';
 @Injectable()
 export class CacheService {
   private readonly defaultTTL = 300; // 5 minutes default TTL
+  // Track in-flight requests to prevent cache stampede
+  private readonly inFlightRequests = new Map<string, Promise<any>>();
 
   constructor(private readonly logger: LoggerService) {
     this.logger.setContext(CacheService.name);
@@ -38,10 +40,29 @@ export class CacheService {
   }
 
   /**
+   * Check if Redis is connected
+   */
+  private async isRedisConnected(): Promise<boolean> {
+    try {
+      // Try a simple ping to check connection
+      await redisClient.ping();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * Get a value from cache
    */
   async get<T>(key: string): Promise<T | null> {
     try {
+      // Check if Redis is connected before attempting to use it
+      if (!(await this.isRedisConnected())) {
+        this.logger.warn(`Redis not connected, skipping cache for key: ${key}`);
+        return null;
+      }
+
       const cached = await redisClient.get(key);
       if (cached) {
         this.logger.debug(`Cache hit for key: ${key}`);
@@ -60,6 +81,12 @@ export class CacheService {
    */
   async set<T>(key: string, value: T, ttlSeconds?: number): Promise<void> {
     try {
+      // Check if Redis is connected before attempting to use it
+      if (!(await this.isRedisConnected())) {
+        this.logger.warn(`Redis not connected, skipping cache set for key: ${key}`);
+        return;
+      }
+
       const ttl = ttlSeconds ?? this.defaultTTL;
       const serialized = JSON.stringify(value);
       await redisClient.setEx(key, ttl, serialized);
@@ -100,6 +127,10 @@ export class CacheService {
   /**
    * Get or set a value using a callback function
    * This is the main method to use for caching database queries
+   * 
+   * Implements request deduplication to prevent cache stampede:
+   * - If multiple requests come in for the same key simultaneously
+   * - Only one will fetch from database, others wait for that result
    */
   async getOrSet<T>(
     cacheKey: string,
@@ -112,13 +143,39 @@ export class CacheService {
       return cached;
     }
 
-    // Cache miss - fetch from database
-    const value = await fetchFn();
+    // Check if there's already an in-flight request for this key
+    const existingRequest = this.inFlightRequests.get(cacheKey);
+    if (existingRequest) {
+      this.logger.debug(`Deduplicating request for key: ${cacheKey} (waiting for in-flight request)`);
+      try {
+        return await existingRequest;
+      } catch (error) {
+        // If the in-flight request failed, we'll try again below
+        this.inFlightRequests.delete(cacheKey);
+        throw error;
+      }
+    }
 
-    // Store in cache
-    await this.set(cacheKey, value, ttlSeconds);
+    // Create a new promise for this request
+    const requestPromise = (async () => {
+      try {
+        // Cache miss - fetch from database
+        const value = await fetchFn();
 
-    return value;
+        // Store in cache
+        await this.set(cacheKey, value, ttlSeconds);
+
+        return value;
+      } finally {
+        // Remove from in-flight map when done (success or failure)
+        this.inFlightRequests.delete(cacheKey);
+      }
+    })();
+
+    // Store the promise so other concurrent requests can wait for it
+    this.inFlightRequests.set(cacheKey, requestPromise);
+
+    return requestPromise;
   }
 
   /**
