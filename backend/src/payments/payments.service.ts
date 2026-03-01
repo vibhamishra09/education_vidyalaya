@@ -1,6 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaymentStatus } from '@prisma/client';
+import { CacheService } from '../redis/cache.service';
+import { LoggerService } from '../common/logger';
 
 export interface TransactionHistoryItem {
   id: string;
@@ -23,59 +25,79 @@ export interface TransactionHistoryItem {
 
 @Injectable()
 export class PaymentsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly cacheService: CacheService,
+    private readonly logger: LoggerService,
+  ) {
+    this.logger.setContext(PaymentsService.name);
+  }
 
   async getTransactionHistory(
     clerkUserId: string,
     page: number = 1,
     limit: number = 20,
   ) {
-    // Find user by clerkId
-    const user = await this.prisma.user.findUnique({
-      where: { clerkId: clerkUserId },
-      select: { id: true },
+    // Create cache key - user-specific with pagination
+    const cacheKey = this.cacheService.createKey('payments:history', {
+      clerkUserId,
+      page,
+      limit,
     });
 
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
+    // Cache for 30 seconds - payment history changes when new payments are made
+    // Short TTL ensures users see new payments relatively quickly
+    const cacheTTL = 30;
 
-    const skip = (page - 1) * limit;
+    return this.cacheService.getOrSet(
+      cacheKey,
+      async () => {
+        // Find user by clerkId
+        const user = await this.prisma.user.findUnique({
+          where: { clerkId: clerkUserId },
+          select: { id: true },
+        });
 
-    // Get payments made and received
-    const [paymentsMade, paymentsReceived, totalMade, totalReceived] =
-      await Promise.all([
-        this.prisma.payment.findMany({
-          where: { madeById: user.id },
-          skip,
-          take: limit,
-          include: {
-            receivedBy: { select: { id: true, name: true, avatar: true } },
-            peerSession: { select: { id: true, title: true } },
-            studyRoom: { select: { id: true, title: true } },
-          },
-          orderBy: { id: 'desc' },
-        }),
-        this.prisma.payment.findMany({
-          where: { receivedById: user.id },
-          skip,
-          take: limit,
-          include: {
-            madeBy: { select: { id: true, name: true, avatar: true } },
-            peerSession: { select: { id: true, title: true } },
-            studyRoom: { select: { id: true, title: true } },
-          },
-          orderBy: { id: 'desc' },
-        }),
-        this.prisma.payment.count({ where: { madeById: user.id } }),
-        this.prisma.payment.count({ where: { receivedById: user.id } }),
-      ]);
+        if (!user) {
+          throw new NotFoundException('User not found');
+        }
 
-    // Combine and format transactions
-    const transactions: TransactionHistoryItem[] = [];
+        const skip = (page - 1) * limit;
 
-    // Add payments made
-    paymentsMade.forEach((payment) => {
+        // Get payments made and received
+        const [paymentsMade, paymentsReceived, totalMade, totalReceived] =
+          await Promise.all([
+            this.prisma.payment.findMany({
+              where: { madeById: user.id },
+              skip,
+              take: limit,
+              include: {
+                receivedBy: { select: { id: true, name: true, avatar: true } },
+                peerSession: { select: { id: true, title: true } },
+                studyRoom: { select: { id: true, title: true } },
+              },
+              orderBy: { id: 'desc' },
+            }),
+            this.prisma.payment.findMany({
+              where: { receivedById: user.id },
+              skip,
+              take: limit,
+              include: {
+                madeBy: { select: { id: true, name: true, avatar: true } },
+                peerSession: { select: { id: true, title: true } },
+                studyRoom: { select: { id: true, title: true } },
+              },
+              orderBy: { id: 'desc' },
+            }),
+            this.prisma.payment.count({ where: { madeById: user.id } }),
+            this.prisma.payment.count({ where: { receivedById: user.id } }),
+          ]);
+
+          // Combine and format transactions
+          const transactions: TransactionHistoryItem[] = [];
+
+          // Add payments made
+          paymentsMade.forEach((payment) => {
       let description = '';
       let sessionType: 'PEER_SESSION' | 'STUDY_ROOM' | undefined;
       let sessionTitle = '';
@@ -105,18 +127,18 @@ export class PaymentsService {
           name: payment.receivedBy.name,
           avatar: payment.receivedBy.avatar || undefined,
         },
-        relatedSession: sessionType
-          ? {
-              id: payment.peerSession?.id || payment.studyRoom?.id || '',
-              title: sessionTitle,
-              type: sessionType,
-            }
-          : undefined,
-      });
-    });
+            relatedSession: sessionType
+              ? {
+                  id: payment.peerSession?.id || payment.studyRoom?.id || '',
+                  title: sessionTitle,
+                  type: sessionType,
+                }
+              : undefined,
+          });
+        });
 
-    // Add payments received
-    paymentsReceived.forEach((payment) => {
+        // Add payments received
+        paymentsReceived.forEach((payment) => {
       let description = '';
       let sessionType: 'PEER_SESSION' | 'STUDY_ROOM' | undefined;
       let sessionTitle = '';
@@ -143,31 +165,34 @@ export class PaymentsService {
           name: payment.madeBy.name,
           avatar: payment.madeBy.avatar || undefined,
         },
-        relatedSession: sessionType
-          ? {
-              id: payment.peerSession?.id || payment.studyRoom?.id || '',
-              title: sessionTitle,
-              type: sessionType,
-            }
-          : undefined,
-      });
-    });
+            relatedSession: sessionType
+              ? {
+                  id: payment.peerSession?.id || payment.studyRoom?.id || '',
+                  title: sessionTitle,
+                  type: sessionType,
+                }
+              : undefined,
+          });
+        });
 
-    // Sort by date (newest first)
-    transactions.sort((a, b) => b.date.getTime() - a.date.getTime());
+        // Sort by date (newest first)
+        transactions.sort((a, b) => b.date.getTime() - a.date.getTime());
 
-    const total = totalMade + totalReceived;
-    const totalPages = Math.ceil(total / limit);
+        const total = totalMade + totalReceived;
+        const totalPages = Math.ceil(total / limit);
 
-    return {
-      transactions: transactions.slice(0, limit),
-      pagination: {
-        total,
-        page,
-        limit,
-        totalPages,
-        hasMore: page < totalPages,
-      },
-    };
+        return {
+          transactions: transactions.slice(0, limit),
+          pagination: {
+            total,
+            page,
+            limit,
+            totalPages,
+            hasMore: page < totalPages,
+          },
+        };
+        },
+        cacheTTL,
+      );
+    }
   }
-}
