@@ -1,6 +1,7 @@
 import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { PrismaClient, Prisma } from '@prisma/client';
 import { LoggerService } from '../common/logger';
+import { withQueryTimeout } from '../common/db-error-handler';
 
 /**
  * Connection error codes that indicate a "zombie" or stale connection
@@ -28,6 +29,13 @@ const RETRYABLE_ERROR_MESSAGES = [
 
 const MAX_RETRIES = 3;
 const INITIAL_BACKOFF_MS = 200;
+
+// Default query timeout in milliseconds (30 seconds)
+// Can be overridden via QUERY_TIMEOUT_MS environment variable
+const DEFAULT_QUERY_TIMEOUT_MS = parseInt(
+  process.env.QUERY_TIMEOUT_MS || '30000',
+  10,
+);
 
 /**
  * Determines if an error is retryable (connection/timeout related)
@@ -96,6 +104,7 @@ export class PrismaService
 
   /**
    * Creates a Prisma client with automatic retry logic for connection errors
+   * and timeout protection for all queries
    */
   private withRetryExtension() {
     const logger = this.logger;
@@ -106,13 +115,31 @@ export class PrismaService
           // Ensure connection is established before executing any query
           await ensureConnected(logger);
 
+          const operationName = `${model}.${operation}`;
           let lastError: unknown;
           
           for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
             try {
-              return await query(args);
+              // Wrap query with timeout to prevent hanging queries
+              // Create new timeout wrapper for each attempt (including retries)
+              const queryWithTimeout = withQueryTimeout(
+                query(args),
+                DEFAULT_QUERY_TIMEOUT_MS,
+                attempt === 1 ? operationName : `${operationName} (retry ${attempt})`,
+              );
+              
+              // Execute query with timeout protection
+              return await queryWithTimeout;
             } catch (error) {
               lastError = error;
+              
+              // Check if it's a timeout error - don't retry timeouts
+              if (error instanceof Error && error.message.includes('timed out')) {
+                logger.warn(
+                  `Query timeout on ${operationName} after ${DEFAULT_QUERY_TIMEOUT_MS}ms`,
+                );
+                throw error;
+              }
               
               if (!isRetryableError(error)) {
                 throw error;
@@ -120,7 +147,7 @@ export class PrismaService
               
               if (attempt === MAX_RETRIES) {
                 logger.error(
-                  `Query failed after ${MAX_RETRIES} retries: ${model}.${operation}`,
+                  `Query failed after ${MAX_RETRIES} retries: ${operationName}`,
                   error instanceof Error ? error.stack : String(error),
                 );
                 throw error;
@@ -130,7 +157,7 @@ export class PrismaService
               
               if (attempt === 1) {
                 logger.warn(
-                  `Connection error on ${model}.${operation}, retrying with backoff...`,
+                  `Connection error on ${operationName}, retrying with backoff...`,
                 );
               }
               
