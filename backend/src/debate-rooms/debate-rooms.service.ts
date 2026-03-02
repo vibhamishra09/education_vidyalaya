@@ -1202,6 +1202,7 @@ export class DebateRoomsService {
 
   /**
    * Store transcript chunk in Redis
+   * Reduced TTL from 2 hours to 10 minutes to prevent cache exhaustion
    */
   async storeTranscriptChunk(
     roomId: string,
@@ -1218,15 +1219,16 @@ export class DebateRoomsService {
 
     await redisClient.rPush(key, entry);
     
-    // Set TTL if not already set
+    // Set TTL if not already set - reduced from 7200 (2 hours) to 600 (10 minutes)
+    // This prevents cache exhaustion while still allowing streaming to database
     const ttl = await redisClient.ttl(key);
     if (ttl === -1) {
-      await redisClient.expire(key, 7200); // 2 hours
+      await redisClient.expire(key, 600); // 10 minutes (reduced from 2 hours)
     }
   }
 
   /**
-   * Commit Redis transcripts to database
+   * Commit Redis transcripts to database for a specific participant
    */
   private async commitTranscriptsToDb(
     roomId: string,
@@ -1263,6 +1265,163 @@ export class DebateRoomsService {
     this.logger.debug(
       `Committed ${participantChunks.length} transcript chunks for participant ${participantId}`,
     );
+  }
+
+  /**
+   * Stream all pending transcripts from Redis to database for a room
+   * Used by the periodic scheduler to commit transcripts every 30 seconds
+   * This prevents Redis cache exhaustion by keeping only recent chunks in memory
+   */
+  async streamTranscriptsToDatabase(roomId: string): Promise<number> {
+    try {
+      const key = REDIS_KEYS.debateTranscripts(roomId);
+      
+      // Check if key exists
+      const exists = await redisClient.exists(key);
+      if (!exists) {
+        return 0;
+      }
+
+      // Get all chunks
+      const chunks = await redisClient.lRange(key, 0, -1);
+      if (chunks.length === 0) {
+        return 0;
+      }
+
+      // Parse and group by participant
+      const participantChunks = new Map<string, Array<{ text: string; timestamp: number }>>();
+      
+      chunks.forEach((chunkStr) => {
+        try {
+          const chunk = JSON.parse(chunkStr);
+          if (chunk.participantId && chunk.text) {
+            if (!participantChunks.has(chunk.participantId)) {
+              participantChunks.set(chunk.participantId, []);
+            }
+            participantChunks.get(chunk.participantId)!.push({
+              text: chunk.text,
+              timestamp: chunk.timestamp,
+            });
+          }
+        } catch {
+          // Skip invalid chunks
+        }
+      });
+
+      if (participantChunks.size === 0) {
+        return 0;
+      }
+
+      // Get current turn numbers for each participant from the debate room
+      const debateRoom = await this.prisma.debateRoom.findUnique({
+        where: { id: roomId },
+        include: {
+          teams: {
+            include: {
+              participants: {
+                include: {
+                  turnQueueEntry: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (!debateRoom) {
+        this.logger.warn(`Debate room ${roomId} not found for transcript streaming`);
+        return 0;
+      }
+
+      // Commit transcripts for each participant
+      let totalCommitted = 0;
+      for (const [participantId, texts] of participantChunks.entries()) {
+        // Find participant to get current turn number
+        const participant = debateRoom.teams
+          .flatMap((team) => team.participants)
+          .find((p) => p.id === participantId);
+
+        if (!participant) {
+          continue;
+        }
+
+        // Use turn number from turn queue if available, otherwise default to 0
+        const turnNumber = participant.turnQueueEntry?.turnOrder ?? 0;
+        const combinedText = texts.map((t) => t.text).join(' ');
+
+        if (combinedText.trim()) {
+          await this.prisma.debateTranscript.create({
+            data: {
+              debateRoomId: roomId,
+              participantId,
+              turnNumber,
+              text: combinedText,
+            },
+          });
+          totalCommitted++;
+        }
+      }
+
+      // After committing, remove committed chunks from Redis
+      // Keep only the last few chunks (last 30 seconds worth) as buffer
+      // This dramatically reduces Redis memory usage
+      const chunksToKeep = 10; // Keep last 10 chunks (~30 seconds of buffer)
+      if (chunks.length > chunksToKeep) {
+        // Remove all but the last chunksToKeep chunks
+        await redisClient.lTrim(key, -chunksToKeep, -1);
+        this.logger.debug(
+          `Streamed ${totalCommitted} transcript entries to database for room ${roomId}, kept ${chunksToKeep} chunks in Redis buffer`,
+        );
+      } else {
+        this.logger.debug(
+          `Streamed ${totalCommitted} transcript entries to database for room ${roomId}`,
+        );
+      }
+
+      return totalCommitted;
+    } catch (error) {
+      this.logger.error(
+        `Failed to stream transcripts for room ${roomId}:`,
+        error instanceof Error ? error.message : String(error),
+      );
+      return 0;
+    }
+  }
+
+  /**
+   * Get all active debate room IDs that have transcripts in Redis
+   * Used by the scheduler to know which rooms to process
+   */
+  async getActiveDebateRoomsWithTranscripts(): Promise<string[]> {
+    try {
+      const pattern = 'debate:*:transcripts';
+      const keys = await redisClient.keys(pattern);
+      
+      // Extract room IDs from keys (format: debate:{roomId}:transcripts)
+      const roomIds = keys
+        .map((key) => {
+          const match = key.match(/^debate:(.+):transcripts$/);
+          return match ? match[1] : null;
+        })
+        .filter((id): id is string => id !== null);
+
+      // Verify rooms are still active (status is LIVE or PREP)
+      const activeRooms = await this.prisma.debateRoom.findMany({
+        where: {
+          id: { in: roomIds },
+          status: { in: [DebateStatus.LIVE, DebateStatus.PREP] },
+        },
+        select: { id: true },
+      });
+
+      return activeRooms.map((room) => room.id);
+    } catch (error) {
+      this.logger.error(
+        'Failed to get active debate rooms with transcripts:',
+        error instanceof Error ? error.message : String(error),
+      );
+      return [];
+    }
   }
 
   /**

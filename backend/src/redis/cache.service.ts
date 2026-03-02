@@ -7,6 +7,11 @@ export class CacheService {
   private readonly defaultTTL = 300; // 5 minutes default TTL
   // Track in-flight requests to prevent cache stampede
   private readonly inFlightRequests = new Map<string, Promise<any>>();
+  
+  // Memory management thresholds (256 MB limit for free tier)
+  private readonly MEMORY_WARNING_THRESHOLD_MB = 200; // 200 MB (78% of 256 MB)
+  private readonly MEMORY_CRITICAL_THRESHOLD_MB = 230; // 230 MB (90% of 256 MB)
+  private readonly MAX_MEMORY_MB = 256;
 
   constructor(private readonly logger: LoggerService) {
     this.logger.setContext(CacheService.name);
@@ -183,5 +188,137 @@ export class CacheService {
    */
   createKey(prefix: string, params?: Record<string, any>): string {
     return this.generateCacheKey(prefix, params);
+  }
+
+  /**
+   * Get current Redis memory usage in MB
+   */
+  async getMemoryUsage(): Promise<number> {
+    try {
+      if (!(await this.isRedisConnected())) {
+        return 0;
+      }
+
+      const info = await redisClient.info('memory');
+      // Parse used_memory_human or used_memory
+      const usedMemoryMatch = info.match(/used_memory:(\d+)/);
+      if (usedMemoryMatch) {
+        const bytes = parseInt(usedMemoryMatch[1], 10);
+        return bytes / (1024 * 1024); // Convert to MB
+      }
+      return 0;
+    } catch (error) {
+      this.logger.warn('Failed to get Redis memory usage:', error instanceof Error ? error.message : String(error));
+      return 0;
+    }
+  }
+
+  /**
+   * Check if memory usage is approaching limits
+   */
+  async checkMemoryStatus(): Promise<{
+    usageMB: number;
+    percentage: number;
+    status: 'ok' | 'warning' | 'critical';
+  }> {
+    const usageMB = await this.getMemoryUsage();
+    const percentage = (usageMB / this.MAX_MEMORY_MB) * 100;
+    
+    let status: 'ok' | 'warning' | 'critical' = 'ok';
+    if (usageMB >= this.MEMORY_CRITICAL_THRESHOLD_MB) {
+      status = 'critical';
+    } else if (usageMB >= this.MEMORY_WARNING_THRESHOLD_MB) {
+      status = 'warning';
+    }
+
+    return { usageMB, percentage, status };
+  }
+
+  /**
+   * Evict debate transcript keys to free memory
+   * Prioritizes oldest/least recently used keys
+   */
+  async evictDebateTranscripts(maxKeysToEvict: number = 10): Promise<number> {
+    try {
+      if (!(await this.isRedisConnected())) {
+        return 0;
+      }
+
+      // Find all debate transcript keys
+      const pattern = 'debate:*:transcripts';
+      const keys = await redisClient.keys(pattern);
+
+      if (keys.length === 0) {
+        return 0;
+      }
+
+      // Get TTL for each key to prioritize eviction (evict keys with longer TTL first, or expired)
+      const keysWithTTL = await Promise.all(
+        keys.map(async (key) => {
+          const ttl = await redisClient.ttl(key);
+          return { key, ttl };
+        }),
+      );
+
+      // Sort by TTL (longer TTL = more time left = lower priority, so evict first)
+      // Also prioritize keys that are close to expiration (negative TTL means expired)
+      keysWithTTL.sort((a, b) => {
+        // Expired keys first
+        if (a.ttl < 0 && b.ttl >= 0) return -1;
+        if (a.ttl >= 0 && b.ttl < 0) return 1;
+        // Then by TTL (longer TTL = evict first)
+        return b.ttl - a.ttl;
+      });
+
+      // Evict the specified number of keys
+      const keysToEvict = keysWithTTL.slice(0, maxKeysToEvict).map((k) => k.key);
+      
+      if (keysToEvict.length > 0) {
+        await redisClient.del(keysToEvict);
+        this.logger.warn(
+          `Evicted ${keysToEvict.length} debate transcript keys to free memory. Keys: ${keysToEvict.slice(0, 3).join(', ')}${keysToEvict.length > 3 ? '...' : ''}`,
+        );
+      }
+
+      return keysToEvict.length;
+    } catch (error) {
+      this.logger.warn('Failed to evict debate transcripts:', error instanceof Error ? error.message : String(error));
+      return 0;
+    }
+  }
+
+  /**
+   * Evict old cache entries when memory is high
+   * Automatically called before setting large values
+   */
+  async evictIfNeeded(): Promise<void> {
+    const status = await this.checkMemoryStatus();
+    
+    if (status.status === 'critical') {
+      this.logger.warn(
+        `Redis memory usage is critical: ${status.usageMB.toFixed(2)} MB (${status.percentage.toFixed(1)}%). Evicting debate transcripts...`,
+      );
+      // Evict more aggressively when critical
+      await this.evictDebateTranscripts(20);
+    } else if (status.status === 'warning') {
+      this.logger.warn(
+        `Redis memory usage is high: ${status.usageMB.toFixed(2)} MB (${status.percentage.toFixed(1)}%). Evicting old debate transcripts...`,
+      );
+      // Evict moderately when warning
+      await this.evictDebateTranscripts(10);
+    }
+  }
+
+  /**
+   * Set a value in cache with memory-aware eviction
+   * Automatically evicts old entries if memory is high
+   */
+  async setWithMemoryCheck<T>(key: string, value: T, ttlSeconds?: number): Promise<void> {
+    // Check memory before setting large values (debate transcripts)
+    if (key.includes('debate:') && key.includes(':transcripts')) {
+      await this.evictIfNeeded();
+    }
+    
+    await this.set(key, value, ttlSeconds);
   }
 }
