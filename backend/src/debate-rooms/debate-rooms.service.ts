@@ -1204,67 +1204,31 @@ export class DebateRoomsService {
    * Store transcript chunk in Redis
    * Reduced TTL from 2 hours to 10 minutes to prevent cache exhaustion
    */
+  /**
+   * Store transcript chunk in Redis
+   * DISABLED: Transcript feature is turned off
+   */
   async storeTranscriptChunk(
     roomId: string,
     participantId: string,
     text: string,
     timestamp: number,
   ): Promise<void> {
-    const key = REDIS_KEYS.debateTranscripts(roomId);
-    const entry = JSON.stringify({
-      participantId,
-      text,
-      timestamp,
-    });
-
-    await redisClient.rPush(key, entry);
-    
-    // Set TTL if not already set - reduced from 7200 (2 hours) to 600 (10 minutes)
-    // This prevents cache exhaustion while still allowing streaming to database
-    const ttl = await redisClient.ttl(key);
-    if (ttl === -1) {
-      await redisClient.expire(key, 600); // 10 minutes (reduced from 2 hours)
-    }
+    // Feature disabled - return early without storing
+    return;
   }
 
   /**
    * Commit Redis transcripts to database for a specific participant
+   * DISABLED: Transcript feature is turned off
    */
   private async commitTranscriptsToDb(
     roomId: string,
     participantId: string,
     turnNumber: number,
   ): Promise<void> {
-    const key = REDIS_KEYS.debateTranscripts(roomId);
-    const chunks = await redisClient.lRange(key, 0, -1);
-
-    const participantChunks = chunks
-      .map((c) => {
-        try {
-          return JSON.parse(c);
-        } catch {
-          return null;
-        }
-      })
-      .filter((c) => c && c.participantId === participantId);
-
-    if (participantChunks.length === 0) return;
-
-    // Combine chunks into single transcript entry
-    const combinedText = participantChunks.map((c) => c.text).join(' ');
-
-    await this.prisma.debateTranscript.create({
-      data: {
-        debateRoomId: roomId,
-        participantId,
-        turnNumber,
-        text: combinedText,
-      },
-    });
-
-    this.logger.debug(
-      `Committed ${participantChunks.length} transcript chunks for participant ${participantId}`,
-    );
+    // Feature disabled - return early without committing
+    return;
   }
 
   /**
