@@ -51,6 +51,8 @@ RUN pnpm prune --prod
 
 # Copy built application from builder stage
 COPY --from=builder /app/dist ./dist
+# Copy generated Prisma client (needed at runtime)
+COPY --from=builder /app/src/generated ./src/generated
 
 # Create non-root user for security
 RUN addgroup -g 1001 -S nodejs && \
