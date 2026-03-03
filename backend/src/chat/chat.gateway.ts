@@ -10,7 +10,7 @@ import { Server, Socket } from 'socket.io';
 import { ChatService } from './chat.service';
 import { createClerkClient } from '@clerk/backend';
 import { PermissionsService } from '../session-moderation/permissions.service';
-import { MessageAudienceType } from '@prisma/client';
+import { MessageAudienceType } from '../generated/prisma/client';
 
 @WebSocketGateway({
   cors: {

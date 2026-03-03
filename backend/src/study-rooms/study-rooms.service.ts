@@ -29,7 +29,7 @@ import {
   StudyRoomParticipantRole,
   ExternalInviteRole,
   ExternalJoinRequestStatus,
-} from '@prisma/client';
+} from '../generated/prisma/client';
 import { convertLocalToUTC } from '../utils/timezone';
 import { buildStudyRoomOccurrences } from './recurrence.util';
 import {

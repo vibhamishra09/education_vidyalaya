@@ -1,4 +1,4 @@
-import { SessionStatus } from '@prisma/client';
+import { SessionStatus } from '../generated/prisma/client';
 import { ForbiddenException } from '@nestjs/common';
 import { StudyRoomsService } from './study-rooms.service';
 import { StudyRoomEditScope } from './dto/study-room.dto';

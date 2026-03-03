@@ -14,7 +14,7 @@ import {
   IsEmail,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { SessionStatus } from '@prisma/client';
+import { SessionStatus } from '../../generated/prisma/client';
 
 export enum StudyRoomRecurrenceMode {
   DAILY = 'DAILY',

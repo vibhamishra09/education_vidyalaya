@@ -11,7 +11,7 @@ import {
 } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
-import { SessionStatus } from '@prisma/client';
+import { SessionStatus } from '../../generated/prisma/client';
 
 export class BrowseQueryDto extends PaginationQueryDto {
   @IsOptional()

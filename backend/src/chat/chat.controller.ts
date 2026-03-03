@@ -10,7 +10,7 @@ import {
 import { ChatService } from './chat.service';
 import { ClerkAuthGuard } from '../common/guards/clerk-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { MessageAudienceType } from '@prisma/client';
+import { MessageAudienceType } from '../generated/prisma/client';
 
 @UseGuards(ClerkAuthGuard)
 @Controller('api/chat')

@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma } from '../generated/prisma/client';
 
 /**
  * Checks if an error is a database connection error that should trigger a fallback

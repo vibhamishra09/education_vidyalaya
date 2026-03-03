@@ -6,7 +6,7 @@ import {
   UpdateSessionStatusDto,
 } from './dto/peer-session.dto';
 import { SessionFeedbackDto } from '../common/dto/session-feedback.dto';
-import { SessionStatus, PaymentStatus, NotifType, Prisma } from '@prisma/client';
+import { SessionStatus, PaymentStatus, NotifType, Prisma } from '../generated/prisma/client';
 import {
   normalizeGoogleMeetLink,
   isValidGoogleMeetLink,

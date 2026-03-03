@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { MessageAudienceType } from '@prisma/client';
+import { MessageAudienceType } from '../generated/prisma/client';
 import { redisClient } from '../redis/redis.provider';
 import { LoggerService } from '../common/logger';
 

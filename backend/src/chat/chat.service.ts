@@ -5,7 +5,7 @@ import {
   NotFoundException,
   Logger,
 } from '@nestjs/common';
-import { MessageAudienceType } from '@prisma/client';
+import { MessageAudienceType } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { isConnectionError } from '../common/db-error-handler';
 

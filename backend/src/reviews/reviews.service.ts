@@ -8,7 +8,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CreateReviewDto } from './dto/review.dto';
-import { NotifType, PaymentStatus } from '@prisma/client';
+import { NotifType, PaymentStatus } from '../generated/prisma/client';
 import { CacheService } from '../redis/cache.service';
 import { isConnectionError } from '../common/db-error-handler';
 
