@@ -94,11 +94,15 @@ jobs:
         working-directory: ./backend
         run: pnpm install --frozen-lockfile
 
+      - name: Create directory structure for Prisma client
+        working-directory: ./backend
+        run: mkdir -p src/generated
+
       - name: Generate Prisma Client
         working-directory: ./backend
         env:
           DATABASE_URL: "postgresql://dummy:dummy@dummy:5432/dummy"
-        run: pnpm exec prisma generate
+        run: pnpm prisma:generate
 
       - name: Build application
         working-directory: ./backend
