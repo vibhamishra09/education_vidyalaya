@@ -1313,17 +1313,17 @@ export class DebateRoomsService {
         const turnNumber = participant.turnQueueEntry?.turnOrder ?? 0;
         const combinedText = texts.map((t) => t.text).join(' ');
 
-        if (combinedText.trim()) {
-          await this.prisma.debateTranscript.create({
-            data: {
-              debateRoomId: roomId,
-              participantId,
-              turnNumber,
-              text: combinedText,
-            },
-          });
-          totalCommitted++;
-        }
+        // if (combinedText.trim()) {
+        //   await this.prisma.debateTranscript.create({
+        //     data: {
+        //       debateRoomId: roomId,
+        //       participantId,
+        //       turnNumber,
+        //       text: combinedText,
+        //     },
+        //   });
+        //   totalCommitted++;
+        // }
       }
 
       // After committing, remove committed chunks from Redis
