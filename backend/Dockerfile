@@ -16,7 +16,10 @@ RUN pnpm install --frozen-lockfile
 # Copy source code
 COPY . .
 
-# Generate Prisma Client
+# Create directory structure for custom Prisma client output
+RUN mkdir -p src/generated
+
+# Generate Prisma Client (outputs to src/generated/prisma)
 RUN pnpm prisma:generate
 
 # Build application
@@ -37,7 +40,10 @@ COPY prisma ./prisma/
 # Install all dependencies first (needed for Prisma generation)
 RUN pnpm install --frozen-lockfile
 
-# Generate Prisma Client
+# Create directory structure for custom Prisma client output
+RUN mkdir -p src/generated
+
+# Generate Prisma Client (outputs to src/generated/prisma)
 RUN pnpm prisma:generate
 
 # Remove dev dependencies to reduce image size
