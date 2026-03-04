@@ -404,6 +404,7 @@ export function EnhancedVideoRoom({
 		lockAudio,
 		lockVideo,
 		lockChat,
+		restrictChatToHostOnly,
 		lockUserAudio,
 		lockUserVideo,
 		lockUserChatAudience,
@@ -776,6 +777,7 @@ export function EnhancedVideoRoom({
 					onLockAudio={lockAudio}
 					onLockVideo={lockVideo}
 					onLockChat={lockChat}
+					onRestrictChatToHostOnly={restrictChatToHostOnly}
 					onHideParticipantList={hideParticipantList}
 					onLockUserAudio={lockUserAudio}
 					onLockUserVideo={lockUserVideo}
@@ -963,6 +965,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	onLockAudio,
 	onLockVideo,
 	onLockChat,
+	onRestrictChatToHostOnly,
 	onHideParticipantList,
 	onLockUserAudio,
 	onLockUserVideo,
@@ -1036,6 +1039,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	onLockAudio?: (locked: boolean) => void
 	onLockVideo?: (locked: boolean) => void
 	onLockChat?: (locked: boolean) => void
+	onRestrictChatToHostOnly?: (restricted: boolean) => void
 	onHideParticipantList?: (hidden: boolean) => void
 	onLockUserAudio?: (targetUserId: string, locked: boolean) => void
 	onLockUserVideo?: (targetUserId: string, locked: boolean) => void
@@ -3662,6 +3666,37 @@ const VideoRoomContent = memo(function VideoRoomContent({
 														{(chatDisabled || permissions?.allowChat === false) ? 'Unlock Chat' : 'Lock Chat'}
 													</span>
 												</Button>
+
+												{/* Restrict Chat to Host Only */}
+												<Button
+													onClick={() => {
+														const isCurrentlyRestricted = roomSettings?.chatRestrictToHostOnly === true
+														onRestrictChatToHostOnly?.(!isCurrentlyRestricted)
+														showSuccess(
+															isCurrentlyRestricted ? 'Chat Unrestricted' : 'Chat Restricted to Host Only',
+															isCurrentlyRestricted
+																? 'Participants can now send messages to everyone'
+																: 'Participants can only send messages to the host',
+														)
+													}}
+													variant="ghost"
+													className={`flex flex-col items-center justify-center h-auto py-2 gap-1 rounded-lg border transition-all ${
+														roomSettings?.chatRestrictToHostOnly
+															? 'bg-sky-500/10 text-sky-500 border-sky-500/20 hover:bg-sky-500/20' 
+															: 'bg-white/5 text-white/70 border-white/5 hover:bg-white/10 hover:text-white'
+													}`}
+													title={roomSettings?.chatRestrictToHostOnly ? 'Allow participants to send to everyone' : 'Restrict participants to send to host only'}
+												>
+													{roomSettings?.chatRestrictToHostOnly ? (
+														<Lock className="h-4 w-4" />
+													) : (
+														<MessageSquare className="h-4 w-4" />
+													)}
+													<span className="text-[10px] font-medium">
+														{roomSettings?.chatRestrictToHostOnly ? 'Unrestrict Chat' : 'Host Only'}
+													</span>
+												</Button>
+
 												<Button
 													onClick={() => {
 														const isCurrentlyHidden = roomSettings?.hideParticipantList === true

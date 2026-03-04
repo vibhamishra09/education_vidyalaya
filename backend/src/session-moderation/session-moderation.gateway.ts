@@ -171,6 +171,7 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
         lockVideo: roomSettings.lockVideo,
         chatDisabled: roomSettings.chatDisabled,
         hideParticipantList: roomSettings.hideParticipantList,
+        chatRestrictToHostOnly: roomSettings.chatRestrictToHostOnly,
       },
       isHost,
     });
@@ -199,6 +200,7 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
         allowChatHost?: boolean;
         allowChatUser?: boolean;
         allowParticipantList?: boolean;
+        restrictChatToHostOnly?: boolean; // New: restrict all users to send to host only
       };
       targetUserId?: string; // If set, only update this user's permissions
     }
@@ -267,6 +269,7 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
           lockVideo?: boolean;
           chatDisabled?: boolean;
           hideParticipantList?: boolean;
+          chatRestrictToHostOnly?: boolean;
         } = {};
         if (permissions.allowAudio !== undefined) roomSettings.lockAudio = !permissions.allowAudio;
         if (permissions.allowVideo !== undefined) roomSettings.lockVideo = !permissions.allowVideo;
@@ -274,13 +277,35 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
         if (permissions.allowParticipantList !== undefined) {
           roomSettings.hideParticipantList = !permissions.allowParticipantList;
         }
+        if (permissions.restrictChatToHostOnly !== undefined) {
+          roomSettings.chatRestrictToHostOnly = permissions.restrictChatToHostOnly;
+        }
         
         await this.permissionsService.setRoomSettings(sessionId, roomSettings);
         
         // Get updated settings
         const updatedSettings = await this.permissionsService.getRoomSettings(sessionId);
         
-        // Broadcast to all in the room
+        // Recompute permissions for all users in the room and broadcast
+        const allClients = await this.server.in(sessionId).fetchSockets();
+        
+        for (const socket of allClients) {
+          if (socket.data.userId) {
+            const socketIsHost = await this.verifyIsHost(sessionId, sessionType, socket.data.userId);
+            const computedPerms = await this.permissionsService.getComputedPermissions(
+              sessionId,
+              socket.data.userId,
+              socketIsHost
+            );
+            
+            // Emit to specific user with their computed permissions
+            socket.emit('permissions-updated', {
+              permissions: computedPerms,
+            });
+          }
+        }
+        
+        // Also broadcast room-wide update with general permissions (for backwards compatibility)
         this.server.to(sessionId).emit('permissions-updated', {
           permissions: {
             allowAudio: !updatedSettings.lockAudio,

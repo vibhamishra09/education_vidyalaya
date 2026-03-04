@@ -8,7 +8,7 @@ import { LoggerService } from '../common/logger';
  * 
  * Redis Data Structure:
  * - Global Room Settings: room:{sessionId}:settings (Hash)
- *   Fields: lockAudio (string "true"/"false"), lockVideo, chatDisabled, hideParticipantList
+ *   Fields: lockAudio (string "true"/"false"), lockVideo, chatDisabled, hideParticipantList, chatRestrictToHostOnly
  * 
  * - Individual Overrides: room:{sessionId}:permissions:{userId} (Hash)
  *   Fields: canAudio, canVideo, canChat, canChatEveryone, canChatHost, canChatUser (string "true"/"false")
@@ -19,6 +19,7 @@ export interface RoomSettings {
   lockVideo: boolean;
   chatDisabled: boolean;
   hideParticipantList: boolean;
+  chatRestrictToHostOnly: boolean;
 }
 
 export interface UserPermissions {
@@ -86,6 +87,7 @@ export class PermissionsService {
         lockVideo: settings.lockVideo === 'true',
         chatDisabled: settings.chatDisabled === 'true',
         hideParticipantList: settings.hideParticipantList === 'true',
+        chatRestrictToHostOnly: settings.chatRestrictToHostOnly === 'true',
       };
     } catch (error) {
       this.logger.error(`Error getting room settings for ${sessionId}:`, error);
@@ -95,6 +97,7 @@ export class PermissionsService {
         lockVideo: false,
         chatDisabled: false,
         hideParticipantList: false,
+        chatRestrictToHostOnly: false,
       };
     }
   }
@@ -118,6 +121,9 @@ export class PermissionsService {
       }
       if (settings.hideParticipantList !== undefined) {
         updates.hideParticipantList = settings.hideParticipantList.toString();
+      }
+      if (settings.chatRestrictToHostOnly !== undefined) {
+        updates.chatRestrictToHostOnly = settings.chatRestrictToHostOnly.toString();
       }
       
       if (Object.keys(updates).length > 0) {
@@ -261,6 +267,19 @@ export class PermissionsService {
           ? userOverrides.canChat
           : !roomSettings.chatDisabled;
 
+      // If chat is restricted to host only, non-host users can only send to host
+      let allowChatEveryone = allowChat && (userOverrides?.canChatEveryone ?? true);
+      let allowChatHost = allowChat && (userOverrides?.canChatHost ?? true);
+      let allowChatUser = allowChat && (userOverrides?.canChatUser ?? true);
+
+      if (roomSettings.chatRestrictToHostOnly && !isHost) {
+        // Restrict non-host users to only send to host
+        allowChatEveryone = false;
+        allowChatUser = false;
+        // Keep allowChatHost as true (or from override)
+        allowChatHost = allowChat && (userOverrides?.canChatHost ?? true);
+      }
+
       return {
         allowAudio: userOverrides?.canAudio !== undefined 
           ? userOverrides.canAudio 
@@ -269,9 +288,9 @@ export class PermissionsService {
           ? userOverrides.canVideo 
           : !roomSettings.lockVideo,
         allowChat,
-        allowChatEveryone: allowChat && (userOverrides?.canChatEveryone ?? true),
-        allowChatHost: allowChat && (userOverrides?.canChatHost ?? true),
-        allowChatUser: allowChat && (userOverrides?.canChatUser ?? true),
+        allowChatEveryone,
+        allowChatHost,
+        allowChatUser,
         allowParticipantList: !roomSettings.hideParticipantList,
       };
     } catch (error) {

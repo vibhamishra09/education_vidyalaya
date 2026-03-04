@@ -33,6 +33,7 @@ export interface RoomSettings {
   lockVideo: boolean;
   chatDisabled: boolean;
   hideParticipantList: boolean;
+  chatRestrictToHostOnly: boolean;
 }
 
 export interface ParticipantChatLocks {
@@ -84,6 +85,7 @@ export function useSessionModeration({ sessionId, sessionType, isHost, token, us
     lockVideo: false,
     chatDisabled: false,
     hideParticipantList: false,
+    chatRestrictToHostOnly: false,
   });
 
   const [participantChatLocks, setParticipantChatLocks] = useState<Record<string, ParticipantChatLocks>>({});
@@ -464,6 +466,16 @@ export function useSessionModeration({ sessionId, sessionType, isHost, token, us
     [socket, sessionId, sessionType],
   );
 
+  // Restrict all users to send messages to host only
+  const restrictChatToHostOnly = useCallback((restricted: boolean) => {
+    if (!socket || !sessionId || !sessionType) return;
+    socket.emit('update-permissions', {
+      sessionId,
+      sessionType,
+      permissions: { restrictChatToHostOnly: restricted },
+    });
+  }, [socket, sessionId, sessionType]);
+
   const hideParticipantList = useCallback(
     (hidden: boolean) => {
       if (!socket || !sessionId || !sessionType) return;
@@ -662,6 +674,7 @@ export function useSessionModeration({ sessionId, sessionType, isHost, token, us
     lockUserAudio,
     lockUserVideo,
     lockUserChatAudience,
+    restrictChatToHostOnly,
     hideParticipantList,
     // Immediate actions (mute/unmute)
     muteAll,
