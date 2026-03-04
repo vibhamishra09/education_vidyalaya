@@ -26,7 +26,7 @@ We use a **trunk + promotion** model with a few long-lived branches:
 - `main` – **Production** branch  
 - `test` – **Staging / Pre-prod** branch  
 - `dev` – **Integration / Dev** branch  
-- `feature/*` – Short-lived feature branches  
+- `wi/*` – Short-lived work-item branches  
 - `claude-profiles` – Shared Claude agent profiles (never merged to `dev/test/main`)
 
 ### Branch → Environment → Database
@@ -36,7 +36,7 @@ We use a **trunk + promotion** model with a few long-lived branches:
 | `main`          | `https://webyalaya.com`       | `webyalaya_prod`   | Live production                     |
 | `test`          | `https://test.webyalaya.com`  | `webyalaya_test`   | Staging / QA                        |
 | `dev`           | `https://dev.webyalaya.com`   | `webyalaya_dev`    | Integrated development              |
-| `feature/*`     | Local only                    | Local or dev DB    | Individual feature development      |
+| `wi/*`     | Local only                    | Local or dev DB    | Individual work-item development      |
 | `claude-profiles` | n/a (no deployment)        | n/a                | Shared Claude agents & prompts     |
 
 > Only `dev`, `test`, and `main` are tied to deployments.  
@@ -134,7 +134,7 @@ git checkout dev
 git pull origin dev
 
 git checkout -b wi/<work-item-number>
-# e.g. feature/session-booking
+# e.g. wi/123
 ```
 
 You always branch off `dev` for new work.
@@ -176,9 +176,53 @@ Create a PR:
 > **from**: `wi/<work-item-number>`
 > **to**: `dev`
 
+**PR Size Guidelines:**
+* **Ideal range**: 10-100 lines of code changes
+* **Acceptable**: Up to ~500 lines for complex features
+* **⚠️ Danger zone**: 1000+ lines — break it down into smaller PRs!
+
+Large PRs are harder to review, increase risk, and slow down the team. If your PR exceeds 500 lines, please consider:
+* Splitting into multiple smaller PRs
+* Creating a feature flag and merging incrementally
+* Breaking down into logical sub-features
+
+**PR Quality Guidelines:**
+* **Self-review**: Always review your own code in the web UI before submitting. This instantly highlights left-over `console.log` statements and weird formatting issues.
+* **Add context**: Leave comments on your own PR to explain weird diffs or non-obvious necessary changes. Save the reviewer from asking, "Why is this here?"
+
+**PR Description Requirements:**
+
+Your PR must include:
+
+1. **Title**: Clear, concise, and descriptive (e.g., `feat: add session booking UI with calendar integration`)
+
+2. **Description** with:
+   * **TL;DR**: Brief summary of what this PR does (1-2 sentences)
+   * **Links**: Reference to work items, related issues, or parent PRs
+   * **Visuals**: Attach screenshots, GIFs, or videos showing the changes (especially for UI changes)
+   * **Reproduction steps**: Exact steps for reviewers to test locally:
+     ```markdown
+     ## How to Test
+     1. Checkout this branch: `git checkout wi/123`
+     2. Install dependencies: `pnpm install` (in both backend and my-app)
+     3. Set up environment variables:
+        - Backend: Copy `.env.example` to `.env` and set `DATABASE_URL=...`
+        - Frontend: Copy `.env.local.example` to `.env.local` and set `NEXT_PUBLIC_API_URL=...`
+     4. Run migrations: `cd backend && pnpm prisma migrate dev`
+     5. Start backend: `pnpm start:dev`
+     6. Start frontend: `cd ../my-app && pnpm dev`
+     7. Navigate to `/sessions` and test the booking flow
+     ```
+   * **Required setup**: List any required API keys, environment variables, or external services needed for testing
+
 Checklist before opening the PR:
 
+* [ ] PR has a clear, concise, and descriptive title.
+* [ ] PR description includes TL;DR, links to work items, screenshots/GIFs (if UI changes), and exact reproduction steps with required environment variables/API keys.
 * [ ] The app builds and runs locally (`pnpm build` in both backend and my-app).
+* [ ] PR size is reasonable (ideally 10-100 lines, avoid 1000+ lines).
+* [ ] Self-reviewed the PR in the web UI (check for console.logs, formatting issues).
+* [ ] Added comments explaining any non-obvious changes or weird diffs.
 * [ ] No secrets or hard-coded tokens are committed.
 * [ ] If you changed API/DB/contracts, related docs in `docs/` are updated.
 * [ ] Database migrations (if any) are included and tested.
@@ -189,6 +233,48 @@ Once approved and merged:
 * CI/CD deploys `dev` to **`dev.webyalaya.com`** using **`webyalaya_dev`**.
 
 Use this environment to test integrated features.
+
+---
+
+## PR Review Guidelines
+
+When reviewing PRs, follow these principles to make the review process constructive and efficient:
+
+### Practice Radical Clarity
+
+**Over-communicate your intent** so the author never has to guess if a comment is blocking approval. Use clear prefixes to categorize your comments:
+
+* **[Nit]**: A minor syntax or style suggestion. Not critical for meeting standards. Example: `[Nit] Consider using a more descriptive variable name here.`
+* **[Sanity check/Non-Actionable]**: Is this what you meant to do? Just asking for clarity, no change required. Example: `[Sanity check] Did you intend to use `===` instead of `==` here?`
+* **[Explicit Deferral]**: Use your judgement, I don't feel strongly about this. Example: `[Explicit Deferral] I'm not sure about this approach, but if you think it's best, go ahead.`
+* **[Blocking]**: Must be addressed before approval. Example: `[Blocking] This will cause a security issue in production.`
+* **[Suggestion]**: Would improve the code but not required. Example: `[Suggestion] Consider extracting this into a helper function for reusability.`
+* **[Question]**: Need clarification to understand the change. Example: `[Question] Why did we choose this approach over the alternative?`
+
+**Always state whether a comment is blocking or not.** If you don't specify, the author may assume it's blocking and delay the PR unnecessarily.
+
+### Generosity and Praise
+
+* **Acknowledge good work**: When you see well-written code, thoughtful solutions, or good practices, say so! Positive feedback encourages the team and reinforces good patterns.
+* **Be kind**: Remember that code reviews are about improving code, not criticizing people. Frame feedback constructively.
+* **Recognize effort**: If someone tackled a difficult problem or went the extra mile, acknowledge it.
+
+### Progress Over Perfection
+
+* **Bring it up a letter grade, not to A+**: Focus on making the PR better, not perfect. If the code is functional, readable, and follows standards, it's often better to merge and iterate than to hold it up for minor improvements.
+* **Prioritize impact**: Spend more time on high-impact feedback (bugs, security, architecture) than on style preferences.
+* **Ship and iterate**: It's better to ship good code and improve it later than to delay for perfection. Trust that the team will continue to improve the codebase over time.
+
+### Review Checklist
+
+When reviewing a PR, consider:
+
+* [ ] Does the code solve the problem described in the PR?
+* [ ] Are there any obvious bugs or security issues?
+* [ ] Is the code readable and maintainable?
+* [ ] Are tests included (if applicable)?
+* [ ] Is documentation updated (if needed)?
+* [ ] Are my comments clear about whether they're blocking or not?
 
 ---
 
