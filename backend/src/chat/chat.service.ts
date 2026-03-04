@@ -120,6 +120,8 @@ export class ChatService {
     viewerUserId?: string,
   ) {
     try {
+      // For guest users (viewerUserId is undefined), only show EVERYONE messages
+      // For authenticated users, show EVERYONE messages plus their own messages
       const where = viewerUserId
         ? {
             channelId,
@@ -129,7 +131,10 @@ export class ChatService {
               { targetUserId: viewerUserId },
             ],
           }
-        : { channelId };
+        : {
+            channelId,
+            audienceType: MessageAudienceType.EVERYONE,
+          };
       const messages = await this.prisma.message.findMany({
       where,
       include: {
