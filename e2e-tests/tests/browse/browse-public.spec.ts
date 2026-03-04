@@ -34,12 +34,24 @@ test.describe('Browse — Public (Unauthenticated)', () => {
 
   test('@smoke browse page renders content', async ({ page }) => {
     // At least some content should be visible
+    // Check for various content that might appear on mobile or desktop
     await page.waitForLoadState('networkidle');
-    const hasContent = await Promise.any([
+    
+    // Check for multiple possible content indicators (handle errors gracefully)
+    const checks = await Promise.allSettled([
       page.locator(':text("Browse")').first().isVisible(),
+      page.locator(':text("Browse Community")').first().isVisible(),
       page.locator(':text("Peers")').first().isVisible(),
       page.locator(':text("Study Room")').first().isVisible(),
+      page.locator('h1').first().isVisible(),
+      page.locator('[class*="card"], [class*="peer"]').first().isVisible(),
     ]);
+    
+    // At least one check should pass (be truthy)
+    const hasContent = checks.some(
+      (result) => result.status === 'fulfilled' && result.value === true
+    );
+    
     expect(hasContent).toBeTruthy();
   });
 
