@@ -1,9 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { SessionStatus } from '@prisma/client';
+import { SessionStatus } from '../generated/prisma/client';
 import { StreaksService } from '../streaks/streaks.service';
 import { AchievementsService } from '../achievements/achievements.service';
 import { LoggerService } from '../common/logger';
+import { CacheService } from '../redis/cache.service';
+import { isConnectionError } from '../common/db-error-handler';
 
 export interface SessionActivityDataPoint {
   date: string;
@@ -27,8 +29,10 @@ export class DashboardService {
     private streaksService: StreaksService,
     private achievementsService: AchievementsService,
     private readonly logger: LoggerService,
+    private readonly cacheService: CacheService,
   ) {
-    this.logger.setContext(DashboardService.name);}
+    this.logger.setContext(DashboardService.name);
+  }
 
   async getDashboardData(
     userId: string,
@@ -41,18 +45,36 @@ export class DashboardService {
     sessionsPage: number = 1,
     sessionsLimit: number = 10,
   ) {
-    const startTime = Date.now();
-    this.logger.debug(`[Dashboard] Fetching dashboard data for user: ${userId}`);
-
-    // userId is actually clerkId, so we need to find the user by clerkId first
-    const user = await this.prisma.user.findUnique({
-      where: { clerkId: userId },
-      select: { id: true, clerkId: true },
+    // Cache for 30 seconds - dashboard data changes frequently
+    const cacheKey = this.cacheService.createKey('dashboard:data', {
+      userId,
+      includeMetrics,
+      includeRequests,
+      includeSessions,
+      includeNotifications,
+      includeStreaks,
+      includeAchievements,
+      sessionsPage,
+      sessionsLimit,
     });
+    const cacheTTL = 30;
 
-    if (!user) {
-      throw new Error('User not found');
-    }
+    return this.cacheService.getOrSet(
+      cacheKey,
+      async () => {
+        try {
+          const startTime = Date.now();
+          this.logger.debug(`[Dashboard] Fetching dashboard data for user: ${userId}`);
+
+          // userId is actually clerkId, so we need to find the user by clerkId first
+          const user = await this.prisma.user.findUnique({
+          where: { clerkId: userId },
+          select: { id: true, clerkId: true },
+        });
+
+        if (!user) {
+          throw new Error('User not found');
+        }
 
     // Helper functions for each data block
     const getMetrics = async () => {
@@ -483,22 +505,47 @@ export class DashboardService {
       ...achievementsData,
     };
 
-    const totalDuration = Date.now() - startTime;
-    this.logger.log({
-      message: `[Dashboard] Dashboard data fetched successfully`,
-      userId: user.id,
-      duration: `${totalDuration}ms`,
-      includes: {
-        metrics: includeMetrics,
-        requests: includeRequests,
-        sessions: includeSessions,
-        notifications: includeNotifications,
-        streaks: includeStreaks,
-        achievements: includeAchievements,
-      },
-    });
+        const totalDuration = Date.now() - startTime;
+        this.logger.log({
+          message: `[Dashboard] Dashboard data fetched successfully`,
+          userId: user.id,
+          duration: `${totalDuration}ms`,
+          includes: {
+            metrics: includeMetrics,
+            requests: includeRequests,
+            sessions: includeSessions,
+            notifications: includeNotifications,
+            streaks: includeStreaks,
+            achievements: includeAchievements,
+          },
+        });
 
-    return data;
+          return data;
+        } catch (error) {
+          // Handle database connection errors
+          if (isConnectionError(error)) {
+            this.logger.error(
+              `Database connection error in getDashboardData for user ${userId}:`,
+              error instanceof Error ? error.message : String(error),
+            );
+            
+            // Return empty dashboard data as fallback
+            return {
+              metrics: includeMetrics ? [] : null,
+              requests: includeRequests ? [] : null,
+              sessions: includeSessions ? { items: [], pagination: { total: 0, page: sessionsPage, limit: sessionsLimit, totalPages: 0, hasMore: false } } : null,
+              notifications: includeNotifications ? [] : null,
+              streaks: includeStreaks ? null : null,
+              achievements: includeAchievements ? [] : null,
+            };
+          }
+          
+          // Re-throw other errors
+          throw error;
+        }
+      },
+      cacheTTL,
+    );
   }
 
   /**
@@ -508,16 +555,27 @@ export class DashboardService {
     userId: string,
     days: number = 30,
   ): Promise<SessionActivityDataPoint[]> {
-    const user = await this.prisma.user.findUnique({
-      where: { clerkId: userId },
-      select: { id: true },
+    // Cache for 2 minutes - activity data changes when sessions complete
+    const cacheKey = this.cacheService.createKey('dashboard:session-activity', {
+      userId,
+      days,
     });
+    const cacheTTL = 120;
 
-    if (!user) {
-      throw new Error('User not found');
-    }
+    return this.cacheService.getOrSet(
+      cacheKey,
+      async () => {
+        try {
+          const user = await this.prisma.user.findUnique({
+            where: { clerkId: userId },
+            select: { id: true },
+          });
 
-    const endDate = new Date();
+          if (!user) {
+            throw new Error('User not found');
+          }
+
+          const endDate = new Date();
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days + 1);
     startDate.setHours(0, 0, 0, 0);
@@ -612,7 +670,25 @@ export class DashboardService {
       }
     }
 
-    return Array.from(activityMap.values());
+          return Array.from(activityMap.values());
+        } catch (error) {
+          // Handle database connection errors
+          if (isConnectionError(error)) {
+            this.logger.error(
+              `Database connection error in getSessionActivity for user ${userId}:`,
+              error instanceof Error ? error.message : String(error),
+            );
+            
+            // Return empty activity data as fallback
+            return [];
+          }
+          
+          // Re-throw other errors
+          throw error;
+        }
+      },
+      cacheTTL,
+    );
   }
 
   /**
@@ -622,18 +698,29 @@ export class DashboardService {
     userId: string,
     months: number = 6,
   ): Promise<WalletActivityDataPoint[]> {
-    const user = await this.prisma.user.findUnique({
-      where: { clerkId: userId },
-      select: { id: true },
+    // Cache for 2 minutes - wallet activity changes when payments are made
+    const cacheKey = this.cacheService.createKey('dashboard:wallet-activity', {
+      userId,
+      months,
     });
+    const cacheTTL = 120;
 
-    if (!user) {
-      throw new Error('User not found');
-    }
+    return this.cacheService.getOrSet(
+      cacheKey,
+      async () => {
+        try {
+          const user = await this.prisma.user.findUnique({
+            where: { clerkId: userId },
+            select: { id: true },
+          });
 
-    const endDate = new Date();
-    const startDate = new Date();
-    startDate.setMonth(startDate.getMonth() - months + 1);
+          if (!user) {
+            throw new Error('User not found');
+          }
+
+          const endDate = new Date();
+          const startDate = new Date();
+          startDate.setMonth(startDate.getMonth() - months + 1);
     startDate.setDate(1);
     startDate.setHours(0, 0, 0, 0);
 
@@ -712,6 +799,24 @@ export class DashboardService {
       data.net = Math.round(data.net * 100) / 100;
     }
 
-    return Array.from(activityMap.values());
+          return Array.from(activityMap.values());
+        } catch (error) {
+          // Handle database connection errors
+          if (isConnectionError(error)) {
+            this.logger.error(
+              `Database connection error in getWalletActivity for user ${userId}:`,
+              error instanceof Error ? error.message : String(error),
+            );
+            
+            // Return empty wallet activity data as fallback
+            return [];
+          }
+          
+          // Re-throw other errors
+          throw error;
+        }
+      },
+      cacheTTL,
+    );
   }
 }

@@ -152,7 +152,7 @@ export function useRequestExternalJoin() {
   });
 }
 
-export function useExternalJoinRequests(studyRoomId: string) {
+export function useExternalJoinRequests(studyRoomId: string, enabled = true) {
   const { getToken, isLoaded } = useAuth();
   return useQuery({
     queryKey: [...studyRoomKeys.detail(studyRoomId), 'external-requests'],
@@ -163,7 +163,7 @@ export function useExternalJoinRequests(studyRoomId: string) {
       }
       return studyRoomsApi.listExternalJoinRequests(studyRoomId);
     },
-    enabled: !!studyRoomId,
+    enabled: !!studyRoomId && enabled,
     refetchInterval: 5000,
   });
 }

@@ -9,6 +9,8 @@ const isPublicRoute = createRouteMatcher([
   '/browse',
   '/how-it-works',
   '/about',
+  '/studyroom(.*)',
+  '/rooms/studyroom(.*)',
 ]);
 const isApiRoute = createRouteMatcher(['/api(.*)']);
 

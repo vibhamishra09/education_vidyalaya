@@ -1,15 +1,20 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { AchievementCategory, AchievementRarity, Prisma } from '@prisma/client';
+import { AchievementCategory, AchievementRarity, Prisma } from '../generated/prisma/client';
 import { LoggerService } from '../common/logger';
+import { CacheService } from '../redis/cache.service';
+import { isConnectionError } from '../common/db-error-handler';
 
 @Injectable()
 export class AchievementsService {
 
-  constructor(private prisma: PrismaService,
+  constructor(
+    private prisma: PrismaService,
     private readonly logger: LoggerService,
+    private readonly cacheService: CacheService,
   ) {
-    this.logger.setContext(AchievementsService.name);}
+    this.logger.setContext(AchievementsService.name);
+  }
 
   /**
    * Get all achievements with user's progress
@@ -18,36 +23,47 @@ export class AchievementsService {
    * @returns Categorized achievements (unlocked, in-progress, locked)
    */
   async getUserAchievements(userId: string, dbUserId?: string) {
-    let dbUserIdFinal: string;
-    
-    // If dbUserId is provided, use it directly to avoid lookup
-    if (dbUserId) {
-      dbUserIdFinal = dbUserId;
-    } else {
-      // userId is actually Clerk ID, convert to database ID
-      const user = await this.prisma.user.findUnique({
-        where: { clerkId: userId },
-        select: { id: true, name: true },
-      });
+    // Cache for 2 minutes - achievements change when user progresses
+    const cacheKey = this.cacheService.createKey('achievements:user', {
+      userId,
+      dbUserId: dbUserId || 'none',
+    });
+    const cacheTTL = 120;
 
-      if (!user) {
-        this.logger.warn(`User not found for clerkId: ${userId}`);
-        throw new Error('User not found');
-      }
+    return this.cacheService.getOrSet(
+      cacheKey,
+      async () => {
+        try {
+          let dbUserIdFinal: string;
+          
+          // If dbUserId is provided, use it directly to avoid lookup
+          if (dbUserId) {
+            dbUserIdFinal = dbUserId;
+          } else {
+            // userId is actually Clerk ID, convert to database ID
+            const user = await this.prisma.user.findUnique({
+            where: { clerkId: userId },
+            select: { id: true, name: true },
+          });
 
-      dbUserIdFinal = user.id;
-    }
-    
-    // Get all achievements and user's achievement progress in parallel
-    const [allAchievements, userAchievements] = await Promise.all([
-      this.prisma.achievement.findMany({
-        orderBy: [{ category: 'asc' }, { rarity: 'asc' }],
-      }),
-      this.prisma.userAchievement.findMany({
-        where: { userId: dbUserIdFinal },
-        include: { achievement: true },
-      }),
-    ]);
+          if (!user) {
+            this.logger.warn(`User not found for clerkId: ${userId}`);
+            throw new Error('User not found');
+          }
+
+          dbUserIdFinal = user.id;
+        }
+        
+        // Get all achievements and user's achievement progress in parallel
+        const [allAchievements, userAchievements] = await Promise.all([
+          this.prisma.achievement.findMany({
+            orderBy: [{ category: 'asc' }, { rarity: 'asc' }],
+          }),
+          this.prisma.userAchievement.findMany({
+            where: { userId: dbUserIdFinal },
+            include: { achievement: true },
+          }),
+        ]);
 
     // Create a map for quick lookup
     const userAchievementMap = new Map(
@@ -97,13 +113,37 @@ export class AchievementsService {
       }
     }
 
-    return {
-      unlocked,
-      inProgress,
-      locked,
-      totalUnlocked: unlocked.length,
-      totalAvailable: allAchievements.length,
-    };
+          return {
+            unlocked,
+            inProgress,
+            locked,
+            totalUnlocked: unlocked.length,
+            totalAvailable: allAchievements.length,
+          };
+        } catch (error) {
+          // Handle database connection errors
+          if (isConnectionError(error)) {
+            this.logger.error(
+              `Database connection error in getUserAchievements for user ${userId}:`,
+              error instanceof Error ? error.message : String(error),
+            );
+            
+            // Return empty achievements as fallback
+            return {
+              unlocked: [],
+              inProgress: [],
+              locked: [],
+              totalUnlocked: 0,
+              totalAvailable: 0,
+            };
+          }
+          
+          // Re-throw other errors
+          throw error;
+        }
+      },
+      cacheTTL,
+    );
   }
 
   /**
@@ -153,6 +193,9 @@ export class AchievementsService {
       await this.unlockAchievement(userId, achievementId);
     }
 
+    // Invalidate user achievements cache
+    await this.cacheService.deletePattern(`achievements:user:*${userId}*`);
+
     return userAchievement;
   }
 
@@ -200,6 +243,9 @@ export class AchievementsService {
     this.logger.log(
       `User ${userId} unlocked achievement: ${achievement.title}`,
     );
+
+    // Invalidate user achievements cache
+    await this.cacheService.deletePattern(`achievements:user:*${userId}*`);
 
     return userAchievement;
   }

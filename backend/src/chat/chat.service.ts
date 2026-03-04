@@ -3,12 +3,16 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Logger,
 } from '@nestjs/common';
-import { MessageAudienceType } from '@prisma/client';
+import { MessageAudienceType } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { isConnectionError } from '../common/db-error-handler';
 
 @Injectable()
 export class ChatService {
+  private readonly logger = new Logger(ChatService.name);
+
   constructor(private prisma: PrismaService) {}
 
   async createChannel(name: string, memberUserIds: string[], isDirect = false) {
@@ -81,10 +85,26 @@ export class ChatService {
   }
 
   async listChannels(userId: string) {
-    return this.prisma.channel.findMany({
-      where: { members: { some: { userId } } },
-      orderBy: { createdAt: 'desc' },
-    });
+    try {
+      return await this.prisma.channel.findMany({
+        where: { members: { some: { userId } } },
+        orderBy: { createdAt: 'desc' },
+      });
+    } catch (error) {
+      // Handle database connection errors
+      if (isConnectionError(error)) {
+        this.logger.error(
+          `Database connection error in listChannels for user ${userId}:`,
+          error instanceof Error ? error.message : String(error),
+        );
+        
+        // Return empty channels as fallback
+        return [];
+      }
+      
+      // Re-throw other errors
+      throw error;
+    }
   }
 
   async addMember(channelId: string, userId: string) {
@@ -99,17 +119,23 @@ export class ChatService {
     cursor?: string,
     viewerUserId?: string,
   ) {
-    const where = viewerUserId
-      ? {
-          channelId,
-          OR: [
-            { audienceType: MessageAudienceType.EVERYONE },
-            { senderId: viewerUserId },
-            { targetUserId: viewerUserId },
-          ],
-        }
-      : { channelId };
-    const messages = await this.prisma.message.findMany({
+    try {
+      // For guest users (viewerUserId is undefined), only show EVERYONE messages
+      // For authenticated users, show EVERYONE messages plus their own messages
+      const where = viewerUserId
+        ? {
+            channelId,
+            OR: [
+              { audienceType: MessageAudienceType.EVERYONE },
+              { senderId: viewerUserId },
+              { targetUserId: viewerUserId },
+            ],
+          }
+        : {
+            channelId,
+            audienceType: MessageAudienceType.EVERYONE,
+          };
+      const messages = await this.prisma.message.findMany({
       where,
       include: {
         sender: {
@@ -130,9 +156,24 @@ export class ChatService {
       orderBy: { createdAt: 'asc' }, // Changed to 'asc' to get oldest first, then we'll reverse
       take: limit,
       skip: cursor ? 1 : 0,
-      cursor: cursor ? { id: cursor } : undefined,
-    });
-    return messages;
+        cursor: cursor ? { id: cursor } : undefined,
+      });
+      return messages;
+    } catch (error) {
+      // Handle database connection errors
+      if (isConnectionError(error)) {
+        this.logger.error(
+          `Database connection error in getMessages for channel ${channelId}:`,
+          error instanceof Error ? error.message : String(error),
+        );
+        
+        // Return empty messages as fallback
+        return [];
+      }
+      
+      // Re-throw other errors
+      throw error;
+    }
   }
 
   async isChannelMember(channelId: string, userId: string): Promise<boolean> {

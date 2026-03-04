@@ -66,11 +66,16 @@ async function bootstrap() {
   logger.log('🔍 Sentry error tracking enabled');
 
   // Enable validation
+  // Note: forbidNonWhitelisted is set to false for query params to be more lenient with mobile browsers
+  // that may send additional query parameters (e.g., tracking params, browser-specific params)
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
-      forbidNonWhitelisted: true,
+      forbidNonWhitelisted: false, // Changed to false to allow extra query params from mobile browsers
       transform: true,
+      transformOptions: {
+        enableImplicitConversion: true, // Helps with mobile browser query param conversion
+      },
     }),
   );
 

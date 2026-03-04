@@ -8,7 +8,8 @@ export class AppController {
   constructor(private readonly appService: AppService,
     private readonly logger: LoggerService,
   ) {
-    this.logger.setContext(AppController.name);}
+    this.logger.setContext(AppController.name);
+  }
 
   @Get()
   getHello(): string {

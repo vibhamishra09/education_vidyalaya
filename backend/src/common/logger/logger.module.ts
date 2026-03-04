@@ -1,7 +1,6 @@
 import { Global, Module } from '@nestjs/common';
 import { LoggerModule as PinoLoggerModule } from 'nestjs-pino';
 import { ConfigService } from '@nestjs/config';
-import pino from 'pino';
 import { LoggerService } from './logger.service';
 
 @Global()
@@ -22,9 +21,7 @@ import { LoggerService } from './logger.service';
         // Loki configuration
         const lokiEnabled = configService.get<string>('LOKI_ENABLED', 'false') === 'true';
         const lokiHost = configService.get<string>('LOKI_HOST', 'http://localhost:3100');
-        const lokiBatchSize = parseInt(configService.get<string>('LOKI_BATCH_SIZE', '100'), 10);
-        const lokiBatchInterval = parseInt(configService.get<string>('LOKI_BATCH_INTERVAL', '5000'), 10);
-
+      
         // Base Pino configuration - shared between HTTP and application logging
         let basePinoConfig: any = {
           level: logLevel,

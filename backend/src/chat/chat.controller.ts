@@ -9,8 +9,9 @@ import {
 } from '@nestjs/common';
 import { ChatService } from './chat.service';
 import { ClerkAuthGuard } from '../common/guards/clerk-auth.guard';
+import { OptionalClerkAuthGuard } from '../common/guards/optional-clerk-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { MessageAudienceType } from '@prisma/client';
+import { MessageAudienceType } from '../generated/prisma/client';
 
 @UseGuards(ClerkAuthGuard)
 @Controller('api/chat')
@@ -46,23 +47,29 @@ export class ChatController {
     return this.chatService.addMember(channelId, body.userId);
   }
 
+  @UseGuards(OptionalClerkAuthGuard)
   @Get('channels/:id/messages')
   async getMessages(
     @Param('id') channelId: string,
-    @CurrentUser() userId: string,
+    @CurrentUser() userId?: string,
     @Query('limit') limit?: string,
     @Query('cursor') cursor?: string,
   ) {
-    const user = await this.chatService.getUserByClerkId(userId);
-    if (!user) {
-      throw new Error('User not found');
+    // For authenticated users, get their DB user ID
+    // For guest users, userId will be undefined
+    let dbUserId: string | undefined;
+    if (userId) {
+      const user = await this.chatService.getUserByClerkId(userId);
+      if (user) {
+        dbUserId = user.id;
+      }
     }
 
     return this.chatService.getMessages(
       channelId,
       limit ? Number(limit) : 50,
       cursor,
-      user.id,
+      dbUserId,
     );
   }
 

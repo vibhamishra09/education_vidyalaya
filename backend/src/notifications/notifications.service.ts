@@ -1,9 +1,10 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { NotifType } from '@prisma/client';
+import { NotifType } from '../generated/prisma/client';
 import { PushNotificationService } from './push-notification.service';
 import { EmailService } from '../email/email.service';
-import { redisClient } from '../redis/redis.provider';
+import { CacheService } from '../redis/cache.service';
+import { isConnectionError } from '../common/db-error-handler';
 
 @Injectable()
 export class NotificationsService {
@@ -13,10 +14,8 @@ export class NotificationsService {
     private prisma: PrismaService,
     private pushNotificationService: PushNotificationService,
     private emailService: EmailService,
+    private readonly cacheService: CacheService,
   ) {}
-
-  // Redis client available for caching, deduplication, etc.
-  private redis = redisClient;
 
   async getNotifications(
     userId: string,
@@ -25,47 +24,94 @@ export class NotificationsService {
     page: number = 1,
     limit: number = 20,
   ) {
-    // userId is actually clerkId, so we need to find the user by clerkId first
-    const user = await this.prisma.user.findUnique({
-      where: { clerkId: userId },
-      select: { id: true },
+    // Cache for 30 seconds - notifications change frequently
+    const cacheKey = this.cacheService.createKey('notifications:list', {
+      userId,
+      type,
+      viewed,
+      page,
+      limit,
     });
+    const cacheTTL = 30;
 
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
+    return this.cacheService.getOrSet(
+      cacheKey,
+      async () => {
+        try {
+          // userId is actually clerkId, so we need to find the user by clerkId first
+          const user = await this.prisma.user.findUnique({
+          where: { clerkId: userId },
+          select: { id: true },
+        });
 
-    const where: any = { userId: user.id };
+        if (!user) {
+          throw new NotFoundException('User not found');
+        }
 
-    if (type) where.notifType = type;
-    if (viewed !== undefined) where.viewed = viewed;
+        const where: any = { userId: user.id };
 
-    const skip = (page - 1) * limit;
+        if (type) where.notifType = type;
+        if (viewed !== undefined) where.viewed = viewed;
 
-    const [notifications, total, unreadCount] = await Promise.all([
-      this.prisma.notification.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
-      }),
-      this.prisma.notification.count({ where }),
-      this.prisma.notification.count({
-        where: { userId: user.id, viewed: false },
-      }),
-    ]);
+        const skip = (page - 1) * limit;
 
-    return {
-      notifications,
-      unreadCount,
-      pagination: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
-        hasMore: skip + limit < total,
+        const [notifications, total, unreadCount] = await Promise.all([
+          this.prisma.notification.findMany({
+            where,
+            skip,
+            take: limit,
+            orderBy: { createdAt: 'desc' },
+          }),
+          this.prisma.notification.count({ where }),
+          this.prisma.notification.count({
+            where: { userId: user.id, viewed: false },
+          }),
+        ]);
+
+        return {
+          notifications,
+          unreadCount,
+          pagination: {
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit),
+            hasMore: skip + limit < total,
+          },
+        };
+        } catch (error) {
+          // Handle database connection errors
+          if (isConnectionError(error)) {
+            this.logger.error(
+              `Database connection error in getNotifications for user ${userId}:`,
+              error instanceof Error ? error.message : String(error),
+            );
+            
+            // Re-throw NotFoundException (user not found is a valid case)
+            if (error instanceof NotFoundException) {
+              throw error;
+            }
+            
+            // Return empty notifications as fallback
+            return {
+              notifications: [],
+              unreadCount: 0,
+              pagination: {
+                total: 0,
+                page,
+                limit,
+                totalPages: 0,
+                hasMore: false,
+              },
+            };
+          }
+          
+          // Re-throw other errors
+          throw error;
+        }
       },
-    };
+      cacheTTL,
+    );
   }
 
   async markNotificationAsRead(notificationId: string, userId: string) {
@@ -79,18 +125,23 @@ export class NotificationsService {
       throw new NotFoundException('User not found');
     }
 
-    const notification = await this.prisma.notification.findUnique({
+    const existingNotification = await this.prisma.notification.findUnique({
       where: { id: notificationId },
     });
 
-    if (!notification || notification.userId !== user.id) {
+    if (!existingNotification || existingNotification.userId !== user.id) {
       throw new NotFoundException('Notification not found');
     }
 
-    return this.prisma.notification.update({
+    const notification = await this.prisma.notification.update({
       where: { id: notificationId },
       data: { viewed: true },
     });
+
+    // Invalidate notifications cache for this user
+    await this.cacheService.deletePattern(`notifications:list:*${userId}*`);
+
+    return notification;
   }
 
   async markAllNotificationsAsRead(userId: string) {
@@ -108,6 +159,9 @@ export class NotificationsService {
       where: { userId: user.id, viewed: false },
       data: { viewed: true },
     });
+
+    // Invalidate notifications cache for this user
+    await this.cacheService.deletePattern(`notifications:list:*${userId}*`);
 
     return {
       success: true,
@@ -142,6 +196,9 @@ export class NotificationsService {
       },
       data: { viewed: true },
     });
+
+    // Invalidate notifications cache for this user
+    await this.cacheService.deletePattern(`notifications:list:*${userId}*`);
 
     return {
       success: true,
@@ -243,6 +300,9 @@ export class NotificationsService {
         );
       }
     }
+
+    // Invalidate notifications cache for this user
+    await this.cacheService.deletePattern(`notifications:list:*${userId}*`);
 
     return notification;
   }

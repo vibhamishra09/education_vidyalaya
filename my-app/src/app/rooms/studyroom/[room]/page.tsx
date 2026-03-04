@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@clerk/nextjs'
 import axios from 'axios'
@@ -12,6 +12,41 @@ type ChatIdentity = {
 	id: string
 	name: string
 	avatar?: string | null
+}
+
+function extractChatTargets(
+	data: Record<string, unknown>,
+	isStudyRoom: boolean,
+	isPeerSession: boolean,
+): { recipients: ChatIdentity[]; host: ChatIdentity | null } {
+	const uniqueRecipients = new Map<string, ChatIdentity>()
+	let host: ChatIdentity | null = null
+	const pushRecipient = (user: unknown) => {
+		if (!user || typeof user !== 'object') return
+		const identity = user as ChatIdentity
+		if (!identity.id || !identity.name) return
+		uniqueRecipients.set(identity.id, identity)
+	}
+
+	if (isStudyRoom) {
+		const createdBy = (data as { createdBy?: ChatIdentity }).createdBy
+		const participants =
+			(data as { participants?: ChatIdentity[] }).participants || []
+		pushRecipient(createdBy)
+		participants.forEach(pushRecipient)
+		if (createdBy) host = createdBy
+	} else if (isPeerSession) {
+		const requestedBy = (data as { requestedBy?: ChatIdentity }).requestedBy
+		const requestedTo = (data as { requestedTo?: ChatIdentity }).requestedTo
+		pushRecipient(requestedBy)
+		pushRecipient(requestedTo)
+		if (requestedTo) host = requestedTo
+	}
+
+	return {
+		recipients: Array.from(uniqueRecipients.values()),
+		host,
+	}
 }
 
 export default function RoomPage() {
@@ -38,6 +73,57 @@ export default function RoomPage() {
 	const [hostUser, setHostUser] = useState<ChatIdentity | null>(null)
 	const [currentUserDbId, setCurrentUserDbId] = useState<string | null>(null)
 	const guestAccessToken = searchParams.get('guestAccessToken')
+	const isMountedRef = useRef(true)
+	const participantKeyRef = useRef<string>('')
+
+	useEffect(() => {
+		isMountedRef.current = true
+		return () => {
+			isMountedRef.current = false
+		}
+	}, [])
+
+	const refreshChatRecipients = useCallback(async () => {
+		// Guests don't have authenticated chat channels in this flow.
+		if (guestAccessToken) return
+		const clerkToken = await getToken()
+		if (!clerkToken || !roomName) return
+
+		const isStudyRoom = roomName.startsWith('studyroom-')
+		const isPeerSession = roomName.startsWith('peersession-')
+		const roomId = isStudyRoom
+			? roomName.slice('studyroom-'.length)
+			: isPeerSession
+				? roomName.slice('peersession-'.length)
+				: roomName.split('-')[1]
+		if (!roomId) return
+
+		try {
+			const endpoint = isStudyRoom
+				? `/api/study-rooms/${roomId}`
+				: `/api/peer-sessions/${roomId}`
+			const response = await apiClient.get(endpoint, {
+				headers: { Authorization: `Bearer ${clerkToken}` },
+			})
+			if (!isMountedRef.current || !response.data) return
+			const chatTargets = extractChatTargets(
+				response.data as Record<string, unknown>,
+				isStudyRoom,
+				isPeerSession,
+			)
+			setChatRecipients(chatTargets.recipients)
+			setHostUser(chatTargets.host)
+		} catch {
+			// Best-effort refresh when participants join; do not interrupt the call UI.
+		}
+	}, [guestAccessToken, getToken, roomName])
+
+	const handleParticipantListChange = useCallback((participantIdentities: string[]) => {
+		const nextKey = participantIdentities.slice().sort().join('|')
+		if (nextKey === participantKeyRef.current) return
+		participantKeyRef.current = nextKey
+		void refreshChatRecipients()
+	}, [refreshChatRecipients])
 
 	useEffect(() => {
 		let mounted = true
@@ -149,29 +235,13 @@ export default function RoomPage() {
 						sessionType: isStudyRoom ? 'studyRoom' : 'peerSession',
 					})
 
-					const uniqueRecipients = new Map<string, ChatIdentity>()
-					const pushRecipient = (user: unknown) => {
-						if (!user || typeof user !== 'object') return
-						const identity = user as ChatIdentity
-						if (!identity.id || !identity.name) return
-						uniqueRecipients.set(identity.id, identity)
-					}
-
-					if (isStudyRoom) {
-						const createdBy = (data as { createdBy?: ChatIdentity }).createdBy
-						const participants =
-							(data as { participants?: ChatIdentity[] }).participants || []
-						pushRecipient(createdBy)
-						participants.forEach(pushRecipient)
-						if (createdBy) setHostUser(createdBy)
-					} else if (isPeerSession) {
-						const requestedBy = (data as { requestedBy?: ChatIdentity }).requestedBy
-						const requestedTo = (data as { requestedTo?: ChatIdentity }).requestedTo
-						pushRecipient(requestedBy)
-						pushRecipient(requestedTo)
-						if (requestedTo) setHostUser(requestedTo)
-					}
-					setChatRecipients(Array.from(uniqueRecipients.values()))
+					const chatTargets = extractChatTargets(
+						data as Record<string, unknown>,
+						isStudyRoom,
+						isPeerSession,
+					)
+					setChatRecipients(chatTargets.recipients)
+					setHostUser(chatTargets.host)
 
 					// Check if current user is the host
 					try {
@@ -302,6 +372,7 @@ export default function RoomPage() {
 			hostUser={hostUser}
 			currentUserDbId={currentUserDbId}
 			externalAccessToken={guestAccessToken}
+			onParticipantListChange={handleParticipantListChange}
 		/>
 	)
 }

@@ -3,7 +3,7 @@ import { LivekitService } from './livekit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ClerkAuthGuard } from '../common/guards/clerk-auth.guard';
 import { StudyRoomsService } from '../study-rooms/study-rooms.service';
-import { StudyRoomParticipantRole } from '@prisma/client';
+import { StudyRoomParticipantRole } from '../generated/prisma/client';
 
 @Controller('api/livekit')
 export class LivekitController {

@@ -1,4 +1,4 @@
-import { NotifType } from '@prisma/client';
+import { NotifType } from '../../generated/prisma/client';
 import { ArrayNotEmpty, ArrayUnique, IsArray, IsString } from 'class-validator';
 
 export class NotificationDto {

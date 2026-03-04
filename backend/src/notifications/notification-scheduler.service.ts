@@ -4,7 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from './notifications.service';
 import { TranscriptsService } from '../transcripts/transcripts.service';
 import { StreaksService } from '../streaks/streaks.service';
-import { SessionStatus, NotifType } from '@prisma/client';
+import { SessionStatus, NotifType } from '../generated/prisma/client';
 import { LoggerService } from '../common/logger';
 
 @Injectable()

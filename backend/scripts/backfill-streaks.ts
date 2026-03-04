@@ -1,4 +1,4 @@
-import { PrismaClient, SessionStatus } from '@prisma/client';
+import { PrismaClient, SessionStatus } from '../src/generated/prisma/client';
 import { DateTime } from 'luxon';
 
 const prisma = new PrismaClient();

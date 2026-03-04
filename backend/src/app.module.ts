@@ -1,8 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { PrometheusModule } from '@willsoto/nestjs-prometheus';
 import { APP_INTERCEPTOR } from '@nestjs/core';
-import { makeHistogramProvider } from '@willsoto/nestjs-prometheus';
+import { PrometheusModule, makeHistogramProvider } from '@willsoto/nestjs-prometheus';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
@@ -31,6 +30,7 @@ import { SessionModerationModule } from './session-moderation/session-moderation
 import { LoggingInterceptor } from './logging.interceptor';
 import { SentryModule } from './common/sentry';
 import { LoggerModule } from './common/logger';
+import { CacheModule } from './redis/cache.module';
 
 @Module({
   imports: [
@@ -45,6 +45,7 @@ import { LoggerModule } from './common/logger';
       },
     }),
     SentryModule.forRoot(),
+    CacheModule,
     PrismaModule,
     UsersModule,
     SkillsModule,

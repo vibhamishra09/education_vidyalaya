@@ -1,7 +1,7 @@
 import { Body, Controller, Headers, Post } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import { NotifType } from '@prisma/client';
+import { NotifType } from '../generated/prisma/client';
 import { LoggerService } from '../common/logger';
 
 @Controller('api/livekit/webhooks')

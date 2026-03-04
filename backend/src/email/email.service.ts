@@ -4,6 +4,13 @@ import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
 import { PrismaService } from '../prisma/prisma.service';
 import { LoggerService } from '../common/logger';
 
+export interface EmailDeliveryResult {
+  success: boolean;
+  messageId?: string;
+  errorCode?: string;
+  errorMessage?: string;
+}
+
 @Injectable()
 export class EmailService {
   private sesClient: SESClient;
@@ -102,7 +109,7 @@ export class EmailService {
     subject: string,
     message: string,
     recipientName: string = 'User',
-  ): Promise<boolean> {
+  ): Promise<EmailDeliveryResult> {
     try {
       const command = new SendEmailCommand({
         Source: this.fromEmail,
@@ -122,17 +129,45 @@ export class EmailService {
           },
         },
       });
-      await this.sesClient.send(command);
-      return true;
+      const response = await this.sesClient.send(command);
+      this.logger.log({
+        message: '✅ Direct email sent successfully',
+        source: this.fromEmail,
+        destination: email,
+        subject,
+        messageId: response.MessageId,
+        region: this.region,
+      });
+      return {
+        success: true,
+        messageId: response.MessageId,
+      };
     } catch (error) {
+      const awsError = error as {
+        name?: string;
+        message?: string;
+        $metadata?: { requestId?: string; httpStatusCode?: number };
+      };
       this.logger.error({
         message: 'Error sending direct email notification',
         error: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
         email,
         subject,
+        source: this.fromEmail,
+        region: this.region,
+        awsErrorCode: awsError?.name,
+        awsErrorMessage: awsError?.message,
+        awsRequestId: awsError?.$metadata?.requestId,
+        awsHttpStatusCode: awsError?.$metadata?.httpStatusCode,
       });
-      return false;
+      return {
+        success: false,
+        errorCode: awsError?.name,
+        errorMessage:
+          awsError?.message ||
+          (error instanceof Error ? error.message : String(error)),
+      };
     }
   }
 

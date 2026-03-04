@@ -1,0 +1,22 @@
+{
+  "name": "webyalaya-e2e",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:headed": "playwright test --headed",
+    "test:smoke": "playwright test --grep @smoke",
+    "test:auth": "playwright test tests/auth/",
+    "test:dashboard": "playwright test tests/dashboard/",
+    "test:ci": "playwright test --reporter=github,html",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.50.0",
+    "@clerk/backend": "^1.x",
+    "@types/node": "^22.x",
+    "dotenv": "^16.x",
+    "typescript": "^5.x"
+  }
+}

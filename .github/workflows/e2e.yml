@@ -1,0 +1,89 @@
+name: E2E Tests
+
+on:
+  workflow_run:
+    workflows: ["deploy-test-namaste"]
+    types:
+      - completed
+  workflow_dispatch:
+
+jobs:
+  e2e:
+    name: Playwright E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+
+    env:
+      BASE_URL: https://webyalaya.com
+      TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL }}
+      TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
+      CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY }}
+      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install e2e dependencies
+        working-directory: e2e-tests
+        run: pnpm install
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('e2e-tests/package.json') }}
+
+      - name: Install Playwright browsers
+        working-directory: e2e-tests
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Install Playwright system deps (cached browser)
+        working-directory: e2e-tests
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm exec playwright install-deps chromium
+
+      - name: Wait for deployment to stabilize
+        run: |
+          echo "Waiting 1 minute for deployment to stabilize..."
+          sleep 60
+          echo "Wait complete, proceeding with tests"
+
+      - name: Verify live website is accessible
+        run: |
+          echo "Testing connection to ${{ env.BASE_URL }}"
+          curl -sf ${{ env.BASE_URL }} || (echo "Website is not accessible" && exit 1)
+
+      - name: Run smoke tests
+        working-directory: e2e-tests
+        run: pnpm test:ci -- --grep "@smoke"
+        env:
+          CI: true
+
+      - name: Upload test report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: e2e-tests/playwright-report/
+          retention-days: 14
+
+      - name: Upload test results (on failure)
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: test-results
+          path: e2e-tests/test-results/
+          retention-days: 7

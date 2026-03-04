@@ -3,17 +3,23 @@ import {
   NotFoundException,
   ConflictException,
   ForbiddenException,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CreateReviewDto } from './dto/review.dto';
-import { NotifType, PaymentStatus } from '@prisma/client';
+import { NotifType, PaymentStatus } from '../generated/prisma/client';
+import { CacheService } from '../redis/cache.service';
+import { isConnectionError } from '../common/db-error-handler';
 
 @Injectable()
 export class ReviewsService {
+  private readonly logger = new Logger(ReviewsService.name);
+
   constructor(
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
+    private readonly cacheService: CacheService,
   ) {}
 
   async getReviews(
@@ -23,63 +29,104 @@ export class ReviewsService {
     page: number = 1,
     limit: number = 10,
   ) {
-    const where: any = {};
+    // Cache for 2 minutes - reviews change when new reviews are added
+    const cacheKey = this.cacheService.createKey('reviews:list', {
+      userId,
+      sessionId,
+      sessionType,
+      page,
+      limit,
+    });
+    const cacheTTL = 120;
 
-    if (userId) {
-      // Check if userId is a clerkId or database ID
-      // If it's a clerkId, convert to database ID
-      const user = await this.prisma.user.findUnique({
-        where: { clerkId: userId },
-        select: { id: true },
-      });
+    return this.cacheService.getOrSet(
+      cacheKey,
+      async () => {
+        try {
+          const where: any = {};
 
-      if (user) {
-        where.revieweeId = user.id;
-      } else {
-        // If not found by clerkId, assume it's already a database ID
-        where.revieweeId = userId;
-      }
-    }
-    if (sessionId) {
-      if (sessionType === 'studyRoom') {
-        where.studyRoomId = sessionId;
-      } else if (sessionType === 'peerSession') {
-        where.peerSessionId = sessionId;
-      }
-    }
+        if (userId) {
+          // Check if userId is a clerkId or database ID
+          // If it's a clerkId, convert to database ID
+          const user = await this.prisma.user.findUnique({
+            where: { clerkId: userId },
+            select: { id: true },
+          });
 
-    const skip = (page - 1) * limit;
+          if (user) {
+            where.revieweeId = user.id;
+          } else {
+            // If not found by clerkId, assume it's already a database ID
+            where.revieweeId = userId;
+          }
+        }
+        if (sessionId) {
+          if (sessionType === 'studyRoom') {
+            where.studyRoomId = sessionId;
+          } else if (sessionType === 'peerSession') {
+            where.peerSessionId = sessionId;
+          }
+        }
 
-    const [reviews, total] = await Promise.all([
-      this.prisma.review.findMany({
-        where,
-        skip,
-        take: limit,
-        include: {
-          reviewer: { select: { id: true, name: true, avatar: true } },
-          reviewee: { select: { id: true, name: true, avatar: true } },
-        },
-        orderBy: { id: 'desc' },
-      }),
-      this.prisma.review.count({ where }),
-    ]);
+        const skip = (page - 1) * limit;
 
-    return {
-      reviews: reviews.map((r) => ({
-        id: r.id,
-        rating: r.rating,
-        review: r.review,
-        reviewer: r.reviewer,
-        reviewee: r.reviewee,
-      })),
-      pagination: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
-        hasMore: skip + limit < total,
+        const [reviews, total] = await Promise.all([
+          this.prisma.review.findMany({
+            where,
+            skip,
+            take: limit,
+            include: {
+              reviewer: { select: { id: true, name: true, avatar: true } },
+              reviewee: { select: { id: true, name: true, avatar: true } },
+            },
+            orderBy: { id: 'desc' },
+          }),
+          this.prisma.review.count({ where }),
+        ]);
+
+        return {
+          reviews: reviews.map((r) => ({
+            id: r.id,
+            rating: r.rating,
+            review: r.review,
+            reviewer: r.reviewer,
+            reviewee: r.reviewee,
+          })),
+          pagination: {
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit),
+            hasMore: skip + limit < total,
+          },
+        };
+        } catch (error) {
+          // Handle database connection errors
+          if (isConnectionError(error)) {
+            this.logger.error(
+              `Database connection error in getReviews:`,
+              error instanceof Error ? error.message : String(error),
+            );
+            
+            // Return empty reviews as fallback
+            return {
+              reviews: [],
+              pagination: {
+                total: 0,
+                page,
+                limit,
+                totalPages: 0,
+                hasMore: false,
+              },
+            };
+          }
+          
+          // Re-throw other errors
+          throw error;
+        }
       },
-    };
+      cacheTTL,
+    );
   }
 
   async createReview(userId: string, createDto: CreateReviewDto) {
@@ -250,6 +297,12 @@ export class ReviewsService {
       user.id,
     );
 
+    // Invalidate reviews cache
+    await this.cacheService.deletePattern(`reviews:list*`);
+    await this.cacheService.deletePattern(`reviews:session:*${createDto.sessionId}*`);
+    // Invalidate user profile cache (reviews affect user stats)
+    await this.cacheService.deletePattern(`user:*${revieweeId}*`);
+
     return {
       id: review.id,
       rating: review.rating,
@@ -265,50 +318,92 @@ export class ReviewsService {
     page: number = 1,
     limit: number = 10,
   ) {
-    const skip = (page - 1) * limit;
+    // Cache for 2 minutes - reviews change when new reviews are added
+    const cacheKey = this.cacheService.createKey('reviews:session', {
+      sessionId,
+      sessionType,
+      page,
+      limit,
+    });
+    const cacheTTL = 120;
 
-    const whereClause: any = {};
-    if (sessionType === 'studyRoom') {
-      whereClause.studyRoomId = sessionId;
-    } else {
-      whereClause.peerSessionId = sessionId;
-    }
+    return this.cacheService.getOrSet(
+      cacheKey,
+      async () => {
+        try {
+          const skip = (page - 1) * limit;
 
-    const [reviews, total] = await Promise.all([
-      this.prisma.review.findMany({
-        where: whereClause,
-        skip,
-        take: limit,
-        include: {
-          reviewer: { select: { id: true, name: true, avatar: true } },
-        },
-        orderBy: { id: 'desc' },
-      }),
-      this.prisma.review.count({ where: whereClause }),
-    ]);
+          const whereClause: any = {};
+        if (sessionType === 'studyRoom') {
+          whereClause.studyRoomId = sessionId;
+        } else {
+          whereClause.peerSessionId = sessionId;
+        }
 
-    const avgRating =
-      reviews.length > 0
-        ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
-        : 0;
+        const [reviews, total] = await Promise.all([
+          this.prisma.review.findMany({
+            where: whereClause,
+            skip,
+            take: limit,
+            include: {
+              reviewer: { select: { id: true, name: true, avatar: true } },
+            },
+            orderBy: { id: 'desc' },
+          }),
+          this.prisma.review.count({ where: whereClause }),
+        ]);
 
-    return {
-      reviews: reviews.map((r) => ({
-        id: r.id,
-        rating: r.rating,
-        review: r.review,
-        reviewer: r.reviewer,
-      })),
-      avgRating: Math.round(avgRating * 10) / 10,
-      totalCount: total,
-      pagination: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
-        hasMore: skip + limit < total,
+        const avgRating =
+          reviews.length > 0
+            ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
+            : 0;
+
+        return {
+          reviews: reviews.map((r) => ({
+            id: r.id,
+            rating: r.rating,
+            review: r.review,
+            reviewer: r.reviewer,
+          })),
+          avgRating: Math.round(avgRating * 10) / 10,
+          totalCount: total,
+          pagination: {
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit),
+            hasMore: skip + limit < total,
+          },
+        };
+        } catch (error) {
+          // Handle database connection errors
+          if (isConnectionError(error)) {
+            this.logger.error(
+              `Database connection error in getSessionReviews for session ${sessionId}:`,
+              error instanceof Error ? error.message : String(error),
+            );
+            
+            // Return empty reviews as fallback
+            return {
+              reviews: [],
+              avgRating: 0,
+              totalCount: 0,
+              pagination: {
+                total: 0,
+                page,
+                limit,
+                totalPages: 0,
+                hasMore: false,
+              },
+            };
+          }
+          
+          // Re-throw other errors
+          throw error;
+        }
       },
-    };
+      cacheTTL,
+    );
   }
 
   private async checkAndReleaseEscrowPayment(

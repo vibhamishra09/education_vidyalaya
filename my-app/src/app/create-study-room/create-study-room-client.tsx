@@ -1097,6 +1097,23 @@ export function CreateStudyRoomClient() {
             
             {createdRoom && (
               <div className="w-full space-y-3 sm:space-y-4">
+                {createdRoom.emailDelivery && createdRoom.emailDelivery.failed > 0 && (
+                  <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-left">
+                    <p className="text-sm font-semibold text-red-700">
+                      Invite email delivery failed for {createdRoom.emailDelivery.failed} of {createdRoom.emailDelivery.attempted} recipients.
+                    </p>
+                    <p className="mt-1 text-xs text-red-600">
+                      Failed: {createdRoom.emailDelivery.failures.map((f) => f.email).join(", ")}
+                    </p>
+                  </div>
+                )}
+                {createdRoom.emailDelivery && createdRoom.emailDelivery.failed === 0 && createdRoom.emailDelivery.attempted > 0 && (
+                  <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-left">
+                    <p className="text-sm font-semibold text-green-700">
+                      Invite emails sent successfully to {createdRoom.emailDelivery.sent} recipients.
+                    </p>
+                  </div>
+                )}
                 {/* Copy Link Section */}
                 <div className="w-full relative flex items-center justify-between gap-1.5 p-1 pl-2 sm:p-1.5 sm:pl-3 rounded-lg sm:rounded-xl border border-input bg-muted/40 hover:bg-muted/60 transition-colors">
                   <span className="text-[10px] sm:text-xs text-foreground/70 truncate flex-1 font-mono text-center select-all">

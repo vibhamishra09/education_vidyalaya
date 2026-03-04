@@ -8,7 +8,7 @@ import {
   Min,
   Max,
 } from 'class-validator';
-import { SessionStatus } from '@prisma/client';
+import { SessionStatus } from '../../generated/prisma/client';
 
 export class PeerSessionDto {
   id: string;

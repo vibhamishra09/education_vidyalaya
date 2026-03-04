@@ -36,7 +36,17 @@ export function MessageInput({
 
 	// Filter out the current user (no self-messaging) and host (host has its own option)
 	const availableRecipients = recipients.filter(
-		(recipient) => recipient.id !== currentUserDbId && recipient.id !== hostUserId,
+		(recipient) => {
+			// Exclude current user (self) - handle null/undefined and type coercion
+			if (currentUserDbId && String(recipient.id) === String(currentUserDbId)) {
+				return false
+			}
+			// Exclude host (host has its own option)
+			if (hostUserId && String(recipient.id) === String(hostUserId)) {
+				return false
+			}
+			return true
+		},
 	)
 	const canUseSpecificUser = availableRecipients.length > 0
 

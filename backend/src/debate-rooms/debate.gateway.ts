@@ -455,37 +455,15 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   /**
    * Handle transcript chunks from speech recognition
+   * DISABLED: Transcript feature is turned off
    */
   @SubscribeMessage(DEBATE_EVENTS.TRANSCRIPT)
   async handleTranscript(
     @ConnectedSocket() client: Socket,
     @MessageBody() payload: TranscriptPayload,
   ) {
-    const { roomId, text, timestamp } = payload;
-    const userId = client.data.userId;
-
-    // Verify user is current speaker
-    const state = await this.debateRoomsService.getDebateState(roomId);
-    
-    if (!state || state.status !== DebateStatus.LIVE || state.currentSpeakerId !== userId) {
-      // Silently ignore - only current speaker's transcripts are stored
-      return;
-    }
-
-    // Find participant
-    const participant = await this.prisma.debateParticipant.findFirst({
-      where: { debateRoomId: roomId, userId },
-    });
-
-    if (!participant) return;
-
-    // Store in Redis
-    await this.debateRoomsService.storeTranscriptChunk(
-      roomId,
-      participant.id,
-      text,
-      timestamp,
-    );
+    // Feature disabled - return early without processing
+    return;
   }
 
   /**
