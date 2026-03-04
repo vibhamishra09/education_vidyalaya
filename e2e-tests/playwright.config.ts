@@ -59,13 +59,16 @@ export default defineConfig({
     },
   ],
 
-  webServer: process.env.CI
-    ? {
-        command: 'pnpm --filter my-app dev',
-        url: BASE_URL,
-        reuseExistingServer: false,
-        timeout: 120_000,
-        cwd: '..',
-      }
-    : undefined,
+  // Only start webServer in CI if BASE_URL is localhost (for local testing)
+  // If BASE_URL is a production URL, tests run against the deployed site
+  webServer:
+    process.env.CI && BASE_URL.startsWith('http://localhost')
+      ? {
+          command: 'pnpm --filter my-app dev',
+          url: BASE_URL,
+          reuseExistingServer: false,
+          timeout: 120_000,
+          cwd: '..',
+        }
+      : undefined,
 });
