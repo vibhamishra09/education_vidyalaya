@@ -12,6 +12,8 @@ At the top level, the repo is organized as:
 - `backend/` – Backend API (auth, business logic, DB access)
 - `my-app/` – Frontend (Next.js web app)
 - `docs/` – Architecture, design, and requirements documentation
+- `e2e-tests/` – End-to-end test suite
+- `lambdas/` – AWS Lambda functions (e.g., feedback-system)
 
 Please keep this structure clean and consistent.
 
@@ -42,15 +44,96 @@ We use a **trunk + promotion** model with a few long-lived branches:
 
 ---
 
+## Prerequisites
+
+Before you start contributing, make sure you have:
+
+- **Node.js** >= 18.x
+- **pnpm** >= 8.x (we use pnpm as our package manager)
+- **PostgreSQL** >= 14.x
+- **Redis** >= 7.x (optional, for local development)
+- **Docker & Docker Compose** (optional, for running services locally)
+
+### Installing pnpm
+
+```bash
+# Using npm
+npm install -g pnpm
+
+# Using Homebrew (macOS)
+brew install pnpm
+
+# Using standalone script
+curl -fsSL https://get.pnpm.io/install.sh | sh -
+```
+
+---
+
+## Local Development Setup
+
+### Initial Setup
+
+1. **Clone the repository** (if you haven't already):
+   ```bash
+   git clone <repository-url>
+   cd webyalaya-mvp-1
+   ```
+
+2. **Set up Backend**:
+   ```bash
+   cd backend
+   pnpm install
+   cp .env.example .env  # Edit .env with your local config
+   pnpm prisma generate
+   pnpm prisma migrate dev
+   pnpm prisma db seed  # Optional: seed with test data
+   ```
+
+3. **Set up Frontend**:
+   ```bash
+   cd ../my-app
+   pnpm install
+   cp .env.local.example .env.local  # Edit .env.local with your config
+   ```
+
+4. **Start development servers**:
+   ```bash
+   # Terminal 1: Backend
+   cd backend
+   pnpm start:dev
+
+   # Terminal 2: Frontend
+   cd my-app
+   pnpm dev
+   ```
+
+### Common Development Commands
+
+**Backend:**
+- `pnpm start:dev` – Start backend in watch mode
+- `pnpm test` – Run unit tests
+- `pnpm test:e2e` – Run end-to-end tests
+- `pnpm lint` – Lint code
+- `pnpm prisma studio` – Open Prisma Studio (DB GUI)
+- `pnpm prisma migrate dev` – Create and apply migrations
+
+**Frontend:**
+- `pnpm dev` – Start Next.js dev server
+- `pnpm build` – Build for production
+- `pnpm lint` – Lint code
+- `pnpm test` – Run Playwright tests
+
+---
+
 ## How to Work on a Feature
 
-### 1. Sync `dev` and create a feature branch
+### 1. Sync `dev` and create a feature or work-item branch
 
 ```bash
 git checkout dev
 git pull origin dev
 
-git checkout -b feature/<short-feature-name>
+git checkout -b wi/<work-item-number>
 # e.g. feature/session-booking
 ```
 
@@ -66,11 +149,16 @@ You always branch off `dev` for new work.
   * a **local DB** for safe experiments, or
   * the shared `webyalaya_dev` DB when you want integrated test data.
 
-Commit often with clear messages:
+**Before committing, ensure:**
+* Code builds successfully (`pnpm build` in backend/my-app)
+* Linting passes (`pnpm lint`)
+* Tests pass (if applicable)
+
+Commit often with clear messages and descriptive commit body:
 
 ```bash
 git add .
-git commit -m "Implement session booking UI + basic API integration"
+git commit -m "feat: implement session booking UI + basic API integration" -m "Describe the changes in detail"
 ```
 
 Push your branch:
@@ -85,15 +173,16 @@ git push -u origin feature/session-booking
 
 Create a PR:
 
-> **from**: `feature/<name>`
+> **from**: `wi/<work-item-number>`
 > **to**: `dev`
 
 Checklist before opening the PR:
 
-* [ ] The app builds and runs locally.
-* [ ] Basic tests (if any) pass.
+* [ ] The app builds and runs locally (`pnpm build` in both backend and my-app).
 * [ ] No secrets or hard-coded tokens are committed.
 * [ ] If you changed API/DB/contracts, related docs in `docs/` are updated.
+* [ ] Database migrations (if any) are included and tested.
+* [ ] Environment variable changes are documented in `.env.example` files.
 
 Once approved and merged:
 
@@ -261,13 +350,43 @@ If your work changes APIs, DB schema, or important flows, **update the correspon
 
 ## Coding & Commit Style (Short Version)
 
-* Write clear commit messages:
+* Write clear commit messages using conventional commits:
 
   * `feat: add session booking API`
   * `fix: handle null mentor in session list`
   * `docs: update ERD for new review table`
+  * `refactor: simplify dashboard service logic`
+  * `test: add unit tests for achievements service`
+  * `chore: update dependencies`
+
 * Keep PRs focused: one feature / bugfix per PR.
 * Add comments or small docs when behavior is non-obvious.
+* Follow TypeScript best practices and existing code style.
+* Use `pnpm` for all package management (never commit `package-lock.json` or `yarn.lock`).
+
+## Testing Guidelines
+
+* Write tests for new features when possible.
+* Backend: Use Jest for unit tests, located in `*.spec.ts` files.
+* Frontend: Use Playwright for E2E tests, located in `tests/` directory.
+* Run tests locally before pushing:
+
+## Troubleshooting
+
+### Common Issues
+
+**pnpm install fails:**
+- Ensure you're using pnpm >= 8.x
+- Try deleting `node_modules` and `pnpm-lock.yaml`, then reinstall
+
+**Database connection errors:**
+- Verify PostgreSQL is running
+- Check `.env` file has correct `DATABASE_URL`
+- Run `pnpm prisma generate` to regenerate Prisma client
+
+**Port already in use:**
+- Backend defaults to port 3001, frontend to 3000
+- Change ports in `.env` files if needed
 
 Thanks for contributing 🙏
 
