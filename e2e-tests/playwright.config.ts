@@ -30,6 +30,7 @@ export default defineConfig({
   projects: [
     // Main chromium project — uses saved auth from globalSetup.
     // Excludes auth specs that need a fresh (unauthenticated) browser.
+    // Note: When running with --grep, all matching tests in included files will run.
     {
       name: 'chromium',
       use: {
@@ -41,6 +42,7 @@ export default defineConfig({
 
     // New user flows — fresh browser (no pre-existing session).
     // Runs sign-in, sign-up, and onboarding specs only.
+    // Note: testMatch restricts to auth tests, but --grep will filter within those.
     {
       name: 'chromium-new-user',
       use: {
@@ -49,13 +51,14 @@ export default defineConfig({
       testMatch: /tests\/auth\/(sign-in|sign-up|onboarding)\.spec\.ts/,
     },
 
-    // Mobile viewport
+    // Mobile viewport — runs all tests except auth flows that need fresh browser
     {
       name: 'mobile',
       use: {
         ...devices['Pixel 5'],
         storageState: './fixtures/auth-state/onboarded-user.json',
       },
+      testIgnore: /tests\/auth\/(sign-in|sign-up)\.spec\.ts/,
     },
   ],
 

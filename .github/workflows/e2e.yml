@@ -68,7 +68,7 @@ jobs:
 
       - name: Run smoke tests
         working-directory: e2e-tests
-        run: pnpm test:ci -- --grep "@smoke"
+        run: pnpm exec playwright test --reporter=github,html --grep "@smoke"
         env:
           CI: true
 
