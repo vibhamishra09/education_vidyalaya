@@ -210,28 +210,20 @@ export default function RoomPage() {
 				if (results[2]?.data) {
 					// Add session type to sessionData
 					const data = results[2].data as { id: string; date: string; duration: number; sessionStatus?: string; [key: string]: unknown };
-
-					// For recurring rooms, the root occurrence may be DONE while a current occurrence is active.
-					// Use currentOccurrence's status/id if available.
-					const currentOcc = (data as any).currentOccurrence as { id: string; date: string; sessionStatus: string } | null | undefined;
-					const effectiveStatus = currentOcc?.sessionStatus ?? data.sessionStatus;
-					const effectiveId = currentOcc?.id ?? data.id;
-
+					
 					console.log('📊 [RoomPage] Session data loaded:', {
-						id: effectiveId,
+						id: data.id,
 						date: data.date,
 						duration: data.duration,
-						sessionStatus: effectiveStatus,
+						sessionStatus: data.sessionStatus,
 						type: isStudyRoom ? 'studyRoom' : 'peerSession',
 					})
-
+					
 					// Check if session is already completed or not completed (expired)
-					if (effectiveStatus === 'DONE' || effectiveStatus === 'CANCELLED' || effectiveStatus === 'NOT_COMPLETED') {
+					if (data.sessionStatus === 'DONE' || data.sessionStatus === 'CANCELLED' || data.sessionStatus === 'NOT_COMPLETED') {
 						setSessionEnded(true)
 						setSessionData({
 							...data,
-							id: effectiveId,
-							sessionStatus: effectiveStatus,
 							sessionType: isStudyRoom ? 'studyRoom' : 'peerSession',
 						})
 						setLoading(false)
@@ -240,7 +232,6 @@ export default function RoomPage() {
 					
 					setSessionData({
 						...data,
-						id: effectiveId,
 						sessionType: isStudyRoom ? 'studyRoom' : 'peerSession',
 					})
 

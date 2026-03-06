@@ -892,28 +892,6 @@ export class StudyRoomsService {
       }
     }
 
-    // For the series root occurrence, find the active or next upcoming occurrence
-    let currentOccurrence: {
-      id: string;
-      date: Date;
-      sessionStatus: SessionStatus;
-      occurrenceIndex: number | null;
-    } | null = null;
-    if (
-      studyRoom.isRecurring &&
-      studyRoom.seriesId &&
-      studyRoom.id === studyRoom.seriesRootId
-    ) {
-      currentOccurrence = await this.prisma.studyRoom.findFirst({
-        where: {
-          seriesId: studyRoom.seriesId,
-          sessionStatus: { in: [SessionStatus.ONGOING, SessionStatus.UPCOMING] },
-        },
-        orderBy: [{ sessionStatus: 'asc' }, { date: 'asc' }],
-        select: { id: true, date: true, sessionStatus: true, occurrenceIndex: true },
-      });
-    }
-
     return {
       id: studyRoom.id,
       title: studyRoom.title,
@@ -944,14 +922,6 @@ export class StudyRoomsService {
       occurrenceIndex: (studyRoom as any).occurrenceIndex,
       timezone: (studyRoom as any).timezone,
       summary: studyRoom.summary,
-      currentOccurrence: currentOccurrence
-        ? {
-            id: currentOccurrence.id,
-            date: currentOccurrence.date,
-            sessionStatus: currentOccurrence.sessionStatus,
-            occurrenceIndex: currentOccurrence.occurrenceIndex,
-          }
-        : null,
       createdBy: studyRoom.createdBy,
       skills: studyRoom.skills.map((s) => s.skill),
       participants: studyRoom.learners.map((l) => ({
@@ -1526,28 +1496,6 @@ export class StudyRoomsService {
         },
       });
     });
-
-    // Auto-enroll in all future UPCOMING occurrences of the same series
-    if (studyRoom.seriesId) {
-      const futureOccurrences = await this.prisma.studyRoom.findMany({
-        where: {
-          seriesId: studyRoom.seriesId,
-          sessionStatus: SessionStatus.UPCOMING,
-          id: { not: studyRoomId },
-        },
-        select: { id: true },
-      });
-      if (futureOccurrences.length > 0) {
-        await this.prisma.studyRoomParticipant.createMany({
-          data: futureOccurrences.map((o) => ({
-            userId: user.id,
-            studyRoomId: o.id,
-            role: StudyRoomParticipantRole.PARTICIPANT,
-          })),
-          skipDuplicates: true,
-        });
-      }
-    }
 
     // Get all participants (creator + learners) for the chat channel
     const allParticipants = await this.prisma.studyRoomParticipant.findMany({
