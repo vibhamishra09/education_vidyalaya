@@ -1,7 +1,7 @@
 import { Body, Controller, Headers, Post } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import { NotifType } from '../generated/prisma/client';
+import { NotifType, SessionStatus } from '../generated/prisma/client';
 import { LoggerService } from '../common/logger';
 
 @Controller('api/livekit/webhooks')
@@ -27,12 +27,31 @@ export class LivekitWebhooksController {
 
       // Check if this is a study room
       if (roomName?.startsWith('studyroom-')) {
-        const studyRoomId = roomName.replace('studyroom-', '');
-        await this.handleStudyRoomParticipantJoined(
-          studyRoomId,
-          participantIdentity,
-          participantName,
-        );
+        const suffix = roomName.replace('studyroom-', '');
+        // UUID pattern = seriesId (recurring shared room), CUID = individual occurrence
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-/.test(suffix);
+        let studyRoomId: string | undefined;
+        if (isUuid) {
+          // Find the ongoing occurrence for this series; fall back to next upcoming
+          const occurrence = await this.prisma.studyRoom.findFirst({
+            where: { seriesId: suffix, sessionStatus: SessionStatus.ONGOING },
+            select: { id: true },
+          }) ?? await this.prisma.studyRoom.findFirst({
+            where: { seriesId: suffix, sessionStatus: SessionStatus.UPCOMING },
+            orderBy: { date: 'asc' },
+            select: { id: true },
+          });
+          studyRoomId = occurrence?.id;
+        } else {
+          studyRoomId = suffix;
+        }
+        if (studyRoomId) {
+          await this.handleStudyRoomParticipantJoined(
+            studyRoomId,
+            participantIdentity,
+            participantName,
+          );
+        }
       }
     }
 

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { Navigation } from "@/components/layout/navigation";
 import { Footer } from "@/components/layout/footer";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -45,11 +46,28 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
   const { getToken } = useAuth();
   const { isSignedIn } = useUser();
   const { showSuccess, showError } = useToast();
+  const router = useRouter();
   const [isJoining, setIsJoining] = useState(false);
   const [canJoinVideoCall, setCanJoinVideoCall] = useState(false);
-  
+
   const { data: room, isLoading, error } = useStudyRoomDetails(roomId);
   console.log(room);
+
+  // Redirect non-root occurrences to the persistent series root URL
+  const redirectedRef = useRef(false);
+  useEffect(() => {
+    if (
+      room &&
+      (room as any).isRecurring &&
+      (room as any).seriesRootId &&
+      room.id !== (room as any).seriesRootId &&
+      !redirectedRef.current
+    ) {
+      redirectedRef.current = true;
+      router.replace(`/studyroom/${(room as any).seriesRootId}`);
+    }
+  }, [room, router]);
+
   const joinStudyRoom = useJoinStudyRoom();
   const cancelStudyRoom = useCancelStudyRoom(roomId);
   const { data: externalRequests } = useExternalJoinRequests(roomId, !!isSignedIn);
@@ -65,33 +83,34 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
   const [isPasscodeCopied, setIsPasscodeCopied] = useState(false);
 
   // Check if video call can be joined (within 5 minutes of start time)
+  // For recurring rooms, use the currentOccurrence's date/status if available
   useEffect(() => {
-    if (!room || room.sessionStatus === SessionStatus.ONGOING) {
-      // If session is ongoing, always allow joining
+    if (!room) return;
+    const currentOccurrence = (room as any).currentOccurrence as {
+      id: string; date: string; sessionStatus: SessionStatus; occurrenceIndex: number | null;
+    } | null | undefined;
+    const effectiveStatus = (currentOccurrence?.sessionStatus ?? room.sessionStatus) as SessionStatus;
+    const effectiveDate = currentOccurrence?.date ?? room.date;
+
+    if (effectiveStatus === SessionStatus.ONGOING) {
       setCanJoinVideoCall(true);
       return;
     }
 
-    if (room.sessionStatus !== SessionStatus.UPCOMING) {
+    if (effectiveStatus !== SessionStatus.UPCOMING) {
       setCanJoinVideoCall(false);
       return;
     }
 
     const checkVideoCallAvailability = () => {
       const now = new Date();
-      const scheduledStart = new Date(room.date);
-      const fiveMinutesBefore = new Date(scheduledStart.getTime() - 5 * 60 * 1000); // 5 minutes in milliseconds
-      
-      // Enable if current time is >= 5 minutes before start time
+      const scheduledStart = new Date(effectiveDate);
+      const fiveMinutesBefore = new Date(scheduledStart.getTime() - 5 * 60 * 1000);
       setCanJoinVideoCall(now >= fiveMinutesBefore);
     };
 
-    // Check immediately
     checkVideoCallAvailability();
-
-    // Update every minute to handle the 5-minute window
     const interval = setInterval(checkVideoCallAvailability, 60000);
-
     return () => clearInterval(interval);
   }, [room]);
 
@@ -280,19 +299,27 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
   const isFull = room.participantCount >= room.maxParticipants;
   const pendingRequests = externalRequests?.requests || [];
 
+  // For the series root, use currentOccurrence's date/status for display
+  const currentOccurrence = (room as any).currentOccurrence as {
+    id: string; date: string; sessionStatus: SessionStatus; occurrenceIndex: number | null;
+  } | null | undefined;
+  const effectiveStatus = (currentOccurrence?.sessionStatus ?? room.sessionStatus) as SessionStatus;
+  const effectiveDate = currentOccurrence?.date ?? room.date;
 
-  const formattedDate = new Date(room.date).toLocaleDateString("en-US", {
+  const formattedDate = new Date(effectiveDate).toLocaleDateString("en-US", {
     weekday: "long",
     year: "numeric",
     month: "long",
     day: "numeric",
   });
 
-  const formattedTime = new Date(room.date).toLocaleTimeString("en-US", {
+  const formattedTime = new Date(effectiveDate).toLocaleTimeString("en-US", {
     hour: "2-digit",
     minute: "2-digit",
   });
 
+  // For recurring rooms, always link to the series root so the URL is persistent
+  const shareRoomId = (room as any).seriesRootId || roomId;
   const liveRoomName = `studyroom-${roomId}`;
 
   return (
@@ -313,10 +340,10 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
                 <div className="space-y-4">
                     <div className="flex flex-wrap items-center gap-2">
                         <Badge
-                            variant={room.sessionStatus === SessionStatus.ONGOING ? "destructive" : "secondary"}
+                            variant={effectiveStatus === SessionStatus.ONGOING ? "destructive" : "secondary"}
                             className="rounded-full px-2.5 py-0.5 text-xs font-medium shadow-none border-transparent bg-primary/10 text-primary hover:bg-primary/20"
                         >
-                            {room.sessionStatus === SessionStatus.ONGOING ? (
+                            {effectiveStatus === SessionStatus.ONGOING ? (
                                 <span className="flex items-center gap-1.5">
                                     <span className="relative flex h-1.5 w-1.5">
                                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75"></span>
@@ -505,7 +532,7 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
                                 )}
 
                                 <ShareButton
-                                    url={`${typeof window !== "undefined" ? window.location.origin : process.env.NEXT_PUBLIC_BASE_URL || ""}/studyroom/${roomId}`}
+                                    url={`${typeof window !== "undefined" ? window.location.origin : process.env.NEXT_PUBLIC_BASE_URL || ""}/studyroom/${shareRoomId}`}
                                     title={room.title}
                                     description={room.description || ""}
                                     image={room.imageUrl}
@@ -513,8 +540,8 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
                                     className="w-full rounded-lg h-9 hover:bg-primary/5 text-xs text-green-600 border-green-200/50 hover:text-green-700"
                                 />
                                 {role === "teacher" &&
-                                  (room.sessionStatus === SessionStatus.UPCOMING ||
-                                    room.sessionStatus === SessionStatus.ONGOING) && (
+                                  (effectiveStatus === SessionStatus.UPCOMING ||
+                                    effectiveStatus === SessionStatus.ONGOING) && (
                                     <Button
                                       size="sm"
                                       variant="outline"
@@ -612,7 +639,7 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
                     </Card>
 
                     {/* Live Session CTA Box */}
-                    {(room.sessionStatus === SessionStatus.UPCOMING || room.sessionStatus === SessionStatus.ONGOING) && (role === "teacher" || role === "learner") && (
+                    {(effectiveStatus === SessionStatus.UPCOMING || effectiveStatus === SessionStatus.ONGOING) && (role === "teacher" || role === "learner") && (
                         <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-3 backdrop-blur-sm">
                             <div className="space-y-0.5">
                                <h3 className="font-semibold text-sm tracking-tight flex items-center gap-2">

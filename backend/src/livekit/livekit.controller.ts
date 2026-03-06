@@ -39,8 +39,21 @@ export class LivekitController {
       ...(body.metadata ? JSON.parse(body.metadata) : {}),
     });
     
+    // For recurring study rooms, issue the token for the shared series room name
+    let effectiveRoomName = body.roomName;
+    if (body.roomName.startsWith('studyroom-')) {
+      const studyRoomId = body.roomName.replace('studyroom-', '');
+      const studyRoom = await this.prisma.studyRoom.findUnique({
+        where: { id: studyRoomId },
+        select: { seriesId: true },
+      });
+      if (studyRoom?.seriesId) {
+        effectiveRoomName = `studyroom-${studyRoom.seriesId}`;
+      }
+    }
+
     const token = await this.livekit.createToken({
-      roomName: body.roomName,
+      roomName: effectiveRoomName,
       identity,
       name: user?.name || undefined,
       metadata: userMetadata,
