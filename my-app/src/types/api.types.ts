@@ -317,6 +317,12 @@ export interface StudyRoom extends StudyRoomCard {
   summary?: string;
   chatChannelId?: string | null;
   occurrencesCreated?: number;
+  currentOccurrence?: {
+    id: string;
+    date: Date | string;
+    sessionStatus: SessionStatus;
+    occurrenceIndex: number | null;
+  } | null;
 }
 
 export enum StudyRoomRecurrenceMode {

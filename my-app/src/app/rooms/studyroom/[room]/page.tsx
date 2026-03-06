@@ -209,11 +209,22 @@ export default function RoomPage() {
 				}
 				if (results[2]?.data) {
 					// Add session type to sessionData
-					const data = results[2].data as { id: string; date: string; duration: number; sessionStatus?: string; [key: string]: unknown };
+					const data = results[2].data as { 
+						id: string; 
+						date: string; 
+						duration: number; 
+						sessionStatus?: string; 
+						currentOccurrence?: {
+							id: string;
+							date: string;
+							sessionStatus: string;
+						} | null;
+						[key: string]: unknown;
+					};
 
 					// For recurring rooms, the root occurrence may be DONE while a current occurrence is active.
 					// Use currentOccurrence's status/id if available.
-					const currentOcc = (data as any).currentOccurrence as { id: string; date: string; sessionStatus: string } | null | undefined;
+					const currentOcc = data.currentOccurrence;
 					const effectiveStatus = currentOcc?.sessionStatus ?? data.sessionStatus;
 					const effectiveId = currentOcc?.id ?? data.id;
 
