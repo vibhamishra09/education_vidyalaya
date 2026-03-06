@@ -58,13 +58,13 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
   useEffect(() => {
     if (
       room &&
-      room.isRecurring &&
-      room.seriesRootId &&
-      room.id !== room.seriesRootId &&
+      (room as any).isRecurring &&
+      (room as any).seriesRootId &&
+      room.id !== (room as any).seriesRootId &&
       !redirectedRef.current
     ) {
       redirectedRef.current = true;
-      router.replace(`/studyroom/${room.seriesRootId}`);
+      router.replace(`/studyroom/${(room as any).seriesRootId}`);
     }
   }, [room, router]);
 
@@ -86,8 +86,10 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
   // For recurring rooms, use the currentOccurrence's date/status if available
   useEffect(() => {
     if (!room) return;
-    const currentOccurrence = room.currentOccurrence;
-    const effectiveStatus = currentOccurrence?.sessionStatus ?? room.sessionStatus;
+    const currentOccurrence = (room as any).currentOccurrence as {
+      id: string; date: string; sessionStatus: SessionStatus; occurrenceIndex: number | null;
+    } | null | undefined;
+    const effectiveStatus = (currentOccurrence?.sessionStatus ?? room.sessionStatus) as SessionStatus;
     const effectiveDate = currentOccurrence?.date ?? room.date;
 
     if (effectiveStatus === SessionStatus.ONGOING) {
@@ -298,8 +300,10 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
   const pendingRequests = externalRequests?.requests || [];
 
   // For the series root, use currentOccurrence's date/status for display
-  const currentOccurrence = room.currentOccurrence;
-  const effectiveStatus = currentOccurrence?.sessionStatus ?? room.sessionStatus;
+  const currentOccurrence = (room as any).currentOccurrence as {
+    id: string; date: string; sessionStatus: SessionStatus; occurrenceIndex: number | null;
+  } | null | undefined;
+  const effectiveStatus = (currentOccurrence?.sessionStatus ?? room.sessionStatus) as SessionStatus;
   const effectiveDate = currentOccurrence?.date ?? room.date;
 
   const formattedDate = new Date(effectiveDate).toLocaleDateString("en-US", {
@@ -315,7 +319,7 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
   });
 
   // For recurring rooms, always link to the series root so the URL is persistent
-  const shareRoomId = room.seriesRootId || roomId;
+  const shareRoomId = (room as any).seriesRootId || roomId;
   const liveRoomName = `studyroom-${roomId}`;
 
   return (
