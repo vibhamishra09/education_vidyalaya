@@ -99,10 +99,12 @@ export function Navigation() {
         { href: "/browse", label: "Browse" },
         { href: "/how-it-works", label: "How it works" },
         { href: "/dashboard", label: "Dashboard" },
+        { href: "https://www.webyalaya.com/updates", label: "Webya Updates", external: true },
       ]
     : [
         { href: "/browse", label: "Browse" },
         { href: "/how-it-works", label: "How it works" },
+        { href: "https://www.webyalaya.com/updates", label: "Webya Updates", external: true },
       ];
 
   return (
@@ -133,10 +135,18 @@ export function Navigation() {
               <nav className="hidden md:flex items-center gap-1" aria-label="Primary">
                 {links.map((link) => {
                   const isActive = pathname === link.href;
+                  const linkProps = link.external
+                    ? {
+                        href: link.href,
+                        target: "_blank",
+                        rel: "noopener noreferrer",
+                      }
+                    : { href: link.href };
+                  
                   return (
                     <Link
                       key={link.href}
-                      href={link.href}
+                      {...linkProps}
                       className={cn(
                         "relative rounded-full px-4 py-2 text-sm font-medium transition-all duration-300",
                         "text-muted-foreground hover:text-foreground",
