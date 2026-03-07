@@ -45,7 +45,7 @@ jobs:
       - name: Detect skip-test-namaste directive in commit message
         id: skip_deploy
         run: |
-          COMMIT_MSG="${{ github.event.head_commit.message }}"
+          COMMIT_MSG=$(printf '%s\n' "${{ github.event.head_commit.message }}")
           if echo "$COMMIT_MSG" | grep -iq "\[skip test-namaste\]"; then
             echo "Skip test-namaste directive found."
             echo "skip=true" >> "$GITHUB_OUTPUT"
