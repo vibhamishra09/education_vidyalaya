@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import { CheckCircle2, ArrowRight } from "lucide-react";
 import Link from "next/link";
 
-type FeatureTab = "study-rooms" | "peer-sessions" | "webya-coins" | "streaks";
+type FeatureTab = "study-rooms" | "peer-sessions" | "debate-rooms" | "webya-coins" | "streaks";
 
 const FEATURES = {
   "study-rooms": {
@@ -39,6 +39,20 @@ const FEATURES = {
     image: "https://placehold.co/800x500/f0fdf4/15803d?text=Peer+Sessions+Demo",
     cta: "Find Peers",
     href: "/browse?tab=peers"
+  },
+  "debate-rooms": {
+    label: "Debate Rooms",
+    title: "Engage in structured, real-time debates with peers.",
+    description: "Join or create debate rooms to discuss topics with two teams (FOR and AGAINST). Experience organized turn-based discussions with video, audio, and chat capabilities.",
+    points: [
+      "Create or join debates: Set up a room with a topic or join existing debates.",
+      "Team-based structure: Automatically assigned to FOR or AGAINST teams.",
+      "Turn-based speaking: Fair turn order with timers and buzzer system.",
+      "Real-time communication: Video, audio, and team chat for seamless interaction."
+    ],
+    image: "https://placehold.co/800x500/fef2f2/dc2626?text=Debate+Rooms+Demo",
+    cta: "Browse Debates",
+    href: "/debateroom"
   },
   "webya-coins": {
     label: "Coins",

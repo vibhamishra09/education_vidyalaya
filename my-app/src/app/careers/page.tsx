@@ -63,7 +63,7 @@ export default function CareersPage() {
 
           <div className="prose prose-slate dark:prose-invert max-w-none space-y-6">
             <p>
-              At Webyalaya, we're building a platform that makes learning collaborative, 
+              At Webyalaya, we&apos;re building a platform that makes learning collaborative, 
               accessible, and engaging. We believe that real learning happens when people 
               come together to share knowledge, ask questions, and grow together.
             </p>
@@ -86,20 +86,20 @@ export default function CareersPage() {
                 Open Positions
               </h2>
               <p className="text-muted-foreground">
-                We're always looking for talented individuals to join our team. 
-                Currently, we don't have any open positions listed, but we're always 
+                We&apos;re always looking for talented individuals to join our team. 
+                Currently, we don&apos;t have any open positions listed, but we&apos;re always 
                 interested in hearing from passionate people who want to make a difference 
                 in education.
               </p>
               <p className="mt-4">
-                If you're interested in working with us, please reach out to us at{" "}
+                If you&apos;re interested in working with us, please reach out to us at{" "}
                 <a 
                   href="mailto:namaste@webyalaya.com" 
                   className="text-primary hover:underline"
                 >
                   namaste@webyalaya.com
                 </a>
-                {" "}with your resume and a brief note about why you'd like to join Webyalaya.
+                {" "}with your resume and a brief note about why you&apos;d like to join Webyalaya.
               </p>
             </section>
 
