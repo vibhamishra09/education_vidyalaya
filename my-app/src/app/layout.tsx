@@ -14,6 +14,7 @@ import { FloatingActionButtons } from "@/components/ui/floating-action-buttons";
 import { PushNotificationPrompt } from "@/components/notifications/push-notification-prompt";
 import { PushNotificationListener } from "@/components/notifications/push-notification-listener";
 import { HiddenSignInButton } from "@/components/auth/hidden-sign-in-button";
+import { AuthTokenSync } from "@/components/auth/auth-token-sync";
 import { ServiceWorkerRegistration } from "@/components/pwa/service-worker-registration";
 import { InstallPrompt } from "@/components/pwa/install-prompt";
 import { UpdateNotification } from "@/components/pwa/update-notification";
@@ -258,6 +259,7 @@ export default function RootLayout({
         >
           <BackgroundGradient />
           <QueryProvider>
+            <AuthTokenSync />
             <NotificationProvider>
               <ToastProvider>
                 <AchievementNotificationProvider>
