@@ -1,4 +1,5 @@
 import { UseGuards, Logger } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import {
   OnGatewayConnection,
   OnGatewayDisconnect,
@@ -142,6 +143,16 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         client.emit('authenticated');
         this.logger.debug('WebSocket authenticated for user:', auth.userId);
       } catch (verifyError: any) {
+        // Clerk auth failed — try guest token path
+        const guestRecord = await this.chatService.validateGuestToken(token).catch(() => null);
+        if (guestRecord) {
+          client.data.isGuest = true;
+          client.data.guestName = guestRecord.guestParticipant.name;
+          client.data.guestIdentity = guestRecord.guestParticipant.livekitIdentity;
+          client.data.studyRoomId = guestRecord.studyRoomId;
+          client.emit('authenticated');
+          return;
+        }
         this.logger.debug(
           'Token verification failed:',
           verifyError.message || verifyError,
@@ -159,6 +170,18 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   @SubscribeMessage('join:channel')
   async handleJoinChannel(client: Socket, payload: { channelId: string }) {
+    // Guest path: allow join if the channel belongs to the guest's study room
+    if (client.data.isGuest) {
+      const sessionInfo = await this.chatService.getSessionInfoFromChannelId(payload.channelId);
+      if (sessionInfo?.externalType === 'studyRoom' && sessionInfo.externalId === client.data.studyRoomId) {
+        client.join(payload.channelId);
+        client.emit('joined:channel', { channelId: payload.channelId });
+      } else {
+        client.emit('error', { message: 'Not authorized to join this channel' });
+      }
+      return;
+    }
+
     if (!client.data.userId || !client.data.dbUserId) {
       client.emit('error', { message: 'Not authenticated' });
       return;
@@ -190,6 +213,40 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       targetUserId?: string;
     },
   ) {
+    // Guest path: ephemeral message to host only, no DB write
+    if (client.data.isGuest) {
+      try {
+        const hostDbUserId = await this.chatService.getChannelHostUserId(payload.channelId);
+        if (!hostDbUserId) {
+          client.emit('error', { message: 'Host not found for this channel' });
+          return;
+        }
+        const ephemeralMsg = {
+          id: randomUUID(),
+          channelId: payload.channelId,
+          senderId: client.data.guestIdentity || 'guest',
+          guestName: client.data.guestName,
+          guestIdentity: client.data.guestIdentity,
+          content: payload.content,
+          audienceType: MessageAudienceType.HOST,
+          targetUserId: hostDbUserId,
+          createdAt: new Date().toISOString(),
+          isGuest: true,
+          sender: {
+            id: client.data.guestIdentity || 'guest',
+            name: client.data.guestName || 'Guest',
+            avatar: null,
+          },
+        };
+        this.server.to(`user:${hostDbUserId}`).emit('message:new', ephemeralMsg);
+        client.emit('message:new', ephemeralMsg);
+      } catch (error: any) {
+        this.logger.debug('Error sending guest message:', error);
+        client.emit('error', { message: error.message || 'Failed to send message' });
+      }
+      return;
+    }
+
     if (!client.data.userId || !client.data.dbUserId) {
       client.emit('error', { message: 'Not authenticated' });
       return;

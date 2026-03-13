@@ -335,11 +335,9 @@ export function CreateStudyRoomClient() {
         .map((line) => line.trim())
         .filter(Boolean)
         .map((line) => {
-          const [emailPart, rolePart] = line.split(",").map((p) => p.trim());
           return {
-            email: emailPart,
-            role:
-              rolePart?.toUpperCase() === "COHOST" ? "COHOST" : "PARTICIPANT",
+            email: line,
+            role: "PARTICIPANT",
           } as { email: string; role: "PARTICIPANT" | "COHOST" };
         })
         .filter((invite) => invite.email.includes("@"));
@@ -977,11 +975,11 @@ export function CreateStudyRoomClient() {
 
                         <div className="space-y-1">
                           <Label className="text-xs font-semibold uppercase text-muted-foreground">
-                            Invite Emails (one per line: email, role)
+                            Invite Emails (one per line)
                           </Label>
                           <Textarea
                             rows={5}
-                            placeholder={"alice@mail.com, participant\nbob@mail.com, cohost"}
+                            placeholder={"alice@mail.com\nbob@mail.com"}
                             value={formData.externalInviteList}
                             onChange={(e) =>
                               updateField("externalInviteList", e.target.value)

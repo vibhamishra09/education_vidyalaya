@@ -53,6 +53,7 @@ interface ChatWidgetProps {
 	hostUserId?: string | null
 	currentUserDbId?: string | null
 	allowedAudiences?: Partial<Record<MessageAudienceType, boolean>>
+	guestToken?: string | null
 }
 
 export function ChatWidget({
@@ -63,7 +64,9 @@ export function ChatWidget({
 	hostUserId,
 	currentUserDbId,
 	allowedAudiences,
+	guestToken,
 }: ChatWidgetProps) {
+	const isGuestMode = !!guestToken
 	const { user, isLoaded } = useUser()
 	const { getToken } = useAuth()
 	const userId = user?.id
@@ -86,6 +89,8 @@ export function ChatWidget({
 			setError(null)
 			return
 		}
+		// Guests have no persistent history (all messages are ephemeral)
+		if (guestToken) return
 		const activeChannelId = channelId
 
 		const cachedMessages = channelMessageCache.get(activeChannelId)
@@ -118,10 +123,10 @@ export function ChatWidget({
 		return () => {
 			mounted = false
 		}
-	}, [channelId])
+	}, [channelId, guestToken])
 
 	useEffect(() => {
-		if (!channelId || !isLoaded || !userId || !getToken) {
+		if (!channelId || !isLoaded || (!userId && !isGuestMode)) {
 			if (socketRef.current) {
 				socketRef.current.disconnect()
 				socketRef.current = null
@@ -129,17 +134,17 @@ export function ChatWidget({
 			return
 		}
 		const activeChannelId = channelId
-		
+
 		let socketInstance: Socket | null = null
 		let isMounted = true
-		
+
 		async function connectSocket() {
 			try {
 				setIsConnecting(true)
 				setError(null)
-				
-				// Get Clerk token for authentication using the useAuth hook
-				const token = await getToken()
+
+				// For guests use their DB access token; for regular users get Clerk token
+				const token = isGuestMode ? guestToken : await getToken()
 				if (!token) {
 					if (isMounted) {
 						setError('Authentication required')
@@ -315,7 +320,7 @@ export function ChatWidget({
 			}
 			socketRef.current = null
 		}
-	}, [channelId, isLoaded, userId, getToken])
+	}, [channelId, isLoaded, userId, getToken, guestToken, isGuestMode])
 
 	useEffect(() => {
 		if (!channelId) return
@@ -339,7 +344,7 @@ export function ChatWidget({
 		)
 	}
 
-	if (!user) {
+	if (!user && !isGuestMode) {
 		return (
 			<div className={`p-4 border rounded ${className}`}>
 				<p className="text-muted-foreground text-sm">Please sign in to chat</p>

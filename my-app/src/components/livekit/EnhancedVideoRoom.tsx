@@ -119,6 +119,7 @@ export function EnhancedVideoRoom({
 	externalAccessToken,
 	onParticipantListChange,
 }: EnhancedVideoRoomProps) {
+	const isGuest = !!externalAccessToken
 	const [showChat, setShowChat] = useState(false) // Start hidden on mobile
 	const [showParticipants, setShowParticipants] = useState(false)
 	const [isFullscreen, setIsFullscreen] = useState(false)
@@ -800,6 +801,8 @@ export function EnhancedVideoRoom({
 					hostUser={hostUser}
 					currentUserDbId={currentUserDbId}
 					onParticipantListChange={onParticipantListChange}
+					isGuest={isGuest}
+					guestToken={isGuest ? externalAccessToken : undefined}
 					// Flash message props
 					activeFlashMessage={activeFlashMessage}
 					flashQuestions={flashQuestions}
@@ -987,6 +990,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	hostUser,
 	currentUserDbId,
 	onParticipantListChange,
+	isGuest = false,
+	guestToken,
 	participantChatLocks,
 	onPromoteToCohost,
 	// Flash message
@@ -1065,6 +1070,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	hostUser?: ChatIdentity | null
 	currentUserDbId?: string | null
 	onParticipantListChange?: (participantIdentities: string[]) => void
+	isGuest?: boolean
+	guestToken?: string | null
 	participantChatLocks?: Record<string, ParticipantChatLocks>
 	onPromoteToCohost?: (
 		participantIdentity: string,
@@ -1092,7 +1099,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 
 	// Get participants list for name lookup
 	const allParticipants = useParticipants()
-	const canViewParticipantList = isHost || permissions?.allowParticipantList !== false
+	const canViewParticipantList = !isGuest && (isHost || permissions?.allowParticipantList !== false)
 	const participantIdentitiesKey = useMemo(
 		() => allParticipants.map((participant) => participant.identity).sort().join('|'),
 		[allParticipants],
@@ -3200,6 +3207,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				{/* LEFT: Audio/Video Controls - Horizontal Group */}
 				<div className="flex items-center gap-1 md:gap-3">
 					{/* Audio Button Stack */}
+					{!isGuest && (
 					<div className="flex flex-col items-center justify-center group relative">
 						<div className="flex items-center bg-white/5 rounded-lg md:rounded-xl p-0.5 md:p-1 border border-white/5">
 							<button
@@ -3222,8 +3230,10 @@ const VideoRoomContent = memo(function VideoRoomContent({
 							</button>
 						</div>
 					</div>
+					)}
 
 			{/* Video Button Stack */}
+					{!isGuest && (
 					<div className="flex flex-col items-center justify-center group relative">
 						<div className="flex items-center bg-white/5 rounded-lg md:rounded-xl p-0.5 md:p-1 border border-white/5">
 							<button
@@ -3257,13 +3267,14 @@ const VideoRoomContent = memo(function VideoRoomContent({
 							</button>
 						</div>
 					</div>
+					)}
 				</div>
 
 				{/* CENTER: Main Controls */}
 				<div className="flex items-center gap-1 md:gap-3 flex-1 justify-center">
 					
-					{/* Share Screen - hidden on mobile (getDisplayMedia not supported) */}
-					{!isMobileViewport && (
+					{/* Share Screen - hidden on mobile/guests (getDisplayMedia not supported) */}
+					{!isGuest && !isMobileViewport && (
 						<div className="flex flex-col items-center justify-center group">
 							<button
 								onClick={async () => {
@@ -3549,11 +3560,14 @@ const VideoRoomContent = memo(function VideoRoomContent({
 										recipients={chatRecipients}
 										hostUserId={hostUser?.id}
 										currentUserDbId={currentUserDbId}
-										allowedAudiences={{
-											EVERYONE: permissions?.allowChatEveryone ?? true,
-											HOST: permissions?.allowChatHost ?? true,
-											USER: permissions?.allowChatUser ?? true,
-										}}
+										allowedAudiences={isGuest
+											? { HOST: true, EVERYONE: false, USER: false }
+											: {
+												EVERYONE: permissions?.allowChatEveryone ?? true,
+												HOST: permissions?.allowChatHost ?? true,
+												USER: permissions?.allowChatUser ?? true,
+											}}
+										guestToken={guestToken}
 										className="flex-1 min-h-0 overflow-hidden" 
 									/>
 								) : (

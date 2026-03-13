@@ -344,4 +344,26 @@ export class ChatService {
       externalId: channel.externalId,
     };
   }
+
+  /**
+   * Validate a guest access token without requiring a studyRoomId upfront.
+   * Returns guest info if valid, null otherwise.
+   */
+  async validateGuestToken(token: string): Promise<{
+    studyRoomId: string;
+    guestParticipant: { name: string; livekitIdentity: string };
+  } | null> {
+    const record = await this.prisma.studyRoomGuestAccessToken.findUnique({
+      where: { token },
+      include: { guestParticipant: true },
+    });
+    if (!record || record.expiresAt < new Date()) return null;
+    return {
+      studyRoomId: record.studyRoomId,
+      guestParticipant: {
+        name: record.guestParticipant.name,
+        livekitIdentity: record.guestParticipant.livekitIdentity,
+      },
+    };
+  }
 }
