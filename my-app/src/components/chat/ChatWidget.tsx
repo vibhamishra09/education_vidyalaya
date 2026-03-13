@@ -159,7 +159,7 @@ export function ChatWidget({
 				console.log('🔌 [Chat] Connecting to WebSocket:', url, 'for channel:', activeChannelId)
 				
 				const s = io(url, { 
-					transports: ['websocket'],
+					transports: ['websocket', 'polling'],
 					auth: { token },
 					reconnection: true,
 					reconnectionAttempts: 5,
@@ -191,7 +191,7 @@ export function ChatWidget({
 					joinFallbackTimer = setTimeout(() => {
 						console.warn('⚠️ [Chat] Auth handshake timeout, joining with fallback')
 						joinChannel()
-					}, 400)
+					}, 1000)
 				})
 
 				s.on('authenticated', () => {
