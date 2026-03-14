@@ -3945,7 +3945,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		)}
 		
 		{/* Permission Request Modal - Shows when host asks participant to enable audio/video */}
-		{!isHost && pendingPermissionRequest && (
+		{/* Guests don't need microphone/camera permissions as they won't be using them */}
+		{!isHost && !isGuest && pendingPermissionRequest && (
 			<PermissionRequestModal
 				type={pendingPermissionRequest.type}
 				onAccept={() => {
