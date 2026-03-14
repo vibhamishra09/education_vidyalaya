@@ -54,6 +54,7 @@ export class ChatController {
     @CurrentUser() userId?: string,
     @Query('limit') limit?: string,
     @Query('cursor') cursor?: string,
+    @Query('guestEmail') guestEmail?: string, // For guest users to see their message history
   ) {
     // For authenticated users, get their DB user ID
     // For guest users, userId will be undefined
@@ -70,6 +71,7 @@ export class ChatController {
       limit ? Number(limit) : 50,
       cursor,
       dbUserId,
+      guestEmail, // Pass guest email for message history filtering
     );
   }
 

@@ -3570,6 +3570,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 												USER: permissions?.allowChatUser ?? true,
 											}}
 										guestToken={guestToken}
+										guestEmail={isGuest ? (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('guestEmail') : null) : null}
 										className="flex-1 min-h-0 overflow-hidden" 
 									/>
 								) : (

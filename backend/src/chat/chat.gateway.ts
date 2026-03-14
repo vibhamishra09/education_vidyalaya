@@ -121,6 +121,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
             client.data.isGuest = true;
             client.data.guestName = guestRecord.guestParticipant.name;
             client.data.guestIdentity = guestRecord.guestParticipant.livekitIdentity;
+            client.data.guestParticipantId = guestRecord.guestParticipant.id;
+            client.data.guestEmail = guestRecord.guestParticipant.email;
             client.data.studyRoomId = guestRecord.studyRoomId;
             client.emit('authenticated');
             return;
@@ -159,6 +161,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
           client.data.isGuest = true;
           client.data.guestName = guestRecord.guestParticipant.name;
           client.data.guestIdentity = guestRecord.guestParticipant.livekitIdentity;
+          client.data.guestParticipantId = guestRecord.guestParticipant.id;
+          client.data.guestEmail = guestRecord.guestParticipant.email;
           client.data.studyRoomId = guestRecord.studyRoomId;
           client.emit('authenticated');
           return;
@@ -223,7 +227,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       targetUserId?: string;
     },
   ) {
-    // Guest path: ephemeral message to host only, no DB write
+    // Guest path: save message to database and emit to host
     if (client.data.isGuest) {
       try {
         const hostDbUserId = await this.chatService.getChannelHostUserId(payload.channelId);
@@ -231,25 +235,32 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
           client.emit('error', { message: 'Host not found for this channel' });
           return;
         }
-        const ephemeralMsg = {
-          id: randomUUID(),
-          channelId: payload.channelId,
-          senderId: client.data.guestIdentity || 'guest',
-          guestName: client.data.guestName,
-          guestIdentity: client.data.guestIdentity,
-          content: payload.content,
-          audienceType: MessageAudienceType.HOST,
-          targetUserId: hostDbUserId,
-          createdAt: new Date().toISOString(),
-          isGuest: true,
-          sender: {
+        
+        // Save guest message to database
+        const message = await this.chatService.sendGuestMessage(
+          payload.channelId,
+          client.data.guestParticipantId,
+          client.data.guestEmail,
+          client.data.guestName,
+          payload.content,
+          hostDbUserId,
+        );
+        
+        // Transform message for emission (similar to getMessages transformation)
+        const messageToEmit = {
+          ...message,
+          sender: message.sender || {
             id: client.data.guestIdentity || 'guest',
             name: client.data.guestName || 'Guest',
             avatar: null,
           },
+          isGuest: true,
+          guestEmail: client.data.guestEmail,
         };
-        this.server.to(`user:${hostDbUserId}`).emit('message:new', ephemeralMsg);
-        client.emit('message:new', ephemeralMsg);
+        
+        // Emit to host and sender
+        this.server.to(`user:${hostDbUserId}`).emit('message:new', messageToEmit);
+        client.emit('message:new', messageToEmit);
       } catch (error: any) {
         this.logger.debug('Error sending guest message:', error);
         client.emit('error', { message: error.message || 'Failed to send message' });

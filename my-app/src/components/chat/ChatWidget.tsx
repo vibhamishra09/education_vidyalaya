@@ -54,6 +54,7 @@ interface ChatWidgetProps {
 	currentUserDbId?: string | null
 	allowedAudiences?: Partial<Record<MessageAudienceType, boolean>>
 	guestToken?: string | null
+	guestEmail?: string | null // Guest email for message history matching
 }
 
 export function ChatWidget({
@@ -65,6 +66,7 @@ export function ChatWidget({
 	currentUserDbId,
 	allowedAudiences,
 	guestToken,
+	guestEmail,
 }: ChatWidgetProps) {
 	const isGuestMode = !!guestToken
 	const { user, isLoaded } = useUser()
@@ -89,8 +91,6 @@ export function ChatWidget({
 			setError(null)
 			return
 		}
-		// Guests have no persistent history (all messages are ephemeral)
-		if (guestToken) return
 		const activeChannelId = channelId
 
 		const cachedMessages = channelMessageCache.get(activeChannelId)
@@ -103,7 +103,12 @@ export function ChatWidget({
 			try {
 				console.log('Loading chat history for channel:', channelId)
 				// Load more messages to show complete history
-				const res = await apiClient.get(`/api/chat/channels/${activeChannelId}/messages`, { params: { limit: 200 } })
+				const params: Record<string, string | number> = { limit: 200 }
+				// For guests, pass email to filter their message history
+				if (isGuestMode && guestEmail) {
+					params.guestEmail = guestEmail
+				}
+				const res = await apiClient.get(`/api/chat/channels/${activeChannelId}/messages`, { params })
 				if (!mounted) return
 				console.log('Loaded messages:', res.data?.length || 0, 'messages')
 				const historyMessages: Message[] = Array.isArray(res.data) ? res.data : []
@@ -123,7 +128,7 @@ export function ChatWidget({
 		return () => {
 			mounted = false
 		}
-	}, [channelId, guestToken])
+	}, [channelId, guestToken, isGuestMode, guestEmail])
 
 	useEffect(() => {
 		if (!channelId || !isLoaded || (!userId && !isGuestMode)) {
