@@ -3349,9 +3349,9 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						</div>
 					)}
 
-					{!isGuest && (
-					{/* Participants */}
+				{!isGuest && (
 					<div className="flex flex-col items-center justify-center group">
+						{/* Participants */}
 						<button
 							onClick={() => {
 								if (!canViewParticipantList) return
