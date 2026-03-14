@@ -115,6 +115,16 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         );
 
         if (!requestState.isSignedIn) {
+          // Not a valid Clerk token — try guest token path before disconnecting
+          const guestRecord = await this.chatService.validateGuestToken(token).catch(() => null);
+          if (guestRecord) {
+            client.data.isGuest = true;
+            client.data.guestName = guestRecord.guestParticipant.name;
+            client.data.guestIdentity = guestRecord.guestParticipant.livekitIdentity;
+            client.data.studyRoomId = guestRecord.studyRoomId;
+            client.emit('authenticated');
+            return;
+          }
           this.logger.debug('User is not authenticated');
           client.disconnect();
           return;

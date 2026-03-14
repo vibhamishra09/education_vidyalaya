@@ -3317,7 +3317,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 					)}
 
 					{/* Chat */}
-					<div className={`flex flex-col items-center justify-center group ${!canViewParticipantList ? 'hidden' : ''}`}>
+					<div className={`flex flex-col items-center justify-center group ${(!canViewParticipantList && !isGuest) ? 'hidden' : ''}`}>
 						<button
 							onClick={() => {
 								if (!showChat) { setShowParticipants(false); setShowFlashPanel(false) }
@@ -3349,6 +3349,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						</div>
 					)}
 
+					{!isGuest && (
 					{/* Participants */}
 					<div className="flex flex-col items-center justify-center group">
 						<button
@@ -3369,6 +3370,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 							)}
 						</button>
 					</div>
+					)}
 					
 					{/* PiP */}
 					<div className="hidden md:flex flex-col items-center justify-center group">
