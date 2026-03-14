@@ -68,14 +68,24 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   private emitScopedMessage(
     channelId: string,
-    message: { audienceType: MessageAudienceType; senderId: string; targetUserId?: string | null },
+    message: { 
+      audienceType: MessageAudienceType; 
+      senderId: string | null; 
+      guestSenderId?: string | null;
+      targetUserId?: string | null;
+    },
   ) {
     if (message.audienceType === MessageAudienceType.EVERYONE) {
       this.server.to(channelId).emit('message:new', message);
       return;
     }
 
-    const recipients = new Set<string>([message.senderId]);
+    // For guest messages, senderId is null, so we skip adding sender to recipients
+    // Only the target user (host) should receive the message
+    const recipients = new Set<string>();
+    if (message.senderId) {
+      recipients.add(message.senderId);
+    }
     if (message.targetUserId) {
       recipients.add(message.targetUserId);
     }
@@ -324,7 +334,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         audienceType,
         payload.targetUserId,
       );
-      this.emitScopedMessage(payload.channelId, message);
+      // For regular users, senderId is always present (not null)
+      this.emitScopedMessage(payload.channelId, {
+        audienceType: message.audienceType,
+        senderId: message.senderId!, // Non-null assertion: regular users always have senderId
+        targetUserId: message.targetUserId,
+      });
     } catch (error: any) {
       this.logger.debug('Error sending message:', error);
       client.emit('error', {
