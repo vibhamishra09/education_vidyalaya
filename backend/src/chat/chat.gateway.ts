@@ -9,7 +9,7 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { ChatService } from './chat.service';
-import { createClerkClient } from '@clerk/backend';
+import { createClerkClient, verifyToken } from '@clerk/backend';
 import { PermissionsService } from '../session-moderation/permissions.service';
 import { MessageAudienceType } from '../generated/prisma/client';
 
@@ -106,56 +106,52 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         return;
       }
 
-      // Verify token directly with Clerk (for WebSocket, we can't use authenticateRequest)
+      // verifyToken avoids authenticateRequest(Request(API_URL)) which breaks tokens minted on the Next.js origin.
       try {
-        // Use environment variable or construct from PORT
-        const baseUrl = process.env.API_URL || `http://localhost:${process.env.PORT || 3001}`;
-        const clerkRequest = new Request(baseUrl, {
-          method: 'GET',
-          headers: {
-            authorization: `Bearer ${token}`,
-          },
-        });
+        const jwtKey = process.env.CLERK_JWT_KEY;
+        const secretKey = process.env.CLERK_SECRET_KEY;
 
-        const requestState = await this.clerkClient.authenticateRequest(
-          clerkRequest,
-          {
-            jwtKey: process.env.CLERK_JWT_KEY,
-          },
-        );
-
-        if (!requestState.isSignedIn) {
-          // Not a valid Clerk token — try guest token path before disconnecting
-          const guestRecord = await this.chatService.validateGuestToken(token).catch(() => null);
-          if (guestRecord) {
-            client.data.isGuest = true;
-            client.data.guestName = guestRecord.guestParticipant.name;
-            client.data.guestIdentity = guestRecord.guestParticipant.livekitIdentity;
-            client.data.guestParticipantId = guestRecord.guestParticipant.id;
-            client.data.guestEmail = guestRecord.guestParticipant.email;
-            client.data.studyRoomId = guestRecord.studyRoomId;
-            client.emit('authenticated');
+        let clerkUserId: string;
+        if (jwtKey || secretKey) {
+          const payload = await verifyToken(token, {
+            ...(jwtKey ? { jwtKey } : { secretKey: secretKey! }),
+          });
+          if (!payload.sub) {
+            this.logger.debug('Clerk token verified but missing sub');
+            client.disconnect();
             return;
           }
-          this.logger.debug('User is not authenticated');
-          client.disconnect();
-          return;
+          clerkUserId = payload.sub;
+        } else {
+          const frontendUrl =
+            process.env.FRONTEND_URLS?.split(',')[0]?.trim() ||
+            'http://localhost:3000';
+          const clerkRequest = new Request(frontendUrl, {
+            method: 'GET',
+            headers: { authorization: `Bearer ${token}` },
+          });
+          const requestState = await this.clerkClient.authenticateRequest(
+            clerkRequest,
+            {},
+          );
+          if (!requestState.isSignedIn) {
+            throw new Error('Clerk session not signed in');
+          }
+          const auth = requestState.toAuth();
+          if (!auth.userId) {
+            this.logger.debug('User ID not found in token');
+            client.disconnect();
+            return;
+          }
+          clerkUserId = auth.userId;
         }
 
-        const auth = requestState.toAuth();
+        client.data.userId = clerkUserId;
+        client.data.clerkId = clerkUserId;
 
-        if (!auth.userId) {
-          this.logger.debug('User ID not found in token');
-          client.disconnect();
-          return;
-        }
-
-        client.data.userId = auth.userId;
-        client.data.clerkId = auth.userId;
-
-        const user = await this.chatService.getUserByClerkId(auth.userId);
+        const user = await this.chatService.getUserByClerkId(clerkUserId);
         if (!user) {
-          this.logger.debug('No user found for clerkId:', auth.userId);
+          this.logger.debug('No user found for clerkId:', clerkUserId);
           client.disconnect();
           return;
         }
@@ -163,9 +159,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         client.data.dbUserId = user.id;
         client.join(`user:${user.id}`);
         client.emit('authenticated');
-        this.logger.debug('WebSocket authenticated for user:', auth.userId);
+        this.logger.debug('WebSocket authenticated for user:', clerkUserId);
       } catch (verifyError: any) {
-        // Clerk auth failed — try guest token path
         const guestRecord = await this.chatService.validateGuestToken(token).catch(() => null);
         if (guestRecord) {
           client.data.isGuest = true;
@@ -179,7 +174,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         }
         this.logger.debug(
           'Token verification failed:',
-          verifyError.message || verifyError,
+          verifyError?.message || verifyError,
         );
         client.disconnect();
         return;
@@ -201,13 +196,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         client.join(payload.channelId);
         client.emit('joined:channel', { channelId: payload.channelId });
       } else {
-        client.emit('error', { message: 'Not authorized to join this channel' });
+        client.emit('chat:error', { message: 'Not authorized to join this channel' });
       }
       return;
     }
 
     if (!client.data.userId || !client.data.dbUserId) {
-      client.emit('error', { message: 'Not authenticated' });
+      client.emit('chat:error', { message: 'Not authenticated' });
       return;
     }
 
@@ -216,7 +211,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       client.data.dbUserId,
     );
     if (!isMember) {
-      client.emit('error', {
+      client.emit('chat:error', {
         code: 'NOT_CHANNEL_MEMBER',
         message: 'Not a member of this channel',
       });
@@ -242,7 +237,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       try {
         const hostDbUserId = await this.chatService.getChannelHostUserId(payload.channelId);
         if (!hostDbUserId) {
-          client.emit('error', { message: 'Host not found for this channel' });
+          client.emit('chat:error', { message: 'Host not found for this channel' });
           return;
         }
         
@@ -273,13 +268,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         client.emit('message:new', messageToEmit);
       } catch (error: any) {
         this.logger.debug('Error sending guest message:', error);
-        client.emit('error', { message: error.message || 'Failed to send message' });
+        client.emit('chat:error', { message: error.message || 'Failed to send message' });
       }
       return;
     }
 
     if (!client.data.userId || !client.data.dbUserId) {
-      client.emit('error', { message: 'Not authenticated' });
+      client.emit('chat:error', { message: 'Not authenticated' });
       return;
     }
 
@@ -301,7 +296,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         );
         
         if (!canChat) {
-          client.emit('error', { 
+          client.emit('chat:error', { 
             code: 'CHAT_DISABLED',
             message: 'Chat is disabled by the host',
           });
@@ -319,7 +314,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
           isHostSender,
         );
         if (!canSendToAudience) {
-          client.emit('error', {
+          client.emit('chat:error', {
             code: 'CHAT_SCOPE_RESTRICTED',
             message: 'The host has restricted this chat target for you',
           });
@@ -342,7 +337,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       });
     } catch (error: any) {
       this.logger.debug('Error sending message:', error);
-      client.emit('error', {
+      client.emit('chat:error', {
         message: error.message || 'Failed to send message',
       });
     }

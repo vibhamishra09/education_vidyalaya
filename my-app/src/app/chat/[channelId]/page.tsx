@@ -1,11 +1,30 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import { io, Socket } from 'socket.io-client'
 import { useUser, useAuth } from '@clerk/nextjs'
 import apiClient from '@/lib/api-client'
 import { MessageList } from '@/components/chat/MessageList'
 import { MessageInput } from '@/components/chat/MessageInput'
+
+function parseChatSocketPayload(data: unknown): {
+	code?: string
+	message?: string
+	error?: string
+} | null {
+	if (data == null) return null
+	if (data instanceof Error) {
+		const m = data.message?.trim()
+		return m ? { message: m } : null
+	}
+	if (typeof data !== 'object') return null
+	const o = data as Record<string, unknown>
+	const message = typeof o.message === 'string' ? o.message : undefined
+	const error = typeof o.error === 'string' ? o.error : undefined
+	const code = typeof o.code === 'string' ? o.code : undefined
+	if (!code && !message?.trim() && !error?.trim()) return null
+	return { code, message: message?.trim(), error: error?.trim() }
+}
 
 type Message = {
 	id: string
@@ -20,6 +39,8 @@ export default function ChannelPage() {
 	const { channelId } = useParams<{ channelId: string }>()
 	const { user, isLoaded } = useUser()
 	const { getToken } = useAuth()
+	const getTokenRef = useRef(getToken)
+	getTokenRef.current = getToken
 	const [messages, setMessages] = useState<Message[]>([])
 	const [socket, setSocket] = useState<Socket | null>(null)
 	const [error, setError] = useState<string | null>(null)
@@ -44,22 +65,24 @@ export default function ChannelPage() {
 	}, [channelId])
 
 	useEffect(() => {
-		if (!channelId || !isLoaded || !user || !getToken) return
+		if (!channelId || !isLoaded || !user) return
 		
 		let socketInstance: Socket | null = null
 		
 		async function connectSocket() {
 			try {
-				// Get Clerk token for authentication using the useAuth hook
-				const token = await getToken()
+				const token = await getTokenRef.current()
 				if (!token) {
 					setError('Authentication required')
 					return
 				}
 
-				const url = process.env.NEXT_PUBLIC_CHAT_WS_URL as string
+				const url =
+					process.env.NEXT_PUBLIC_CHAT_WS_URL ||
+					process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') ||
+					'http://localhost:3001'
 				const s = io(url, { 
-					transports: ['websocket'],
+					transports: ['websocket', 'polling'],
 					auth: { token },
 					reconnection: true,
 					reconnectionAttempts: 5,
@@ -67,15 +90,32 @@ export default function ChannelPage() {
 				})
 				
 				socketInstance = s
+
+				let joined = false
+				const joinChannel = () => {
+					if (joined) return
+					joined = true
+					s.emit('join:channel', { channelId })
+				}
 				
 				s.on('connect', () => {
-					console.log('Socket connected, joining channel:', channelId)
-					s.emit('join:channel', { channelId })
+					joined = false
+				})
+
+				s.on('authenticated', () => {
+					joinChannel()
 				})
 				
 				s.on('joined:channel', () => {
-					console.log('Successfully joined channel:', channelId)
-					setError(null) // Clear any previous errors
+					setError(null)
+				})
+
+				s.on('chat:error', (data: unknown) => {
+					const parsed = parseChatSocketPayload(data)
+					if (!parsed) return
+					const msg = (parsed.message || parsed.error || '').trim()
+					if (msg) setError(msg)
+					console.warn('[chat page] chat:error:', parsed)
 				})
 				
 				s.on('message:new', (msg: Message) => {
@@ -83,17 +123,15 @@ export default function ChannelPage() {
 				})
 				
 				s.on('connect_error', (err: Error) => {
-					console.error('Socket connection error:', err)
+					console.warn('Socket connection error:', err.message)
 					setError(err.message || 'Connection error')
 				})
-				
-				s.on('error', (err: Error) => {
-					console.error('Socket error:', err)
-					setError(err.message || 'Connection error')
-				})
+
+				// Avoid s.on('error'): socket.io-client uses it internally; args often log as {}.
 				
 				s.on('disconnect', (reason) => {
 					console.log('Socket disconnected:', reason)
+					joined = false
 				})
 				
 				setSocket(s)
@@ -112,7 +150,7 @@ export default function ChannelPage() {
 				socketInstance = null
 			}
 		}
-	}, [channelId, isLoaded, user, getToken])
+	}, [channelId, isLoaded, user])
 
 	if (!isLoaded) return <div className="p-4">Loading…</div>
 	if (!user) return <div className="p-4">Please sign in.</div>

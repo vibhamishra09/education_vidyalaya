@@ -3,7 +3,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@clerk/nextjs'
 import axios from 'axios'
-import { EnhancedVideoRoom } from '@/components/livekit/EnhancedVideoRoom'
+import {
+	EnhancedVideoRoom,
+	LIVEKIT_PARTICIPANT_IDS_SEP,
+} from '@/components/livekit/EnhancedVideoRoom'
 import apiClient from '@/lib/api-client'
 import { Loader2, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -118,8 +121,18 @@ export default function RoomPage() {
 		}
 	}, [guestAccessToken, getToken, roomName])
 
+	// LiveKit can lag behind DB when someone joins; periodic refresh avoids stale chat targets until the next identity change.
+	useEffect(() => {
+		if (guestAccessToken || !roomName?.startsWith('studyroom-')) return
+		const tick = () => {
+			void refreshChatRecipients()
+		}
+		const id = window.setInterval(tick, 25_000)
+		return () => window.clearInterval(id)
+	}, [guestAccessToken, roomName, refreshChatRecipients])
+
 	const handleParticipantListChange = useCallback((participantIdentities: string[]) => {
-		const nextKey = participantIdentities.slice().sort().join('|')
+		const nextKey = [...participantIdentities].sort().join(LIVEKIT_PARTICIPANT_IDS_SEP)
 		if (nextKey === participantKeyRef.current) return
 		participantKeyRef.current = nextKey
 		void refreshChatRecipients()
@@ -376,6 +389,9 @@ export default function RoomPage() {
 			currentUserDbId={currentUserDbId}
 			externalAccessToken={guestAccessToken}
 			onParticipantListChange={handleParticipantListChange}
+			onLiveKitConnected={() => {
+				void refreshChatRecipients()
+			}}
 		/>
 	)
 }

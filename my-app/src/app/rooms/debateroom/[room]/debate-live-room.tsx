@@ -13,7 +13,7 @@ import {
   useSpeakingParticipants,
 } from '@livekit/components-react';
 import { Track, RoomOptions, VideoPresets, RemoteParticipant } from 'livekit-client';
-import { KrispNoiseFilter, isKrispNoiseFilterSupported } from '@livekit/krisp-noise-filter';
+import { isLiveKitKrispEnabled } from '@/lib/livekit-krisp';
 import { io, Socket } from 'socket.io-client';
 import type { TrackReferenceOrPlaceholder } from '@livekit/components-react';
 import '@livekit/components-styles';
@@ -548,16 +548,34 @@ function DebateLiveContent({
     };
   }, [room]);
 
-  // Apply Krisp AI noise suppression to microphone track
+  // Krisp requires LiveKit Cloud entitlement; skip unless NEXT_PUBLIC_ENABLE_KRISP=true.
   useEffect(() => {
-    if (!localParticipant || !isKrispNoiseFilterSupported()) return;
-    const micPublication = localParticipant.getTrackPublication(Track.Source.Microphone);
-    const micTrack = micPublication?.audioTrack;
-    if (!micTrack) return;
-    const filter = KrispNoiseFilter();
-    micTrack.setProcessor(filter).catch(() => {});
+    if (!isLiveKitKrispEnabled() || !localParticipant || typeof window === 'undefined') return;
+    let cancelled = false;
+    let cleanup: (() => void) | null = null;
+
+    (async () => {
+      try {
+        const { KrispNoiseFilter, isKrispNoiseFilterSupported } = await import(
+          '@livekit/krisp-noise-filter',
+        );
+        if (cancelled || !isKrispNoiseFilterSupported()) return;
+        const micPublication = localParticipant.getTrackPublication(Track.Source.Microphone);
+        const micTrack = micPublication?.audioTrack;
+        if (!micTrack) return;
+        const filter = KrispNoiseFilter();
+        await micTrack.setProcessor(filter);
+        cleanup = () => {
+          micTrack.stopProcessor().catch(() => {});
+        };
+      } catch {
+        // No entitlement / network — continue without Krisp.
+      }
+    })();
+
     return () => {
-      micTrack.stopProcessor().catch(() => {});
+      cancelled = true;
+      cleanup?.();
     };
   }, [localParticipant]);
 
