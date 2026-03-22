@@ -1,13 +1,13 @@
 // Sentry must be imported and initialized before anything else
+import 'dotenv/config';
 import * as Sentry from '@sentry/nestjs';
-import { nodeProfilingIntegration } from '@sentry/profiling-node';
 
 // Initialize Sentry
 Sentry.init({
   dsn: process.env.SENTRY_DSN,
-  integrations: [nodeProfilingIntegration()],
+  integrations: [],
   tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
-  profilesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
+  profilesSampleRate: 0,
   environment: process.env.NODE_ENV || 'development',
 });
 
