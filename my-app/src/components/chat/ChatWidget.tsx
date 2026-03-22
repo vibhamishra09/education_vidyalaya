@@ -3,7 +3,6 @@ import { useEffect, useState, useRef } from 'react'
 import { io, Socket } from 'socket.io-client'
 import { useUser, useAuth } from '@clerk/nextjs'
 import apiClient from '@/lib/api-client'
-import { parseRejectedApiError } from '@/lib/api-error'
 import { MessageList } from '@/components/chat/MessageList'
 import { ChatRecipient, MessageAudienceType, MessageInput } from '@/components/chat/MessageInput'
 
@@ -29,27 +28,6 @@ type Message = {
 // Keep chat history in-memory per channel so closing/reopening the panel
 // does not wipe the current message list.
 const channelMessageCache = new Map<string, Message[]>()
-
-/** Socket.IO reserves `error` for transport failures; parse only `chat:error` payloads. */
-function parseChatSocketPayload(data: unknown): {
-	code?: string
-	message?: string
-	error?: string
-} | null {
-	if (data == null) return null
-	if (data instanceof Error) {
-		const m = data.message?.trim()
-		return m ? { message: m } : null
-	}
-	if (typeof data !== 'object') return null
-	const o = data as Record<string, unknown>
-	const message =
-		typeof o.message === 'string' ? o.message : undefined
-	const error = typeof o.error === 'string' ? o.error : undefined
-	const code = typeof o.code === 'string' ? o.code : undefined
-	if (!code && !message?.trim() && !error?.trim()) return null
-	return { code, message: message?.trim(), error: error?.trim() }
-}
 
 function mergeMessages(existing: Message[], incoming: Message[]): Message[] {
 	if (incoming.length === 0) return existing
@@ -99,10 +77,13 @@ export function ChatWidget({
 		return channelMessageCache.get(channelId) || []
 	})
 	const socketRef = useRef<Socket | null>(null)
-	const getTokenRef = useRef(getToken)
-	getTokenRef.current = getToken
 	const [error, setError] = useState<string | null>(null)
 	const [isConnecting, setIsConnecting] = useState(false)
+
+	// Debug: Log chatDisabled prop changes
+	useEffect(() => {
+		console.log('[ChatWidget] chatDisabled prop changed to:', chatDisabled)
+	}, [chatDisabled])
 
 	useEffect(() => {
 		if (!channelId) {
@@ -138,11 +119,7 @@ export function ChatWidget({
 				})
 			} catch (e: unknown) {
 				if (!mounted) return
-				const { message: parsed } = parseRejectedApiError(e)
-				const errorMessage =
-					parsed ||
-					(e instanceof Error ? e.message : null) ||
-					'Failed to load messages'
+				const errorMessage = e instanceof Error ? e.message : 'Failed to load messages'
 				console.error('Failed to load chat history:', errorMessage)
 				setError(errorMessage)
 			}
@@ -165,7 +142,6 @@ export function ChatWidget({
 
 		let socketInstance: Socket | null = null
 		let isMounted = true
-		let clearStallTimerOnUnmount: (() => void) | null = null
 
 		async function connectSocket() {
 			try {
@@ -173,7 +149,7 @@ export function ChatWidget({
 				setError(null)
 
 				// For guests use their DB access token; for regular users get Clerk token
-				const token = isGuestMode ? guestToken : await getTokenRef.current()
+				const token = isGuestMode ? guestToken : await getToken()
 				if (!token) {
 					if (isMounted) {
 						setError('Authentication required')
@@ -203,114 +179,41 @@ export function ChatWidget({
 				
 				socketInstance = s
 				socketRef.current = s
-
-				const joinState = { joinedChannel: false }
-				let stallTimer: ReturnType<typeof setTimeout> | null = null
-				const clearStallTimer = () => {
-					if (stallTimer) {
-						clearTimeout(stallTimer)
-						stallTimer = null
-					}
-				}
-				const armStallTimer = (ms: number, message: string) => {
-					clearStallTimer()
-					stallTimer = setTimeout(() => {
-						stallTimer = null
-						if (!isMounted || joinState.joinedChannel) return
-						setIsConnecting(false)
-						setError((prev) => prev || message)
-					}, ms)
-				}
-				clearStallTimerOnUnmount = clearStallTimer
-
+				
 				let joinedForCurrentSocket = false
-				let joinAuthRetryCount = 0
+				let joinFallbackTimer: ReturnType<typeof setTimeout> | null = null
 				const joinChannel = () => {
 					if (joinedForCurrentSocket) return
 					joinedForCurrentSocket = true
 					console.log('✅ [Chat] Joining channel:', activeChannelId)
 					s.emit('join:channel', { channelId: activeChannelId })
+					if (joinFallbackTimer) {
+						clearTimeout(joinFallbackTimer)
+						joinFallbackTimer = null
+					}
 				}
 
 				s.on('connect', () => {
 					console.log('✅ [Chat] Socket connected:', activeChannelId)
-					joinState.joinedChannel = false
 					joinedForCurrentSocket = false
-					joinAuthRetryCount = 0
-					armStallTimer(
-						22_000,
-						'Chat timed out waiting for the server. Check that the API is running and NEXT_PUBLIC_CHAT_WS_URL points at it (e.g. http://localhost:3001), then refresh.',
-					)
+
+					// Wait for explicit server auth signal to avoid join/auth race.
+					joinFallbackTimer = setTimeout(() => {
+						console.warn('⚠️ [Chat] Auth handshake timeout, joining with fallback')
+						joinChannel()
+					}, 1000)
 				})
 
 				s.on('authenticated', () => {
 					console.log('✅ [Chat] Socket authenticated')
-					armStallTimer(
-						14_000,
-						'Could not attach to this chat channel. Leave the room and join again so your account is synced, or refresh the page.',
-					)
 					joinChannel()
 				})
 				
 				s.on('joined:channel', () => {
 					console.log('✅ [Chat] Successfully joined channel:', activeChannelId)
-					joinState.joinedChannel = true
-					clearStallTimer()
-					joinAuthRetryCount = 0
 					if (isMounted) {
 						setIsConnecting(false)
 						setError(null) // Clear any previous errors
-					}
-				})
-
-				s.on('chat:error', (data: unknown) => {
-					const errorData = parseChatSocketPayload(data)
-					if (!errorData) return
-
-					const rawMsg = (
-						errorData.message ||
-						errorData.error ||
-						''
-					).trim()
-
-					if (rawMsg === 'Not authenticated' && joinAuthRetryCount < 6) {
-						joinAuthRetryCount++
-						joinedForCurrentSocket = false
-						const delay = 300 + joinAuthRetryCount * 200
-						console.warn(
-							`[Chat] join:channel early; retrying in ${delay}ms (${joinAuthRetryCount}/6)`,
-						)
-						setTimeout(() => {
-							if (!isMounted || !s.connected) return
-							joinedForCurrentSocket = false
-							joinChannel()
-						}, delay)
-						return
-					}
-
-					console.warn('🚨 [Chat] chat:error:', errorData)
-
-					if (isMounted) {
-						setIsConnecting(false)
-						clearStallTimer()
-						if (errorData.code === 'CHAT_DISABLED') {
-							console.log('ℹ️ [Chat] Chat is disabled by host')
-						} else if (errorData.code === 'CHAT_SCOPE_RESTRICTED') {
-							setError('Host has restricted this chat target for you')
-						} else if (errorData.code === 'NOT_CHANNEL_MEMBER') {
-							setError(
-								'Your account is not on this chat channel yet. Open the study room page and use Join again, then return to the call.',
-							)
-						} else if (errorData.code === 'RECONNECTING') {
-							console.log('🔄 [Chat] Reconnecting...')
-							setIsConnecting(true)
-						} else if (rawMsg === 'Not authenticated') {
-							setError(
-								'Chat could not verify your session. Complete onboarding if you have not, then refresh the page.',
-							)
-						} else if (rawMsg) {
-							setError(rawMsg)
-						}
 					}
 				})
 				
@@ -331,7 +234,7 @@ export function ChatWidget({
 			// Track reconnection attempts to avoid showing error on normal reconnects
 			let reconnectAttempts = 0
 			
-				s.on('connect_error', (err: Error) => {
+			s.on('connect_error', (err: Error) => {
 					reconnectAttempts++
 					console.warn(`🔄 [Chat] Connection attempt ${reconnectAttempts} failed:`, err.message)
 					
@@ -346,23 +249,52 @@ export function ChatWidget({
 						setIsConnecting(false)
 					}
 				})
-
-				// Do not use s.on('error'): reserved by socket.io-client; payloads are often non-serializable (logs as {}).
+				
+				s.on('error', (data: unknown) => {
+					// Only process if data is an object with meaningful error information
+					if (!data || typeof data !== 'object') {
+						return
+					}
+					
+					const errorData = data as { code?: string; message?: string; error?: string }
+					const hasErrorInfo = !!(errorData.code || errorData.message || errorData.error)
+					
+					// Only log if there's actual meaningful error data (skip empty objects)
+					if (hasErrorInfo) {
+						console.error('🚨 [Chat] Socket error:', data)
+					}
+					
+					if (isMounted) {
+						// Handle specific error codes
+						if (errorData.code === 'CHAT_DISABLED') {
+							// Don't show error - chatDisabled prop will handle the UI
+							console.log('ℹ️ [Chat] Chat is disabled by host')
+						} else if (errorData.code === 'CHAT_SCOPE_RESTRICTED') {
+							setError('Host has restricted this chat target for you')
+						} else if (errorData.code === 'RECONNECTING') {
+							// Normal reconnection, don't show error
+							console.log('🔄 [Chat] Reconnecting...')
+						} else if (hasErrorInfo && (errorData.message || errorData.error)) {
+							setError(errorData.message || errorData.error || 'Connection error')
+						}
+					}
+				})
 				
 				s.on('disconnect', (reason) => {
 					console.log('🔌 [Chat] Socket disconnected:', reason)
-					clearStallTimer()
-					joinState.joinedChannel = false
 					// Only show error for server-initiated disconnects, not for normal reconnects
 					if (isMounted && reason === 'io server disconnect') {
 						setError('Disconnected from chat server')
-						setIsConnecting(false)
 					}
 					// Clear error and reset attempts on client-side disconnect (e.g., page refresh)
 					if (reason === 'io client disconnect') {
 						reconnectAttempts = 0
 					}
 					joinedForCurrentSocket = false
+					if (joinFallbackTimer) {
+						clearTimeout(joinFallbackTimer)
+						joinFallbackTimer = null
+					}
 				})
 				
 				// Clear error on successful reconnect
@@ -387,15 +319,13 @@ export function ChatWidget({
 		
 		return () => {
 			isMounted = false
-			clearStallTimerOnUnmount?.()
-			clearStallTimerOnUnmount = null
 			if (socketInstance) {
 				socketInstance.disconnect()
 				socketInstance = null
 			}
 			socketRef.current = null
 		}
-	}, [channelId, isLoaded, userId, guestToken, isGuestMode])
+	}, [channelId, isLoaded, userId, getToken, guestToken, isGuestMode])
 
 	useEffect(() => {
 		if (!channelId) return
@@ -467,7 +397,7 @@ export function ChatWidget({
 					<p className="text-xs opacity-90">{error}</p>
 				</div>
 			)}
-			{isConnecting && !error && (
+			{isConnecting && (
 				<div className="p-2 md:p-3 bg-blue-900/50 border border-blue-500/40 rounded-lg text-blue-200 text-xs md:text-sm mx-2 md:mx-3 mt-2 md:mt-3">
 					Connecting to chat...
 				</div>

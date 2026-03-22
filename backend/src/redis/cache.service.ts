@@ -2,18 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { redisClient } from './redis.provider';
 import { LoggerService } from '../common/logger';
 
-const REDIS_OP_TIMEOUT_MS = 2_500;
-const FETCH_FN_TIMEOUT_MS = 20_000;
-
-function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) =>
-      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms),
-    ),
-  ]);
-}
-
 @Injectable()
 export class CacheService {
   private readonly defaultTTL = 300; // 5 minutes default TTL
@@ -57,14 +45,12 @@ export class CacheService {
   }
 
   /**
-   * Check if Redis responds (bounded — unbounded ping caused hung Skills API / Swagger).
+   * Check if Redis is connected
    */
   private async isRedisConnected(): Promise<boolean> {
     try {
-      if (!redisClient.isOpen) {
-        return false;
-      }
-      await withTimeout(redisClient.ping(), REDIS_OP_TIMEOUT_MS, 'redis ping');
+      // Try a simple ping to check connection
+      await redisClient.ping();
       return true;
     } catch {
       return false;
@@ -82,11 +68,7 @@ export class CacheService {
         return null;
       }
 
-      const cached = await withTimeout(
-        redisClient.get(key),
-        REDIS_OP_TIMEOUT_MS,
-        'redis get',
-      ).catch(() => null);
+      const cached = await redisClient.get(key);
       if (cached) {
         this.logger.debug(`Cache hit for key: ${key}`);
         return JSON.parse(cached) as T;
@@ -112,11 +94,7 @@ export class CacheService {
 
       const ttl = ttlSeconds ?? this.defaultTTL;
       const serialized = JSON.stringify(value);
-      await withTimeout(
-        redisClient.setEx(key, ttl, serialized),
-        REDIS_OP_TIMEOUT_MS,
-        'redis setEx',
-      ).catch(() => undefined);
+      await redisClient.setEx(key, ttl, serialized);
       this.logger.debug(`Cached value for key: ${key} with TTL: ${ttl}s`);
     } catch (error) {
       this.logger.warn(`Cache set error for key ${key}:`, error instanceof Error ? error.message : String(error));
@@ -186,12 +164,8 @@ export class CacheService {
     // Create a new promise for this request
     const requestPromise = (async () => {
       try {
-        // Cache miss - fetch from database (bounded — prevents permanent stampede locks)
-        const value = await withTimeout(
-          fetchFn(),
-          FETCH_FN_TIMEOUT_MS,
-          'cache fetchFn',
-        );
+        // Cache miss - fetch from database
+        const value = await fetchFn();
 
         // Store in cache
         await this.set(cacheKey, value, ttlSeconds);

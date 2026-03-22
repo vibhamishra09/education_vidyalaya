@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react'
-import { LiveKitRoom, useParticipants, useTracks, RoomAudioRenderer, useSpeakingParticipants, VideoTrack, useLocalParticipant, isTrackReference, useRoomContext } from '@livekit/components-react'
-import { Track, RoomOptions, VideoPresets, LocalVideoTrack, RoomEvent } from 'livekit-client'
+import { LiveKitRoom, useParticipants, useTracks, RoomAudioRenderer, useSpeakingParticipants, VideoTrack, useLocalParticipant, isTrackReference } from '@livekit/components-react'
+import { Track, RoomOptions, VideoPresets, LocalVideoTrack } from 'livekit-client'
 import '@livekit/components-styles'
 import { BackgroundProcessor, BackgroundBlur, VirtualBackground, BackgroundOptions } from '@livekit/track-processors'
 import { ChatWidget } from '@/components/chat/ChatWidget'
@@ -11,7 +11,7 @@ import {
   Clock, MonitorUp, MonitorOff, Grid2X2, Presentation, Pin, 
   PinOff, User, PictureInPicture2, Camera, CameraOff, Sparkles, Lock, Settings2, 
   PhoneOff, ChevronUp, ChevronLeft, ChevronRight, ShieldCheck, Ban, Aperture, 
-  ImageIcon, LayoutGrid, Check, Timer, Power, LogOut, Zap, ZoomIn, ZoomOut, RotateCcw,
+  ImageIcon, LayoutGrid, Check, Timer, Power, LogOut, Zap
 } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
@@ -30,7 +30,6 @@ import { ExtensionRequestDialog } from '@/components/study-room/extension-reques
 import { EndMeetingDialog } from '@/components/study-room/end-meeting-dialog'
 import { useSessionModeration, RoomPermissions, PermissionRequest, ParticipantPermissionRequest, ParticipantChatLocks, RoomSettings, FlashQuestion, ActiveFlashMessage } from '@/hooks/use-session-moderation'
 import { FlashMessageOverlay } from '@/components/study-room/FlashMessageOverlay'
-import { isLiveKitKrispEnabled } from '@/lib/livekit-krisp'
 import { QuestionManager } from '@/components/study-room/QuestionManager'
 import { ChatRecipient } from '@/components/chat/MessageInput'
 
@@ -73,10 +72,6 @@ const VIRTUAL_BACKGROUNDS = [
 		thumbnail: 'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=200&h=150&fit=crop&q=80'
 	}
 ]
-
-/** Separator for serializing LiveKit identity lists (must not appear in identities). */
-export const LIVEKIT_PARTICIPANT_IDS_SEP = '\u001e'
-
 interface SessionData {
 	id: string;
 	date: string;
@@ -110,8 +105,6 @@ interface EnhancedVideoRoomProps {
 	currentUserDbId?: string | null
 	externalAccessToken?: string | null
 	onParticipantListChange?: (participantIdentities: string[]) => void
-	/** Fires when the LiveKit session is connected; use to refresh server-side room state (e.g. study room participants). */
-	onLiveKitConnected?: () => void
 }
 
 export function EnhancedVideoRoom({
@@ -125,7 +118,6 @@ export function EnhancedVideoRoom({
 	currentUserDbId,
 	externalAccessToken,
 	onParticipantListChange,
-	onLiveKitConnected,
 }: EnhancedVideoRoomProps) {
 	const isGuest = !!externalAccessToken
 	const [showChat, setShowChat] = useState(false) // Start hidden on mobile
@@ -747,8 +739,6 @@ export function EnhancedVideoRoom({
 				connect={true}
 				className="flex-1 flex flex-col overflow-hidden"
 				options={roomOptions}
-				connectOptions={{ autoSubscribe: true }}
-				onConnected={onLiveKitConnected}
 			>
 				<VideoRoomContent
 					isUserActive={isUserActive}
@@ -1109,23 +1099,17 @@ const VideoRoomContent = memo(function VideoRoomContent({
 
 	// Get participants list for name lookup
 	const allParticipants = useParticipants()
-	const room = useRoomContext()
 	const canViewParticipantList = !isGuest && (isHost || permissions?.allowParticipantList !== false)
 	const participantIdentitiesKey = useMemo(
-		() =>
-			allParticipants
-				.map((participant) => participant.identity)
-				.sort()
-				.join(LIVEKIT_PARTICIPANT_IDS_SEP),
+		() => allParticipants.map((participant) => participant.identity).sort().join('|'),
 		[allParticipants],
 	)
 
 	useEffect(() => {
 		if (!onParticipantListChange) return
-		const ids = participantIdentitiesKey
-			? participantIdentitiesKey.split(LIVEKIT_PARTICIPANT_IDS_SEP).filter(Boolean)
-			: []
-		onParticipantListChange(ids)
+		onParticipantListChange(
+			participantIdentitiesKey ? participantIdentitiesKey.split('|') : [],
+		)
 	}, [onParticipantListChange, participantIdentitiesKey])
 
 	useEffect(() => {
@@ -1176,11 +1160,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	const [showExtendMenu, setShowExtendMenu] = useState(false)
 	// Expanded view - hide thumbnails and show only main video
 	const [isExpandedView, setIsExpandedView] = useState(false)
-	const PRESENTER_ZOOM_MIN = 1
-	const PRESENTER_ZOOM_MAX = 2.75
-	const PRESENTER_ZOOM_STEP = 0.25
-	const [presenterZoom, setPresenterZoom] = useState(1)
-
+	
 	// Close extend menu on outside click
 	useEffect(() => {
 		if (!showExtendMenu) return
@@ -1370,10 +1350,9 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		{ onlySubscribed: false }
 	)
 	
-	// Include unsubscribed publications so VideoTrack can subscribe (defaults lean toward onlySubscribed).
+	// Get screen share tracks
 	const screenShareTracks = useTracks(
-		[{ source: Track.Source.ScreenShare, withPlaceholder: false }],
-		{ onlySubscribed: false },
+		[{ source: Track.Source.ScreenShare, withPlaceholder: false }]
 	)
 	
 	
@@ -1438,53 +1417,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		}
 	}, [screenShareTracks.length, layoutMode])
 	
-	// With onlySubscribed:false, we can get multiple refs (e.g. remote publication not subscribed yet). Prefer media that
-	// actually exists, then remote over local so viewers see the presenter—but never pick a stale remote over the local sharer.
-	const activeScreenShare = useMemo(() => {
-		if (screenShareTracks.length === 0) return null
-		const refs = screenShareTracks.filter(isTrackReference)
-		if (refs.length === 0) return null
-		const rank = (r: (typeof refs)[number]) => {
-			const isRemote = !!(r.participant && !r.participant.isLocal)
-			const hasTrack = !!r.publication?.track
-			if (isRemote && hasTrack) return 0
-			if (!isRemote && hasTrack) return 1
-			if (isRemote) return 2
-			return 3
-		}
-		return [...refs].sort((a, b) => rank(a) - rank(b))[0]
-	}, [screenShareTracks])
-
-	// Viewers often stayed unsubscribed to remote screen-share (adaptive stream / dynacast), so they saw zoom chrome but no video.
-	useEffect(() => {
-		const subscribeRemoteScreenTracks = () => {
-			room.remoteParticipants.forEach((participant) => {
-				participant.trackPublications.forEach((publication) => {
-					if (
-						publication.source !== Track.Source.ScreenShare &&
-						publication.source !== Track.Source.ScreenShareAudio
-					) {
-						return
-					}
-					if (publication.isSubscribed) return
-					publication.setSubscribed(true)
-				})
-			})
-		}
-
-		subscribeRemoteScreenTracks()
-
-		const bump = () => subscribeRemoteScreenTracks()
-		room.on(RoomEvent.TrackPublished, bump)
-		room.on(RoomEvent.ParticipantConnected, bump)
-		room.on(RoomEvent.Reconnected, bump)
-
-		return () => {
-			room.off(RoomEvent.TrackPublished, bump)
-			room.off(RoomEvent.ParticipantConnected, bump)
-			room.off(RoomEvent.Reconnected, bump)
-		}
-	}, [room])
+	// Check if anyone is screen sharing (highest priority)
+	const activeScreenShare = screenShareTracks.length > 0 ? screenShareTracks[0] : null
 	
 	const focusedParticipant = useMemo(() => {
 		// Priority 1: Screen sharing participant (handled separately via activeScreenShare)
@@ -1695,9 +1629,9 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		}
 	}, [localParticipant])
 
-	// Apply Krisp only when entitled (NEXT_PUBLIC_ENABLE_KRISP=true); otherwise auth returns 404.
+	// Apply Krisp AI noise suppression to microphone track
 	useEffect(() => {
-		if (!isLiveKitKrispEnabled() || !localParticipant || typeof window === 'undefined') return
+		if (!localParticipant || typeof window === 'undefined') return
 		let cancelled = false
 		let cleanup: (() => void) | null = null
 
@@ -1911,12 +1845,6 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		
 		return { focusedTrack: focused, isScreenShareFocused: false }
 	}, [focusedParticipant, layoutMode, activeScreenShare, cameraTrackByParticipantId])
-
-	useEffect(() => {
-		if (!isScreenShareFocused) {
-			setPresenterZoom(1)
-		}
-	}, [isScreenShareFocused])
 
 	const focusedParticipantForDisplay = useMemo(() => {
 		if (isScreenShareFocused && focusedTrack) {
@@ -3057,26 +2985,11 @@ const VideoRoomContent = memo(function VideoRoomContent({
 											</div>
 											{/* Video layer on top - ONLY render when there's actual video track */}
 											{isTrackReference(focusedTrack) && (isScreenShareFocused || focusedTrack.publication?.track) && (
-												<div
-													className={`absolute inset-0 z-[2] flex items-center justify-center ${
-														isScreenShareFocused && presenterZoom > PRESENTER_ZOOM_MIN
-															? 'overflow-auto'
-															: 'overflow-hidden'
-													}`}
-												>
-													<div
-														className="flex h-full w-full items-center justify-center"
-														style={{
-															transform: isScreenShareFocused ? `scale(${presenterZoom})` : undefined,
-															transformOrigin: 'center center',
-															transition: 'transform 0.12s ease-out',
-														}}
-													>
-														<VideoTrack
-															trackRef={focusedTrack}
-															className={`h-full w-full object-contain ${focusedParticipantForDisplay.isLocal && !isScreenShareFocused ? 'scale-x-[-1]' : ''}`}
-														/>
-													</div>
+												<div className="absolute inset-0 z-[2]">
+													<VideoTrack 
+														trackRef={focusedTrack} 
+														className={`w-full h-full object-contain ${focusedParticipantForDisplay.isLocal && !isScreenShareFocused ? 'scale-x-[-1]' : ''}`} 
+													/>
 												</div>
 											)}
 											
@@ -3132,106 +3045,24 @@ const VideoRoomContent = memo(function VideoRoomContent({
 											
 											{/* Screen Share indicator badge */}
 											{isScreenShareFocused && (
-												<div className="absolute top-4 left-4 z-20 flex items-center gap-1.5 rounded-lg border border-blue-400/30 bg-[#3b82f6] px-3 py-1.5 text-xs font-medium text-white backdrop-blur-sm">
+												<div className="absolute top-4 left-4 flex items-center gap-1.5 bg-[#3b82f6] text-white text-xs px-3 py-1.5 rounded-lg z-10 font-medium backdrop-blur-sm border border-blue-400/30">
 													<MonitorUp className="h-3.5 w-3.5" />
 													<span>Screen Share</span>
 												</div>
 											)}
-
-											{/* Screen share: zoom + expand always visible (hover-only was impossible during self-share / touch). */}
-											{isScreenShareFocused && (
-												<div className="pointer-events-none absolute bottom-20 right-3 z-30 md:bottom-24 md:right-4">
-													<div className="pointer-events-auto flex items-center gap-0.5 rounded-xl border border-white/15 bg-black/80 px-1 py-1 shadow-lg backdrop-blur-md">
-														<Button
-															type="button"
-															variant="ghost"
-															size="sm"
-															onClick={() =>
-																setPresenterZoom((z) =>
-																	Math.max(PRESENTER_ZOOM_MIN, z - PRESENTER_ZOOM_STEP),
-																)
-															}
-															disabled={presenterZoom <= PRESENTER_ZOOM_MIN}
-															className="h-9 w-9 shrink-0 rounded-lg p-0 text-white hover:bg-white/15 disabled:opacity-40"
-															title="Zoom out"
-														>
-															<ZoomOut className="h-4 w-4" />
-														</Button>
-														<span className="w-11 select-none text-center text-[11px] font-medium tabular-nums text-white/90">
-															{Math.round(presenterZoom * 100)}%
-														</span>
-														<Button
-															type="button"
-															variant="ghost"
-															size="sm"
-															onClick={() =>
-																setPresenterZoom((z) =>
-																	Math.min(PRESENTER_ZOOM_MAX, z + PRESENTER_ZOOM_STEP),
-																)
-															}
-															disabled={presenterZoom >= PRESENTER_ZOOM_MAX}
-															className="h-9 w-9 shrink-0 rounded-lg p-0 text-white hover:bg-white/15 disabled:opacity-40"
-															title="Zoom in"
-														>
-															<ZoomIn className="h-4 w-4" />
-														</Button>
-														<Button
-															type="button"
-															variant="ghost"
-															size="sm"
-															onClick={() => setPresenterZoom(1)}
-															disabled={presenterZoom <= PRESENTER_ZOOM_MIN}
-															className="h-9 w-9 shrink-0 rounded-lg p-0 text-white hover:bg-white/15 disabled:opacity-40"
-															title="Reset zoom"
-														>
-															<RotateCcw className="h-4 w-4" />
-														</Button>
-														<div className="mx-0.5 h-6 w-px shrink-0 bg-white/20" aria-hidden />
-														<Button
-															type="button"
-															variant="ghost"
-															size="sm"
-															onClick={() => setIsExpandedView(!isExpandedView)}
-															className="h-9 w-9 shrink-0 rounded-lg p-0 text-white hover:bg-white/15"
-															title={
-																isExpandedView
-																	? 'Show participant strip'
-																	: 'Hide strip — larger screen area'
-															}
-														>
-															{isExpandedView ? (
-																<Minimize2 className="h-4 w-4" />
-															) : (
-																<Maximize2 className="h-4 w-4" />
-															)}
-														</Button>
-													</div>
-												</div>
-											)}
-
-											{/* Camera / non-screen focus: expand still visible without hover */}
-											{!isScreenShareFocused && focusedParticipantForDisplay && (
-												<div className="absolute bottom-4 right-4 z-20">
-													<Button
-														type="button"
-														variant="ghost"
-														size="sm"
-														onClick={() => setIsExpandedView(!isExpandedView)}
-														className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-black/70 text-white backdrop-blur-sm hover:bg-black/85"
-														title={
-															isExpandedView
-																? 'Show participant strip'
-																: 'Hide strip — larger video'
-														}
-													>
-														{isExpandedView ? (
-															<Minimize2 className="h-5 w-5" />
-														) : (
-															<Maximize2 className="h-5 w-5" />
-														)}
-													</Button>
-												</div>
-											)}
+											
+											{/* Expand/Collapse button - Bottom Right */}
+											<div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+												<Button
+													variant="ghost"
+													size="sm"
+													onClick={() => setIsExpandedView(!isExpandedView)}
+													className="h-10 w-10 rounded-xl bg-black/60 text-white hover:bg-black/80 border border-white/10 backdrop-blur-sm flex items-center justify-center"
+													title={isExpandedView ? 'Show participants' : 'Expand video'}
+												>
+													{isExpandedView ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
+												</Button>
+											</div>
 										</div>
 										
 										{/* Participant name bar below video */}
@@ -3529,13 +3360,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 							}}
 							disabled={!canViewParticipantList}
 							className={`h-11 w-11 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl hover:bg-sky-500/20 active:scale-95 transition-all relative ${showParticipants ? 'bg-sky-500/20 text-sky-400' : 'text-white/80 hover:text-sky-400'}`}
-							title={
-								!canViewParticipantList
-									? 'Participant list is hidden by host'
-									: allParticipants.length <= 1
-										? 'Participants — invite others using the same room link (copy from the address bar)'
-										: 'Participants'
-							}
+							title={canViewParticipantList ? 'Participants' : 'Participant list is hidden by host'}
 						>
 							<Users className="h-5 w-5 md:h-5 md:w-5" />
 							{allParticipants && allParticipants.length > 0 && (

@@ -10,21 +10,12 @@ export class SkillsController {
   @Get()
   async getAllSkills(
     @Query('search') search?: string,
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
-    @Query('offset') offset?: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('offset') offset?: number,
   ) {
-    // Query params are strings from HTTP/Swagger — coerce so Prisma skip/take stay numeric.
-    const parsedLimit = Math.min(Math.max(parseInt(limit ?? '', 10) || 50, 1), 500);
-    const parsedPage = parseInt(page ?? '', 10);
-    const parsedOffset = parseInt(offset ?? '', 10);
-    const finalLimit = parsedLimit;
-    const finalOffset =
-      Number.isFinite(parsedOffset) && parsedOffset >= 0
-        ? parsedOffset
-        : Number.isFinite(parsedPage) && parsedPage >= 1
-          ? (parsedPage - 1) * finalLimit
-          : 0;
+    const finalLimit = limit || 50;
+    const finalOffset = offset || (page ? (page - 1) * finalLimit : 0);
 
     return this.skillsService.getAllSkills(search, finalLimit, finalOffset);
   }
