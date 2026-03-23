@@ -5,6 +5,10 @@ import { setAuthToken } from '@/lib/api-client';
 import { UpdateUserDto } from '@/types/api.types';
 import { isAuthError } from '@/lib/utils/error-handling';
 
+// Note: useCurrentUser no longer calls getToken() directly.
+// AuthTokenSync (in layout.tsx) sets the token in axios defaults as soon as
+// Clerk loads, so the axios interceptor picks it up without a serial await.
+
 // Query Keys
 export const userKeys = {
   all: ['users'] as const,
@@ -16,36 +20,20 @@ export const userKeys = {
 
 // Get current user
 export function useCurrentUser() {
-  const { getToken, isLoaded } = useAuth();
+  const { isLoaded, isSignedIn } = useAuth();
 
   return useQuery({
     queryKey: userKeys.current(),
-    queryFn: async () => {
-      // Ensure token is set before making the request
-      if (isLoaded) {
-        const token = await getToken();
-        if (token) {
-          setAuthToken(token);
-        }
-      }
-      return usersApi.getCurrentUser();
-    },
-    enabled: isLoaded, // Wait for Clerk to be loaded
+    // Token is set by AuthTokenSync before this fires; interceptor handles the rest
+    queryFn: () => usersApi.getCurrentUser(),
+    enabled: isLoaded && !!isSignedIn,
     staleTime: 5 * 60 * 1000, // 5 minutes
+    refetchOnWindowFocus: false,
     retry: (failureCount, error) => {
-      // Don't retry on authentication errors
       if (isAuthError(error)) {
         return false;
       }
-      // Retry up to 2 times for other errors
       return failureCount < 2;
-    },
-    // Don't refetch on window focus if there's an auth error
-    refetchOnWindowFocus: (query) => {
-      if (query.state.error && isAuthError(query.state.error)) {
-        return false;
-      }
-      return true;
     },
   });
 }

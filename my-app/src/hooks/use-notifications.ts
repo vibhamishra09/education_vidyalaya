@@ -18,30 +18,19 @@ export function useNotifications(
   type?: string,
   viewed?: boolean
 ) {
-  const { getToken, isLoaded, isSignedIn } = useAuth();
+  const { isLoaded, isSignedIn } = useAuth();
 
   return useQuery({
     queryKey: notificationKeys.list(page, limit, type, viewed),
-    queryFn: async () => {
-      // Ensure user is signed in
-      if (!isSignedIn) {
-        throw new Error('User not signed in');
-      }
-
-      // Ensure token is set before making the request
-      const token = await getToken();
-      if (!token) {
-        throw new Error('Failed to get authentication token');
-      }
-      
-      setAuthToken(token);
-      return notificationsApi.getNotifications(page, limit, type, viewed);
-    },
-    enabled: isLoaded && isSignedIn, // Wait for Clerk to be loaded and user signed in
-    refetchInterval: 30000, // Refetch every 30 seconds
-    retry: 2, // Retry failed requests twice
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000), // Exponential backoff
-    staleTime: 10000, // Consider data stale after 10 seconds
+    // Token is set by AuthTokenSync; interceptor handles auth header
+    queryFn: () => notificationsApi.getNotifications(page, limit, type, viewed),
+    enabled: isLoaded && !!isSignedIn,
+    staleTime: 60 * 1000, // 1 minute
+    refetchInterval: 2 * 60 * 1000, // 2 minutes
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: false,
+    retry: 2,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
   });
 }
 

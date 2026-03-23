@@ -13,11 +13,11 @@ import { OptionalClerkAuthGuard } from '../common/guards/optional-clerk-auth.gua
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { MessageAudienceType } from '../generated/prisma/client';
 
-@UseGuards(ClerkAuthGuard)
 @Controller('api/chat')
 export class ChatController {
   constructor(private readonly chatService: ChatService) {}
 
+  @UseGuards(ClerkAuthGuard)
   @Post('channels')
   async createChannel(
     @Body() body: { name: string; userIds: string[]; isDirect?: boolean },
@@ -29,6 +29,7 @@ export class ChatController {
     );
   }
 
+  @UseGuards(ClerkAuthGuard)
   @Get('channels')
   async listChannels(@CurrentUser() userId: string) {
     // Get user DB ID from clerkId
@@ -39,6 +40,7 @@ export class ChatController {
     return this.chatService.listChannels(user.id);
   }
 
+  @UseGuards(ClerkAuthGuard)
   @Post('channels/:id/members')
   async addMember(
     @Param('id') channelId: string,
@@ -54,6 +56,7 @@ export class ChatController {
     @CurrentUser() userId?: string,
     @Query('limit') limit?: string,
     @Query('cursor') cursor?: string,
+    @Query('guestEmail') guestEmail?: string, // For guest users to see their message history
   ) {
     // For authenticated users, get their DB user ID
     // For guest users, userId will be undefined
@@ -70,9 +73,11 @@ export class ChatController {
       limit ? Number(limit) : 50,
       cursor,
       dbUserId,
+      guestEmail, // Pass guest email for message history filtering
     );
   }
 
+  @UseGuards(ClerkAuthGuard)
   @Post('channels/:id/messages')
   async sendMessage(
     @Param('id') channelId: string,
@@ -98,6 +103,7 @@ export class ChatController {
     );
   }
 
+  @UseGuards(OptionalClerkAuthGuard)
   @Get('channel-by-room/:roomName')
   async getChannelByRoomName(@Param('roomName') roomName: string) {
     return this.chatService.getChannelByRoomName(roomName);

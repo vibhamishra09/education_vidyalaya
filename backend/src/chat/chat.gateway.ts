@@ -1,4 +1,5 @@
 import { UseGuards, Logger } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import {
   OnGatewayConnection,
   OnGatewayDisconnect,
@@ -67,14 +68,24 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   private emitScopedMessage(
     channelId: string,
-    message: { audienceType: MessageAudienceType; senderId: string; targetUserId?: string | null },
+    message: { 
+      audienceType: MessageAudienceType; 
+      senderId: string | null; 
+      guestSenderId?: string | null;
+      targetUserId?: string | null;
+    },
   ) {
     if (message.audienceType === MessageAudienceType.EVERYONE) {
       this.server.to(channelId).emit('message:new', message);
       return;
     }
 
-    const recipients = new Set<string>([message.senderId]);
+    // For guest messages, senderId is null, so we skip adding sender to recipients
+    // Only the target user (host) should receive the message
+    const recipients = new Set<string>();
+    if (message.senderId) {
+      recipients.add(message.senderId);
+    }
     if (message.targetUserId) {
       recipients.add(message.targetUserId);
     }
@@ -114,6 +125,18 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         );
 
         if (!requestState.isSignedIn) {
+          // Not a valid Clerk token — try guest token path before disconnecting
+          const guestRecord = await this.chatService.validateGuestToken(token).catch(() => null);
+          if (guestRecord) {
+            client.data.isGuest = true;
+            client.data.guestName = guestRecord.guestParticipant.name;
+            client.data.guestIdentity = guestRecord.guestParticipant.livekitIdentity;
+            client.data.guestParticipantId = guestRecord.guestParticipant.id;
+            client.data.guestEmail = guestRecord.guestParticipant.email;
+            client.data.studyRoomId = guestRecord.studyRoomId;
+            client.emit('authenticated');
+            return;
+          }
           this.logger.debug('User is not authenticated');
           client.disconnect();
           return;
@@ -142,6 +165,18 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         client.emit('authenticated');
         this.logger.debug('WebSocket authenticated for user:', auth.userId);
       } catch (verifyError: any) {
+        // Clerk auth failed — try guest token path
+        const guestRecord = await this.chatService.validateGuestToken(token).catch(() => null);
+        if (guestRecord) {
+          client.data.isGuest = true;
+          client.data.guestName = guestRecord.guestParticipant.name;
+          client.data.guestIdentity = guestRecord.guestParticipant.livekitIdentity;
+          client.data.guestParticipantId = guestRecord.guestParticipant.id;
+          client.data.guestEmail = guestRecord.guestParticipant.email;
+          client.data.studyRoomId = guestRecord.studyRoomId;
+          client.emit('authenticated');
+          return;
+        }
         this.logger.debug(
           'Token verification failed:',
           verifyError.message || verifyError,
@@ -159,6 +194,18 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   @SubscribeMessage('join:channel')
   async handleJoinChannel(client: Socket, payload: { channelId: string }) {
+    // Guest path: allow join if the channel belongs to the guest's study room
+    if (client.data.isGuest) {
+      const sessionInfo = await this.chatService.getSessionInfoFromChannelId(payload.channelId);
+      if (sessionInfo?.externalType === 'studyRoom' && sessionInfo.externalId === client.data.studyRoomId) {
+        client.join(payload.channelId);
+        client.emit('joined:channel', { channelId: payload.channelId });
+      } else {
+        client.emit('error', { message: 'Not authorized to join this channel' });
+      }
+      return;
+    }
+
     if (!client.data.userId || !client.data.dbUserId) {
       client.emit('error', { message: 'Not authenticated' });
       return;
@@ -190,6 +237,47 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       targetUserId?: string;
     },
   ) {
+    // Guest path: save message to database and emit to host
+    if (client.data.isGuest) {
+      try {
+        const hostDbUserId = await this.chatService.getChannelHostUserId(payload.channelId);
+        if (!hostDbUserId) {
+          client.emit('error', { message: 'Host not found for this channel' });
+          return;
+        }
+        
+        // Save guest message to database
+        const message = await this.chatService.sendGuestMessage(
+          payload.channelId,
+          client.data.guestParticipantId,
+          client.data.guestEmail,
+          client.data.guestName,
+          payload.content,
+          hostDbUserId,
+        );
+        
+        // Transform message for emission (similar to getMessages transformation)
+        const messageToEmit = {
+          ...message,
+          sender: message.sender || {
+            id: client.data.guestIdentity || 'guest',
+            name: client.data.guestName || 'Guest',
+            avatar: null,
+          },
+          isGuest: true,
+          guestEmail: client.data.guestEmail,
+        };
+        
+        // Emit to host and sender
+        this.server.to(`user:${hostDbUserId}`).emit('message:new', messageToEmit);
+        client.emit('message:new', messageToEmit);
+      } catch (error: any) {
+        this.logger.debug('Error sending guest message:', error);
+        client.emit('error', { message: error.message || 'Failed to send message' });
+      }
+      return;
+    }
+
     if (!client.data.userId || !client.data.dbUserId) {
       client.emit('error', { message: 'Not authenticated' });
       return;
@@ -246,7 +334,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         audienceType,
         payload.targetUserId,
       );
-      this.emitScopedMessage(payload.channelId, message);
+      // For regular users, senderId is always present (not null)
+      this.emitScopedMessage(payload.channelId, {
+        audienceType: message.audienceType,
+        senderId: message.senderId!, // Non-null assertion: regular users always have senderId
+        targetUserId: message.targetUserId,
+      });
     } catch (error: any) {
       this.logger.debug('Error sending message:', error);
       client.emit('error', {

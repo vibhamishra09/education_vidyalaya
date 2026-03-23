@@ -403,18 +403,21 @@ model ChannelMember {
 model Message {
   id        String   @id @default(cuid())
   channelId String
-  senderId  String
+  senderId  String?  // Optional for guest messages
+  guestSenderId String? // Guest participant ID for guest messages
+  guestEmail String? // Email of guest sender for message history matching
   audienceType MessageAudienceType @default(EVERYONE)
   targetUserId String?
   content   String
   createdAt DateTime @default(now())
 
   channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  sender    User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  sender    User?    @relation(fields: [senderId], references: [id], onDelete: Cascade)
   targetUser User?   @relation("TargetedMessages", fields: [targetUserId], references: [id], onDelete: SetNull)
 
   @@index([channelId, createdAt])
   @@index([channelId, targetUserId, createdAt])
+  @@index([channelId, guestEmail, createdAt]) // For guest message history lookup
 }
 
 model UserAvailability {

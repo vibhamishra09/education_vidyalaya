@@ -203,6 +203,9 @@ export default function RoomPage() {
 				}
 				if (results[1]?.data?.channelId) {
 					setChannelId(results[1].data.channelId as string)
+				} else if (!results[1]?.data?.channelId && results[2]?.data?.chatChannelId) {
+					// For guests, channel endpoint returns null; fall back to chatChannelId in room data
+					setChannelId(results[2].data.chatChannelId as string)
 				}
 				if (results[0]?.data && guestAccessToken && mounted) {
 					setIsHost(Boolean((results[0] as { data?: { isHost?: boolean } }).data?.isHost))

@@ -11,7 +11,7 @@ export class PrismaService
   constructor(private readonly logger: LoggerService) {
     const adapter = new PrismaPg({
       connectionString: process.env.DATABASE_URL,
-      max: 250
+      max: 125
   });
     super({ adapter, log: ['error'], errorFormat: 'minimal' });
     this.logger.setContext(PrismaService.name);

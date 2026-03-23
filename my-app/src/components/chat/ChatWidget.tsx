@@ -53,6 +53,8 @@ interface ChatWidgetProps {
 	hostUserId?: string | null
 	currentUserDbId?: string | null
 	allowedAudiences?: Partial<Record<MessageAudienceType, boolean>>
+	guestToken?: string | null
+	guestEmail?: string | null // Guest email for message history matching
 }
 
 export function ChatWidget({
@@ -63,7 +65,10 @@ export function ChatWidget({
 	hostUserId,
 	currentUserDbId,
 	allowedAudiences,
+	guestToken,
+	guestEmail,
 }: ChatWidgetProps) {
+	const isGuestMode = !!guestToken
 	const { user, isLoaded } = useUser()
 	const { getToken } = useAuth()
 	const userId = user?.id
@@ -98,7 +103,12 @@ export function ChatWidget({
 			try {
 				console.log('Loading chat history for channel:', channelId)
 				// Load more messages to show complete history
-				const res = await apiClient.get(`/api/chat/channels/${activeChannelId}/messages`, { params: { limit: 200 } })
+				const params: Record<string, string | number> = { limit: 200 }
+				// For guests, pass email to filter their message history
+				if (isGuestMode && guestEmail) {
+					params.guestEmail = guestEmail
+				}
+				const res = await apiClient.get(`/api/chat/channels/${activeChannelId}/messages`, { params })
 				if (!mounted) return
 				console.log('Loaded messages:', res.data?.length || 0, 'messages')
 				const historyMessages: Message[] = Array.isArray(res.data) ? res.data : []
@@ -118,10 +128,10 @@ export function ChatWidget({
 		return () => {
 			mounted = false
 		}
-	}, [channelId])
+	}, [channelId, guestToken, isGuestMode, guestEmail])
 
 	useEffect(() => {
-		if (!channelId || !isLoaded || !userId || !getToken) {
+		if (!channelId || !isLoaded || (!userId && !isGuestMode)) {
 			if (socketRef.current) {
 				socketRef.current.disconnect()
 				socketRef.current = null
@@ -129,17 +139,17 @@ export function ChatWidget({
 			return
 		}
 		const activeChannelId = channelId
-		
+
 		let socketInstance: Socket | null = null
 		let isMounted = true
-		
+
 		async function connectSocket() {
 			try {
 				setIsConnecting(true)
 				setError(null)
-				
-				// Get Clerk token for authentication using the useAuth hook
-				const token = await getToken()
+
+				// For guests use their DB access token; for regular users get Clerk token
+				const token = isGuestMode ? guestToken : await getToken()
 				if (!token) {
 					if (isMounted) {
 						setError('Authentication required')
@@ -159,7 +169,7 @@ export function ChatWidget({
 				console.log('🔌 [Chat] Connecting to WebSocket:', url, 'for channel:', activeChannelId)
 				
 				const s = io(url, { 
-					transports: ['websocket'],
+					transports: ['websocket', 'polling'],
 					auth: { token },
 					reconnection: true,
 					reconnectionAttempts: 5,
@@ -191,7 +201,7 @@ export function ChatWidget({
 					joinFallbackTimer = setTimeout(() => {
 						console.warn('⚠️ [Chat] Auth handshake timeout, joining with fallback')
 						joinChannel()
-					}, 400)
+					}, 1000)
 				})
 
 				s.on('authenticated', () => {
@@ -315,7 +325,7 @@ export function ChatWidget({
 			}
 			socketRef.current = null
 		}
-	}, [channelId, isLoaded, userId, getToken])
+	}, [channelId, isLoaded, userId, getToken, guestToken, isGuestMode])
 
 	useEffect(() => {
 		if (!channelId) return
@@ -339,7 +349,7 @@ export function ChatWidget({
 		)
 	}
 
-	if (!user) {
+	if (!user && !isGuestMode) {
 		return (
 			<div className={`p-4 border rounded ${className}`}>
 				<p className="text-muted-foreground text-sm">Please sign in to chat</p>

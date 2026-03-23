@@ -118,23 +118,39 @@ export class ChatService {
     limit = 100,
     cursor?: string,
     viewerUserId?: string,
+    guestEmail?: string, // For guest users to see their own messages
   ) {
     try {
-      // For guest users (viewerUserId is undefined), only show EVERYONE messages
-      // For authenticated users, show EVERYONE messages plus their own messages
-      const where = viewerUserId
-        ? {
-            channelId,
-            OR: [
-              { audienceType: MessageAudienceType.EVERYONE },
-              { senderId: viewerUserId },
-              { targetUserId: viewerUserId },
-            ],
-          }
-        : {
-            channelId,
-            audienceType: MessageAudienceType.EVERYONE,
-          };
+      // Build where clause based on viewer type
+      let where: any = { channelId };
+      
+      if (guestEmail) {
+        // Guest user: show EVERYONE messages + their own messages (by email)
+        where = {
+          channelId,
+          OR: [
+            { audienceType: MessageAudienceType.EVERYONE },
+            { guestEmail, audienceType: MessageAudienceType.HOST }, // Guest's messages to host
+          ],
+        };
+      } else if (viewerUserId) {
+        // Authenticated user: show EVERYONE messages + their own messages + messages targeted to them
+        where = {
+          channelId,
+          OR: [
+            { audienceType: MessageAudienceType.EVERYONE },
+            { senderId: viewerUserId },
+            { targetUserId: viewerUserId },
+          ],
+        };
+      } else {
+        // No viewer info: only show EVERYONE messages
+        where = {
+          channelId,
+          audienceType: MessageAudienceType.EVERYONE,
+        };
+      }
+      
       const messages = await this.prisma.message.findMany({
       where,
       include: {
@@ -158,7 +174,24 @@ export class ChatService {
       skip: cursor ? 1 : 0,
         cursor: cursor ? { id: cursor } : undefined,
       });
-      return messages;
+      
+      // Transform guest messages to include guest info in sender field
+      return messages.map((msg) => {
+        if (msg.guestSenderId && !msg.sender) {
+          // This is a guest message, add guest info to sender
+          return {
+            ...msg,
+            sender: {
+              id: msg.guestSenderId,
+              name: msg.guestEmail?.split('@')[0] || 'Guest', // Use email prefix as name fallback
+              avatar: null,
+            },
+            isGuest: true,
+            guestEmail: msg.guestEmail,
+          };
+        }
+        return msg;
+      });
     } catch (error) {
       // Handle database connection errors
       if (isConnectionError(error)) {
@@ -289,6 +322,47 @@ export class ChatService {
     });
   }
 
+  /**
+   * Send a message from a guest user
+   * Guest messages are always sent to HOST and include guest email for history matching
+   */
+  async sendGuestMessage(
+    channelId: string,
+    guestParticipantId: string,
+    guestEmail: string,
+    guestName: string,
+    content: string,
+    targetUserId: string, // Host user ID
+  ) {
+    return this.prisma.message.create({
+      data: {
+        channelId,
+        senderId: null, // No User record for guests
+        guestSenderId: guestParticipantId,
+        guestEmail,
+        content,
+        audienceType: MessageAudienceType.HOST,
+        targetUserId,
+      },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            name: true,
+            avatar: true,
+          },
+        },
+        targetUser: {
+          select: {
+            id: true,
+            name: true,
+            avatar: true,
+          },
+        },
+      },
+    });
+  }
+
   async getUserByClerkId(clerkId: string) {
     return this.prisma.user.findUnique({
       where: { clerkId },
@@ -342,6 +416,35 @@ export class ChatService {
     return {
       externalType: channel.externalType,
       externalId: channel.externalId,
+    };
+  }
+
+  /**
+   * Validate a guest access token without requiring a studyRoomId upfront.
+   * Returns guest info if valid, null otherwise.
+   */
+  async validateGuestToken(token: string): Promise<{
+    studyRoomId: string;
+    guestParticipant: { 
+      id: string;
+      name: string; 
+      livekitIdentity: string;
+      email: string;
+    };
+  } | null> {
+    const record = await this.prisma.studyRoomGuestAccessToken.findUnique({
+      where: { token },
+      include: { guestParticipant: true },
+    });
+    if (!record || record.expiresAt < new Date()) return null;
+    return {
+      studyRoomId: record.studyRoomId,
+      guestParticipant: {
+        id: record.guestParticipant.id,
+        name: record.guestParticipant.name,
+        livekitIdentity: record.guestParticipant.livekitIdentity,
+        email: record.guestParticipant.email,
+      },
     };
   }
 }

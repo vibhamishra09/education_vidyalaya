@@ -11,6 +11,9 @@ const isPublicRoute = createRouteMatcher([
   '/about',
   '/studyroom(.*)',
   '/rooms/studyroom(.*)',
+  '/terms-of-use',
+  '/privacy-policy',
+  '/careers',
 ]);
 const isApiRoute = createRouteMatcher(['/api(.*)']);
 
@@ -39,8 +42,14 @@ export default clerkMiddleware(async (auth, req: NextRequest) => {
     return redirectToSignIn({ returnBackUrl: req.url });
   }
 
+  // Allow public routes to be accessed without onboarding completion
+  if (isPublicRoute(req)) {
+    return NextResponse.next();
+  }
+
   // Catch users who do not have `onboardingComplete: true` in their publicMetadata
   // Redirect them to the /onboarding route to complete onboarding
+  // (This only applies to protected routes, as public routes are handled above)
   if (isAuthenticated && !sessionClaims?.metadata?.onboardingComplete) {
     const onboardingUrl = new URL('/onboarding', req.url);
     // Preserve the original URL as a redirect parameter
@@ -57,7 +66,8 @@ export default clerkMiddleware(async (auth, req: NextRequest) => {
 export const config = {
   matcher: [
     // Skip Next.js internals and all static files, unless found in search params
-    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    // Exclude: static assets, metadata routes (sitemap.xml, robots.txt), and Next.js internals
+    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest|xml|txt)).*)',
     // Always run for API routes
     '/(api|trpc)(.*)',
   ],

@@ -192,7 +192,7 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
         showSuccess("Request sent", "Waiting for host approval...");
         return;
       }
-      const guestUrl = `/rooms/studyroom/studyroom-${roomId}?guestAccessToken=${encodeURIComponent(result.guestAccessToken)}&guestName=${encodeURIComponent(derivedGuestName)}`;
+      const guestUrl = `/rooms/studyroom/studyroom-${roomId}?guestAccessToken=${encodeURIComponent(result.guestAccessToken)}&guestName=${encodeURIComponent(derivedGuestName)}&guestEmail=${encodeURIComponent(guestEmail.trim())}`;
       window.location.href = guestUrl;
     } catch {
       showError("Join failed", "Could not submit external join request.");

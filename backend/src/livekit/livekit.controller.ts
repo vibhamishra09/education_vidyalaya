@@ -76,7 +76,7 @@ export class LivekitController {
       identity: guestToken.guestParticipant.livekitIdentity,
       name: guestToken.guestParticipant.name,
       metadata,
-      publish: true,
+      publish: false,
       subscribe: true,
     });
 
