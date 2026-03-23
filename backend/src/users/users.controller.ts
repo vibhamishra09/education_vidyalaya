@@ -1,8 +1,19 @@
-import { Controller, Get, Patch, Body, Param, UseGuards, Query, Post, Logger } from '@nestjs/common';
-import { UsersService } from './users.service';
-import { ClerkAuthGuard } from '../common/guards/clerk-auth.guard';
+import {
+  Body,
+  Controller,
+  Get,
+  Logger,
+  UnauthorizedException,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { UpdateUserDto } from './dto/user.dto';
+import { ClerkAuthGuard } from '../common/guards/clerk-auth.guard';
+import { UsersService } from './users.service';
+import { CompleteOnboardingDto, UpdateUserDto } from './dto/user.dto';
 
 @Controller('api')
 export class UsersController {
@@ -34,14 +45,11 @@ export class UsersController {
     if (!username) {
       return { available: false };
     }
+
     try {
-      return await this.usersService.checkUsernameAvailability(
-        username,
-        userId,
-      );
+      return await this.usersService.checkUsernameAvailability(username, userId);
     } catch (error) {
       this.logger.debug('Error in checkUsernameAvailability controller:', error);
-      // Return false on error to be safe
       return { available: false };
     }
   }
@@ -60,30 +68,29 @@ export class UsersController {
   }
 
   @Post('users/onboarding')
-  async completeOnboarding(@Body() body: any) {
-    this.logger.debug('🔍 Complete onboarding called with body:', body);
-    const {
-      clerkId,
-      name,
-      email,
-      avatar,
-      bio,
-      location,
-      school,
-      hourlyRate,
-      skillsIHave,
-      skillsIWant,
-    } = body;
-    return this.usersService.completeOnboarding(clerkId, {
-      name,
-      email,
-      avatar,
-      bio,
-      location,
-      school,
-      hourlyRate,
-      skillsIHave: skillsIHave || [],
-      skillsIWant: skillsIWant || [],
+  @UseGuards(ClerkAuthGuard)
+  async completeOnboarding(
+    @CurrentUser() clerkUserId: string,
+    @Body() body: CompleteOnboardingDto,
+  ) {
+    if (!clerkUserId) {
+      throw new UnauthorizedException(
+        'Authenticated Clerk user could not be resolved for onboarding.',
+      );
+    }
+
+    this.logger.debug('Completing onboarding for Clerk user:', clerkUserId);
+
+    return this.usersService.completeOnboarding(clerkUserId, {
+      name: body.name,
+      email: body.email,
+      avatar: body.avatar,
+      bio: body.bio,
+      location: body.location,
+      school: body.school,
+      hourlyRate: body.hourlyRate,
+      skillsIHave: body.skillsIHave || [],
+      skillsIWant: body.skillsIWant || [],
     });
   }
 }

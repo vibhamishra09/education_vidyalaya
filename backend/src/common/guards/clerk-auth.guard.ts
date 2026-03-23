@@ -1,4 +1,14 @@
-import { Injectable, CanActivate, ExecutionContext, UnauthorizedException, Logger } from '@nestjs/common';
+/* eslint-disable prettier/prettier */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  UnauthorizedException,
+  Logger,
+} from '@nestjs/common';
 import { createClerkClient } from '@clerk/backend';
 
 @Injectable()
@@ -44,9 +54,11 @@ export class ClerkAuthGuard implements CanActivate {
       // The method automatically extracts the token from the Authorization header
       const requestState = await this.clerkClient.authenticateRequest(
         clerkRequest,
-        {
-          jwtKey: process.env.CLERK_JWT_KEY, // This is the JWT signing key, not the token
-        },
+        process.env.CLERK_JWT_KEY
+          ? {
+            jwtKey: process.env.CLERK_JWT_KEY,
+          }
+          : undefined,
       );
 
       if (!requestState.isSignedIn) {

@@ -11,7 +11,7 @@ import {
   Clock, MonitorUp, MonitorOff, Grid2X2, Presentation, Pin, 
   PinOff, User, PictureInPicture2, Camera, CameraOff, Sparkles, Lock, Settings2, 
   PhoneOff, ChevronUp, ChevronLeft, ChevronRight, ShieldCheck, Ban, Aperture, 
-  ImageIcon, LayoutGrid, Check, Timer, Power, LogOut, Zap
+  ImageIcon, LayoutGrid, Check, Timer, Power, LogOut, Zap, ZoomIn, ZoomOut,
 } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
@@ -1160,6 +1160,10 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	const [showExtendMenu, setShowExtendMenu] = useState(false)
 	// Expanded view - hide thumbnails and show only main video
 	const [isExpandedView, setIsExpandedView] = useState(false)
+	// Screen share: zoom + minimize (floating) + maximize (full workspace overlay)
+	const [screenShareZoom, setScreenShareZoom] = useState(1)
+	const [screenShareMinimized, setScreenShareMinimized] = useState(false)
+	const [screenShareMaximized, setScreenShareMaximized] = useState(false)
 	
 	// Close extend menu on outside click
 	useEffect(() => {
@@ -1846,6 +1850,24 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		return { focusedTrack: focused, isScreenShareFocused: false }
 	}, [focusedParticipant, layoutMode, activeScreenShare, cameraTrackByParticipantId])
 
+	useEffect(() => {
+		if (!isScreenShareFocused) {
+			setScreenShareZoom(1)
+			setScreenShareMinimized(false)
+			setScreenShareMaximized(false)
+		}
+	}, [isScreenShareFocused])
+
+	const showScreenShareInMain =
+		isScreenShareFocused && !screenShareMinimized && !screenShareMaximized
+
+	const adjustScreenShareZoom = useCallback((delta: number) => {
+		setScreenShareZoom((z) => {
+			const next = Math.round((z + delta) * 100) / 100
+			return Math.min(2, Math.max(0.5, next))
+		})
+	}, [])
+
 	const focusedParticipantForDisplay = useMemo(() => {
 		if (isScreenShareFocused && focusedTrack) {
 			return focusedTrack.participant
@@ -1919,145 +1941,56 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	}
 
 	const pipVideoRef = useRef<HTMLVideoElement | null>(null)
-	const pipCanvasRef = useRef<HTMLCanvasElement | null>(null)
-	const pipStreamVideoRef = useRef<HTMLVideoElement | null>(null)
 	const pipAnimationFrameRef = useRef<number | null>(null)
 	
 	// Toggle native PiP mode
 	const togglePiP = useCallback(async () => {
 		try {
-			if (isMobileViewport) return
-			// Check if PiP is supported
-			if (!document.pictureInPictureEnabled) {
-				return
-			}
+			if (isMobileViewport || !document.pictureInPictureEnabled) return
 			
-			// If already in PiP, exit
 			if (document.pictureInPictureElement) {
 				await document.exitPictureInPicture()
-				setIsPiPActive(false)
-				// Cleanup canvas loop if active
-				if (pipAnimationFrameRef.current) {
-					cancelAnimationFrame(pipAnimationFrameRef.current)
-					pipAnimationFrameRef.current = null
-				}
 				return
 			}
 			
-			// Find the video element to put in PiP
-			// First try to find the focused video, then fallback to any video in the room
-			let videoElement: HTMLVideoElement | null = null
-			
-			// Try to find video in focus-main-video first
-			const focusMainVideo = document.querySelector('.focus-main-video video') as HTMLVideoElement
-			if (focusMainVideo) {
-				videoElement = focusMainVideo
-			} else {
-				// Fallback to any video in the grid
-				const gridVideo = document.querySelector('.custom-grid-tile video, .lk-participant-tile video') as HTMLVideoElement
-				if (gridVideo) {
-					videoElement = gridVideo
-				}
-			}
-			
+			const videoElement = document.querySelector('.focus-main-video video, .custom-grid-tile video, .lk-participant-tile video') as HTMLVideoElement
 			if (videoElement) {
-				// Check if the video is mirrored (local participant)
-				const computedStyle = window.getComputedStyle(videoElement)
-				const isMirrored = videoElement.classList.contains('scale-x-[-1]') || 
-								  videoElement.style.transform === 'scaleX(-1)' ||
-								  computedStyle.transform === 'matrix(-1, 0, 0, 1, 0, 0)'
-
-				if (isMirrored) {
-					// Logic to fix mirrored PiP using Canvas
-					if (!pipCanvasRef.current) pipCanvasRef.current = document.createElement('canvas')
-					if (!pipStreamVideoRef.current) {
-						const v = document.createElement('video')
-						v.muted = true
-						v.autoplay = true // Essential for the stream to play
-						pipStreamVideoRef.current = v
-						
-						// Important: Handle PiP exit on this proxy element
-						v.addEventListener('leavepictureinpicture', () => {
-							setIsPiPActive(false)
-							pipVideoRef.current = null
-							if (pipAnimationFrameRef.current) {
-								cancelAnimationFrame(pipAnimationFrameRef.current)
-								pipAnimationFrameRef.current = null
-							}
-						})
-					}
-
-					const canvas = pipCanvasRef.current
-					const proxyVideo = pipStreamVideoRef.current!
-					
-					// Match dimensions
-					canvas.width = videoElement.videoWidth
-					canvas.height = videoElement.videoHeight
-					
-					const ctx = canvas.getContext('2d')
-					if (ctx) {
-						// Mirror the context
-						ctx.translate(canvas.width, 0)
-						ctx.scale(-1, 1)
-
-						const draw = () => {
-							if (videoElement && !videoElement.paused && !videoElement.ended) {
-								ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height)
-							}
-							if (document.pictureInPictureElement === proxyVideo) {
-								pipAnimationFrameRef.current = requestAnimationFrame(draw)
-							}
-						}
-						
-						// Start drawing
-						draw()
-						
-						// Stream canvas to proxy video
-						const stream = canvas.captureStream(30) // 30 FPS
-						proxyVideo.srcObject = stream
-						
-						// Play and request PiP
-						try {
-							await proxyVideo.play()
-							await proxyVideo.requestPictureInPicture()
-							setIsPiPActive(true)
-							pipVideoRef.current = videoElement // Store original ref for tracking
-						} catch (err) {
-							// Fallback to standard
-							await videoElement.requestPictureInPicture()
-							setIsPiPActive(true)
-							pipVideoRef.current = videoElement
-						}
-					}
-				} else {
-					// Standard PiP
-					await videoElement.requestPictureInPicture()
-					setIsPiPActive(true)
-					pipVideoRef.current = videoElement
+				// Handle mirroring manually to avoid React re-renders (which close PiP)
+				if (videoElement.classList.contains('scale-x-[-1]') || videoElement.style.transform.includes('scaleX(-1)')) {
+					videoElement.style.transform = 'none'
 				}
+
+				// Prevent track pausing during transitions
+				await videoElement.play().catch(() => {})
+				await videoElement.requestPictureInPicture()
+				setIsPiPActive(true)
+				pipVideoRef.current = videoElement
 			}
 		} catch (error) {
-			// Error toggling PiP
+			console.error('PiP error:', error)
 		}
 	}, [isMobileViewport])
 	
 	// Auto-trigger PiP on visibility change (like Google Meet)
 	useEffect(() => {
 		if (isMobileViewport) return
+
 		const handleVisibilityChange = async () => {
-			if (!document.pictureInPictureEnabled) return
-			
-			// When page becomes hidden and we have video, try to enter PiP
 			if (document.hidden && !document.pictureInPictureElement) {
-				// Find any active video element
 				const videoElement = document.querySelector('.focus-main-video video, .custom-grid-tile video, .lk-participant-tile video') as HTMLVideoElement
-				if (videoElement && videoElement.readyState >= 2) { // HAVE_CURRENT_DATA
+				if (videoElement && videoElement.readyState >= 2) {
 					try {
+						// Set transform to none before PiP to ensure natural view
+						if (videoElement.classList.contains('scale-x-[-1]') || videoElement.style.transform.includes('scaleX(-1)')) {
+							videoElement.style.transform = 'none'
+						}
+						
 						await videoElement.requestPictureInPicture()
+						videoElement.play().catch(() => {}) // Prevent freeze on tab switch
 						setIsPiPActive(true)
 						pipVideoRef.current = videoElement
 					} catch (error) {
-						// User may have denied PiP permission, silently fail
+						// Ignore errors
 					}
 				}
 			}
@@ -2066,6 +1999,13 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		// Listen for PiP exit
 		const handlePiPExit = () => {
 			setIsPiPActive(false)
+			const videoElement = pipVideoRef.current
+			if (videoElement) {
+				// Restore mirroring if it was previously mirrored (roughly detect via class)
+				if (videoElement.classList.contains('scale-x-[-1]')) {
+					videoElement.style.transform = '' // Clear manual override to restore class transform
+				}
+			}
 			pipVideoRef.current = null
 			if (pipAnimationFrameRef.current) {
 				cancelAnimationFrame(pipAnimationFrameRef.current)
@@ -2266,6 +2206,20 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						backface-visibility: hidden;
 						-webkit-backface-visibility: hidden;
 						will-change: transform;
+					}
+
+					video:picture-in-picture {
+						transform: none !important;
+					}
+					
+					/* Hide the unnecessary Chrome-specific overlay text when in PiP */
+					video::-webkit-media-controls-panel,
+					video::-webkit-media-controls-enclosure,
+					video::-internal-media-controls-overlay-cast-button,
+					video::-webkit-media-controls-picture-in-picture-display {
+						display: none !important;
+						opacity: 0 !important;
+						visibility: hidden !important;
 					}
 					
 					/* CRITICAL: Make ALL LiveKit tile backgrounds transparent */
@@ -2983,16 +2937,65 @@ const VideoRoomContent = memo(function VideoRoomContent({
 													)
 												})()}
 											</div>
-											{/* Video layer on top - ONLY render when there's actual video track */}
-											{isTrackReference(focusedTrack) && (isScreenShareFocused || focusedTrack.publication?.track) && (
-												<div className="absolute inset-0 z-[2]">
-													<VideoTrack 
-														trackRef={focusedTrack} 
-														className={`w-full h-full object-contain ${focusedParticipantForDisplay.isLocal && !isScreenShareFocused ? 'scale-x-[-1]' : ''}`} 
-													/>
-												</div>
+											{/* Video layer — screen share (zoom / min / max) vs camera */}
+											{isTrackReference(focusedTrack) && (
+												<>
+													{isScreenShareFocused && showScreenShareInMain && (
+														<div className="absolute inset-0 z-[2] overflow-auto bg-black/40">
+															<div
+																className="flex min-h-full min-w-full items-center justify-center p-4 box-border"
+																style={{
+																	transform: `scale(${screenShareZoom})`,
+																	transformOrigin: 'center center',
+																	transition: 'transform 0.12s ease-out',
+																}}
+															>
+																<VideoTrack
+																	trackRef={focusedTrack}
+																	className="h-auto w-full max-w-full max-h-[78vh] object-contain"
+																/>
+															</div>
+														</div>
+													)}
+													{isScreenShareFocused && !showScreenShareInMain && (
+														<div className="absolute inset-0 z-[2] flex flex-col items-center justify-center gap-3 bg-gradient-to-b from-[#252525] to-[#1a1a1a] px-6 text-center">
+															{screenShareMaximized ? (
+																<Maximize2 className="h-10 w-10 text-sky-400" />
+															) : (
+																<PictureInPicture2 className="h-10 w-10 text-sky-400" />
+															)}
+															<p className="text-sm font-medium text-white">
+																{screenShareMaximized
+																	? 'Screen share is using the full workspace'
+																	: 'Screen share is in a small window'}
+															</p>
+															<p className="max-w-xs text-xs text-white/50">
+																Restore the small window or exit full workspace from its top bar.
+															</p>
+															<Button
+																size="sm"
+																variant="secondary"
+																className="mt-1"
+																onClick={() => {
+																	setScreenShareMinimized(false)
+																	setScreenShareMaximized(false)
+																}}
+															>
+																Back to meeting layout
+															</Button>
+														</div>
+													)}
+													{!isScreenShareFocused && focusedTrack.publication?.track && (
+														<div className="absolute inset-0 z-[2]">
+															<VideoTrack
+																trackRef={focusedTrack}
+																className={`h-full w-full object-contain ${focusedParticipantForDisplay.isLocal ? 'scale-x-[-1]' : ''}`}
+															/>
+														</div>
+													)}
+												</>
 											)}
-											
+
 											{/* Audio/Video status icons in top-right corner */}
 											<div className="absolute top-4 right-4 flex items-center gap-2 z-20">
 												<div
@@ -3043,14 +3046,6 @@ const VideoRoomContent = memo(function VideoRoomContent({
 												</div>
 											)}
 											
-											{/* Screen Share indicator badge */}
-											{isScreenShareFocused && (
-												<div className="absolute top-4 left-4 flex items-center gap-1.5 bg-[#3b82f6] text-white text-xs px-3 py-1.5 rounded-lg z-10 font-medium backdrop-blur-sm border border-blue-400/30">
-													<MonitorUp className="h-3.5 w-3.5" />
-													<span>Screen Share</span>
-												</div>
-											)}
-											
 											{/* Expand/Collapse button - Bottom Right */}
 											<div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity z-20">
 												<Button
@@ -3063,6 +3058,37 @@ const VideoRoomContent = memo(function VideoRoomContent({
 													{isExpandedView ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
 												</Button>
 											</div>
+
+											{/* Screen share zoom — bottom-left of same stage as expand (absolute; shifts with main column / md:mr-96) */}
+											{isScreenShareFocused && showScreenShareInMain && (
+												<div
+													className="pointer-events-auto absolute bottom-4 left-4 z-20 flex items-center gap-0.5 rounded-xl border border-white/10 bg-black/60 px-1 py-1 shadow-lg backdrop-blur-sm"
+													role="toolbar"
+													aria-label="Screen share zoom"
+												>
+													<button
+														type="button"
+														onClick={() => adjustScreenShareZoom(-0.25)}
+														disabled={screenShareZoom <= 0.5}
+														className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white transition-colors hover:bg-white/10 disabled:pointer-events-none disabled:opacity-30"
+														title="Zoom out"
+													>
+														<ZoomOut className="h-4 w-4" />
+													</button>
+													<span className="min-w-[2.25rem] shrink-0 text-center text-[10px] font-semibold tabular-nums text-white/90">
+														{Math.round(screenShareZoom * 100)}%
+													</span>
+													<button
+														type="button"
+														onClick={() => adjustScreenShareZoom(0.25)}
+														disabled={screenShareZoom >= 2}
+														className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white transition-colors hover:bg-white/10 disabled:pointer-events-none disabled:opacity-30"
+														title="Zoom in"
+													>
+														<ZoomIn className="h-4 w-4" />
+													</button>
+												</div>
+											)}
 										</div>
 										
 										{/* Participant name bar below video */}
@@ -3196,6 +3222,146 @@ const VideoRoomContent = memo(function VideoRoomContent({
 							</div>
 						</div>
 					)}
+					{/* Screen share: small floating preview (minimized) */}
+					{isScreenShareFocused &&
+						screenShareMinimized &&
+						!screenShareMaximized &&
+						isTrackReference(focusedTrack) && (
+							<div className="fixed bottom-28 right-4 z-[260] w-[min(calc(100vw-2rem),22rem)] overflow-hidden rounded-xl border border-white/15 bg-[#141414] shadow-2xl">
+								<div className="flex items-center justify-between gap-2 border-b border-white/10 bg-black/60 px-2 py-1.5">
+									<span className="flex min-w-0 items-center gap-1.5 truncate text-xs font-medium text-white">
+										<MonitorUp className="h-3 w-3 shrink-0 text-sky-400" />
+										<span className="truncate">Screen share</span>
+									</span>
+									<div className="flex shrink-0 items-center gap-0.5">
+										<button
+											type="button"
+											onClick={() => adjustScreenShareZoom(-0.25)}
+											disabled={screenShareZoom <= 0.5}
+											className="rounded p-1.5 text-white/80 hover:bg-white/10 disabled:opacity-30"
+											title="Zoom out"
+										>
+											<ZoomOut className="h-3.5 w-3.5" />
+										</button>
+										<button
+											type="button"
+											onClick={() => adjustScreenShareZoom(0.25)}
+											disabled={screenShareZoom >= 2}
+											className="rounded p-1.5 text-white/80 hover:bg-white/10 disabled:opacity-30"
+											title="Zoom in"
+										>
+											<ZoomIn className="h-3.5 w-3.5" />
+										</button>
+										<button
+											type="button"
+											onClick={() => {
+												setScreenShareMinimized(false)
+												setScreenShareMaximized(true)
+											}}
+											className="rounded p-1.5 text-white/80 hover:bg-white/10"
+											title="Full workspace"
+										>
+											<Maximize2 className="h-3.5 w-3.5" />
+										</button>
+										<button
+											type="button"
+											onClick={() => setScreenShareMinimized(false)}
+											className="rounded p-1.5 text-white/80 hover:bg-white/10"
+											title="Restore to meeting layout"
+										>
+											<PictureInPicture2 className="h-3.5 w-3.5" />
+										</button>
+									</div>
+								</div>
+								<div className="relative aspect-video bg-black overflow-auto">
+									<div
+										className="flex min-h-full min-w-full items-center justify-center p-2"
+										style={{
+											transform: `scale(${screenShareZoom})`,
+											transformOrigin: 'center center',
+											transition: 'transform 0.12s ease-out',
+										}}
+									>
+										<VideoTrack
+											trackRef={focusedTrack}
+											className="h-full w-full object-contain"
+										/>
+									</div>
+								</div>
+							</div>
+						)}
+
+					{/* Screen share: full workspace overlay (maximized) */}
+					{isScreenShareFocused &&
+						screenShareMaximized &&
+						isTrackReference(focusedTrack) && (
+							<div className="fixed inset-0 z-[290] flex flex-col bg-black">
+								<div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 bg-[#141414] px-3 py-2 sm:px-4">
+									<span className="flex items-center gap-2 text-sm font-medium text-white">
+										<MonitorUp className="h-4 w-4 shrink-0 text-sky-400" />
+										Screen share
+									</span>
+									<div className="flex flex-wrap items-center justify-end gap-1">
+										<div className="flex items-center gap-0.5 rounded-lg border border-white/10 bg-black/40 p-1">
+											<button
+												type="button"
+												onClick={() => adjustScreenShareZoom(-0.25)}
+												disabled={screenShareZoom <= 0.5}
+												className="rounded p-2 text-white/90 hover:bg-white/10 disabled:opacity-30"
+												title="Zoom out"
+											>
+												<ZoomOut className="h-4 w-4" />
+											</button>
+											<span className="min-w-[2.5rem] text-center text-xs tabular-nums text-white/80">
+												{Math.round(screenShareZoom * 100)}%
+											</span>
+											<button
+												type="button"
+												onClick={() => adjustScreenShareZoom(0.25)}
+												disabled={screenShareZoom >= 2}
+												className="rounded p-2 text-white/90 hover:bg-white/10 disabled:opacity-30"
+												title="Zoom in"
+											>
+												<ZoomIn className="h-4 w-4" />
+											</button>
+										</div>
+										<Button
+											variant="secondary"
+											size="sm"
+											className="h-8 text-xs"
+											onClick={() => {
+												setScreenShareMaximized(false)
+												setScreenShareMinimized(true)
+											}}
+										>
+											Minimize
+										</Button>
+										<Button
+											size="sm"
+											className="h-8 bg-sky-600 text-xs hover:bg-sky-500"
+											onClick={() => setScreenShareMaximized(false)}
+										>
+											Exit
+										</Button>
+									</div>
+								</div>
+								<div className="flex flex-1 items-center justify-center overflow-auto p-4">
+									<div
+										style={{
+											transform: `scale(${screenShareZoom})`,
+											transformOrigin: 'center center',
+											transition: 'transform 0.12s ease-out',
+										}}
+									>
+										<VideoTrack
+											trackRef={focusedTrack}
+											className="max-h-[min(90vh,calc(100vw-2rem))] w-auto max-w-full object-contain"
+										/>
+									</div>
+								</div>
+							</div>
+						)}
+
 					<RoomAudioRenderer />
 				</div>
 			</div>
@@ -3432,9 +3598,9 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				</div>
 					)}
 				</div>
-			{/* RIGHT: End Meeting - Single Button with Dropdown */}
-			<div className="flex items-center justify-end">
-				<div className="relative">
+			{/* RIGHT: End call */}
+			<div className="flex min-w-0 shrink-0 items-center justify-end gap-1.5 sm:gap-2">
+				<div className="relative shrink-0">
 					<Button
 						onClick={() => setShowEndMenu(!showEndMenu)}
 						className={`
