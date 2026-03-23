@@ -1941,145 +1941,56 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	}
 
 	const pipVideoRef = useRef<HTMLVideoElement | null>(null)
-	const pipCanvasRef = useRef<HTMLCanvasElement | null>(null)
-	const pipStreamVideoRef = useRef<HTMLVideoElement | null>(null)
 	const pipAnimationFrameRef = useRef<number | null>(null)
 	
 	// Toggle native PiP mode
 	const togglePiP = useCallback(async () => {
 		try {
-			if (isMobileViewport) return
-			// Check if PiP is supported
-			if (!document.pictureInPictureEnabled) {
-				return
-			}
+			if (isMobileViewport || !document.pictureInPictureEnabled) return
 			
-			// If already in PiP, exit
 			if (document.pictureInPictureElement) {
 				await document.exitPictureInPicture()
-				setIsPiPActive(false)
-				// Cleanup canvas loop if active
-				if (pipAnimationFrameRef.current) {
-					cancelAnimationFrame(pipAnimationFrameRef.current)
-					pipAnimationFrameRef.current = null
-				}
 				return
 			}
 			
-			// Find the video element to put in PiP
-			// First try to find the focused video, then fallback to any video in the room
-			let videoElement: HTMLVideoElement | null = null
-			
-			// Try to find video in focus-main-video first
-			const focusMainVideo = document.querySelector('.focus-main-video video') as HTMLVideoElement
-			if (focusMainVideo) {
-				videoElement = focusMainVideo
-			} else {
-				// Fallback to any video in the grid
-				const gridVideo = document.querySelector('.custom-grid-tile video, .lk-participant-tile video') as HTMLVideoElement
-				if (gridVideo) {
-					videoElement = gridVideo
-				}
-			}
-			
+			const videoElement = document.querySelector('.focus-main-video video, .custom-grid-tile video, .lk-participant-tile video') as HTMLVideoElement
 			if (videoElement) {
-				// Check if the video is mirrored (local participant)
-				const computedStyle = window.getComputedStyle(videoElement)
-				const isMirrored = videoElement.classList.contains('scale-x-[-1]') || 
-								  videoElement.style.transform === 'scaleX(-1)' ||
-								  computedStyle.transform === 'matrix(-1, 0, 0, 1, 0, 0)'
-
-				if (isMirrored) {
-					// Logic to fix mirrored PiP using Canvas
-					if (!pipCanvasRef.current) pipCanvasRef.current = document.createElement('canvas')
-					if (!pipStreamVideoRef.current) {
-						const v = document.createElement('video')
-						v.muted = true
-						v.autoplay = true // Essential for the stream to play
-						pipStreamVideoRef.current = v
-						
-						// Important: Handle PiP exit on this proxy element
-						v.addEventListener('leavepictureinpicture', () => {
-							setIsPiPActive(false)
-							pipVideoRef.current = null
-							if (pipAnimationFrameRef.current) {
-								cancelAnimationFrame(pipAnimationFrameRef.current)
-								pipAnimationFrameRef.current = null
-							}
-						})
-					}
-
-					const canvas = pipCanvasRef.current
-					const proxyVideo = pipStreamVideoRef.current!
-					
-					// Match dimensions
-					canvas.width = videoElement.videoWidth
-					canvas.height = videoElement.videoHeight
-					
-					const ctx = canvas.getContext('2d')
-					if (ctx) {
-						// Mirror the context
-						ctx.translate(canvas.width, 0)
-						ctx.scale(-1, 1)
-
-						const draw = () => {
-							if (videoElement && !videoElement.paused && !videoElement.ended) {
-								ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height)
-							}
-							if (document.pictureInPictureElement === proxyVideo) {
-								pipAnimationFrameRef.current = requestAnimationFrame(draw)
-							}
-						}
-						
-						// Start drawing
-						draw()
-						
-						// Stream canvas to proxy video
-						const stream = canvas.captureStream(30) // 30 FPS
-						proxyVideo.srcObject = stream
-						
-						// Play and request PiP
-						try {
-							await proxyVideo.play()
-							await proxyVideo.requestPictureInPicture()
-							setIsPiPActive(true)
-							pipVideoRef.current = videoElement // Store original ref for tracking
-						} catch (err) {
-							// Fallback to standard
-							await videoElement.requestPictureInPicture()
-							setIsPiPActive(true)
-							pipVideoRef.current = videoElement
-						}
-					}
-				} else {
-					// Standard PiP
-					await videoElement.requestPictureInPicture()
-					setIsPiPActive(true)
-					pipVideoRef.current = videoElement
+				// Handle mirroring manually to avoid React re-renders (which close PiP)
+				if (videoElement.classList.contains('scale-x-[-1]') || videoElement.style.transform.includes('scaleX(-1)')) {
+					videoElement.style.transform = 'none'
 				}
+
+				// Prevent track pausing during transitions
+				await videoElement.play().catch(() => {})
+				await videoElement.requestPictureInPicture()
+				setIsPiPActive(true)
+				pipVideoRef.current = videoElement
 			}
 		} catch (error) {
-			// Error toggling PiP
+			console.error('PiP error:', error)
 		}
 	}, [isMobileViewport])
 	
 	// Auto-trigger PiP on visibility change (like Google Meet)
 	useEffect(() => {
 		if (isMobileViewport) return
+
 		const handleVisibilityChange = async () => {
-			if (!document.pictureInPictureEnabled) return
-			
-			// When page becomes hidden and we have video, try to enter PiP
 			if (document.hidden && !document.pictureInPictureElement) {
-				// Find any active video element
 				const videoElement = document.querySelector('.focus-main-video video, .custom-grid-tile video, .lk-participant-tile video') as HTMLVideoElement
-				if (videoElement && videoElement.readyState >= 2) { // HAVE_CURRENT_DATA
+				if (videoElement && videoElement.readyState >= 2) {
 					try {
+						// Set transform to none before PiP to ensure natural view
+						if (videoElement.classList.contains('scale-x-[-1]') || videoElement.style.transform.includes('scaleX(-1)')) {
+							videoElement.style.transform = 'none'
+						}
+						
 						await videoElement.requestPictureInPicture()
+						videoElement.play().catch(() => {}) // Prevent freeze on tab switch
 						setIsPiPActive(true)
 						pipVideoRef.current = videoElement
 					} catch (error) {
-						// User may have denied PiP permission, silently fail
+						// Ignore errors
 					}
 				}
 			}
@@ -2088,6 +1999,13 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		// Listen for PiP exit
 		const handlePiPExit = () => {
 			setIsPiPActive(false)
+			const videoElement = pipVideoRef.current
+			if (videoElement) {
+				// Restore mirroring if it was previously mirrored (roughly detect via class)
+				if (videoElement.classList.contains('scale-x-[-1]')) {
+					videoElement.style.transform = '' // Clear manual override to restore class transform
+				}
+			}
 			pipVideoRef.current = null
 			if (pipAnimationFrameRef.current) {
 				cancelAnimationFrame(pipAnimationFrameRef.current)
@@ -2288,6 +2206,20 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						backface-visibility: hidden;
 						-webkit-backface-visibility: hidden;
 						will-change: transform;
+					}
+
+					video:picture-in-picture {
+						transform: none !important;
+					}
+					
+					/* Hide the unnecessary Chrome-specific overlay text when in PiP */
+					video::-webkit-media-controls-panel,
+					video::-webkit-media-controls-enclosure,
+					video::-internal-media-controls-overlay-cast-button,
+					video::-webkit-media-controls-picture-in-picture-display {
+						display: none !important;
+						opacity: 0 !important;
+						visibility: hidden !important;
 					}
 					
 					/* CRITICAL: Make ALL LiveKit tile backgrounds transparent */
