@@ -2,9 +2,11 @@ import React from 'react';
 import { View, Text, TouchableOpacity, Linking, Image } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { Facebook, Instagram, Linkedin, Youtube } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export function Footer() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const currentYear = new Date().getFullYear();
 
   const handleLinkPress = (url: string) => {
@@ -12,7 +14,10 @@ export function Footer() {
   };
 
   return (
-    <View className="mt-6 border-t border-black/5 bg-background/60 px-4 py-8 pb-10">
+    <View
+      className="mt-6 border-t border-black/5 bg-background/60 px-4 pt-8"
+      style={{ paddingBottom: Math.max(insets.bottom + 24, 40) }}
+    >
       <View className="flex-col gap-4">
         
         {/* Top Section: Logo & Slogan */}

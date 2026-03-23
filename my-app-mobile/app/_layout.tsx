@@ -10,6 +10,7 @@ import { tokenCache } from '../lib/tokenCache';
 import { OfflineNotice } from '../components/OfflineNotice';
 import { SidebarProvider, useSidebar } from '../lib/SidebarContext';
 import { Sidebar } from '../components/Sidebar';
+import { BackendUserProvider } from '../lib/backend-user-context';
 
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!;
 
@@ -62,10 +63,10 @@ function LayoutContent() {
   }, [router, setNavigateFunction]);
 
   // Hide FAB on live-session screens (video call UI) and debate-room screens (specific FAB)
-  const hideStartButton = segments.includes('live-session') || 
-                          segments.includes('sign-in') || 
-                          segments.includes('sign-up') ||
-                          segments.includes('debate-room');
+  const hideStartButton = segments.includes('live-session') ||
+    segments.includes('sign-in') ||
+    segments.includes('sign-up') ||
+    segments.includes('debate-room');
 
   // Check if navigation is ready - this properly tracks navigation context availability
   const isNavigationReady = rootNavigationState?.key != null;
@@ -107,9 +108,11 @@ export default function Layout() {
   return (
     <ClerkProvider tokenCache={tokenCache} publishableKey={publishableKey}>
       <ClerkLoaded>
-        <SidebarProvider>
-          <LayoutContent />
-        </SidebarProvider>
+        <BackendUserProvider>
+          <SidebarProvider>
+            <LayoutContent />
+          </SidebarProvider>
+        </BackendUserProvider>
       </ClerkLoaded>
     </ClerkProvider>
   );

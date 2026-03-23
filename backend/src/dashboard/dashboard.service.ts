@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SessionStatus } from '../generated/prisma/client';
 import { StreaksService } from '../streaks/streaks.service';
@@ -73,7 +73,9 @@ export class DashboardService {
         });
 
         if (!user) {
-          throw new Error('User not found');
+          throw new NotFoundException(
+            'User not found. Please complete onboarding first.',
+          );
         }
 
     // Helper functions for each data block
@@ -572,7 +574,9 @@ export class DashboardService {
           });
 
           if (!user) {
-            throw new Error('User not found');
+            throw new NotFoundException(
+              'User not found. Please complete onboarding first.',
+            );
           }
 
           const endDate = new Date();
@@ -715,7 +719,9 @@ export class DashboardService {
           });
 
           if (!user) {
-            throw new Error('User not found');
+            throw new NotFoundException(
+              'User not found. Please complete onboarding first.',
+            );
           }
 
           const endDate = new Date();

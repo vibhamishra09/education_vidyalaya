@@ -1,3 +1,8 @@
+/* eslint-disable prettier/prettier */
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
   IsString,
   IsEmail,
@@ -117,6 +122,46 @@ export class UpdateUserDto {
   @ValidateNested({ each: true })
   @Type(() => SocialLinkDto)
   socialLinks?: SocialLinkDto[];
+}
+
+export class CompleteOnboardingDto {
+  @IsString()
+  @MinLength(1, { message: 'Name cannot be empty' })
+  @MaxLength(100, { message: 'Name must be at most 100 characters long' })
+  name: string;
+
+  @IsEmail({}, { message: 'Please enter a valid email address' })
+  email: string;
+
+  @IsOptional()
+  @IsString()
+  avatar?: string;
+
+  @IsOptional()
+  @IsString()
+  bio?: string;
+
+  @IsOptional()
+  @IsString()
+  location?: string;
+
+  @IsOptional()
+  @IsString()
+  school?: string;
+
+  @IsOptional()
+  @IsNumber()
+  hourlyRate?: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  skillsIHave?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  skillsIWant?: string[];
 }
 
 export class ClerkUserDto {

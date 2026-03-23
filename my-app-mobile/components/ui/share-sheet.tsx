@@ -1,8 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, Modal, StyleSheet, Linking, Alert } from 'react-native';
-import { Twitter, Facebook, Linkedin, MessageCircle, Link, X } from 'lucide-react-native';
+import { Twitter, Facebook, Linkedin, MessageCircle, Link, Share2, X } from 'lucide-react-native';
 import * as Clipboard from 'expo-clipboard';
-import { BlurView } from 'expo-blur';
 
 interface ShareSheetProps {
   visible: boolean;
@@ -141,8 +140,6 @@ export function ShareSheet({ visible, onClose, url, title, message }: ShareSheet
     </Modal>
   );
 }
-
-import { Share2 } from 'lucide-react-native';
 
 const styles = StyleSheet.create({
   overlay: {

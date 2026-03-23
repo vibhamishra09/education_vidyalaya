@@ -84,15 +84,32 @@ export default function HowItWorksScreen() {
       <SafeAreaView className="flex-1" edges={['top', 'left', 'right']} style={{ backgroundColor: 'transparent' }}>
 
       {/* Header */}
-        <View className="px-4 py-3 flex-row justify-between items-center bg-transparent">
-            <View className="flex-row items-center gap-3">
-                 <TouchableOpacity onPress={openSidebar}>
+        <View className="relative bg-transparent px-4 py-3">
+            <View className="flex-row items-center justify-between">
+                 <TouchableOpacity
+                    onPress={openSidebar}
+                    className="z-10 -ml-2 h-10 w-10 items-center justify-center rounded-full"
+                    hitSlop={8}
+                 >
                     <Menu size={24} color="#0f172a" />
                  </TouchableOpacity>
+                 <View className="h-10 w-10 items-center justify-center">
+                    <Image source={{ uri: "https://github.com/shadcn.png" }} className="h-8 w-8 rounded-full" />
+                 </View>
             </View>
-            <Text className="text-xl font-bold text-slate-900 absolute left-0 right-0 text-center pointer-events-none">How It Works</Text>
-            <View className="flex-row items-center gap-3">
-                <Image source={{ uri: "https://github.com/shadcn.png" }} className="h-8 w-8 rounded-full" />
+            <View
+              pointerEvents="none"
+              style={{
+                position: 'absolute',
+                top: 0,
+                right: 0,
+                bottom: 0,
+                left: 0,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Text className="text-xl font-bold text-slate-900">How It Works</Text>
             </View>
         </View>
 

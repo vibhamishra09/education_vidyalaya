@@ -42,7 +42,11 @@
   },
   "devDependencies": {
     "@types/react": "~19.1.0",
+    "@types/react-native": "^0.72.8",
     "typescript": "~5.9.2"
+  },
+  "optionalDependencies": {
+    "utf-8-validate": "^5.0.10"
   },
   "private": true
 }

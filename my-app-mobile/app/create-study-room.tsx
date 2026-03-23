@@ -30,6 +30,10 @@ import {
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { LinearGradient } from "expo-linear-gradient";
+import { getErrorMessage } from "../lib/api";
+import { useApi } from "../lib/use-api";
+import { useBackendUser } from "../lib/backend-user-context";
+import { useProtectedRoute } from "../lib/use-protected-route";
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -97,10 +101,14 @@ const weekdayOptions = [
 
 export default function CreateStudyRoomScreen() {
   const router = useRouter();
+  const { request } = useApi();
+  const { ready: backendReady } = useBackendUser();
+  const { shouldBlock } = useProtectedRoute(true, "/create-study-room");
   const [formData, setFormData] = useState<StudyRoomFormData>(initialFormData);
   const [isInstantRoom, setIsInstantRoom] = useState(false);
   const [skillInput, setSkillInput] = useState("");
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   // Sync instant room time
   useEffect(() => {
@@ -141,7 +149,7 @@ export default function CreateStudyRoomScreen() {
     // In a real implementation: use expo-image-picker
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     // Validation logic (simplified from web)
     if (!formData.title) {
         Alert.alert("Required", "Please enter a room name");
@@ -156,11 +164,91 @@ export default function CreateStudyRoomScreen() {
         return;
     }
 
-    Alert.alert("Success", "Design complete! Backend integration pending.");
-    console.log("Submit Data", formData);
+    if (!backendReady) {
+      Alert.alert("Please wait", "Your account is still syncing with the backend.");
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+
+      const recurrence = formData.recurrenceEnabled
+        ? {
+            mode: formData.recurrenceMode,
+            interval: Number(formData.recurrenceInterval || 1),
+            weekdays:
+              formData.recurrenceMode === StudyRoomRecurrenceMode.WEEKLY
+                ? formData.recurrenceWeekdays
+                : undefined,
+            customDates:
+              formData.recurrenceMode === StudyRoomRecurrenceMode.CUSTOM_DATES
+                ? formData.recurrenceCustomDates
+                    .split(",")
+                    .map((item) => item.trim())
+                    .filter(Boolean)
+                : undefined,
+            repeatUntil: formData.recurrenceRepeatUntil,
+          }
+        : undefined;
+
+      const externalInvites = formData.externalInviteList
+        .split(",")
+        .map((email) => email.trim())
+        .filter(Boolean)
+        .map((email) => ({ email, role: "PARTICIPANT" }));
+
+      await request(
+        "/api/study-rooms",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            title: formData.title,
+            description: formData.description,
+            imageUrl: formData.imageUrl,
+            skills: formData.skills,
+            date: formData.date,
+            time: formData.time,
+            duration: Number(formData.duration),
+            maxParticipants: Number(formData.maxParticipants),
+            joiningFee: Number(formData.joiningFee || 0),
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Kolkata",
+            recurrence:
+              recurrence && recurrence.repeatUntil
+                ? recurrence
+                : undefined,
+            allowExternalUsers: formData.allowExternalUsers,
+            externalAutoAccept: formData.externalAutoAccept,
+            externalPasscode: formData.externalPasscode || undefined,
+            externalInvites: externalInvites.length > 0 ? externalInvites : undefined,
+          }),
+        },
+        { auth: true },
+      );
+
+      Alert.alert("Success", "Study room created successfully.", [
+        {
+          text: "Open Dashboard",
+          onPress: () => router.replace("/dashboard"),
+        },
+      ]);
+    } catch (error) {
+      Alert.alert("Could not create room", getErrorMessage(error, "Please try again."));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const potentialEarnings = (parseInt(formData.maxParticipants) || 0) * (parseInt(formData.joiningFee) || 0);
+
+  if (shouldBlock) {
+    return (
+      <LinearGradient colors={['#f7fefb', '#fafffd', '#ffffff']} style={{ flex: 1 }}>
+        <SafeAreaView className="flex-1 items-center justify-center">
+          <Text className="text-base text-slate-500">Redirecting to sign in...</Text>
+        </SafeAreaView>
+      </LinearGradient>
+    );
+  }
 
   return (
     <LinearGradient colors={['#f7fefb', '#fafffd', '#ffffff']} style={{flex: 1}}>
@@ -598,10 +686,13 @@ export default function CreateStudyRoomScreen() {
           </View>
 
           <Pressable 
-              onPress={handleSubmit}
+              onPress={() => void handleSubmit()}
+              disabled={submitting}
               className="w-full bg-emerald-100 h-14 rounded-xl flex-row items-center justify-center border border-emerald-200 active:scale-[0.99] transition-transform"
           >
-              <Text className="text-emerald-900 font-bold text-lg mr-2">Launch Session</Text>
+              <Text className="text-emerald-900 font-bold text-lg mr-2">
+                {submitting ? "Launching..." : "Launch Session"}
+              </Text>
               <CheckCircle2 size={20} color="#065f46" strokeWidth={2.5} />
           </Pressable>
           

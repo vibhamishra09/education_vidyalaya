@@ -1,287 +1,158 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, Image, TouchableOpacity, SafeAreaView } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
-import { Edit, Star, Users, Coins, MapPin, Globe, GraduationCap, Github, Linkedin, Twitter, Calendar, Clock, DollarSign, Settings, Menu } from 'lucide-react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { View, Text, ScrollView, Image, TouchableOpacity, SafeAreaView, ActivityIndicator, Linking } from 'react-native';
+import { Stack, useLocalSearchParams } from 'expo-router';
+import { Edit, Star, Users, Coins, MapPin, Globe, GraduationCap, Github, Linkedin, Twitter, Settings, Menu } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { clsx } from 'clsx';
 import { useSidebar } from '../lib/SidebarContext';
 import { EditProfileModal } from '../components/profile/edit-profile-modal';
-import { AvailabilitySettings } from '../components/profile/availability-settings';
-import { AchievementShowcase } from '../components/profile/achievement-showcase';
-import { ProfileStatsChart } from '../components/profile/profile-stats-chart';
-import { SessionsTab } from '../components/profile/sessions-tab';
-import { WalletTab } from '../components/profile/wallet-tab';
-import { ReviewsTab } from '../components/profile/reviews-tab';
+import { getErrorMessage } from '../lib/api';
+import { useApi } from '../lib/use-api';
+import { useBackendUser } from '../lib/backend-user-context';
+import { useProtectedRoute } from '../lib/use-protected-route';
+import { CurrentUserResponse, PublicUser } from '../types/api';
 
-// Mock Data
-const INITIAL_USER = {
-  id: "user-123",
-  name: "Arghadeep",
-  username: "arghadeep",
-  email: "arghadeep@example.com",
-  avatar: "https://github.com/shadcn.png",
-  bio: "Passionate about coding and teaching. Love to explore new technologies and share knowledge.",
-  role: "Student",
-  coins: 1500,
-  hourlyRate: 50,
-  languagePreference: "English",
-  location: "New York, USA",
-  school: "MIT",
-  socialLinks: [
-    { platform: "twitter", url: "https://twitter.com/arghadeep" },
-    { platform: "linkedin", url: "https://linkedin.com/in/arghadeep" },
-    { platform: "github", url: "https://github.com/arghadeep" }
-  ],
-  publicStats: {
-    avgRating: 4.8,
-    reviewCount: 12,
-    sessionsTaught: 5,
-    sessionsAttendedAsLearner: 10
-  },
-  hasSkills: ["React", "JavaScript", "TypeScript", "Node.js", "Python"],
-  wantSkills: ["Machine Learning", "System Design", "Rust", "Go"],
-  reviews: [
-    { id: '1', reviewer: "Alice Wang", rating: 5, comment: "Great session! Explained the concepts very clearly.", date: "2024-01-01", avatar: "https://i.pravatar.cc/150?u=alice" },
-    { id: '2', reviewer: "Bob Smith", rating: 4, comment: "Very helpful and patient.", date: "2024-01-05", avatar: "https://i.pravatar.cc/150?u=bob" },
-    { id: '3', reviewer: "Charlie Brown", rating: 5, comment: "Awesome tutor!", date: "2024-01-10", avatar: "https://i.pravatar.cc/150?u=charlie" }
-  ],
-  sessions: [
-     { id: '1', topic: "React Hooks Deep Dive", status: "Completed", date: "Jan 15, 2024", duration: "60 min", role: "Tutor", coins: "+50" },
-     { id: '2', topic: "Intro to Python", status: "Upcoming", date: "Feb 20, 2024", duration: "45 min", role: "Learner", coins: "-40" },
-     { id: '3', topic: "Advanced TypeScript", status: "Completed", date: "Jan 10, 2024", duration: "90 min", role: "Learner", coins: "-80" }
-  ],
-  walletTransactions: [
-    { id: '1', type: 'Credit', amount: 50, description: 'Session Earnings', date: 'Jan 15, 2024' },
-    { id: '2', type: 'Debit', amount: 40, description: 'Session Payment', date: 'Jan 20, 2024' },
-    { id: '3', type: 'Credit', amount: 100, description: 'Welcome Bonus', date: 'Jan 01, 2024' }
-  ],
-  achievements: [
-    { id: '1', title: 'First Steps', description: 'Complete your profile', category: 'milestone', icon: 'Medal', progress: 1, maxProgress: 1, unlockedAt: '2024-01-01' },
-    { id: '2', title: 'Scholar', description: 'Attend 10 sessions', category: 'learning', icon: 'GraduationCap', progress: 10, maxProgress: 10, unlockedAt: '2024-01-15' },
-    { id: '3', title: 'Mentor', description: 'Teach 5 sessions', category: 'teaching', icon: 'Trophy', progress: 5, maxProgress: 10, unlockedAt: null },
-    { id: '4', title: 'Social Butterfly', description: 'Connect with 5 peers', category: 'social', icon: 'Users', progress: 3, maxProgress: 5, unlockedAt: null },
-    { id: '5', title: 'On Fire', description: '7 day streak', category: 'streak', icon: 'Flame', progress: 4, maxProgress: 7, unlockedAt: null },
-  ]
-};
+function SocialIcon({ platform }: { platform: string }) {
+  const normalized = platform.toLowerCase();
 
-const STATS_DATA = [
-    { label: "Teaching", value: 35, fullMark: 100 },
-    { label: "Learning", value: 80, fullMark: 100 },
-    { label: "Comm.", value: 65, fullMark: 100 },
-    { label: "Reliability", value: 95, fullMark: 100 },
-    { label: "Activity", value: 50, fullMark: 100 },
-];
+  if (normalized.includes('github')) {
+    return <Github size={16} color="#0f172a" />;
+  }
 
-type TabKey = 'about' | 'sessions' | 'wallet' | 'reviews';
+  if (normalized.includes('linkedin')) {
+    return <Linkedin size={16} color="#0f172a" />;
+  }
 
-const TABS: { key: TabKey; label: string }[] = [
-  { key: 'about', label: 'About' },
-  { key: 'sessions', label: 'Sessions' },
-  { key: 'wallet', label: 'Wallet' },
-  { key: 'reviews', label: 'Reviews' },
-];
+  if (normalized.includes('twitter') || normalized.includes('x')) {
+    return <Twitter size={16} color="#0f172a" />;
+  }
+
+  return <Globe size={16} color="#0f172a" />;
+}
 
 export default function ProfileScreen() {
-  const [activeTab, setActiveTab] = useState<TabKey>('about');
-  const [user, setUser] = useState(INITIAL_USER);
-  const [isEditModalVisible, setIsEditModalVisible] = useState(false);
+  const { userId } = useLocalSearchParams<{ userId?: string }>();
   const { openSidebar } = useSidebar();
-  const router = useRouter();
+  const { request } = useApi();
+  const {
+    ready: backendReady,
+    loading: bootstrapping,
+    error: backendError,
+    isSignedIn,
+    refresh: refreshBackendUser,
+  } = useBackendUser();
 
-  const totalSessions = user.publicStats.sessionsTaught + user.publicStats.sessionsAttendedAsLearner;
+  const [user, setUser] = useState<PublicUser | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isEditModalVisible, setIsEditModalVisible] = useState(false);
 
-  const handleUpdateUser = (updatedUser: any) => {
-    setUser(prev => ({ ...prev, ...updatedUser }));
+  const isOwnProfile = !userId;
+  const { shouldBlock } = useProtectedRoute(isOwnProfile, '/profile');
+
+  useEffect(() => {
+    if (isOwnProfile && !bootstrapping && !backendReady && error === null) {
+      setLoading(false);
+    }
+  }, [backendReady, bootstrapping, error, isOwnProfile]);
+
+  useEffect(() => {
+    let active = true;
+
+    if ((isOwnProfile && !isSignedIn) || (isOwnProfile && !backendReady)) {
+      return () => {
+        active = false;
+      };
+    }
+
+    const loadProfile = async () => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        if (!active) {
+          return;
+        }
+
+        if (isOwnProfile) {
+          const result = await request<CurrentUserResponse>('/api/users/me', undefined, {
+            auth: true,
+          });
+          if (!active) {
+            return;
+          }
+          setUser(result.user);
+        } else {
+          const result = await request<PublicUser>(`/api/users/${userId}`);
+          if (!active) {
+            return;
+          }
+          setUser(result);
+        }
+      } catch (err) {
+        if (!active) {
+          return;
+        }
+
+        setError(getErrorMessage(err, 'Unable to load this profile.'));
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void loadProfile();
+
+    return () => {
+      active = false;
+    };
+  }, [backendReady, isOwnProfile, isSignedIn, request, userId]);
+
+  const totalSessions = useMemo(() => {
+    if (!user) {
+      return 0;
+    }
+
+    return user.publicStats.sessionsTaught + user.publicStats.sessionsAttendedAsLearner;
+  }, [user]);
+
+  const handleUpdateUser = async (updatedUser: {
+    name: string;
+    bio: string;
+    hasSkills: string[];
+    wantSkills: string[];
+    socialLinks: Array<{ platform: string; url: string }>;
+  }) => {
+    const result = await request<CurrentUserResponse>(
+      '/api/users/me',
+      {
+        method: 'PATCH',
+        body: JSON.stringify(updatedUser),
+      },
+      { auth: true },
+    );
+
+    setUser(result.user);
   };
 
-  const renderHeader = () => (
-      <View className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-800 mx-4 mt-2 mb-6">
-        <View className="flex-row items-start gap-4">
-          <View className="relative">
-             <View className="absolute inset-0 bg-emerald-100 dark:bg-emerald-900 rounded-full scale-110 opacity-50" />
-             <Image 
-                source={{ uri: user.avatar }} 
-                className="w-24 h-24 rounded-full border-4 border-white dark:border-slate-800"
-             />
-          </View>
-          
-          <View className="flex-1">
-            <View className="flex-row justify-between items-start">
-              <View className="flex-1 mr-2">
-                 <Text className="text-2xl font-bold text-slate-900 dark:text-white" numberOfLines={1}>{user.name}</Text>
-                 <View className="flex-row items-center gap-2 mt-1">
-                    <Text className="text-slate-500 dark:text-slate-400 font-medium">@{user.username}</Text>
-                 </View>
-              </View>
-              
-              <View className="bg-emerald-50 dark:bg-emerald-900/30 px-3 py-1 rounded-full border border-emerald-100 dark:border-emerald-800">
-                <Text className="text-emerald-700 dark:text-emerald-400 font-semibold text-xs">{user.role}</Text>
-              </View>
-            </View>
-          </View>
-        </View>
-
-         {/* Stats Row */}
-         <View className="flex-row flex-wrap gap-3 mt-6">
-            <View className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800">
-               <Star size={14} color="#f59e0b" fill="#f59e0b" />
-               <Text className="text-amber-900 dark:text-amber-400 font-bold">{user.publicStats.avgRating}</Text>
-               <Text className="text-amber-700/60 dark:text-amber-500/60 text-xs">({user.publicStats.reviewCount})</Text>
-            </View>
-
-            <View className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-               <Users size={14} className="text-slate-500 dark:text-slate-400" />
-               <Text className="text-slate-700 dark:text-slate-300 font-bold">{totalSessions}</Text>
-               <Text className="text-slate-500 dark:text-slate-400 text-xs">sessions</Text>
-            </View>
-
-            <View className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800">
-               <Coins size={14} color="#059669" />
-               <Text className="text-emerald-700 dark:text-emerald-400 font-bold">{user.coins.toLocaleString()}</Text>
-               <Text className="text-emerald-600/60 dark:text-emerald-500/60 text-xs">Coins</Text>
-            </View>
-
-            <View className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full bg-violet-50 dark:bg-violet-900/20 border border-violet-100 dark:border-violet-800">
-               <Clock size={14} className="text-violet-600" />
-               <Text className="text-violet-700 dark:text-violet-400 font-bold">{user.hourlyRate}</Text>
-               <Text className="text-violet-600/60 dark:text-violet-500/60 text-xs">Coins/hr</Text>
-            </View>
-         </View>
-
-         {/* Bio */}
-         <Text className="mt-6 text-slate-600 dark:text-slate-300 leading-6 border-l-2 border-emerald-100 dark:border-emerald-800 pl-3">
-            {user.bio}
-         </Text>
-
-         {/* Details */}
-         <View className="flex-row flex-wrap gap-4 mt-5">
-            {user.languagePreference && (
-               <View className="flex-row items-center gap-1.5">
-                  <Globe size={14} className="text-slate-500 dark:text-slate-400" />
-                  <Text className="text-slate-600 dark:text-slate-300 text-sm">{user.languagePreference}</Text>
-               </View>
-            )}
-            {user.location && (
-               <View className="flex-row items-center gap-1.5">
-                  <MapPin size={14} className="text-slate-500 dark:text-slate-400" />
-                  <Text className="text-slate-600 dark:text-slate-300 text-sm">{user.location}</Text>
-               </View>
-            )}
-            {user.school && (
-               <View className="flex-row items-center gap-1.5">
-                  <GraduationCap size={14} className="text-slate-500 dark:text-slate-400" />
-                  <Text className="text-slate-600 dark:text-slate-300 text-sm">{user.school}</Text>
-               </View>
-            )}
-         </View>
-
-         {/* Edit Button */}
-         <TouchableOpacity 
-            className="mt-6 bg-slate-900 dark:bg-white py-3 rounded-xl flex-row items-center justify-center gap-2 active:bg-slate-800 dark:active:bg-slate-200"
-            onPress={() => setIsEditModalVisible(true)}
-         >
-            <Edit size={16} className="text-white dark:text-slate-900" />
-            <Text className="text-white dark:text-slate-900 font-semibold">Edit Profile</Text>
-         </TouchableOpacity>
+  if (shouldBlock) {
+    return (
+      <View className="flex-1 items-center justify-center bg-white">
+        <ActivityIndicator color="#10b981" />
+        <Text className="mt-3 text-slate-500">Redirecting to sign in...</Text>
       </View>
-  );
-
-  const renderTabs = () => (
-    <View className="px-4 mb-4">
-       <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row gap-2 pb-2">
-          {TABS.map((tab) => (
-             <TouchableOpacity
-                key={tab.key}
-                onPress={() => setActiveTab(tab.key)}
-                className={clsx(
-                   "px-5 py-2.5 rounded-full border transition-all",
-                   activeTab === tab.key 
-                      ? "bg-emerald-600 border-emerald-600" 
-                      : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
-                )}
-             >
-                <Text 
-                   className={clsx(
-                      "font-semibold",
-                      activeTab === tab.key ? "text-white" : "text-slate-600 dark:text-slate-400"
-                   )}
-                >
-                   {tab.label}
-                </Text>
-             </TouchableOpacity>
-          ))}
-       </ScrollView>
-    </View>
-  );
-
-  const renderAboutTab = () => (
-    <View className="px-4 gap-4 pb-20">
-       {/* Skills */}
-       <View className="bg-white dark:bg-slate-900 rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-800">
-          <View className="flex-row justify-between items-center mb-4">
-             <Text className="text-lg font-bold text-slate-800 dark:text-white">I can teach</Text>
-             <TouchableOpacity onPress={() => setIsEditModalVisible(true)}>
-                <Edit size={16} className="text-slate-400" />
-             </TouchableOpacity>
-          </View>
-          <View className="flex-row flex-wrap gap-2">
-             {user.hasSkills.map((skill, index) => (
-                <View key={index} className="bg-emerald-50 dark:bg-emerald-900/20 px-3 py-1.5 rounded-lg border border-emerald-100 dark:border-emerald-800 mb-2">
-                   <Text className="text-emerald-700 dark:text-emerald-400 font-medium text-sm">{skill}</Text>
-                </View>
-             ))}
-             {user.hasSkills.length === 0 && (
-                <Text className="text-slate-400 italic">No skills listed yet.</Text>
-             )}
-          </View>
-       </View>
-
-       {/* Interests */}
-       <View className="bg-white dark:bg-slate-900 rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-800">
-          <View className="flex-row justify-between items-center mb-4">
-             <Text className="text-lg font-bold text-slate-800 dark:text-white">I want to learn</Text>
-             <TouchableOpacity onPress={() => setIsEditModalVisible(true)}>
-                <Edit size={16} className="text-slate-400" />
-             </TouchableOpacity>
-          </View>
-          <View className="flex-row flex-wrap gap-2">
-             {user.wantSkills.map((interest, index) => (
-                <View key={index} className="bg-blue-50 dark:bg-blue-900/20 px-3 py-1.5 rounded-lg border border-blue-100 dark:border-blue-800">
-                   <Text className="text-blue-700 dark:text-blue-400 font-medium text-sm">{interest}</Text>
-                </View>
-             ))}
-             {user.wantSkills.length === 0 && (
-                <Text className="text-slate-400 italic">No interests listed yet.</Text>
-             )}
-          </View>
-       </View>
-
-       <AvailabilitySettings />
-       <AchievementShowcase achievements={user.achievements} />
-    </View>
-  );
-
-  const renderSessionsTab = () => (
-    <SessionsTab />
-  );
-
-  const renderWalletTab = () => (
-    <WalletTab />
-  );
-
-  const renderReviewsTab = () => (
-    <ReviewsTab />
-  );
+    );
+  }
 
   return (
     <View className="flex-1 bg-white">
-       <Stack.Screen 
+      <Stack.Screen
         options={{
           headerShown: false,
-          contentStyle: { backgroundColor: 'transparent' }
-        }} 
+          contentStyle: { backgroundColor: 'transparent' },
+        }}
       />
-      {/* GLOBAL LIGHT GRADIENT BACKGROUND */}
+
       <LinearGradient
         colors={['#c9fbd7', '#e2fdf0', '#f5fff8']}
         locations={[0, 0.45, 1]}
@@ -290,33 +161,250 @@ export default function ProfileScreen() {
         style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
         pointerEvents="none"
       />
-      
+
       <SafeAreaView className="flex-1">
-         <View className="flex-row items-center justify-between px-4 py-3">
-            <TouchableOpacity onPress={openSidebar} className="p-2 -ml-2">
-                <Menu size={24} color="#0f172a" />
-            </TouchableOpacity>
-            <Text className="text-lg font-bold text-slate-900">Profile</Text>
+        <View className="flex-row items-center justify-between px-4 py-3">
+          <TouchableOpacity onPress={openSidebar} className="p-2 -ml-2">
+            <Menu size={24} color="#0f172a" />
+          </TouchableOpacity>
+          <Text className="text-lg font-bold text-slate-900">Profile</Text>
+          {isOwnProfile ? (
             <TouchableOpacity onPress={() => setIsEditModalVisible(true)} className="p-2">
-                <Settings size={24} color="#0f172a" />
+              <Settings size={24} color="#0f172a" />
             </TouchableOpacity>
-         </View>
-         <ScrollView contentContainerStyle={{ paddingBottom: 20 }}>
-            {renderHeader()}
-            {renderTabs()}
-            {activeTab === 'about' && renderAboutTab()}
-            {activeTab === 'sessions' && renderSessionsTab()}
-            {activeTab === 'wallet' && renderWalletTab()}
-            {activeTab === 'reviews' && renderReviewsTab()}
-         </ScrollView>
+          ) : (
+            <View className="w-10" />
+          )}
+        </View>
+
+        <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
+          {bootstrapping || loading ? (
+            <View className="items-center py-16">
+              <ActivityIndicator color="#10b981" />
+              <Text className="mt-3 text-slate-500">Loading profile...</Text>
+            </View>
+          ) : null}
+
+          {!bootstrapping && isOwnProfile && !backendReady ? (
+            <View className="mx-4 mt-2 rounded-2xl border border-rose-100 bg-rose-50 p-4">
+              <Text className="font-semibold text-rose-700">
+                {backendError || 'We signed you in, but could not load your app profile from the backend.'}
+              </Text>
+              <Text className="mt-2 text-rose-700">
+                Please check that the mobile build is pointed at the correct backend and Clerk environment.
+              </Text>
+              <TouchableOpacity
+                onPress={() => void refreshBackendUser()}
+                className="mt-3 self-start rounded-xl bg-rose-600 px-4 py-2"
+              >
+                <Text className="font-semibold text-white">Try Again</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
+          {error ? (
+            <View className="mx-4 mt-2 rounded-2xl border border-rose-100 bg-rose-50 p-4">
+              <Text className="font-semibold text-rose-700">{error}</Text>
+            </View>
+          ) : null}
+
+          {user ? (
+            <>
+              <View className="mx-4 mb-6 mt-2 rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
+                <View className="flex-row items-start gap-4">
+                  <View className="relative">
+                    <View className="absolute inset-0 scale-110 rounded-full bg-emerald-100 opacity-50" />
+                    <Image
+                      source={{ uri: user.avatar || 'https://github.com/shadcn.png' }}
+                      className="h-24 w-24 rounded-full border-4 border-white bg-slate-200"
+                    />
+                  </View>
+
+                  <View className="flex-1">
+                    <View className="flex-row items-start justify-between">
+                      <View className="mr-2 flex-1">
+                        <Text className="text-2xl font-bold text-slate-900" numberOfLines={1}>
+                          {user.name}
+                        </Text>
+                        {user.username ? (
+                          <Text className="mt-1 font-medium text-slate-500">@{user.username}</Text>
+                        ) : null}
+                      </View>
+
+                      {isOwnProfile ? (
+                        <TouchableOpacity
+                          className="rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1"
+                          onPress={() => setIsEditModalVisible(true)}
+                        >
+                          <View className="flex-row items-center gap-1">
+                            <Edit size={14} color="#047857" />
+                            <Text className="text-xs font-semibold text-emerald-700">Edit</Text>
+                          </View>
+                        </TouchableOpacity>
+                      ) : null}
+                    </View>
+                  </View>
+                </View>
+
+                <View className="mt-6 flex-row flex-wrap gap-3">
+                  <View className="flex-row items-center gap-1.5 rounded-full border border-amber-100 bg-amber-50 px-3 py-1.5">
+                    <Star size={14} color="#f59e0b" fill="#f59e0b" />
+                    <Text className="font-bold text-amber-900">
+                      {user.publicStats.avgRating.toFixed(1)}
+                    </Text>
+                    <Text className="text-xs text-amber-700/60">({user.publicStats.reviewCount})</Text>
+                  </View>
+
+                  <View className="flex-row items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5">
+                    <Users size={14} color="#64748b" />
+                    <Text className="font-bold text-slate-700">{totalSessions}</Text>
+                    <Text className="text-xs text-slate-500">sessions</Text>
+                  </View>
+
+                  <View className="flex-row items-center gap-1.5 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1.5">
+                    <Coins size={14} color="#059669" />
+                    <Text className="font-bold text-emerald-700">{user.coins.toLocaleString()}</Text>
+                    <Text className="text-xs text-emerald-600/60">Coins</Text>
+                  </View>
+                </View>
+
+                {user.bio ? (
+                  <Text className="mt-6 border-l-2 border-emerald-100 pl-3 leading-6 text-slate-600">
+                    {user.bio}
+                  </Text>
+                ) : (
+                  <Text className="mt-6 text-slate-400">No bio added yet.</Text>
+                )}
+
+                <View className="mt-5 flex-row flex-wrap gap-4">
+                  {user.location ? (
+                    <View className="flex-row items-center gap-1.5">
+                      <MapPin size={14} color="#64748b" />
+                      <Text className="text-sm text-slate-600">{user.location}</Text>
+                    </View>
+                  ) : null}
+                  {user.school ? (
+                    <View className="flex-row items-center gap-1.5">
+                      <GraduationCap size={14} color="#64748b" />
+                      <Text className="text-sm text-slate-600">{user.school}</Text>
+                    </View>
+                  ) : null}
+                </View>
+              </View>
+
+              <View className="mx-4 mb-4 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+                <Text className="mb-4 text-lg font-bold text-slate-800">I can teach</Text>
+                <View className="flex-row flex-wrap gap-2">
+                  {user.hasSkills.length > 0 ? (
+                    user.hasSkills.map((skill) => (
+                      <View
+                        key={skill}
+                        className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-1.5"
+                      >
+                        <Text className="text-sm font-medium text-emerald-700">{skill}</Text>
+                      </View>
+                    ))
+                  ) : (
+                    <Text className="italic text-slate-400">No teaching skills listed yet.</Text>
+                  )}
+                </View>
+              </View>
+
+              <View className="mx-4 mb-4 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+                <Text className="mb-4 text-lg font-bold text-slate-800">I want to learn</Text>
+                <View className="flex-row flex-wrap gap-2">
+                  {user.wantSkills.length > 0 ? (
+                    user.wantSkills.map((skill) => (
+                      <View
+                        key={skill}
+                        className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-1.5"
+                      >
+                        <Text className="text-sm font-medium text-blue-700">{skill}</Text>
+                      </View>
+                    ))
+                  ) : (
+                    <Text className="italic text-slate-400">No learning goals listed yet.</Text>
+                  )}
+                </View>
+              </View>
+
+              <View className="mx-4 mb-4 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+                <Text className="mb-4 text-lg font-bold text-slate-800">Public Stats</Text>
+                <View className="flex-row flex-wrap gap-3">
+                  <View className="min-w-[140px] flex-1 rounded-xl border border-slate-100 bg-slate-50 p-4">
+                    <Text className="text-xs uppercase tracking-wider text-slate-500">Teaching</Text>
+                    <Text className="mt-1 text-2xl font-bold text-slate-900">
+                      {user.publicStats.sessionsTaught}
+                    </Text>
+                  </View>
+                  <View className="min-w-[140px] flex-1 rounded-xl border border-slate-100 bg-slate-50 p-4">
+                    <Text className="text-xs uppercase tracking-wider text-slate-500">Learning</Text>
+                    <Text className="mt-1 text-2xl font-bold text-slate-900">
+                      {user.publicStats.sessionsAttendedAsLearner}
+                    </Text>
+                  </View>
+                  <View className="min-w-[140px] flex-1 rounded-xl border border-slate-100 bg-slate-50 p-4">
+                    <Text className="text-xs uppercase tracking-wider text-slate-500">Requests</Text>
+                    <Text className="mt-1 text-2xl font-bold text-slate-900">
+                      {user.publicStats.totalSessionRequests}
+                    </Text>
+                  </View>
+                  <View className="min-w-[140px] flex-1 rounded-xl border border-slate-100 bg-slate-50 p-4">
+                    <Text className="text-xs uppercase tracking-wider text-slate-500">
+                      Acceptance
+                    </Text>
+                    <Text className="mt-1 text-2xl font-bold text-slate-900">
+                      {Math.round(user.publicStats.acceptanceRate * 100)}%
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              <View className="mx-4 mb-4 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+                <Text className="mb-4 text-lg font-bold text-slate-800">Social Links</Text>
+                {user.socialLinks.length > 0 ? (
+                  user.socialLinks.map((link) => (
+                    <TouchableOpacity
+                      key={`${link.platform}-${link.url}`}
+                      onPress={() => Linking.openURL(link.url)}
+                      className="mb-3 flex-row items-center rounded-xl border border-slate-100 bg-slate-50 p-3 last:mb-0"
+                    >
+                      <View className="mr-3 h-10 w-10 items-center justify-center rounded-full bg-white">
+                        <SocialIcon platform={link.platform} />
+                      </View>
+                      <View className="flex-1">
+                        <Text className="font-semibold capitalize text-slate-900">
+                          {link.platform}
+                        </Text>
+                        <Text className="text-xs text-slate-500" numberOfLines={1}>
+                          {link.url}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))
+                ) : (
+                  <Text className="text-slate-400">No social links added yet.</Text>
+                )}
+              </View>
+            </>
+          ) : null}
+        </ScrollView>
       </SafeAreaView>
 
-      <EditProfileModal 
-        visible={isEditModalVisible}
-        onClose={() => setIsEditModalVisible(false)}
-        user={user}
-        onSave={handleUpdateUser}
-      />
+      {isOwnProfile && user ? (
+        <EditProfileModal
+          visible={isEditModalVisible}
+          onClose={() => setIsEditModalVisible(false)}
+          user={{
+            name: user.name,
+            bio: user.bio || '',
+            hasSkills: user.hasSkills,
+            wantSkills: user.wantSkills,
+            socialLinks: user.socialLinks,
+          }}
+          onSave={handleUpdateUser}
+        />
+      ) : null}
     </View>
   );
 }

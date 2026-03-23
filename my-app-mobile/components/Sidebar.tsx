@@ -5,6 +5,7 @@ import { X, Search, HelpCircle, LayoutDashboard, Coins, User, LogOut, Bell } fro
 import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import { useSidebar } from '../lib/SidebarContext';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useAuth, useClerk, useUser } from '@clerk/clerk-expo';
 
 const { width } = Dimensions.get('window');
 const SIDEBAR_WIDTH = width * 0.8;
@@ -29,6 +30,9 @@ function SidebarLink({ icon: Icon, label, isActive, onPress }: any) {
 export function Sidebar() {
     const { isOpen, closeSidebar, pathname, navigateTo } = useSidebar();
     const insets = useSafeAreaInsets();
+    const { isSignedIn } = useAuth();
+    const { signOut } = useClerk();
+    const { user } = useUser();
     const translateX = useSharedValue(-SIDEBAR_WIDTH);
     const opacity = useSharedValue(0);
     const [isVisible, setIsVisible] = React.useState(false);
@@ -64,6 +68,29 @@ export function Sidebar() {
         closeSidebar();
         setTimeout(() => {
             navigateTo(path);
+        }, 50);
+    };
+
+    const navigateProtected = (path: string) => {
+        if (isSignedIn) {
+            navigate(path);
+            return;
+        }
+
+        closeSidebar();
+        setTimeout(() => {
+            navigateTo({
+                pathname: '/sign-in',
+                params: { redirectTo: path },
+            } as any);
+        }, 50);
+    };
+
+    const handleLogout = async () => {
+        await signOut();
+        closeSidebar();
+        setTimeout(() => {
+            navigateTo('/' as any);
         }, 50);
     };
 
@@ -114,7 +141,7 @@ export function Sidebar() {
                             icon={LayoutDashboard} 
                             label="Dashboard" 
                             isActive={pathname === '/dashboard'}
-                            onPress={() => navigate('/dashboard')} 
+                            onPress={() => navigateProtected('/dashboard')} 
                         />
                     </View>
 
@@ -125,40 +152,69 @@ export function Sidebar() {
                         {/* User Info */}
                         <View style={styles.userInfo}>
                             <View style={styles.avatarContainer}>
-                                <Image source={{ uri: "https://github.com/shadcn.png" }} style={styles.avatar} />
+                                <Image
+                                    source={{ uri: user?.imageUrl || "https://github.com/shadcn.png" }}
+                                    style={styles.avatar}
+                                />
                             </View>
                             <View style={styles.userTextContainer}>
-                                <Text style={styles.userName}>Arghadeep Ghosh</Text>
-                                <Text style={styles.userHandle}>@arghadeep</Text>
+                                <Text style={styles.userName}>
+                                    {user?.fullName || user?.firstName || 'Guest User'}
+                                </Text>
+                                <Text style={styles.userHandle}>
+                                    {user?.primaryEmailAddress?.emailAddress || 'Sign in to sync your profile'}
+                                </Text>
                             </View>
                         </View>
 
                         {/* Action Buttons */}
                         <View style={styles.actionButtons}>
-                            <TouchableOpacity onPress={() => navigate('/profile')} style={styles.profileButton}>
+                            <TouchableOpacity
+                                onPress={() => navigateProtected('/profile')}
+                                style={styles.profileButton}
+                            >
                                 <User size={16} color="#059669" />
-                                <Text style={styles.profileButtonText}>Profile</Text>
+                                <Text style={styles.profileButtonText}>
+                                    {isSignedIn ? 'Profile' : 'Sign In'}
+                                </Text>
                             </TouchableOpacity>
                             
-                            <TouchableOpacity onPress={() => console.log('Logout')} style={styles.logoutButton}>
+                            <TouchableOpacity
+                                onPress={() =>
+                                    isSignedIn
+                                        ? void handleLogout()
+                                        : navigate('/sign-up')
+                                }
+                                style={styles.logoutButton}
+                            >
                                 <LogOut size={16} color="#ef4444" />
-                                <Text style={styles.logoutButtonText}>Logout</Text>
+                                <Text style={styles.logoutButtonText}>
+                                    {isSignedIn ? 'Logout' : 'Sign Up'}
+                                </Text>
                             </TouchableOpacity>
                         </View>
 
                         {/* Coins and Notifications */}
                         <View style={styles.bottomSection}>
-                            <TouchableOpacity style={styles.coinsCard}>
+                            <TouchableOpacity
+                                style={styles.coinsCard}
+                                onPress={() => navigateProtected('/profile')}
+                            >
                                 <View style={styles.coinsLeft}>
                                     <View style={styles.coinsIconContainer}>
                                         <Coins size={18} color="#d97706" />
                                     </View>
                                     <Text style={styles.coinsLabel}>My Coins</Text>
                                 </View>
-                                <Text style={styles.coinsValue}>1,500</Text>
+                                <Text style={styles.coinsValue}>
+                                    {isSignedIn ? 'Profile' : 'Unlock'}
+                                </Text>
                             </TouchableOpacity>
 
-                            <TouchableOpacity style={styles.notificationsCard} onPress={() => navigate('/notifications')}>
+                            <TouchableOpacity
+                                style={styles.notificationsCard}
+                                onPress={() => navigateProtected('/notifications')}
+                            >
                                 <View style={styles.notificationsIconContainer}>
                                     <Bell size={18} color="#64748b" />
                                 </View>

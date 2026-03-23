@@ -546,32 +546,50 @@ export class UsersService {
     // Create user with onboarding data (on-demand user creation)
     this.logger.debug('🔍 Completing onboarding for user:', clerkId);
     const normalizedHourlyRate = data.hourlyRate ?? 0;
-    const user = await this.prisma.user.upsert({
+    const normalizedEmail = data.email.trim().toLowerCase();
+    const userPayload = {
+      name: data.name,
+      email: normalizedEmail,
+      avatar: data.avatar,
+      bio: data.bio,
+      location: data.location,
+      school: data.school,
+      hourlyRate: normalizedHourlyRate,
+      coins: 1000, // Award 1000 coins for completing onboarding
+      onboarded: true,
+    };
+
+    const existingByClerkId = await this.prisma.user.findUnique({
       where: { clerkId },
-      update: {
-        name: data.name,
-        email: data.email,
-        avatar: data.avatar,
-        bio: data.bio,
-        location: data.location,
-        school: data.school,
-        hourlyRate: normalizedHourlyRate,
-        coins: 1000, // Award 1000 coins for completing onboarding
-        onboarded: true,
-      },
-      create: {
-        clerkId,
-        name: data.name,
-        email: data.email,
-        avatar: data.avatar,
-        bio: data.bio,
-        location: data.location,
-        school: data.school,
-        hourlyRate: normalizedHourlyRate,
-        coins: 1000, // Award 1000 coins for completing onboarding
-        onboarded: true,
-      },
+      select: { id: true },
     });
+
+    const existingByEmail = existingByClerkId
+      ? null
+      : await this.prisma.user.findUnique({
+          where: { email: normalizedEmail },
+          select: { id: true },
+        });
+
+    const user = existingByClerkId
+      ? await this.prisma.user.update({
+          where: { clerkId },
+          data: userPayload,
+        })
+      : existingByEmail
+        ? await this.prisma.user.update({
+            where: { id: existingByEmail.id },
+            data: {
+              ...userPayload,
+              clerkId,
+            },
+          })
+        : await this.prisma.user.create({
+            data: {
+              clerkId,
+              ...userPayload,
+            },
+          });
 
     this.logger.debug('🔍 User created:', user);
 

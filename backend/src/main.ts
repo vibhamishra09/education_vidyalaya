@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-misused-promises */
+/* eslint-disable prettier/prettier */
 // Sentry must be imported and initialized before anything else
 import * as Sentry from '@sentry/nestjs';
 import { nodeProfilingIntegration } from '@sentry/profiling-node';
@@ -23,7 +25,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     bufferLogs: true,
   });
-  
+
   const logger = app.get(LoggerService);
   logger.setContext('Bootstrap');
 
@@ -49,6 +51,10 @@ async function bootstrap() {
     'http://localhost:3000',
     'http://localhost:3002',
     'http://localhost:3007',
+    'http://localhost:8081',
+    'http://127.0.0.1:8081',
+    'http://localhost:19006',
+    'http://127.0.0.1:19006',
   ];
   // Combine and deduplicate
   const allowedOrigins = [...new Set([...envUrls, ...defaultUrls])];

@@ -15,7 +15,7 @@ export const PeerCard = ({ peer, className }: PeerCardProps) => {
   
   return (
     <TouchableOpacity 
-      onPress={() => router.push(`/profile/${peer.id}` as any)}
+      onPress={() => router.push({ pathname: '/profile', params: { userId: peer.id } })}
       className={cn(
         "bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4 mb-3 shadow-sm",
         className

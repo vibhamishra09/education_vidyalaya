@@ -21,7 +21,7 @@ interface EditProfileModalProps {
   visible: boolean;
   onClose: () => void;
   user: UserProfile;
-  onSave: (updatedUser: UserProfile) => void;
+  onSave: (updatedUser: UserProfile) => Promise<void> | void;
 }
 
 export function EditProfileModal({ visible, onClose, user, onSave }: EditProfileModalProps) {
@@ -30,6 +30,11 @@ export function EditProfileModal({ visible, onClose, user, onSave }: EditProfile
   const [newWantSkill, setNewWantSkill] = useState('');
   const [newSocialPlatform, setNewSocialPlatform] = useState('');
   const [newSocialUrl, setNewSocialUrl] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  React.useEffect(() => {
+    setFormData(user);
+  }, [user]);
 
   const handleChange = (key: keyof UserProfile, value: string) => {
     setFormData((prev) => ({ ...prev, [key]: value }));
@@ -87,9 +92,14 @@ export function EditProfileModal({ visible, onClose, user, onSave }: EditProfile
     }));
   };
 
-  const handleSave = () => {
-    onSave(formData);
-    onClose();
+  const handleSave = async () => {
+    try {
+      setSaving(true);
+      await onSave(formData);
+      onClose();
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -235,11 +245,14 @@ export function EditProfileModal({ visible, onClose, user, onSave }: EditProfile
 
         <View className="p-4 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 pb-8">
           <TouchableOpacity 
-            onPress={handleSave}
+            onPress={() => void handleSave()}
+            disabled={saving}
             className="w-full bg-slate-900 dark:bg-white py-4 rounded-xl flex-row items-center justify-center gap-2"
           >
             <Save size={20} className="text-white dark:text-slate-900" />
-            <Text className="text-white dark:text-slate-900 font-bold text-lg">Save Changes</Text>
+            <Text className="text-white dark:text-slate-900 font-bold text-lg">
+              {saving ? 'Saving...' : 'Save Changes'}
+            </Text>
           </TouchableOpacity>
         </View>
       </View>

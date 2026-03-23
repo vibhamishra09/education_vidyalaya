@@ -1,152 +1,54 @@
-import React, { useState } from "react";
-import { View, Text, FlatList, TouchableOpacity, SafeAreaView, StatusBar, Alert } from "react-native";
+import React, { useEffect, useState } from 'react';
+import { View, Text, FlatList, TouchableOpacity, SafeAreaView, StatusBar, Alert, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
-import { ArrowLeft, Bell, CheckCheck, X, Check } from "lucide-react-native";
+import { ArrowLeft, Bell, CheckCheck } from 'lucide-react-native';
+import { getErrorMessage } from '../lib/api';
+import { useApi } from '../lib/use-api';
+import { useBackendUser } from '../lib/backend-user-context';
+import { useProtectedRoute } from '../lib/use-protected-route';
+import { ApiNotification, NotificationsResponse } from '../types/api';
 
-// --- TYPES ---
-enum NotifType {
-  URGENT = 'URGENT',
-  NORMAL = 'NORMAL',
-}
-
-interface Notification {
-  id: string;
-  notifType: NotifType;
-  message: string;
-  createdAt: string | Date;
-  viewed: boolean;
-  actionType?: string; // e.g., "SESSION_REQUEST", "SESSION_REMINDER"
-  actionData?: string;
-  title?: string;
-}
-
-// --- MOCK DATA ---
-const MOCK_NOTIFICATIONS: Notification[] = [
-  {
-    id: "1",
-    notifType: NotifType.URGENT,
-    title: "Session Reminder",
-    message: "Your session 'React Hooks Deep Dive' starts in 15 minutes.",
-    createdAt: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
-    viewed: false,
-    actionType: "SESSION_REMINDER",
-    actionData: "123",
-  },
-  {
-    id: "4",
-    notifType: NotifType.URGENT,
-    title: "Session Request",
-    message: "John wants to book a session on 'Node.js Basics'.",
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
-    viewed: false,
-    actionType: "SESSION_REQUEST",
-    actionData: "456",
-  },
-  {
-    id: "2",
-    notifType: NotifType.NORMAL,
-    title: "New Review",
-    message: "Sarah left a 5-star review for your mentoring session!",
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-    viewed: false,
-    actionType: "REVIEW_RECEIVED",
-    actionData: "789",
-  },
-  {
-    id: "3",
-    notifType: NotifType.NORMAL,
-    title: "Achievement Unlocked",
-    message: "You've earned the 'Code Warrior' badge!",
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
-    viewed: true,
-    actionType: "ACHIEVEMENT",
-  },
-  {
-    id: "5",
-    notifType: NotifType.NORMAL,
-    title: "System Update",
-    message: "We've updated our terms of service.",
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(),
-    viewed: true,
-    actionType: "SYSTEM",
-  },
-];
-
-// --- COMPONENTS ---
-
-const NotificationItem = ({ 
-  item, 
+function NotificationItem({
+  item,
   onMarkAsRead,
-  onPress,
-  onAction
-}: { 
-  item: Notification; 
+}: {
+  item: ApiNotification;
   onMarkAsRead: (id: string) => void;
-  onPress: (item: Notification) => void;
-  onAction: (id: string, action: 'accept' | 'reject') => void;
-}) => {
-  const isUrgent = item.notifType === NotifType.URGENT;
-  
+}) {
+  const isUrgent = item.notifType === 'URGENT';
   const date = new Date(item.createdAt);
   const timeString = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const dateString = date.toLocaleDateString();
   const isToday = new Date().toDateString() === date.toDateString();
   const formattedTime = isToday ? timeString : dateString;
 
-  const showActions = item.actionType === 'SESSION_REQUEST';
-
   return (
-    <TouchableOpacity 
-      onPress={() => onPress(item)}
-      activeOpacity={0.7}
-      className={`bg-white p-4 mb-2 mx-4 rounded-xl border ${item.viewed ? 'border-gray-100 opacity-80' : 'border-blue-100 shadow-sm'}`}
+    <View
+      className={`mx-4 mb-2 rounded-xl border bg-white p-4 ${item.viewed ? 'border-gray-100 opacity-80' : 'border-blue-100 shadow-sm'
+        }`}
     >
       <View className="flex-row items-start justify-between">
-        <View className="flex-1 mr-3">
-            <View className="flex-row items-center mb-1">
-                {isUrgent && (
-                    <View className="bg-red-100 px-2 py-0.5 rounded-full mr-2">
-                        <Text className="text-xs text-red-600 font-medium">Urgent</Text>
-                    </View>
-                )}
-                 {!item.viewed && !isUrgent && (
-                    <View className="bg-blue-100 px-2 py-0.5 rounded-full mr-2">
-                        <Text className="text-xs text-blue-600 font-medium">New</Text>
-                    </View>
-                )}
-                <Text className={`text-sm text-gray-500`}>{formattedTime}</Text>
-            </View>
-          
-          <Text className={`text-base font-semibold mb-1 ${item.viewed ? 'text-gray-700' : 'text-gray-900'}`}>
-            {item.title || item.actionType || "Notification"}
-          </Text>
-          <Text className={`text-sm ${item.viewed ? 'text-gray-500' : 'text-gray-700'} leading-5 mb-2`}>
+        <View className="mr-3 flex-1">
+          <View className="mb-1 flex-row items-center">
+            {isUrgent ? (
+              <View className="mr-2 rounded-full bg-red-100 px-2 py-0.5">
+                <Text className="text-xs font-medium text-red-600">Urgent</Text>
+              </View>
+            ) : !item.viewed ? (
+              <View className="mr-2 rounded-full bg-blue-100 px-2 py-0.5">
+                <Text className="text-xs font-medium text-blue-600">New</Text>
+              </View>
+            ) : null}
+            <Text className="text-sm text-gray-500">{formattedTime}</Text>
+          </View>
+
+          <Text className={`mb-2 text-sm leading-5 ${item.viewed ? 'text-gray-500' : 'text-gray-700'}`}>
             {item.message}
           </Text>
-
-          {showActions && (
-            <View className="flex-row mt-2 space-x-3">
-              <TouchableOpacity 
-                onPress={() => onAction(item.id, 'accept')}
-                className="bg-green-600 px-4 py-2 rounded-lg flex-row items-center"
-              >
-                <Check size={14} color="white" className="mr-1" />
-                <Text className="text-white font-semibold text-sm">Accept</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                onPress={() => onAction(item.id, 'reject')}
-                className="bg-red-50 px-4 py-2 rounded-lg flex-row items-center border border-red-100"
-              >
-                <X size={14} color="#DC2626" className="mr-1" />
-                <Text className="text-red-600 font-semibold text-sm">Reject</Text>
-              </TouchableOpacity>
-            </View>
-          )}
         </View>
 
         {!item.viewed && (
-          <TouchableOpacity 
+          <TouchableOpacity
             onPress={() => onMarkAsRead(item.id)}
             className="bg-blue-50 p-2 rounded-full active:bg-blue-100"
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -155,64 +57,126 @@ const NotificationItem = ({
           </TouchableOpacity>
         )}
       </View>
-    </TouchableOpacity>
+    </View>
   );
-};
+}
 
 export default function NotificationsScreen() {
   const router = useRouter();
-  const [notifications, setNotifications] = useState<Notification[]>(MOCK_NOTIFICATIONS);
+  const { request } = useApi();
+  const { ready: backendReady, loading: bootstrapping } = useBackendUser();
+  const { shouldBlock } = useProtectedRoute(true, '/notifications');
 
-  const handleMarkAsRead = (id: string) => {
-    setNotifications(prev => 
-      prev.map(n => n.id === id ? { ...n, viewed: true } : n)
-    );
-  };
+  const [notifications, setNotifications] = useState<ApiNotification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleMarkAllAsRead = () => {
-    setNotifications(prev => 
-      prev.map(n => ({ ...n, viewed: true }))
-    );
-  };
+  useEffect(() => {
+    let active = true;
 
-  const handleNotificationPress = (item: Notification) => {
-    // Mark as read when opened
-    if (!item.viewed) {
-      handleMarkAsRead(item.id);
+    if (!backendReady) {
+      return () => {
+        active = false;
+      };
     }
-    
-    // Navigate based on type
-    if (item.actionType === 'SESSION_REQUEST' || item.actionType === 'SESSION_REMINDER') {
-      // Mock navigation to session ID
-      router.push(`/session/${item.actionData || '123'}`);
-    } else {
-      // Fallback or specific handling for other types
-      console.log('Opened notification:', item.title);
+
+    const loadNotifications = async () => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const result = await request<NotificationsResponse>(
+          '/api/notifications?limit=50',
+          undefined,
+          { auth: true },
+        );
+
+        if (!active) {
+          return;
+        }
+
+        setNotifications(result.notifications || []);
+        setUnreadCount(result.unreadCount || 0);
+      } catch (err) {
+        if (!active) {
+          return;
+        }
+
+        setError(getErrorMessage(err, 'Unable to load notifications.'));
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void loadNotifications();
+
+    return () => {
+      active = false;
+    };
+  }, [backendReady, request]);
+
+  const handleMarkAsRead = async (id: string) => {
+    setNotifications((prev) =>
+      prev.map((notification) =>
+        notification.id === id ? { ...notification, viewed: true } : notification,
+      ),
+    );
+    setUnreadCount((prev) => Math.max(0, prev - 1));
+
+    try {
+      await request(`/api/notifications/${id}/read`, { method: 'PATCH' }, { auth: true });
+    } catch {
+      setNotifications((prev) =>
+        prev.map((notification) =>
+          notification.id === id ? { ...notification, viewed: false } : notification,
+        ),
+      );
+      setUnreadCount((prev) => prev + 1);
     }
   };
 
-  const handleAction = (id: string, action: 'accept' | 'reject') => {
-    Alert.alert(
-      action === 'accept' ? 'Session Accepted' : 'Session Rejected',
-      action === 'accept' ? 'You have accepted the session request.' : 'You have declined the session request.',
-      [{ text: 'OK' }]
-    );
-    // In a real app, you would call an API here and then update the list
-    handleMarkAsRead(id);
+  const handleMarkAllAsRead = async () => {
+    const unreadIds = notifications.filter((notification) => !notification.viewed).map((notification) => notification.id);
+    if (unreadIds.length === 0) {
+      return;
+    }
+
+    setNotifications((prev) => prev.map((notification) => ({ ...notification, viewed: true })));
+    setUnreadCount(0);
+
+    try {
+      await request('/api/notifications/read-all', { method: 'PATCH' }, { auth: true });
+    } catch {
+      setNotifications((prev) =>
+        prev.map((notification) =>
+          unreadIds.includes(notification.id) ? { ...notification, viewed: false } : notification,
+        ),
+      );
+      setUnreadCount(unreadIds.length);
+    }
   };
 
-  const unreadCount = notifications.filter(n => !n.viewed).length;
+  if (shouldBlock) {
+    return (
+      <SafeAreaView className="flex-1 items-center justify-center bg-gray-50">
+        <ActivityIndicator color="#10b981" />
+        <Text className="mt-3 text-gray-500">Redirecting to sign in...</Text>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-gray-50 pt-2">
-        <StatusBar barStyle="dark-content" />
-      
-      {/* Header */}
-      <View className="px-4 py-3 flex-row items-center justify-between bg-white border-b border-gray-100 mb-2">
+      <StatusBar barStyle="dark-content" />
+
+      <View className="mb-2 flex-row items-center justify-between border-b border-gray-100 bg-white px-4 py-3">
         <View className="flex-row items-center">
-          <TouchableOpacity 
+          <TouchableOpacity
             onPress={() => router.back()}
-            className="p-2 -ml-2 mr-2 rounded-full active:bg-gray-100"
+            className="mr-2 -ml-2 rounded-full p-2 active:bg-gray-100"
           >
             <ArrowLeft size={24} color="#1F2937" />
           </TouchableOpacity>
@@ -223,32 +187,41 @@ export default function NotificationsScreen() {
             </View>
           )}
         </View>
-        
-        {unreadCount > 0 && (
-          <TouchableOpacity onPress={handleMarkAllAsRead}>
-            <Text className="text-blue-600 font-medium">Mark all read</Text>
+
+        {unreadCount > 0 ? (
+          <TouchableOpacity onPress={() => void handleMarkAllAsRead()}>
+            <Text className="font-medium text-blue-600">Mark all read</Text>
           </TouchableOpacity>
-        )}
+        ) : null}
       </View>
 
-      {/* Content */}
+      {bootstrapping || loading ? (
+        <View className="items-center py-12">
+          <ActivityIndicator color="#10b981" />
+          <Text className="mt-3 text-gray-500">Loading notifications...</Text>
+        </View>
+      ) : null}
+
+      {error ? (
+        <View className="mx-4 mb-2 rounded-xl border border-rose-100 bg-rose-50 p-4">
+          <Text className="font-semibold text-rose-700">{error}</Text>
+        </View>
+      ) : null}
+
       <FlatList
         data={notifications}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
-          <NotificationItem 
-            item={item} 
-            onMarkAsRead={handleMarkAsRead}
-            onPress={handleNotificationPress}
-            onAction={handleAction}
-          />
+          <NotificationItem item={item} onMarkAsRead={(id) => void handleMarkAsRead(id)} />
         )}
         contentContainerStyle={{ paddingBottom: 20 }}
         ListEmptyComponent={
-          <View className="flex-1 items-center justify-center p-10 mt-10">
-            <Bell size={48} color="#D1D5DB" />
-            <Text className="text-gray-500 mt-4 text-center">No notifications yet</Text>
-          </View>
+          !loading ? (
+            <View className="mt-10 flex-1 items-center justify-center p-10">
+              <Bell size={48} color="#D1D5DB" />
+              <Text className="mt-4 text-center text-gray-500">No notifications yet</Text>
+            </View>
+          ) : null
         }
       />
     </SafeAreaView>
