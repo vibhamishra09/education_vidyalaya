@@ -19,6 +19,7 @@ import { ServiceWorkerRegistration } from "@/components/pwa/service-worker-regis
 import { InstallPrompt } from "@/components/pwa/install-prompt";
 import { UpdateNotification } from "@/components/pwa/update-notification";
 import { BackgroundGradient } from "@/components/ui/background-gradient";
+import { RemoteControlSync } from "@/components/livekit/RemoteControlSync";
 import "./globals.css";
 
 const inter = Inter({
@@ -263,6 +264,7 @@ export default function RootLayout({
             <NotificationProvider>
               <ToastProvider>
                 <AchievementNotificationProvider>
+                  <RemoteControlSync />
                   {children}
                   <BottomNav />
                   <FloatingActionButtons />
