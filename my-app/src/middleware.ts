@@ -42,25 +42,17 @@ export default clerkMiddleware(async (auth, req: NextRequest) => {
     return redirectToSignIn({ returnBackUrl: req.url });
   }
 
-  // Allow public routes to be accessed without onboarding completion
-  if (isPublicRoute(req)) {
-    return NextResponse.next();
-  }
-
-  // Catch users who do not have `onboardingComplete: true` in their publicMetadata
-  // Redirect them to the /onboarding route to complete onboarding
-  // (This only applies to protected routes, as public routes are handled above)
+  // Catch authenticated users who haven't completed onboarding.
+  // Redirect them to /onboarding — this applies to ALL routes (public and private)
+  // so that new users landing on "/" are also caught.
   if (isAuthenticated && !sessionClaims?.metadata?.onboardingComplete) {
     const onboardingUrl = new URL('/onboarding', req.url);
-    // Preserve the original URL as a redirect parameter
     onboardingUrl.searchParams.set('redirect_url', req.url);
     return NextResponse.redirect(onboardingUrl);
   }
 
-  // If the user is logged in and the route is protected, let them view.
-  if (isAuthenticated && !isPublicRoute(req)) {
-    return NextResponse.next();
-  }
+  // Allow all other requests through
+  return NextResponse.next();
 });
 
 export const config = {
