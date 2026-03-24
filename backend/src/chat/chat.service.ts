@@ -169,14 +169,17 @@ export class ChatService {
           },
         },
       },
-      orderBy: { createdAt: 'asc' }, // Changed to 'asc' to get oldest first, then we'll reverse
+      orderBy: { createdAt: 'desc' },
       take: limit,
       skip: cursor ? 1 : 0,
-        cursor: cursor ? { id: cursor } : undefined,
+      cursor: cursor ? { id: cursor } : undefined,
       });
-      
+
+      // Newest-first query → chronological for the client
+      const chronological = [...messages].reverse();
+
       // Transform guest messages to include guest info in sender field
-      return messages.map((msg) => {
+      return chronological.map((msg) => {
         if (msg.guestSenderId && !msg.sender) {
           // This is a guest message, add guest info to sender
           return {

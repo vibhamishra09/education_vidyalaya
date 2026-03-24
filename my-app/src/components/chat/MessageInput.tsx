@@ -11,6 +11,14 @@ export interface ChatRecipient {
 	avatar?: string | null
 }
 
+function pickDefaultAudience(
+	allowed?: Partial<Record<MessageAudienceType, boolean>>,
+): MessageAudienceType {
+	if (allowed?.EVERYONE !== false) return 'EVERYONE'
+	if (allowed?.HOST !== false) return 'HOST'
+	return 'USER'
+}
+
 export function MessageInput({
 	onSend,
 	disabled = false,
@@ -27,7 +35,9 @@ export function MessageInput({
 	allowedAudiences?: Partial<Record<MessageAudienceType, boolean>>
 }) {
 	const [text, setText] = useState('')
-	const [audienceType, setAudienceType] = useState<MessageAudienceType>('EVERYONE')
+	const [audienceType, setAudienceType] = useState<MessageAudienceType>(() =>
+		pickDefaultAudience(allowedAudiences),
+	)
 	const [targetUserId, setTargetUserId] = useState('')
 	const [userSearch, setUserSearch] = useState('')
 	const [showUserDropdown, setShowUserDropdown] = useState(false)
@@ -61,6 +71,25 @@ export function MessageInput({
 	const canSendEveryone = allowedAudiences?.EVERYONE !== false
 	const canSendHost = allowedAudiences?.HOST !== false
 	const canSendUser = allowedAudiences?.USER !== false && canUseSpecificUser
+
+	// Guests often only allow HOST; default was EVERYONE which kept Send disabled.
+	useEffect(() => {
+		setAudienceType((prev) => {
+			const prevOk =
+				(prev === 'EVERYONE' && canSendEveryone) ||
+				(prev === 'HOST' && canSendHost) ||
+				(prev === 'USER' && canSendUser)
+			if (prevOk) return prev
+			return pickDefaultAudience(allowedAudiences)
+		})
+	}, [
+		canSendEveryone,
+		canSendHost,
+		canSendUser,
+		allowedAudiences?.EVERYONE,
+		allowedAudiences?.HOST,
+		allowedAudiences?.USER,
+	])
 
 	// Close dropdown when clicking outside
 	useEffect(() => {

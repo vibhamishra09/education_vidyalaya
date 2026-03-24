@@ -1,5 +1,4 @@
-import { UseGuards, Logger } from '@nestjs/common';
-import { randomUUID } from 'crypto';
+import { Logger } from '@nestjs/common';
 import {
   OnGatewayConnection,
   OnGatewayDisconnect,
@@ -66,22 +65,44 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     return MessageAudienceType.EVERYONE;
   }
 
+  /** Full payload for clients; partial emits produced empty text / invalid dates in the UI. */
+  private serializeMessageForSocket(message: {
+    id: string;
+    channelId: string;
+    senderId: string | null;
+    guestSenderId: string | null;
+    guestEmail: string | null;
+    content: string;
+    audienceType: MessageAudienceType;
+    targetUserId: string | null;
+    createdAt: Date;
+    sender: { id: string; name: string; avatar: string | null } | null;
+    targetUser: { id: string; name: string; avatar: string | null } | null;
+  }) {
+    return {
+      id: message.id,
+      channelId: message.channelId,
+      senderId: message.senderId,
+      guestSenderId: message.guestSenderId,
+      guestEmail: message.guestEmail,
+      content: message.content,
+      audienceType: message.audienceType,
+      targetUserId: message.targetUserId,
+      createdAt: message.createdAt.toISOString(),
+      sender: message.sender,
+      targetUser: message.targetUser,
+    };
+  }
+
   private emitScopedMessage(
     channelId: string,
-    message: { 
-      audienceType: MessageAudienceType; 
-      senderId: string | null; 
-      guestSenderId?: string | null;
-      targetUserId?: string | null;
-    },
+    message: ReturnType<ChatGateway['serializeMessageForSocket']>,
   ) {
     if (message.audienceType === MessageAudienceType.EVERYONE) {
       this.server.to(channelId).emit('message:new', message);
       return;
     }
 
-    // For guest messages, senderId is null, so we skip adding sender to recipients
-    // Only the target user (host) should receive the message
     const recipients = new Set<string>();
     if (message.senderId) {
       recipients.add(message.senderId);
@@ -256,17 +277,19 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
           hostDbUserId,
         );
         
-        // Transform message for emission (similar to getMessages transformation)
-        const messageToEmit = {
+        const base = this.serializeMessageForSocket({
           ...message,
-          sender: message.sender || {
-            id: client.data.guestIdentity || 'guest',
-            name: client.data.guestName || 'Guest',
-            avatar: null,
-          },
-          isGuest: true,
-          guestEmail: client.data.guestEmail,
-        };
+          guestSenderId: message.guestSenderId,
+          guestEmail: message.guestEmail ?? client.data.guestEmail,
+          sender:
+            message.sender || {
+              id: client.data.guestParticipantId || client.data.guestIdentity || 'guest',
+              name: client.data.guestName || 'Guest',
+              avatar: null,
+            },
+        });
+
+        const messageToEmit = { ...base, isGuest: true };
         
         // Emit to host and sender
         this.server.to(`user:${hostDbUserId}`).emit('message:new', messageToEmit);
@@ -334,12 +357,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         audienceType,
         payload.targetUserId,
       );
-      // For regular users, senderId is always present (not null)
-      this.emitScopedMessage(payload.channelId, {
-        audienceType: message.audienceType,
-        senderId: message.senderId!, // Non-null assertion: regular users always have senderId
-        targetUserId: message.targetUserId,
-      });
+      const toEmit = this.serializeMessageForSocket(message);
+      this.emitScopedMessage(payload.channelId, toEmit);
     } catch (error: any) {
       this.logger.debug('Error sending message:', error);
       client.emit('error', {
