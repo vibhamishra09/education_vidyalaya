@@ -150,6 +150,7 @@ export default function SignUpPage() {
             {/* Clerk Sign Up Component */}
             <div className="animate-scale-in flex justify-center">
               <SignUp
+                forceRedirectUrl="/onboarding"
                 appearance={{
                   elements: {
                     rootBox: "w-full mx-auto",
