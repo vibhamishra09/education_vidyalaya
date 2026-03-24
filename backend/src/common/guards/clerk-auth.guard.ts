@@ -10,6 +10,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { createClerkClient } from '@clerk/backend';
+import { attachAuthenticatedUser } from '../auth/clerk-auth.utils';
 
 @Injectable()
 export class ClerkAuthGuard implements CanActivate {
@@ -72,9 +73,7 @@ export class ClerkAuthGuard implements CanActivate {
         throw new UnauthorizedException('User ID not found in token');
       }
 
-      // Attach user ID to request for use in controllers
-      request.userId = auth.userId;
-      request.auth = auth;
+      attachAuthenticatedUser(request, auth);
 
       return true;
     } catch (error) {
