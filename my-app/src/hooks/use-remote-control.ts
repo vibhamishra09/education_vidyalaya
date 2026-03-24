@@ -183,7 +183,20 @@ export function useRemoteControl({ currentUserId }: UseRemoteControlProps = {}) 
       const y = message.y !== undefined ? Math.round(message.y * window.innerHeight) : 0;
       
       let event: Event | null = null;
-      const elementAtPoint = document.elementFromPoint(x, y) || document.body;
+      
+      // Improved element detection: skip overlays and ignored elements
+      let elementAtPoint: Element | null = null;
+      if (document.elementsFromPoint) {
+        const elements = document.elementsFromPoint(x, y);
+        elementAtPoint = elements.find(el => 
+          !el.hasAttribute('data-remote-ignore') && 
+          !el.closest('[data-remote-ignore="true"]')
+        ) || null;
+      }
+      
+      if (!elementAtPoint) {
+        elementAtPoint = document.elementFromPoint(x, y) || document.body;
+      }
 
       // Note: Browsers block programmatic interaction with cross-origin content (iframes)
       // and certain native controls. Synthetic events also cannot trigger default actions
@@ -211,6 +224,13 @@ export function useRemoteControl({ currentUserId }: UseRemoteControlProps = {}) 
           });
           // For synthetic clicks to actually do something, we often need to click the element directly
           if (elementAtPoint instanceof HTMLElement) {
+            // Debug log to help identify what's being clicked
+            console.log(`[RemoteControl] Clicking: ${elementAtPoint.tagName}.${elementAtPoint.className.split(' ').join('.')}`);
+            
+            // Try to focus and then click (avoid focusing body/html)
+            if (elementAtPoint !== document.body && elementAtPoint !== document.documentElement) {
+              elementAtPoint.focus();
+            }
             elementAtPoint.click();
           }
           break;
@@ -294,7 +314,7 @@ export function useRemoteControl({ currentUserId }: UseRemoteControlProps = {}) 
     // Throttle mousemove events
     if (type === 'mousemove') {
       const now = Date.now();
-      if (now - lastMousePosRef.current.time < 30) { // ~30fps max
+      if (now - lastMousePosRef.current.time < 16) { // ~60fps max for smoother tracking
         return;
       }
       lastMousePosRef.current = { x: data.x || 0, y: data.y || 0, time: now };

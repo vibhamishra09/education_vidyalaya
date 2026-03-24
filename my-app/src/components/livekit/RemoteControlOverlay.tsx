@@ -28,6 +28,7 @@ export function RemoteControlOverlay({
   const overlayRef = useRef<HTMLDivElement>(null);
   const cursorRef = useRef<HTMLDivElement>(null);
   const [remoteCursor, setRemoteCursor] = useState<{ x: number; y: number } | null>(null);
+  const [clicks, setClicks] = useState<{ x: number; y: number; id: number }[]>([]);
 
   // Normalize coordinates relative to the video container
   const getNormalizedCoords = (clientX: number, clientY: number) => {
@@ -65,6 +66,14 @@ export function RemoteControlOverlay({
     if (!isControlling) return;
     const { x, y } = getNormalizedCoords(e.clientX, e.clientY);
     onSendInput('click', { x, y, button: e.button });
+
+    // Add click ripple
+    const clickId = Date.now();
+    setClicks(prev => [...prev, { x, y, id: clickId }]);
+    setTimeout(() => {
+      setClicks(prev => prev.filter(c => c.id !== clickId));
+    }, 600);
+
     // Prevent default so we don't accidentally click things in the local UI
     e.preventDefault();
     e.stopPropagation();
@@ -146,6 +155,7 @@ export function RemoteControlOverlay({
       {isControlling && (
         <div
           ref={overlayRef}
+          data-remote-ignore="true"
           className={cn(
             "absolute inset-0 z-40 cursor-crosshair",
             className
@@ -180,9 +190,20 @@ export function RemoteControlOverlay({
         </div>
       )}
 
+      {/* Click Ripples */}
+      {clicks.map(click => (
+        <div 
+          key={click.id}
+          className="absolute w-8 h-8 -ml-4 -mt-4 border-2 border-sky-400 rounded-full animate-ping pointer-events-none z-[101]"
+          style={{ left: `${click.x * 100}%`, top: `${click.y * 100}%` }}
+        />
+      ))}
+
       {/* Warning Overlay (Sharer side) */}
       {isSharing && controllerId && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-amber-500/90 text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-3 backdrop-blur-sm animate-in slide-in-from-top-4 pointer-events-auto">
+        <div 
+          data-remote-ignore="true"
+          className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-amber-500/90 text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-3 backdrop-blur-sm animate-in slide-in-from-top-4 pointer-events-auto">
           <MousePointer2 className="h-4 w-4 animate-pulse" />
           <span className="text-sm font-medium">Someone is controlling your screen</span>
           <Button 

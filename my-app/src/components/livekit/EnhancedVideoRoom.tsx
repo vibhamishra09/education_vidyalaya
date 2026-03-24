@@ -1109,7 +1109,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		denyControl,
 		revokeControl
 	} = useRemoteControl()
-
+	
 	// Flash panel state (host only)
 	const [showFlashPanel, setShowFlashPanel] = useState(false)
 
@@ -1180,6 +1180,18 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	const [screenShareZoom, setScreenShareZoom] = useState(1)
 	const [screenShareMinimized, setScreenShareMinimized] = useState(false)
 	const [screenShareMaximized, setScreenShareMaximized] = useState(false)
+	
+	// Automatically switch to Focus Mode and maximize screen share when controlling
+	useEffect(() => {
+		if (isControlling) {
+			setLayoutMode('focus')
+			setIsExpandedView(true)
+			setScreenShareMaximized(true)
+			// Also ensure sidebars are closed
+			setShowChat(false)
+			setShowParticipants(false)
+		}
+	}, [isControlling, setLayoutMode, setIsExpandedView, setScreenShareMaximized, setShowChat, setShowParticipants])
 	
 	// Close extend menu on outside click
 	useEffect(() => {
@@ -2966,20 +2978,22 @@ const VideoRoomContent = memo(function VideoRoomContent({
 																	transition: 'transform 0.12s ease-out',
 																}}
 															>
-																<VideoTrack
-																	trackRef={focusedTrack}
-																	className="h-auto w-full max-w-full max-h-[78vh] object-contain"
-																/>
-																
-																<RemoteControlOverlay
-																	isControlling={isControlling && targetScreenShareId === focusedParticipantForDisplay.identity}
-																	isSharing={focusedParticipantForDisplay.isLocal}
-																	controllerId={controllerId}
-																	targetScreenShareId={targetScreenShareId}
-																	onSendInput={sendInputEvent}
-																	onStopControl={stopControl}
-																	onRevokeControl={revokeControl}
-																/>
+																<div className="relative inline-block w-full">
+																	<VideoTrack
+																		trackRef={focusedTrack}
+																		className="h-auto w-full max-w-full max-h-[78vh] object-contain"
+																	/>
+																	
+																	<RemoteControlOverlay
+																		isControlling={isControlling && targetScreenShareId === focusedParticipantForDisplay.identity}
+																		isSharing={focusedParticipantForDisplay.isLocal}
+																		controllerId={controllerId}
+																		targetScreenShareId={targetScreenShareId}
+																		onSendInput={sendInputEvent}
+																		onStopControl={stopControl}
+																		onRevokeControl={revokeControl}
+																	/>
+																</div>
 																
 																{/* Remote Control Actions */}
 																{!focusedParticipantForDisplay.isLocal && !isControlling && (
@@ -3399,10 +3413,21 @@ const VideoRoomContent = memo(function VideoRoomContent({
 											transition: 'transform 0.12s ease-out',
 										}}
 									>
-										<VideoTrack
-											trackRef={focusedTrack}
-											className="max-h-[min(90vh,calc(100vw-2rem))] w-auto max-w-full object-contain"
-										/>
+										<div className="relative inline-block w-full">
+											<VideoTrack
+												trackRef={focusedTrack}
+												className="max-h-[min(90vh,calc(100vw-2rem))] w-auto max-w-full object-contain"
+											/>
+											<RemoteControlOverlay
+												isControlling={isControlling && targetScreenShareId === focusedTrack.participant.identity}
+												isSharing={focusedTrack.participant.isLocal}
+												controllerId={controllerId}
+												targetScreenShareId={targetScreenShareId}
+												onSendInput={sendInputEvent}
+												onStopControl={stopControl}
+												onRevokeControl={revokeControl}
+											/>
+										</div>
 									</div>
 								</div>
 							</div>

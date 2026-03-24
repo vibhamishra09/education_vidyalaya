@@ -1068,23 +1068,25 @@ function DebateLiveContent({
           {/* Screen Share Overlay */}
           {activeScreenShare && (
             <div className="absolute inset-0 z-10 bg-black/90 flex flex-col items-center justify-center p-4">
-              <div className="w-full h-full max-h-[75vh] relative rounded-lg overflow-hidden group">
-                {isTrackReference(activeScreenShare) && activeScreenShare.publication?.track && (
-                  <VideoTrack trackRef={activeScreenShare} className="w-full h-full object-contain" />
-                )}
-                
-                {/* Remote Control Overlay */}
-                <RemoteControlOverlay
-                  isControlling={isControlling}
-                  isSharing={activeScreenShare.participant.identity === localParticipant?.identity}
-                  controllerId={controllerId}
-                  targetScreenShareId={targetScreenShareId}
-                  onSendInput={sendInputEvent}
-                  onStopControl={stopControl}
-                  onRevokeControl={revokeControl}
-                />
+              <div className="w-full h-full max-h-[75vh] flex items-center justify-center relative group">
+                <div className="relative inline-block max-w-full max-h-full">
+                  {isTrackReference(activeScreenShare) && activeScreenShare.publication?.track && (
+                    <VideoTrack trackRef={activeScreenShare} className="w-auto h-auto max-w-full max-h-[75vh] object-contain rounded-lg" />
+                  )}
+                  
+                  {/* Remote Control Overlay */}
+                  <RemoteControlOverlay
+                    isControlling={isControlling}
+                    isSharing={activeScreenShare.participant.identity === localParticipant?.identity}
+                    controllerId={controllerId}
+                    targetScreenShareId={targetScreenShareId}
+                    onSendInput={sendInputEvent}
+                    onStopControl={stopControl}
+                    onRevokeControl={revokeControl}
+                  />
+                </div>
 
-                <div className="absolute bottom-4 left-4 bg-blue-500 text-white text-sm px-3 py-1 rounded-full flex items-center gap-2 shadow-lg">
+                <div className="absolute bottom-4 left-4 bg-blue-500 text-white text-sm px-3 py-1 rounded-full flex items-center gap-2 shadow-lg z-20">
                   <MonitorUp className="h-4 w-4" />
                   <span>{activeScreenShare.participant.name || activeScreenShare.participant.identity} - Screen Share</span>
                 </div>
