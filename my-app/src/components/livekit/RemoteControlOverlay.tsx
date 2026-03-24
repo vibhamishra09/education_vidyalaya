@@ -131,10 +131,16 @@ export function RemoteControlOverlay({
 
     const handleRemoteCursorMove = (e: Event) => {
       const customEvent = e as CustomEvent<{x: number, y: number}>;
-      if (cursorRef.current && customEvent.detail) {
-        // detail.x and detail.y are normalized 0.0 to 1.0!
-        cursorRef.current.style.left = `${customEvent.detail.x * 100}%`;
-        cursorRef.current.style.top = `${customEvent.detail.y * 100}%`;
+      if (customEvent.detail) {
+        // Update state so we can use it in React rendering
+        setRemoteCursor({ x: customEvent.detail.x, y: customEvent.detail.y });
+        
+        // Also directly set style for smooth movement (avoid React re-render latency)
+        if (cursorRef.current) {
+          cursorRef.current.style.left = `${customEvent.detail.x * 100}%`;
+          cursorRef.current.style.top = `${customEvent.detail.y * 100}%`;
+          cursorRef.current.style.display = 'block';
+        }
       }
     };
 
@@ -187,23 +193,23 @@ export function RemoteControlOverlay({
               Stop Control
             </Button>
           </div>
+
+          {/* Click Ripples - inside the overlay so they stay positioned relative to it */}
+          {clicks.map(click => (
+            <div 
+              key={click.id}
+              className="absolute w-8 h-8 -ml-4 -mt-4 border-2 border-sky-400 rounded-full animate-ping pointer-events-none z-[101]"
+              style={{ left: `${click.x * 100}%`, top: `${click.y * 100}%` }}
+            />
+          ))}
         </div>
       )}
 
-      {/* Click Ripples */}
-      {clicks.map(click => (
-        <div 
-          key={click.id}
-          className="absolute w-8 h-8 -ml-4 -mt-4 border-2 border-sky-400 rounded-full animate-ping pointer-events-none z-[101]"
-          style={{ left: `${click.x * 100}%`, top: `${click.y * 100}%` }}
-        />
-      ))}
-
-      {/* Warning Overlay (Sharer side) */}
+      {/* Warning Overlay (Sharer side) - fixed position so it doesn't depend on parent */}
       {isSharing && controllerId && (
         <div 
           data-remote-ignore="true"
-          className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-amber-500/90 text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-3 backdrop-blur-sm animate-in slide-in-from-top-4 pointer-events-auto">
+          className="fixed top-4 left-1/2 -translate-x-1/2 z-[200] bg-amber-500/90 text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-3 backdrop-blur-sm animate-in slide-in-from-top-4 pointer-events-auto">
           <MousePointer2 className="h-4 w-4 animate-pulse" />
           <span className="text-sm font-medium">Someone is controlling your screen</span>
           <Button 
@@ -217,16 +223,42 @@ export function RemoteControlOverlay({
         </div>
       )}
 
-      {/* Fake Cursor (Sharer side) */}
+      {/* Fake Cursor (Sharer side) - uses fixed position to be always visible on the full page */}
       {isSharing && controllerId && (
         <div
           ref={cursorRef}
-          className="absolute z-[100] pointer-events-none transition-all duration-75"
+          className="fixed z-[199] pointer-events-none"
           style={{ 
-            left: '50%', top: '50%', 
+            left: '50%', 
+            top: '50%',
+            display: 'none', // Hidden until first cursor move event
+            willChange: 'left, top',
           }}
         >
-          <MousePointer2 className="h-8 w-8 text-rose-500 fill-rose-500 drop-shadow-lg" style={{ transform: 'rotate(-25deg)', marginLeft: '-0.5rem', marginTop: '-0.5rem' }} />
+          {/* Arrow cursor SVG for better visibility */}
+          <svg 
+            width="32" 
+            height="32" 
+            viewBox="0 0 24 24" 
+            fill="none" 
+            xmlns="http://www.w3.org/2000/svg"
+            style={{ 
+              filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))',
+              transform: 'translate(-4px, -2px)',
+            }}
+          >
+            <path 
+              d="M5 3L19 12L12 13L9 20L5 3Z" 
+              fill="#ef4444" 
+              stroke="#ffffff" 
+              strokeWidth="1.5" 
+              strokeLinejoin="round"
+            />
+          </svg>
+          {/* Label below cursor */}
+          <div className="absolute top-7 left-2 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap shadow-lg">
+            Remote
+          </div>
         </div>
       )}
     </>
