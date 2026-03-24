@@ -317,6 +317,7 @@ export interface StudyRoom extends StudyRoomCard {
   summary?: string;
   chatChannelId?: string | null;
   occurrencesCreated?: number;
+  slug: string
 }
 
 export enum StudyRoomRecurrenceMode {
@@ -519,6 +520,7 @@ export interface UpcomingSession {
   description?: string;
   requestedBy?: PublicUser;
   sessionStatus?: SessionStatus;
+  slug: string;
 }
 
 export interface PastSession {
@@ -530,6 +532,7 @@ export interface PastSession {
   skills?: Array<{ id: string; name: string } | string>;
   description?: string;
   requestedBy?: PublicUser;
+  slug: string
 }
 
 export interface UpcomingStudyRoom {
@@ -543,6 +546,7 @@ export interface UpcomingStudyRoom {
   skills?: Array<{ id: string; name: string } | string>;
   description?: string;
   sessionStatus?: SessionStatus;
+  slug: string
 }
 
 export interface PastStudyRoom {
@@ -555,6 +559,7 @@ export interface PastStudyRoom {
   createdBy: PublicUser;
   skills?: Array<{ id: string; name: string } | string>;
   description?: string;
+  slug: string
 }
 
 export interface DashboardData {

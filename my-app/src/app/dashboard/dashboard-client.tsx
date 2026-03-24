@@ -338,6 +338,7 @@ export function DashboardClient() {
                       description: s.description,
                       requestedBy: s.requestedBy,
                       hostName: s.peer?.name,
+                      slug: s.slug
                     })),
                   ...upcomingStudyRooms
                     .filter(sr => {
@@ -357,6 +358,7 @@ export function DashboardClient() {
                       hostName: sr.createdBy?.name,
                       participantCount: sr.participantCount,
                       maxParticipants: sr.maxParticipants,
+                      slug: sr.slug
                     })),
                 ]}
                 ongoingSessions={ongoingSessions.map(session => ({
@@ -370,6 +372,7 @@ export function DashboardClient() {
                   participantCount: 'participantCount' in session ? session.participantCount : undefined,
                   maxParticipants: 'maxParticipants' in session ? session.maxParticipants : undefined,
                   requestedBy: 'requestedBy' in session ? session.requestedBy : undefined,
+                  slug: session.slug
                 }))}
                 pastSessions={[
                   ...pastSessions.map(s => ({
@@ -381,6 +384,7 @@ export function DashboardClient() {
                     description: s.description,
                     requestedBy: s.requestedBy,
                     hostName: s.peer?.name,
+                    slug: s.slug
                   })),
                   ...pastStudyRooms.map(sr => ({
                     id: sr.id,
@@ -392,6 +396,7 @@ export function DashboardClient() {
                     hostName: sr.createdBy?.name,
                     participantCount: sr.participantCount,
                     maxParticipants: sr.maxParticipants,
+                    slug: sr.slug
                   })),
                 ]}
                 isLoading={dashboardLoading}
