@@ -2989,7 +2989,6 @@ const VideoRoomContent = memo(function VideoRoomContent({
 																	isControlling={isControlling && targetScreenShareId === focusedParticipantForDisplay.identity}
 																	isSharing={focusedParticipantForDisplay.isLocal}
 																	controllerId={controllerId}
-																	targetScreenShareId={targetScreenShareId}
 																	onSendInput={sendInputEvent}
 																	onStopControl={stopControl}
 																	onRevokeControl={revokeControl}
@@ -3424,7 +3423,6 @@ const VideoRoomContent = memo(function VideoRoomContent({
 											isControlling={isControlling && targetScreenShareId === focusedTrack.participant.identity}
 											isSharing={focusedTrack.participant.isLocal}
 											controllerId={controllerId}
-											targetScreenShareId={targetScreenShareId}
 											onSendInput={sendInputEvent}
 											onStopControl={stopControl}
 											onRevokeControl={revokeControl}

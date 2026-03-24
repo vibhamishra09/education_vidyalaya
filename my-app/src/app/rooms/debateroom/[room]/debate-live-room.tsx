@@ -1079,7 +1079,6 @@ function DebateLiveContent({
                     isControlling={isControlling}
                     isSharing={activeScreenShare.participant.identity === localParticipant?.identity}
                     controllerId={controllerId}
-                    targetScreenShareId={targetScreenShareId}
                     onSendInput={sendInputEvent}
                     onStopControl={stopControl}
                     onRevokeControl={revokeControl}

@@ -1,15 +1,14 @@
-import React, { useRef, useEffect, MouseEvent as ReactMouseEvent, KeyboardEvent as ReactKeyboardEvent, WheelEvent as ReactWheelEvent, useState } from 'react';
+import React, { useRef, useEffect, MouseEvent as ReactMouseEvent, WheelEvent as ReactWheelEvent, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { MousePointer2, X, StopCircle } from 'lucide-react';
+import { MousePointer2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { RemoteControlEventType } from '@/hooks/use-remote-control';
+import { RemoteControlEventType, RemoteControlMessage } from '@/hooks/use-remote-control';
 
 interface RemoteControlOverlayProps {
   isControlling: boolean;
   isSharing: boolean;
   controllerId: string | null;
-  targetScreenShareId: string | null;
-  onSendInput: (type: RemoteControlEventType, data: any) => void;
+  onSendInput: (type: RemoteControlEventType, data: Partial<RemoteControlMessage>) => void;
   onStopControl: () => void;
   onRevokeControl: () => void;
   className?: string;
@@ -19,7 +18,6 @@ export function RemoteControlOverlay({
   isControlling,
   isSharing,
   controllerId,
-  targetScreenShareId,
   onSendInput,
   onStopControl,
   onRevokeControl,

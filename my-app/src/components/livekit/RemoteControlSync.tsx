@@ -2,14 +2,13 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { MousePointer2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { RemoteControlMessage } from '@/hooks/use-remote-control';
 
 /**
  * RemoteControlSync handles cross-tab remote control input.
  * It listens for broadcasted events from the Meeting Room and executes them in the current tab.
  */
 export function RemoteControlSync() {
-  const [remoteCursor, setRemoteCursor] = useState<{ x: number, y: number, active: boolean }>({ x: 0, y: 0, active: false });
   const [isBeingControlled, setIsBeingControlled] = useState(false);
   const cursorRef = useRef<HTMLDivElement>(null);
 
@@ -18,7 +17,7 @@ export function RemoteControlSync() {
 
     const channel = new BroadcastChannel('webyalaya-remote-control');
 
-    const handleMessage = (event: MessageEvent) => {
+    const handleMessage = (event: MessageEvent<RemoteControlMessage & { isControlled?: boolean }>) => {
       const { type, x, y, deltaY, button, key, isControlled } = event.data;
 
       // Sync the "Controlled" status banner state
@@ -74,7 +73,9 @@ export function RemoteControlSync() {
               target.dispatchEvent(new MouseEvent('click', { view: window, bubbles: true, cancelable: true, clientX: targetX, clientY: targetY, button: button || 0 }));
               
               try { target.focus(); } catch(e) {}
-              setTimeout(() => { if (typeof (target as any).click === 'function') (target as any).click(); }, 0);
+              if (target instanceof HTMLButtonElement || target instanceof HTMLAnchorElement || target instanceof HTMLInputElement) {
+                setTimeout(() => target.click(), 0);
+              }
             }
             break;
           case 'keydown':

@@ -27,11 +27,7 @@ export interface RemoteControlMessage {
   button?: number; // For mouse clicks (0=left, 1=middle, 2=right)
 }
 
-interface UseRemoteControlProps {
-  currentUserId?: string; // The ID of the current user
-}
-
-export function useRemoteControl({ currentUserId }: UseRemoteControlProps = {}) {
+export function useRemoteControl() {
   const room = useRoomContext();
   const { localParticipant } = useLocalParticipant();
   
@@ -123,9 +119,9 @@ export function useRemoteControl({ currentUserId }: UseRemoteControlProps = {}) 
           target.dispatchEvent(new MouseEvent('mouseup', { view: window, bubbles: true, cancelable: true, clientX: x, clientY: y, button: message.button || 0 }));
           event = new MouseEvent('click', { view: window, bubbles: true, cancelable: true, clientX: x, clientY: y, button: message.button || 0 });
           
-          if (target instanceof HTMLElement) {
+          if (target instanceof HTMLButtonElement || target instanceof HTMLAnchorElement || target instanceof HTMLInputElement) {
             try { target.focus(); } catch(e) {}
-            setTimeout(() => { if (typeof (target as any).click === 'function') (target as any).click(); }, 0);
+            setTimeout(() => target.click(), 0);
           }
           break;
         }
@@ -242,7 +238,7 @@ export function useRemoteControl({ currentUserId }: UseRemoteControlProps = {}) 
       const fullMessage = { ...message, sourceId: localParticipant.identity };
       const data = new TextEncoder().encode(JSON.stringify(fullMessage));
       const reliable = ['request', 'granted', 'denied', 'revoke', 'stop', 'click'].includes(message.type);
-      const options: any = { reliable, topic: 'remote-control' };
+      const options: { reliable: boolean; topic: string; destinationIdentities?: string[] } = { reliable, topic: 'remote-control' };
       if (message.targetId) options.destinationIdentities = [message.targetId];
       localParticipant.publishData(data, options);
     } catch (e) {
