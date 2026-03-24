@@ -11,7 +11,7 @@ import {
   Clock, MonitorUp, MonitorOff, Grid2X2, Presentation, Pin, 
   PinOff, User, PictureInPicture2, Camera, CameraOff, Sparkles, Lock, Settings2, 
   PhoneOff, ChevronUp, ChevronLeft, ChevronRight, ShieldCheck, Ban, Aperture, 
-  ImageIcon, LayoutGrid, Check, Timer, Power, LogOut, Zap, ZoomIn, ZoomOut,
+  ImageIcon, LayoutGrid, Check, Timer, Power, LogOut, Zap, ZoomIn, ZoomOut, MousePointer2
 } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
@@ -32,7 +32,8 @@ import { useSessionModeration, RoomPermissions, PermissionRequest, ParticipantPe
 import { FlashMessageOverlay } from '@/components/study-room/FlashMessageOverlay'
 import { QuestionManager } from '@/components/study-room/QuestionManager'
 import { ChatRecipient } from '@/components/chat/MessageInput'
-
+import { useRemoteControl } from '@/hooks/use-remote-control'
+import { RemoteControlOverlay } from '@/components/livekit/RemoteControlOverlay'
 // Stable virtual backgrounds constant to avoid re-creating array each render
 const VIRTUAL_BACKGROUNDS = [
 	{
@@ -815,6 +816,7 @@ export function EnhancedVideoRoom({
 					onFlashDismissForAll={flashDismiss}
 					onFlashGetList={flashGetList}
 					onDismissFlashMessage={dismissFlashMessage}
+					
 					onPromoteToCohost={async (participantIdentity, role) => {
 						if (sessionData?.sessionType !== 'studyRoom' || !sessionData?.id) return
 						const authTokenValue = await getToken()
@@ -903,7 +905,6 @@ export function EnhancedVideoRoom({
 				</div>
 			</div>
 		)}
-
 		{isHost && externalJoinRequests.length > 0 && (
 			<div className="fixed top-4 right-4 z-[94]">
 				<div className="rounded-full bg-[#00DC6E] text-black text-xs font-semibold px-3 py-1 shadow-lg">
@@ -1094,6 +1095,21 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	const params = useParams<{ room: string }>()
 	const { showWarning, showSuccess, showInfo, showError } = useToast()
 	
+	// Remote Control Hook
+	const {
+		isControlling,
+		isRequestPending,
+		targetScreenShareId,
+		requestControl,
+		stopControl,
+		sendInputEvent,
+		controllerId,
+		pendingRequestFrom,
+		grantControl,
+		denyControl,
+		revokeControl
+	} = useRemoteControl()
+	
 	// Flash panel state (host only)
 	const [showFlashPanel, setShowFlashPanel] = useState(false)
 
@@ -1164,6 +1180,18 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	const [screenShareZoom, setScreenShareZoom] = useState(1)
 	const [screenShareMinimized, setScreenShareMinimized] = useState(false)
 	const [screenShareMaximized, setScreenShareMaximized] = useState(false)
+	
+	// Automatically switch to Focus Mode and maximize screen share when controlling
+	useEffect(() => {
+		if (isControlling) {
+			setLayoutMode('focus')
+			setIsExpandedView(true)
+			setScreenShareMaximized(true)
+			// Also ensure sidebars are closed
+			setShowChat(false)
+			setShowParticipants(false)
+		}
+	}, [isControlling, setLayoutMode, setIsExpandedView, setScreenShareMaximized, setShowChat, setShowParticipants])
 	
 	// Close extend menu on outside click
 	useEffect(() => {
@@ -2950,10 +2978,42 @@ const VideoRoomContent = memo(function VideoRoomContent({
 																	transition: 'transform 0.12s ease-out',
 																}}
 															>
-																<VideoTrack
-																	trackRef={focusedTrack}
-																	className="h-auto w-full max-w-full max-h-[78vh] object-contain"
-																/>
+																<div className="relative inline-block w-full">
+																	<VideoTrack
+																		trackRef={focusedTrack}
+																		className="h-auto w-full max-w-full max-h-[78vh] object-contain"
+																	/>
+																	
+																	<RemoteControlOverlay
+																		isControlling={isControlling && targetScreenShareId === focusedParticipantForDisplay.identity}
+																		isSharing={focusedParticipantForDisplay.isLocal}
+																		controllerId={controllerId}
+																		targetScreenShareId={targetScreenShareId}
+																		onSendInput={sendInputEvent}
+																		onStopControl={stopControl}
+																		onRevokeControl={revokeControl}
+																	/>
+																</div>
+																
+																{/* Remote Control Actions */}
+																{!focusedParticipantForDisplay.isLocal && !isControlling && (
+																	<div className="absolute top-4 left-4 z-30">
+																		<Button
+																			variant="secondary"
+																			size="sm"
+																			onClick={(e) => {
+																				e.stopPropagation();
+																				requestControl(focusedParticipantForDisplay.identity);
+																			}}
+																			disabled={isRequestPending && targetScreenShareId === focusedParticipantForDisplay.identity}
+																			className="bg-black/60 hover:bg-black/80 text-white border border-white/20 backdrop-blur"
+																		>
+																			{isRequestPending && targetScreenShareId === focusedParticipantForDisplay.identity 
+																				? 'Requesting Control...' 
+																				: 'Request Control'}
+																		</Button>
+																	</div>
+																)}
 															</div>
 														</div>
 													)}
@@ -3353,10 +3413,21 @@ const VideoRoomContent = memo(function VideoRoomContent({
 											transition: 'transform 0.12s ease-out',
 										}}
 									>
-										<VideoTrack
-											trackRef={focusedTrack}
-											className="max-h-[min(90vh,calc(100vw-2rem))] w-auto max-w-full object-contain"
-										/>
+										<div className="relative inline-block w-full">
+											<VideoTrack
+												trackRef={focusedTrack}
+												className="max-h-[min(90vh,calc(100vw-2rem))] w-auto max-w-full object-contain"
+											/>
+											<RemoteControlOverlay
+												isControlling={isControlling && targetScreenShareId === focusedTrack.participant.identity}
+												isSharing={focusedTrack.participant.isLocal}
+												controllerId={controllerId}
+												targetScreenShareId={targetScreenShareId}
+												onSendInput={sendInputEvent}
+												onStopControl={stopControl}
+												onRevokeControl={revokeControl}
+											/>
+										</div>
 									</div>
 								</div>
 							</div>
@@ -4141,6 +4212,40 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				isHost={isHost}
 				onDismissForAll={onFlashDismissForAll}
 			/>
+		)}
+
+		{/* Remote Control Consent UI (Screen Sharer Side) */}
+		{pendingRequestFrom && (
+			<div className="fixed top-20 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-top-4 fade-in duration-300">
+				<div className="bg-[#1a1a1a]/95 backdrop-blur-xl border border-sky-500/30 shadow-2xl rounded-2xl p-5 w-80 max-w-[calc(100vw-32px)] text-center relative overflow-hidden">
+					<div className="absolute inset-0 bg-gradient-to-b from-sky-500/10 to-transparent pointer-events-none" />
+					
+					<div className="h-12 w-12 rounded-full bg-sky-500/20 flex items-center justify-center mx-auto mb-3">
+						<MousePointer2 className="h-6 w-6 text-sky-400" />
+					</div>
+					
+					<h3 className="text-white font-bold text-lg">Remote Control Request</h3>
+					<p className="text-white/70 text-sm mt-1 mb-4 leading-relaxed">
+						<span className="text-white font-semibold">{pendingRequestFrom.name}</span> would like to control your shared screen.
+					</p>
+					
+					<div className="flex gap-2 w-full">
+						<Button
+							variant="outline"
+							className="flex-1 bg-white/5 border-white/10 text-white/70 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30"
+							onClick={denyControl}
+						>
+							Deny
+						</Button>
+						<Button
+							className="flex-1 bg-sky-500 text-white hover:bg-sky-400"
+							onClick={grantControl}
+						>
+							Grant Control
+						</Button>
+					</div>
+				</div>
+			</div>
 		)}
 	</>
 )
