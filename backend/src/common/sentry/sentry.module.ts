@@ -1,7 +1,6 @@
 import { Module, Global, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as Sentry from '@sentry/nestjs';
-import { nodeProfilingIntegration } from '@sentry/profiling-node';
 
 @Global()
 @Module({})
@@ -30,11 +29,8 @@ export class SentryModule {
               tracesSampleRate: environment === 'production' ? 0.1 : 1.0, // 10% in production, 100% in dev
               
               // Profiling
-              profilesSampleRate: environment === 'production' ? 0.1 : 1.0,
-              integrations: [
-                // Add profiling integration
-                nodeProfilingIntegration(),
-              ],
+              profilesSampleRate: 0,
+              integrations: [],
               
               // Release tracking
               release: configService.get<string>('SENTRY_RELEASE', 'webyalaya-backend@1.0.0'),

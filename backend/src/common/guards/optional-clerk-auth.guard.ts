@@ -1,3 +1,10 @@
+/* eslint-disable prettier/prettier */
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable prettier/prettier */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable prettier/prettier */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Injectable, CanActivate, ExecutionContext, Logger } from '@nestjs/common';
 import { createClerkClient } from '@clerk/backend';
 
@@ -45,9 +52,11 @@ export class OptionalClerkAuthGuard implements CanActivate {
       // This may throw errors for invalid tokens, which we'll catch and ignore
       const requestState = await this.clerkClient.authenticateRequest(
         clerkRequest,
-        {
-          jwtKey: process.env.CLERK_JWT_KEY,
-        },
+        process.env.CLERK_JWT_KEY
+          ? {
+            jwtKey: process.env.CLERK_JWT_KEY,
+          }
+          : undefined,
       );
 
       // Only proceed if the request state indicates the user is signed in

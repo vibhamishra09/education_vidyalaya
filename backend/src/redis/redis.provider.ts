@@ -1,10 +1,17 @@
+/* eslint-disable prettier/prettier */
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+import 'dotenv/config';
 import { createClient, RedisClientType } from 'redis';
 import { Logger } from '@nestjs/common';
 
 const logger = new Logger('RedisProvider');
+const redisUrl = process.env.REDIS_URL?.trim();
 
 export const redisClient: RedisClientType = createClient({
-  url: process.env.REDIS_URL,
+  url: redisUrl,
 }) as RedisClientType;
 
 redisClient.on('error', (err) => {

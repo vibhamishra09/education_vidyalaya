@@ -546,57 +546,50 @@ export class UsersService {
     // Create user with onboarding data (on-demand user creation)
     this.logger.debug('🔍 Completing onboarding for user:', clerkId);
     const normalizedHourlyRate = data.hourlyRate ?? 0;
-    
-    let user;
-    try {
-      user = await this.prisma.user.upsert({
-        where: { clerkId },
-        update: {
-          name: data.name,
-          email: data.email,
-          avatar: data.avatar,
-          bio: data.bio,
-          location: data.location,
-          school: data.school,
-          hourlyRate: normalizedHourlyRate,
-          coins: 1000,
-          onboarded: true,
-        },
-        create: {
-          clerkId,
-          name: data.name,
-          email: data.email,
-          avatar: data.avatar,
-          bio: data.bio,
-          location: data.location,
-          school: data.school,
-          hourlyRate: normalizedHourlyRate,
-          coins: 1000,
-          onboarded: true,
-        },
-      });
-    } catch (error: any) {
-      // Handle email unique constraint violation — update existing user's clerkId
-      if (error.code === 'P2002' && error.meta?.target?.includes('email')) {
-        this.logger.warn(`Email ${data.email} already exists, linking to clerkId ${clerkId}`);
-        user = await this.prisma.user.update({
-          where: { email: data.email },
-          data: {
-            clerkId,
-            name: data.name,
-            avatar: data.avatar,
-            bio: data.bio,
-            location: data.location,
-            school: data.school,
-            hourlyRate: normalizedHourlyRate,
-            coins: 1000,
-            onboarded: true,
-          },
+    const normalizedEmail = data.email.trim().toLowerCase();
+    const userPayload = {
+      name: data.name,
+      email: normalizedEmail,
+      avatar: data.avatar,
+      bio: data.bio,
+      location: data.location,
+      school: data.school,
+      hourlyRate: normalizedHourlyRate,
+      coins: 1000, // Award 1000 coins for completing onboarding
+      onboarded: true,
+    };
+
+    const existingByClerkId = await this.prisma.user.findUnique({
+      where: { clerkId },
+      select: { id: true },
+    });
+
+    const existingByEmail = existingByClerkId
+      ? null
+      : await this.prisma.user.findUnique({
+          where: { email: normalizedEmail },
+          select: { id: true },
         });
-      } else {
-        throw error;
-      }
-    }
+
+    const user = existingByClerkId
+      ? await this.prisma.user.update({
+          where: { clerkId },
+          data: userPayload,
+        })
+      : existingByEmail
+        ? await this.prisma.user.update({
+            where: { id: existingByEmail.id },
+            data: {
+              ...userPayload,
+              clerkId,
+            },
+          })
+        : await this.prisma.user.create({
+            data: {
+              clerkId,
+              ...userPayload,
+            },
+          });
 
     this.logger.debug('🔍 User created:', user);
 
