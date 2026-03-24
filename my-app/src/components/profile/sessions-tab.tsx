@@ -15,6 +15,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { peerSessionsApi } from "@/lib/api";
 import { setAuthToken } from "@/lib/api-client";
 import { peerSessionKeys } from "@/hooks/use-peer-sessions";
+import { useCurrentUser } from "@/hooks/use-users";
 import type {
   PendingRequest,
   PastSession,
@@ -36,6 +37,9 @@ export const SessionsTab = memo(function SessionsTab({ publicStats, isLoading = 
   const [processingRequests, setProcessingRequests] = useState<Set<string>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
   const sessionsPerPage = 10;
+
+  const { data: currentUserData } = useCurrentUser();
+  const myUserId = currentUserData?.user?.id;
 
   const {
     data: dashboardData,
@@ -113,6 +117,11 @@ export const SessionsTab = memo(function SessionsTab({ publicStats, isLoading = 
     description: session.description,
     requestedBy: session.requestedBy,
     hostName: session.peer?.name,
+    detailsEditedForViewer:
+      !!session.hostDetailsUpdatedAt &&
+      !!session.lastDetailsEditedById &&
+      !!myUserId &&
+      session.lastDetailsEditedById !== myUserId,
   });
 
   const formatStudyRoom = (room: UpcomingStudyRoom | PastStudyRoom) => ({
@@ -125,6 +134,10 @@ export const SessionsTab = memo(function SessionsTab({ publicStats, isLoading = 
     participantCount: room.participantCount,
     maxParticipants: room.maxParticipants,
     hostName: room.createdBy?.name,
+    detailsEditedForViewer:
+      !!room.hostDetailsUpdatedAt &&
+      !!myUserId &&
+      room.createdBy?.id !== myUserId,
   });
 
   const upcomingList = useMemo(
@@ -132,7 +145,7 @@ export const SessionsTab = memo(function SessionsTab({ publicStats, isLoading = 
       ...futurePeerSessions.map(formatPeerSession),
       ...futureStudyRooms.map(formatStudyRoom),
     ],
-    [futurePeerSessions, futureStudyRooms]
+    [futurePeerSessions, futureStudyRooms, myUserId]
   );
 
   const ongoingList = useMemo(
@@ -140,7 +153,7 @@ export const SessionsTab = memo(function SessionsTab({ publicStats, isLoading = 
       ...todayPeerSessions.map(formatPeerSession),
       ...todayStudyRooms.map(formatStudyRoom),
     ],
-    [todayPeerSessions, todayStudyRooms]
+    [todayPeerSessions, todayStudyRooms, myUserId]
   );
 
   const pastList = useMemo(() => {
@@ -156,7 +169,7 @@ export const SessionsTab = memo(function SessionsTab({ publicStats, isLoading = 
     return combined.sort(
       (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
     );
-  }, [dashboardData?.pastSessions, dashboardData?.pastStudyRooms]);
+  }, [dashboardData?.pastSessions, dashboardData?.pastStudyRooms, myUserId]);
 
   // Use backend pagination data
   const totalPastSessions = 

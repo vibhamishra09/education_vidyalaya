@@ -15,6 +15,7 @@ import { OptionalClerkAuthGuard } from '../common/guards/optional-clerk-auth.gua
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import {
   CreateDebateRoomDto,
+  UpdateDebateRoomDto,
   JoinDebateRoomDto,
   DebateRoomQueryDto,
   PromoteModeratorDto,
@@ -64,6 +65,19 @@ export class DebateRoomsController {
     @Body() dto: CreateDebateRoomDto,
   ) {
     return this.debateRoomsService.createDebateRoom(userId, dto);
+  }
+
+  /**
+   * Update debate room settings (host only, until debate is finished or cancelled)
+   */
+  @Patch(':roomId')
+  @UseGuards(ClerkAuthGuard)
+  async updateDebateRoom(
+    @Param('roomId') roomId: string,
+    @CurrentUser() userId: string,
+    @Body() dto: UpdateDebateRoomDto,
+  ) {
+    return this.debateRoomsService.updateDebateRoom(roomId, userId, dto);
   }
 
   /**

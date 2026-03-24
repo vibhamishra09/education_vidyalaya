@@ -956,6 +956,9 @@ export class StudyRoomsService {
         reviewer: r.reviewer,
       })),
       chatChannelId: channel?.id ?? null,
+      hostDetailsUpdatedAt: studyRoom.hostDetailsUpdatedAt
+        ? studyRoom.hostDetailsUpdatedAt.toISOString()
+        : null,
     };
     } catch (error) {
       // Handle database connection errors
@@ -1153,6 +1156,17 @@ export class StudyRoomsService {
       );
     }
 
+    const studyRoomEditClosedStatuses: SessionStatus[] = [
+      SessionStatus.DONE,
+      SessionStatus.CANCELLED,
+      SessionStatus.NOT_COMPLETED,
+    ];
+    if (studyRoomEditClosedStatuses.includes(studyRoom.sessionStatus)) {
+      throw new BadRequestException(
+        'Cannot edit this study room after the meeting has ended, been cancelled, or was marked not completed.',
+      );
+    }
+
     const editScope = updateDto.editScope ?? StudyRoomEditScope.SINGLE;
     const timezone = updateDto.timezone ?? studyRoom.timezone ?? 'UTC';
 
@@ -1191,6 +1205,39 @@ export class StudyRoomsService {
         updateDto.time ?? oldTime,
         timezone,
       );
+    }
+
+    const newScheduledStart =
+      updateData.date != null
+        ? new Date(updateData.date as Date)
+        : studyRoom.date;
+    const dateOrTimeChanged = Boolean(updateDto.date || updateDto.time);
+    const willRegenerateSeries =
+      !!updateDto.recurrence &&
+      editScope !== StudyRoomEditScope.SINGLE &&
+      !!studyRoom.seriesId;
+
+    if (
+      !willRegenerateSeries &&
+      studyRoom.sessionStatus === SessionStatus.ONGOING &&
+      updateDto.status === undefined &&
+      dateOrTimeChanged &&
+      newScheduledStart.getTime() > Date.now()
+    ) {
+      updateData.sessionStatus = SessionStatus.UPCOMING;
+    }
+
+    const updateFieldKeys = Object.keys(updateData);
+    const hasNonStatusChange = updateFieldKeys.some(
+      (k) => k !== 'sessionStatus',
+    );
+    const shouldMarkHostDetailsEdited =
+      hasNonStatusChange ||
+      updateDto.skills !== undefined ||
+      updateDto.externalInvites !== undefined ||
+      updateDto.allowExternalUsers !== undefined;
+    if (shouldMarkHostDetailsEdited) {
+      updateData.hostDetailsUpdatedAt = new Date();
     }
 
     const whereForScope: Prisma.StudyRoomWhereInput =
@@ -1344,6 +1391,15 @@ export class StudyRoomsService {
         await this.chatService.getOrCreateChannelForStudyRoom(createdId, [studyRoom.createdById]);
       }
 
+      if (shouldMarkHostDetailsEdited) {
+        await this.notifyStudyRoomLearnersDetailsUpdated(
+          targetRooms.map((r) => r.id),
+          studyRoom.createdById,
+          updateDto.title?.trim() ?? studyRoom.title,
+          studyRoomId,
+        );
+      }
+
       return this.getStudyRoomDetails(studyRoomId, userId);
     }
 
@@ -1397,6 +1453,15 @@ export class StudyRoomsService {
           }
         }
       });
+    }
+
+    if (shouldMarkHostDetailsEdited) {
+      await this.notifyStudyRoomLearnersDetailsUpdated(
+        targetRooms.map((r) => r.id),
+        studyRoom.createdById,
+        updateDto.title?.trim() ?? studyRoom.title,
+        studyRoomId,
+      );
     }
 
     return this.getStudyRoomDetails(studyRoomId, userId);
@@ -2277,5 +2342,60 @@ export class StudyRoomsService {
       message: 'Feedback submitted successfully',
       studyRoomId,
     };
+  }
+
+  /** Notify enrolled learners (and co-hosts) when the teacher updates session details. */
+  private async notifyStudyRoomLearnersDetailsUpdated(
+    roomIds: string[],
+    hostUserId: string,
+    titleSnippet: string,
+    primaryStudyRoomId: string,
+  ) {
+    if (roomIds.length === 0) return;
+    const rows = await this.prisma.studyRoomParticipant.findMany({
+      where: { studyRoomId: { in: roomIds } },
+      select: { userId: true, studyRoomId: true },
+    });
+    /** One notification per user; link to the occurrence they joined (not only the edited row). */
+    const userToRoomId = new Map<string, string>();
+    for (const row of rows) {
+      if (row.userId === hostUserId) continue;
+      if (!userToRoomId.has(row.userId)) {
+        userToRoomId.set(row.userId, row.studyRoomId);
+      }
+    }
+    if (userToRoomId.size === 0) return;
+    const timeLabel = new Intl.DateTimeFormat('en-US', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }).format(new Date());
+    const safeTitle =
+      titleSnippet.length > 80
+        ? `${titleSnippet.slice(0, 77)}…`
+        : titleSnippet;
+    const message = `The session you enrolled in (“${safeTitle}”) has updated details (${timeLabel}).`;
+    for (const [uid, studyRoomIdForLink] of userToRoomId) {
+      try {
+        await this.notificationsService.createAndPushNotification(
+          uid,
+          message,
+          'Study session updated',
+          NotifType.NORMAL,
+          {
+            actionType: 'STUDY_ROOM_DETAILS_UPDATED',
+            studyRoomId: studyRoomIdForLink,
+            actionData: {
+              sessionId: studyRoomIdForLink,
+              sessionType: 'studyRoom',
+            },
+          },
+        );
+      } catch (err) {
+        this.logger.error(
+          `Failed to notify user ${uid} of study room details update (${primaryStudyRoomId})`,
+          err instanceof Error ? err.message : String(err),
+        );
+      }
+    }
   }
 }

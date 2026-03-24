@@ -1,5 +1,6 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { ApiError } from '@/types/api.types';
+import { USER_FACING_TRY_AGAIN } from '@/lib/utils/error-handling';
 
 // Extend Window interface to include Clerk
 declare global {
@@ -33,9 +34,35 @@ const getClerkToken = async (): Promise<string | null> => {
   }
 };
 
+/**
+ * If NEXT_PUBLIC_API_URL equals the browser origin (e.g. both http://localhost:3000),
+ * PATCH/POST would hit Next.js and return "Cannot PATCH /api/...". Use same-origin
+ * + next.config rewrites to forward /api/* to Nest instead.
+ */
+function resolveApiBaseURL(): string {
+  const env = process.env.NEXT_PUBLIC_API_URL?.trim().replace(/\/$/, "") ?? "";
+
+  if (typeof window !== "undefined") {
+    if (env && env === window.location.origin) {
+      return "";
+    }
+    if (env) {
+      return env;
+    }
+    // Same-origin `/api/*` → next.config rewrites to Nest. Avoids CORS when the app is opened
+    // as http://127.0.0.1:3000 while NEXT_PUBLIC_API_URL was http://localhost:3001 (or unset).
+    return "";
+  }
+
+  return (
+    process.env.BACKEND_URL?.trim().replace(/\/$/, "") ||
+    "http://127.0.0.1:3001"
+  );
+}
+
 // Create axios instance
 const apiClient: AxiosInstance = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001',
+  baseURL: resolveApiBaseURL(),
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
@@ -96,8 +123,23 @@ apiClient.interceptors.response.use(
   (response) => response,
   (error: AxiosError<ApiError>) => {
     if (error.response) {
+      const raw = error.response.data;
+      const html =
+        typeof raw === "string" &&
+        (raw.includes("Cannot PATCH") ||
+          raw.includes("Cannot POST") ||
+          raw.includes("Cannot PUT"));
+
+      if (html) {
+        return Promise.reject({
+          code: "API_HIT_NEXT",
+          message: USER_FACING_TRY_AGAIN,
+          timestamp: new Date().toISOString(),
+        } as ApiError);
+      }
+
       // Server responded with error
-      const apiError: ApiError = error.response.data;
+      const apiError: ApiError = raw as ApiError;
 
       // Handle authentication errors gracefully
       if (error.response.status === 401) {

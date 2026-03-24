@@ -6,6 +6,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import {
   RequestSessionDto,
   UpdateSessionStatusDto,
+  UpdatePeerSessionDto,
 } from './dto/peer-session.dto';
 import { SessionFeedbackDto } from '../common/dto/session-feedback.dto';
 import { SessionStatus } from '../generated/prisma/client';
@@ -148,5 +149,15 @@ export class PeerSessionsController {
       userId,
       feedbackDto,
     );
+  }
+
+  @Patch(':peerSessionId')
+  @UseGuards(ClerkAuthGuard)
+  async updatePeerSession(
+    @Param('peerSessionId') peerSessionId: string,
+    @CurrentUser() userId: string,
+    @Body() dto: UpdatePeerSessionDto,
+  ) {
+    return this.peerSessionsService.updatePeerSession(peerSessionId, userId, dto);
   }
 }

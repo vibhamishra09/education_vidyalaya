@@ -24,94 +24,75 @@ export class NotificationsService {
     page: number = 1,
     limit: number = 20,
   ) {
-    // Cache for 30 seconds - notifications change frequently
-    const cacheKey = this.cacheService.createKey('notifications:list', {
-      userId,
-      type,
-      viewed,
-      page,
-      limit,
-    });
-    const cacheTTL = 30;
+    // No Redis cache: getOrSet + deletePattern races could repopulate a stale list
+    // after a new notification was created while a fetch was in flight.
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { clerkId: userId },
+        select: { id: true },
+      });
 
-    return this.cacheService.getOrSet(
-      cacheKey,
-      async () => {
-        try {
-          // userId is actually clerkId, so we need to find the user by clerkId first
-          const user = await this.prisma.user.findUnique({
-          where: { clerkId: userId },
-          select: { id: true },
-        });
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
 
-        if (!user) {
-          throw new NotFoundException('User not found');
-        }
+      const where: Record<string, unknown> = { userId: user.id };
 
-        const where: any = { userId: user.id };
+      if (type) where.notifType = type;
+      if (viewed !== undefined) where.viewed = viewed;
 
-        if (type) where.notifType = type;
-        if (viewed !== undefined) where.viewed = viewed;
+      const skip = (page - 1) * limit;
 
-        const skip = (page - 1) * limit;
+      const [notifications, total, unreadCount] = await Promise.all([
+        this.prisma.notification.findMany({
+          where,
+          skip,
+          take: limit,
+          orderBy: { createdAt: 'desc' },
+        }),
+        this.prisma.notification.count({ where }),
+        this.prisma.notification.count({
+          where: { userId: user.id, viewed: false },
+        }),
+      ]);
 
-        const [notifications, total, unreadCount] = await Promise.all([
-          this.prisma.notification.findMany({
-            where,
-            skip,
-            take: limit,
-            orderBy: { createdAt: 'desc' },
-          }),
-          this.prisma.notification.count({ where }),
-          this.prisma.notification.count({
-            where: { userId: user.id, viewed: false },
-          }),
-        ]);
+      return {
+        notifications,
+        unreadCount,
+        pagination: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
+          hasMore: skip + limit < total,
+        },
+      };
+    } catch (error) {
+      if (isConnectionError(error)) {
+        this.logger.error(
+          `Database connection error in getNotifications for user ${userId}:`,
+          error instanceof Error ? error.message : String(error),
+        );
 
-        return {
-          notifications,
-          unreadCount,
-          pagination: {
-            total,
-            page,
-            limit,
-            totalPages: Math.ceil(total / limit),
-            hasMore: skip + limit < total,
-          },
-        };
-        } catch (error) {
-          // Handle database connection errors
-          if (isConnectionError(error)) {
-            this.logger.error(
-              `Database connection error in getNotifications for user ${userId}:`,
-              error instanceof Error ? error.message : String(error),
-            );
-            
-            // Re-throw NotFoundException (user not found is a valid case)
-            if (error instanceof NotFoundException) {
-              throw error;
-            }
-            
-            // Return empty notifications as fallback
-            return {
-              notifications: [],
-              unreadCount: 0,
-              pagination: {
-                total: 0,
-                page,
-                limit,
-                totalPages: 0,
-                hasMore: false,
-              },
-            };
-          }
-          
-          // Re-throw other errors
+        if (error instanceof NotFoundException) {
           throw error;
         }
-      },
-      cacheTTL,
-    );
+
+        return {
+          notifications: [],
+          unreadCount: 0,
+          pagination: {
+            total: 0,
+            page,
+            limit,
+            totalPages: 0,
+            hasMore: false,
+          },
+        };
+      }
+
+      throw error;
+    }
   }
 
   async markNotificationAsRead(notificationId: string, userId: string) {
@@ -236,7 +217,18 @@ export class NotificationsService {
       },
     });
 
-    // Send push notification if requested
+    // Bust list cache before push so GET /notifications sees the new row even if push throws
+    const owner = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { clerkId: true },
+    });
+    if (owner?.clerkId) {
+      await this.cacheService.deletePattern(
+        `notifications:list:*${owner.clerkId}*`,
+      );
+    }
+
+    // Send push notification if requested (must not fail the in-app notification)
     if (options?.sendPush) {
       this.logger.debug('🔔 [NotificationsService] Triggering push notification:', {
         userId,
@@ -246,20 +238,26 @@ export class NotificationsService {
         actionType: options.actionType,
       });
 
-      await this.pushNotificationService.sendPushNotification(
-        userId,
-        options.pushTitle || 'New Notification',
-        message,
-        {
-          notificationId: notification.id,
-          actionType: options.actionType,
-          ...options.actionData,
-        },
-      );
-
-      this.logger.debug(
-        '✅ [NotificationsService] Push notification triggered successfully',
-      );
+      try {
+        await this.pushNotificationService.sendPushNotification(
+          userId,
+          options.pushTitle || 'New Notification',
+          message,
+          {
+            notificationId: notification.id,
+            actionType: options.actionType,
+            ...options.actionData,
+          },
+        );
+        this.logger.debug(
+          '✅ [NotificationsService] Push notification triggered successfully',
+        );
+      } catch (pushError) {
+        this.logger.error(
+          'Push failed after notification was saved (in-app list still updated)',
+          pushError instanceof Error ? pushError.stack : String(pushError),
+        );
+      }
     }
 
     // Send email notification for high priority (URGENT) notifications
@@ -300,9 +298,6 @@ export class NotificationsService {
         );
       }
     }
-
-    // Invalidate notifications cache for this user
-    await this.cacheService.deletePattern(`notifications:list:*${userId}*`);
 
     return notification;
   }

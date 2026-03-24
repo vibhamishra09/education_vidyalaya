@@ -1,13 +1,19 @@
 'use server'
 
 import { auth, clerkClient } from '@clerk/nextjs/server'
-// import { redirect } from 'next/navigation'
+import { getBackendUrlForServer } from '@/lib/server-backend-url'
+import { messageFromNestJsonBody } from '@/lib/utils/error-handling'
 
 export const completeOnboarding = async (formData: FormData) => {
-  const { isAuthenticated, userId } = await auth()
+  const { isAuthenticated, userId, getToken } = await auth()
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated || !userId) {
     return { message: 'No Logged In User' }
+  }
+
+  const token = await getToken()
+  if (!token) {
+    return { error: 'Could not issue session token for API. Please sign in again.' }
   }
 
   const client = await clerkClient()
@@ -27,19 +33,26 @@ export const completeOnboarding = async (formData: FormData) => {
       skillsIWant: JSON.parse(formData.get('skillsIWant') as string || '[]'),
     }
 
-    // Call the backend API to create/update user
-    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+    const backendUrl = getBackendUrlForServer()
     const response = await fetch(`${backendUrl}/api/users/onboarding`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify(onboardingData),
     })
 
     if (!response.ok) {
-      const error = await response.json()
-      return { error: error.message || 'Failed to complete onboarding' }
+      let payload: unknown
+      try {
+        payload = await response.json()
+      } catch {
+        payload = null
+      }
+      return {
+        error: messageFromNestJsonBody(payload, 'Failed to complete onboarding'),
+      }
     }
 
     // Update Clerk user metadata to mark onboarding as complete

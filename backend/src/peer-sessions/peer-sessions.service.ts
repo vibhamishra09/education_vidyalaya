@@ -4,6 +4,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import {
   RequestSessionDto,
   UpdateSessionStatusDto,
+  UpdatePeerSessionDto,
 } from './dto/peer-session.dto';
 import { SessionFeedbackDto } from '../common/dto/session-feedback.dto';
 import { SessionStatus, PaymentStatus, NotifType, Prisma } from '../generated/prisma/client';
@@ -332,6 +333,10 @@ export class PeerSessionsService {
       skills: peerSession.skills.map((s) => s.skill),
       chatChannelId: channel?.id ?? null,
       role,
+      hostDetailsUpdatedAt: peerSession.hostDetailsUpdatedAt
+        ? peerSession.hostDetailsUpdatedAt.toISOString()
+        : null,
+      lastDetailsEditedById: peerSession.lastDetailsEditedById ?? null,
     };
     } catch (error) {
       // Handle database connection errors
@@ -1006,5 +1011,195 @@ export class PeerSessionsService {
       message: 'Feedback submitted successfully',
       peerSessionId,
     };
+  }
+
+  async updatePeerSession(
+    peerSessionId: string,
+    clerkUserId: string,
+    dto: UpdatePeerSessionDto,
+  ) {
+    const user = await this.prisma.user.findUnique({
+      where: { clerkId: clerkUserId },
+      select: { id: true },
+    });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const peerSession = await this.prisma.peerSession.findUnique({
+      where: { id: peerSessionId },
+      select: {
+        id: true,
+        requestedById: true,
+        requestedToId: true,
+        sessionStatus: true,
+      },
+    });
+
+    if (!peerSession) {
+      throw new NotFoundException('Peer session not found');
+    }
+
+    const isRequester = peerSession.requestedById === user.id;
+    const isReceiver = peerSession.requestedToId === user.id;
+    if (!isRequester && !isReceiver) {
+      throw new ForbiddenException(
+        'Only the two people in this session can update these details.',
+      );
+    }
+
+    const closed: SessionStatus[] = [
+      SessionStatus.DONE,
+      SessionStatus.CANCELLED,
+      SessionStatus.NOT_COMPLETED,
+    ];
+    if (closed.includes(peerSession.sessionStatus)) {
+      throw new BadRequestException(
+        'Cannot edit a session that is completed, cancelled, or marked not completed.',
+      );
+    }
+
+    const hasScalar =
+      dto.title !== undefined ||
+      dto.description !== undefined ||
+      dto.duration !== undefined ||
+      dto.gmeetLink !== undefined ||
+      dto.scheduledAt !== undefined;
+    const hasSkills = dto.skills !== undefined;
+
+    if (!hasScalar && !hasSkills) {
+      throw new BadRequestException('No changes to apply');
+    }
+
+    const data: Prisma.PeerSessionUpdateInput = {};
+
+    if (dto.title !== undefined) {
+      const t = dto.title.trim();
+      if (!t) {
+        throw new BadRequestException('Title cannot be empty');
+      }
+      data.title = t;
+    }
+
+    if (dto.description !== undefined) {
+      data.description = dto.description?.trim() || null;
+    }
+
+    if (dto.duration !== undefined) {
+      data.duration = dto.duration;
+    }
+
+    if (dto.gmeetLink !== undefined) {
+      const raw = dto.gmeetLink.trim();
+      if (!raw) {
+        data.gmeetLink = null;
+      } else {
+        const normalized = normalizeGoogleMeetLink(raw);
+        if (!isValidGoogleMeetLink(normalized)) {
+          throw new BadRequestException(
+            'Invalid Google Meet link. Use a meet.google.com URL or meeting code.',
+          );
+        }
+        data.gmeetLink = normalized;
+      }
+    }
+
+    if (dto.scheduledAt !== undefined) {
+      const next = new Date(dto.scheduledAt);
+      if (Number.isNaN(next.getTime())) {
+        throw new BadRequestException('Invalid scheduled time');
+      }
+      if (next.getTime() < Date.now()) {
+        throw new BadRequestException({
+          code: 'PAST_TIME_NOT_ALLOWED',
+          message: 'Sessions cannot be scheduled in the past',
+        });
+      }
+      data.date = next;
+    }
+
+    if (hasScalar) {
+      await this.prisma.peerSession.update({
+        where: { id: peerSessionId },
+        data,
+      });
+    }
+
+    if (hasSkills) {
+      const skillNames =
+        dto.skills!.length > 0 ? dto.skills! : ['Communication'];
+      await this.prisma.peerSessionSkill.deleteMany({
+        where: { peerSessionId },
+      });
+      for (const skillName of skillNames) {
+        const skill = await this.prisma.skill.findUnique({
+          where: { name: skillName },
+        });
+        if (skill) {
+          await this.prisma.peerSessionSkill.create({
+            data: { peerSessionId, skillId: skill.id },
+          });
+        }
+      }
+    }
+
+    const detailsMarkedAt = new Date();
+    await this.prisma.peerSession.update({
+      where: { id: peerSessionId },
+      data: {
+        hostDetailsUpdatedAt: detailsMarkedAt,
+        lastDetailsEditedById: user.id,
+      },
+    });
+
+    const timeLabel = new Intl.DateTimeFormat('en-US', {
+      dateStyle: 'medium',
+      timeStyle: 'medium',
+    }).format(detailsMarkedAt);
+
+    const notifyUserId =
+      peerSession.requestedToId === user.id
+        ? peerSession.requestedById
+        : peerSession.requestedToId;
+
+    try {
+      await this.notificationsService.createAndPushNotification(
+        notifyUserId,
+        `Meeting details have been changed (${timeLabel}).`,
+        'Peer session',
+        NotifType.NORMAL,
+        {
+          actionType: 'PEER_SESSION_DETAILS_UPDATED',
+          peerSessionId,
+          actionData: { sessionId: peerSessionId, sessionType: 'peerSession' },
+        },
+      );
+    } catch (notifyErr) {
+      this.logger.error(
+        `Failed to notify user ${notifyUserId} of peer session details update (${peerSessionId})`,
+        notifyErr instanceof Error ? notifyErr.message : String(notifyErr),
+      );
+    }
+
+    await this.cacheService.deletePattern(
+      `peer-sessions:list:*${peerSession.requestedById}*`,
+    );
+    await this.cacheService.deletePattern(
+      `peer-sessions:list:*${peerSession.requestedToId}*`,
+    );
+
+    const dashboardUsers = await this.prisma.user.findMany({
+      where: {
+        id: { in: [peerSession.requestedById, peerSession.requestedToId] },
+      },
+      select: { clerkId: true },
+    });
+    for (const u of dashboardUsers) {
+      await this.cacheService.deletePattern(
+        `dashboard:data:*userId:${u.clerkId}*`,
+      );
+    }
+
+    return this.getPeerSessionDetails(peerSessionId, clerkUserId);
   }
 }

@@ -63,6 +63,7 @@ model User {
   debateModeratorRoles  DebateModerator[]      @relation("DebateModerator")
   debateChatMessages    DebateChatMessage[]    @relation("DebateChatMessages")
   debateModeratorEvaluations DebateModeratorEvaluation[] @relation("DebateModeratorEvaluations")
+  peerSessionsLastEdited      PeerSession[]          @relation("PeerSessionLastEditor")
 }
 
 model StudyRoom {
@@ -93,6 +94,8 @@ model StudyRoom {
   reminder5mSent  Boolean                @default(false)
   gmeetLink       String?
   summary         String?                @db.Text
+  /// Host saved participant-visible details — enrollees see “Edited” + get a notification.
+  hostDetailsUpdatedAt DateTime?
   payments        Payment[]              @relation("StudyRoomPayments")
   reviews         Review[]               @relation("StudyRoomReviews")
   notifications   Notification[]
@@ -127,6 +130,10 @@ model PeerSession {
   reminder5mSent  Boolean          @default(false)
   gmeetLink     String?
   summary       String?            @db.Text
+  /// Last time either party saved meeting details; other party sees banner + notification.
+  hostDetailsUpdatedAt DateTime?
+  lastDetailsEditedById String?
+  lastDetailsEditedBy   User?              @relation("PeerSessionLastEditor", fields: [lastDetailsEditedById], references: [id], onDelete: SetNull)
   payments      Payment[]          @relation("PeerSessionPayments")
   notifications Notification[]
   requestedBy   User               @relation("RequestedBy", fields: [requestedById], references: [id])
@@ -561,7 +568,9 @@ model DebateRoom {
   
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
-  
+  /// Host saved lobby settings — members see “Edited” + get a notification.
+  hostDetailsUpdatedAt DateTime?
+
   // Relations
   host                User                @relation("DebateRoomHost", fields: [hostId], references: [id])
   teams               DebateTeam[]

@@ -317,6 +317,7 @@ export interface StudyRoom extends StudyRoomCard {
   summary?: string;
   chatChannelId?: string | null;
   occurrencesCreated?: number;
+  hostDetailsUpdatedAt?: string | null;
 }
 
 export enum StudyRoomRecurrenceMode {
@@ -392,6 +393,10 @@ export interface PeerSession {
   summary?: string;
   chatChannelId?: string | null;
   role?: 'requester' | 'requestedTo' | 'empty';
+  /** ISO time when someone last saved meeting details. */
+  hostDetailsUpdatedAt?: string | null;
+  /** Internal user id of who last saved details (other party sees “Edited” / banner). */
+  lastDetailsEditedById?: string | null;
 }
 
 export interface RequestSessionDto {
@@ -408,6 +413,17 @@ export interface RequestSessionDto {
 
 export interface UpdateSessionStatusDto {
   status: SessionStatus;
+}
+
+/** PATCH /api/peer-sessions/:id — either participant; `scheduledAt` as ISO string. */
+export interface UpdatePeerSessionDto {
+  title?: string;
+  description?: string;
+  duration?: number;
+  /** Omit to leave unchanged; empty string clears the link. */
+  gmeetLink?: string;
+  scheduledAt?: string;
+  skills?: string[];
 }
 
 // Review Types
@@ -519,6 +535,8 @@ export interface UpcomingSession {
   description?: string;
   requestedBy?: PublicUser;
   sessionStatus?: SessionStatus;
+  hostDetailsUpdatedAt?: string | null;
+  lastDetailsEditedById?: string | null;
 }
 
 export interface PastSession {
@@ -530,6 +548,9 @@ export interface PastSession {
   skills?: Array<{ id: string; name: string } | string>;
   description?: string;
   requestedBy?: PublicUser;
+  sessionStatus?: SessionStatus;
+  hostDetailsUpdatedAt?: string | null;
+  lastDetailsEditedById?: string | null;
 }
 
 export interface UpcomingStudyRoom {
@@ -543,6 +564,7 @@ export interface UpcomingStudyRoom {
   skills?: Array<{ id: string; name: string } | string>;
   description?: string;
   sessionStatus?: SessionStatus;
+  hostDetailsUpdatedAt?: string | null;
 }
 
 export interface PastStudyRoom {
@@ -555,6 +577,7 @@ export interface PastStudyRoom {
   createdBy: PublicUser;
   skills?: Array<{ id: string; name: string } | string>;
   description?: string;
+  hostDetailsUpdatedAt?: string | null;
 }
 
 export interface DashboardData {

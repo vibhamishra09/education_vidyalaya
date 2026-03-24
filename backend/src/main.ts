@@ -23,7 +23,16 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     bufferLogs: true,
   });
-  
+
+  // So req.ip / protocol / host respect X-Forwarded-* when behind Next.js rewrites or a proxy.
+  // Clerk's authenticateRequest builds a URL from these; wrong host can break Bearer validation.
+  const expressApp = app.getHttpAdapter().getInstance() as {
+    set?: (key: string, value: unknown) => void;
+  };
+  if (typeof expressApp?.set === 'function') {
+    expressApp.set('trust proxy', 1);
+  }
+
   const logger = app.get(LoggerService);
   logger.setContext('Bootstrap');
 
@@ -49,6 +58,9 @@ async function bootstrap() {
     'http://localhost:3000',
     'http://localhost:3002',
     'http://localhost:3007',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:3002',
+    'http://127.0.0.1:3007',
   ];
   // Combine and deduplicate
   const allowedOrigins = [...new Set([...envUrls, ...defaultUrls])];

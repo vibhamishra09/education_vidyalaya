@@ -19,6 +19,7 @@ import { setAuthToken } from "@/lib/api-client";
 import Link from "next/link";
 import { MetricCard } from "@/types";
 import { User, ReviewCard, StudyRoomCard as StudyRoomCardType, SessionStatus } from "@/types/api.types";
+import { studyRoomCardDisplayLive } from "@/lib/utils/study-room-edit";
 
 export default function PublicProfilePage({
   params,
@@ -297,12 +298,20 @@ export default function PublicProfilePage({
                   <StudyRoomCard
                     key={room.id}
                     roomId={room.id}
-                    status={room.sessionStatus === SessionStatus.UPCOMING ? "scheduled" : "live"}
+                    status={
+                      studyRoomCardDisplayLive(room.sessionStatus, room.date)
+                        ? "live"
+                        : "scheduled"
+                    }
                     category={typeof room.skills[0] === 'string' ? room.skills[0] : room.skills[0]?.name || "General"}
+                    skillNames={room.skills
+                      .map((s) => (typeof s === "string" ? s : s?.name))
+                      .filter((n): n is string => Boolean(n))}
                     title={room.title}
                     description={room.description || ""}
                     date={room.date}
                     duration={room.duration}
+                    imageUrl={room.imageUrl}
                     participants={{
                       current: room.participantCount,
                       max: room.maxParticipants
@@ -312,6 +321,13 @@ export default function PublicProfilePage({
                       name: room.createdBy.name,
                       avatar: room.createdBy.avatar
                     }}
+                    sessionStatus={room.sessionStatus}
+                    currentUserId={
+                      currentUser?.id === userId ? currentUser.id : null
+                    }
+                    seriesId={room.seriesId ?? null}
+                    joiningFee={room.joiningFee}
+                    timezone={room.timezone ?? null}
                   />
                 ))
               )}

@@ -364,6 +364,10 @@ export class DashboardService {
                 description: ps.description,
                 requestedBy: ps.requestedBy,
                 sessionStatus: ps.sessionStatus,
+                hostDetailsUpdatedAt: ps.hostDetailsUpdatedAt
+                  ? ps.hostDetailsUpdatedAt.toISOString()
+                  : null,
+                lastDetailsEditedById: ps.lastDetailsEditedById ?? null,
               })),
               pastSessions: pastSessions.map((ps) => ({
                 id: ps.id,
@@ -375,6 +379,10 @@ export class DashboardService {
                 description: ps.description,
                 requestedBy: ps.requestedBy,
                 sessionStatus: ps.sessionStatus,
+                hostDetailsUpdatedAt: ps.hostDetailsUpdatedAt
+                  ? ps.hostDetailsUpdatedAt.toISOString()
+                  : null,
+                lastDetailsEditedById: ps.lastDetailsEditedById ?? null,
               })),
               upcomingStudyRooms: upcomingStudyRooms.map((sr) => ({
                 id: sr.id,
@@ -387,6 +395,9 @@ export class DashboardService {
                 skills: sr.skills.map((s) => s.skill),
                 description: sr.description,
                 sessionStatus: sr.sessionStatus,
+                hostDetailsUpdatedAt: sr.hostDetailsUpdatedAt
+                  ? sr.hostDetailsUpdatedAt.toISOString()
+                  : null,
               })),
               pastStudyRooms: pastStudyRooms.map((sr) => ({
                 id: sr.id,
@@ -399,6 +410,9 @@ export class DashboardService {
                 skills: sr.skills.map((s) => s.skill),
                 description: sr.description,
                 sessionStatus: sr.sessionStatus,
+                hostDetailsUpdatedAt: sr.hostDetailsUpdatedAt
+                  ? sr.hostDetailsUpdatedAt.toISOString()
+                  : null,
               })),
               sessionsPagination: {
                 upcomingSessions: {

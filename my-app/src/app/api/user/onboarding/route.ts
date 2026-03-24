@@ -1,13 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth, clerkClient } from "@clerk/nextjs/server";
+import { getBackendUrlForServer } from "@/lib/server-backend-url";
+import { messageFromNestJsonBody } from "@/lib/utils/error-handling";
 
 export async function POST(req: NextRequest) {
   console.log('🔍 API route called');
   try {
-    const { userId } = await auth();
+    const { userId, getToken } = await auth();
 
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const token = await getToken();
+    if (!token) {
+      return NextResponse.json(
+        { error: "Could not issue session token for API. Please sign in again." },
+        { status: 401 },
+      );
     }
 
     const formData = await req.formData();
@@ -28,14 +38,14 @@ export async function POST(req: NextRequest) {
     const name = displayName || clerkUser.fullName || clerkUser.username || 'Anonymous';
     const email = clerkUser.primaryEmailAddress?.emailAddress || '';
 
-    // Call the backend API to create/update user
-    const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+    const backendUrl = getBackendUrlForServer();
 
     console.log('🔍 Calling backend API to complete onboarding');
     const response = await fetch(`${backendUrl}/api/users/onboarding`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
         clerkId,
@@ -52,10 +62,20 @@ export async function POST(req: NextRequest) {
     });
 
     if (!response.ok) {
-      const error = await response.json();
+      let payload: unknown;
+      try {
+        payload = await response.json();
+      } catch {
+        payload = null;
+      }
       return NextResponse.json(
-        { error: error.message || "Failed to complete onboarding" },
-        { status: response.status }
+        {
+          error: messageFromNestJsonBody(
+            payload,
+            "Failed to complete onboarding",
+          ),
+        },
+        { status: response.status },
       );
     }
 

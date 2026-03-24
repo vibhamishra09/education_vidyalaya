@@ -9,6 +9,7 @@ import { LivekitService } from '../livekit/livekit.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import {
   CreateDebateRoomDto,
+  UpdateDebateRoomDto,
   JoinDebateRoomDto,
   DebateRoomResponse,
   DebateResultsResponse,
@@ -129,6 +130,136 @@ export class DebateRoomsService {
 
     this.logger.log(`Debate room created: ${debateRoom.id} by user ${user.id}`);
     return this.mapToResponse(debateRoom);
+  }
+
+  /**
+   * Update debate room settings (host only).
+   * Allowed until the debate is finished or cancelled (ENDED / PROCESSED / CANCELLED).
+   */
+  async updateDebateRoom(
+    roomId: string,
+    clerkUserId: string,
+    dto: UpdateDebateRoomDto,
+  ): Promise<DebateRoomResponse> {
+    const user = await this.prisma.user.findUnique({
+      where: { clerkId: clerkUserId },
+    });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const debateRoom = await this.prisma.debateRoom.findUnique({
+      where: { id: roomId },
+      include: {
+        teams: {
+          include: {
+            _count: { select: { participants: true } },
+          },
+        },
+      },
+    });
+
+    if (!debateRoom) {
+      throw new NotFoundException('Debate room not found');
+    }
+    if (debateRoom.hostId !== user.id) {
+      throw new ForbiddenException('Only the host can update this debate room');
+    }
+    const closedStatuses: DebateStatus[] = [
+      DebateStatus.ENDED,
+      DebateStatus.PROCESSED,
+      DebateStatus.CANCELLED,
+    ];
+    if (closedStatuses.includes(debateRoom.status)) {
+      throw new BadRequestException(
+        'Cannot edit a debate that has ended, been completed, or was cancelled.',
+      );
+    }
+
+    if (dto.maxParticipants !== undefined) {
+      const maxOnTeam = Math.max(
+        ...debateRoom.teams.map((t) => t._count.participants),
+        0,
+      );
+      if (dto.maxParticipants < maxOnTeam) {
+        throw new BadRequestException(
+          `Max participants per team must be at least ${maxOnTeam} (current largest team size)`,
+        );
+      }
+    }
+
+    const data: Prisma.DebateRoomUpdateInput = {};
+    if (dto.topic !== undefined) {
+      data.topic = dto.topic;
+    }
+    if (dto.description !== undefined) {
+      data.description = dto.description;
+    }
+    if (dto.maxParticipants !== undefined) {
+      data.maxParticipants = dto.maxParticipants;
+    }
+    if (dto.turnDurationSeconds !== undefined) {
+      data.turnDurationSeconds = dto.turnDurationSeconds;
+    }
+    if (dto.prepTimeSeconds !== undefined) {
+      data.prepTimeSeconds = dto.prepTimeSeconds;
+    }
+    if (dto.turnOrder !== undefined) {
+      data.turnOrder = dto.turnOrder as TurnOrderType;
+    }
+
+    if (Object.keys(data).length === 0) {
+      throw new BadRequestException('No changes to apply');
+    }
+
+    const detailMarkedAt = new Date();
+    data.hostDetailsUpdatedAt = detailMarkedAt;
+
+    const updated = await this.prisma.debateRoom.update({
+      where: { id: roomId },
+      data,
+      include: this.getDebateRoomInclude(),
+    });
+
+    const recipientIds = new Set<string>();
+    for (const team of updated.teams) {
+      for (const p of team.participants) {
+        if (p.user?.id && p.user.id !== user.id) {
+          recipientIds.add(p.user.id);
+        }
+      }
+    }
+    for (const m of updated.moderators) {
+      if (m.user?.id && m.user.id !== user.id) {
+        recipientIds.add(m.user.id);
+      }
+    }
+
+    const timeLabel = new Intl.DateTimeFormat('en-US', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }).format(detailMarkedAt);
+    const topicSnippet =
+      updated.topic.length > 80
+        ? `${updated.topic.slice(0, 77)}…`
+        : updated.topic;
+    const debateMessage = `The debate you joined (“${topicSnippet}”) has updated details (${timeLabel}).`;
+
+    for (const uid of recipientIds) {
+      await this.notificationsService.createAndPushNotification(
+        uid,
+        debateMessage,
+        'Debate updated',
+        NotifType.NORMAL,
+        {
+          actionType: 'DEBATE_ROOM_DETAILS_UPDATED',
+          actionData: { debateRoomId: roomId, sessionType: 'debateRoom' },
+        },
+      );
+    }
+
+    this.logger.log(`Debate room updated: ${roomId} by host ${user.id}`);
+    return this.mapToResponse(updated);
   }
 
   /**
@@ -2138,6 +2269,9 @@ export class DebateRoomsService {
       })),
       livekitRoomName: debateRoom.livekitRoomName,
       createdAt: debateRoom.createdAt,
+      hostDetailsUpdatedAt: debateRoom.hostDetailsUpdatedAt
+        ? debateRoom.hostDetailsUpdatedAt.toISOString()
+        : null,
     };
   }
 

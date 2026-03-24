@@ -13,7 +13,23 @@ import { getNotificationLink } from "@/lib/utils/notification-links";
 export function NotificationDropdown() {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const { notifications, unreadCount, isLoading: loading, isLoadingMore, hasMore, error, markAsRead, loadMoreNotifications } = useNotificationContext();
+  const {
+    notifications,
+    unreadCount,
+    isLoading: loading,
+    isLoadingMore,
+    hasMore,
+    error,
+    markAsRead,
+    loadMoreNotifications,
+    refetchNotifications,
+  } = useNotificationContext();
+
+  useEffect(() => {
+    if (isOpen) {
+      void refetchNotifications();
+    }
+  }, [isOpen, refetchNotifications]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -82,14 +98,14 @@ export function NotificationDropdown() {
                 </CardHeader>
                 <CardContent className="p-0">
                   <div className="max-h-[400px] overflow-y-auto">
-                    {loading ? (
+                    {loading && notifications.length === 0 ? (
                       <div className="px-4 py-8 text-center text-sm text-muted-foreground">
                         <div className="flex items-center justify-center gap-2">
                           <Loader2 className="h-4 w-4 animate-spin" />
                           Loading notifications...
                         </div>
                       </div>
-                    ) : error ? (
+                    ) : error && notifications.length === 0 ? (
                       <div className="px-4 py-8 text-center text-sm text-destructive">
                         {error}
                       </div>
