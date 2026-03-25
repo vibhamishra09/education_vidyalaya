@@ -45,61 +45,61 @@ export class ReviewsService {
         try {
           const where: any = {};
 
-        if (userId) {
-          // Check if userId is a clerkId or database ID
-          // If it's a clerkId, convert to database ID
-          const user = await this.prisma.user.findUnique({
-            where: { clerkId: userId },
-            select: { id: true },
-          });
+          if (userId) {
+            // Check if userId is a clerkId or database ID
+            // If it's a clerkId, convert to database ID
+            const user = await this.prisma.user.findUnique({
+              where: { clerkId: userId },
+              select: { id: true },
+            });
 
-          if (user) {
-            where.revieweeId = user.id;
-          } else {
-            // If not found by clerkId, assume it's already a database ID
-            where.revieweeId = userId;
+            if (user) {
+              where.revieweeId = user.id;
+            } else {
+              // If not found by clerkId, assume it's already a database ID
+              where.revieweeId = userId;
+            }
           }
-        }
-        if (sessionId) {
-          if (sessionType === 'studyRoom') {
-            where.studyRoomId = sessionId;
-          } else if (sessionType === 'peerSession') {
-            where.peerSessionId = sessionId;
+          if (sessionId) {
+            if (sessionType === 'studyRoom') {
+              where.studyRoomId = sessionId;
+            } else if (sessionType === 'peerSession') {
+              where.peerSessionId = sessionId;
+            }
           }
-        }
 
-        const skip = (page - 1) * limit;
+          const skip = (page - 1) * limit;
 
-        const [reviews, total] = await Promise.all([
-          this.prisma.review.findMany({
-            where,
-            skip,
-            take: limit,
-            include: {
-              reviewer: { select: { id: true, name: true, avatar: true } },
-              reviewee: { select: { id: true, name: true, avatar: true } },
+          const [reviews, total] = await Promise.all([
+            this.prisma.review.findMany({
+              where,
+              skip,
+              take: limit,
+              include: {
+                reviewer: { select: { id: true, name: true, avatar: true } },
+                reviewee: { select: { id: true, name: true, avatar: true } },
+              },
+              orderBy: { id: 'desc' },
+            }),
+            this.prisma.review.count({ where }),
+          ]);
+
+          return {
+            reviews: reviews.map((r) => ({
+              id: r.id,
+              rating: r.rating,
+              review: r.review,
+              reviewer: r.reviewer,
+              reviewee: r.reviewee,
+            })),
+            pagination: {
+              total,
+              page,
+              limit,
+              totalPages: Math.ceil(total / limit),
+              hasMore: skip + limit < total,
             },
-            orderBy: { id: 'desc' },
-          }),
-          this.prisma.review.count({ where }),
-        ]);
-
-        return {
-          reviews: reviews.map((r) => ({
-            id: r.id,
-            rating: r.rating,
-            review: r.review,
-            reviewer: r.reviewer,
-            reviewee: r.reviewee,
-          })),
-          pagination: {
-            total,
-            page,
-            limit,
-            totalPages: Math.ceil(total / limit),
-            hasMore: skip + limit < total,
-          },
-        };
+          };
         } catch (error) {
           // Handle database connection errors
           if (isConnectionError(error)) {
@@ -107,7 +107,7 @@ export class ReviewsService {
               `Database connection error in getReviews:`,
               error instanceof Error ? error.message : String(error),
             );
-            
+
             // Return empty reviews as fallback
             return {
               reviews: [],
@@ -120,7 +120,7 @@ export class ReviewsService {
               },
             };
           }
-          
+
           // Re-throw other errors
           throw error;
         }
@@ -299,7 +299,9 @@ export class ReviewsService {
 
     // Invalidate reviews cache
     await this.cacheService.deletePattern(`reviews:list*`);
-    await this.cacheService.deletePattern(`reviews:session:*${createDto.sessionId}*`);
+    await this.cacheService.deletePattern(
+      `reviews:session:*${createDto.sessionId}*`,
+    );
     // Invalidate user profile cache (reviews affect user stats)
     await this.cacheService.deletePattern(`user:*${revieweeId}*`);
 
@@ -334,47 +336,47 @@ export class ReviewsService {
           const skip = (page - 1) * limit;
 
           const whereClause: any = {};
-        if (sessionType === 'studyRoom') {
-          whereClause.studyRoomId = sessionId;
-        } else {
-          whereClause.peerSessionId = sessionId;
-        }
+          if (sessionType === 'studyRoom') {
+            whereClause.studyRoomId = sessionId;
+          } else {
+            whereClause.peerSessionId = sessionId;
+          }
 
-        const [reviews, total] = await Promise.all([
-          this.prisma.review.findMany({
-            where: whereClause,
-            skip,
-            take: limit,
-            include: {
-              reviewer: { select: { id: true, name: true, avatar: true } },
+          const [reviews, total] = await Promise.all([
+            this.prisma.review.findMany({
+              where: whereClause,
+              skip,
+              take: limit,
+              include: {
+                reviewer: { select: { id: true, name: true, avatar: true } },
+              },
+              orderBy: { id: 'desc' },
+            }),
+            this.prisma.review.count({ where: whereClause }),
+          ]);
+
+          const avgRating =
+            reviews.length > 0
+              ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
+              : 0;
+
+          return {
+            reviews: reviews.map((r) => ({
+              id: r.id,
+              rating: r.rating,
+              review: r.review,
+              reviewer: r.reviewer,
+            })),
+            avgRating: Math.round(avgRating * 10) / 10,
+            totalCount: total,
+            pagination: {
+              total,
+              page,
+              limit,
+              totalPages: Math.ceil(total / limit),
+              hasMore: skip + limit < total,
             },
-            orderBy: { id: 'desc' },
-          }),
-          this.prisma.review.count({ where: whereClause }),
-        ]);
-
-        const avgRating =
-          reviews.length > 0
-            ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
-            : 0;
-
-        return {
-          reviews: reviews.map((r) => ({
-            id: r.id,
-            rating: r.rating,
-            review: r.review,
-            reviewer: r.reviewer,
-          })),
-          avgRating: Math.round(avgRating * 10) / 10,
-          totalCount: total,
-          pagination: {
-            total,
-            page,
-            limit,
-            totalPages: Math.ceil(total / limit),
-            hasMore: skip + limit < total,
-          },
-        };
+          };
         } catch (error) {
           // Handle database connection errors
           if (isConnectionError(error)) {
@@ -382,7 +384,7 @@ export class ReviewsService {
               `Database connection error in getSessionReviews for session ${sessionId}:`,
               error instanceof Error ? error.message : String(error),
             );
-            
+
             // Return empty reviews as fallback
             return {
               reviews: [],
@@ -397,7 +399,7 @@ export class ReviewsService {
               },
             };
           }
-          
+
           // Re-throw other errors
           throw error;
         }

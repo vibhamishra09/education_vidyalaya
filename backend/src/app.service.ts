@@ -7,7 +7,6 @@ import { isConnectionError } from './common/db-error-handler';
 
 @Injectable()
 export class AppService {
-
   constructor(
     private prisma: PrismaService,
     private readonly logger: LoggerService,
@@ -28,7 +27,9 @@ export class AppService {
       cacheKey,
       async () => {
         const dbStartTime = Date.now();
-        this.logger.debug('[HomePage] Starting platform stats database queries');
+        this.logger.debug(
+          '[HomePage] Starting platform stats database queries',
+        );
 
         try {
           const [
@@ -70,20 +71,21 @@ export class AppService {
           });
 
           // Calculate total learning hours from completed sessions and average rating
-          const [studyRoomHours, peerSessionHours, reviewStats] = await Promise.all([
-            this.prisma.studyRoom.aggregate({
-              where: { sessionStatus: SessionStatus.DONE },
-              _sum: { duration: true },
-            }),
-            this.prisma.peerSession.aggregate({
-              where: { sessionStatus: SessionStatus.DONE },
-              _sum: { duration: true },
-            }),
-            // Calculate average rating from all reviews
-            this.prisma.review.aggregate({
-              _avg: { rating: true },
-            }),
-          ]);
+          const [studyRoomHours, peerSessionHours, reviewStats] =
+            await Promise.all([
+              this.prisma.studyRoom.aggregate({
+                where: { sessionStatus: SessionStatus.DONE },
+                _sum: { duration: true },
+              }),
+              this.prisma.peerSession.aggregate({
+                where: { sessionStatus: SessionStatus.DONE },
+                _sum: { duration: true },
+              }),
+              // Calculate average rating from all reviews
+              this.prisma.review.aggregate({
+                _avg: { rating: true },
+              }),
+            ]);
 
           const totalMinutes =
             (studyRoomHours._sum.duration || 0) +
@@ -129,7 +131,9 @@ export class AppService {
 
           // Return fallback data for connection errors
           if (isConnectionError(error)) {
-            this.logger.warn('[HomePage] Returning fallback platform stats due to connection error');
+            this.logger.warn(
+              '[HomePage] Returning fallback platform stats due to connection error',
+            );
             return {
               usersOnboarded: 0,
               studyRoomsHosted: 0,

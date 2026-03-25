@@ -37,7 +37,8 @@ const REDIS_KEYS = {
   debateState: (roomId: string) => `debate:${roomId}:state`,
   debateTranscripts: (roomId: string) => `debate:${roomId}:transcripts`,
   debateTimer: (roomId: string) => `debate:${roomId}:timer`,
-  debateTeamChat: (roomId: string, side: string) => `debate:${roomId}:chat:${side}`,
+  debateTeamChat: (roomId: string, side: string) =>
+    `debate:${roomId}:chat:${side}`,
 };
 
 // Coin reward for winning team
@@ -58,7 +59,6 @@ export interface DebateState {
 
 @Injectable()
 export class DebateRoomsService {
-
   constructor(
     private prisma: PrismaService,
     private livekitService: LivekitService,
@@ -67,12 +67,16 @@ export class DebateRoomsService {
     private micControlService: DebateMicControlService,
     private readonly logger: LoggerService,
   ) {
-    this.logger.setContext(DebateRoomsService.name);}
+    this.logger.setContext(DebateRoomsService.name);
+  }
 
   /**
    * Create a new debate room
    */
-  async createDebateRoom(userId: string, dto: CreateDebateRoomDto): Promise<DebateRoomResponse> {
+  async createDebateRoom(
+    userId: string,
+    dto: CreateDebateRoomDto,
+  ): Promise<DebateRoomResponse> {
     // Get user's internal ID from Clerk ID
     const user = await this.prisma.user.findUnique({
       where: { clerkId: userId },
@@ -98,10 +102,7 @@ export class DebateRoomsService {
         hostId: user.id,
         livekitRoomName,
         teams: {
-          create: [
-            { side: DebateSide.FOR },
-            { side: DebateSide.AGAINST },
-          ],
+          create: [{ side: DebateSide.FOR }, { side: DebateSide.AGAINST }],
         },
         moderators: {
           create: {
@@ -134,7 +135,8 @@ export class DebateRoomsService {
 
   /**
    * Update debate room settings (host only).
-   * Allowed until the debate is finished or cancelled (ENDED / PROCESSED / CANCELLED).
+   * Edits are blocked once the debate is ended, processed, or cancelled.
+   * While PREP or LIVE, only topic and description may change (not turn timing, order, or caps).
    */
   async updateDebateRoom(
     roomId: string,
@@ -174,6 +176,23 @@ export class DebateRoomsService {
       throw new BadRequestException(
         'Cannot edit a debate that has ended, been completed, or was cancelled.',
       );
+    }
+
+    const structuralLockedStatuses: DebateStatus[] = [
+      DebateStatus.PREP,
+      DebateStatus.LIVE,
+    ];
+    if (structuralLockedStatuses.includes(debateRoom.status)) {
+      if (
+        dto.maxParticipants !== undefined ||
+        dto.turnDurationSeconds !== undefined ||
+        dto.prepTimeSeconds !== undefined ||
+        dto.turnOrder !== undefined
+      ) {
+        throw new BadRequestException(
+          'Cannot change turn timing, turn order, or max participants while the debate is in progress.',
+        );
+      }
     }
 
     if (dto.maxParticipants !== undefined) {
@@ -246,16 +265,23 @@ export class DebateRoomsService {
     const debateMessage = `The debate you joined (“${topicSnippet}”) has updated details (${timeLabel}).`;
 
     for (const uid of recipientIds) {
-      await this.notificationsService.createAndPushNotification(
-        uid,
-        debateMessage,
-        'Debate updated',
-        NotifType.NORMAL,
-        {
-          actionType: 'DEBATE_ROOM_DETAILS_UPDATED',
-          actionData: { debateRoomId: roomId, sessionType: 'debateRoom' },
-        },
-      );
+      try {
+        await this.notificationsService.createAndPushNotification(
+          uid,
+          debateMessage,
+          'Debate updated',
+          NotifType.NORMAL,
+          {
+            actionType: 'DEBATE_ROOM_DETAILS_UPDATED',
+            actionData: { debateRoomId: roomId, sessionType: 'debateRoom' },
+          },
+        );
+      } catch (err) {
+        this.logger.error(
+          `Failed to notify user ${uid} of debate room details update (${roomId})`,
+          err instanceof Error ? err.message : String(err),
+        );
+      }
     }
 
     this.logger.log(`Debate room updated: ${roomId} by host ${user.id}`);
@@ -265,7 +291,10 @@ export class DebateRoomsService {
   /**
    * Get debate room details
    */
-  async getDebateRoom(roomId: string, userId?: string): Promise<DebateRoomResponse> {
+  async getDebateRoom(
+    roomId: string,
+    userId?: string,
+  ): Promise<DebateRoomResponse> {
     try {
       const debateRoom = await this.prisma.debateRoom.findUnique({
         where: { id: roomId },
@@ -284,18 +313,18 @@ export class DebateRoomsService {
           `Database connection error in getDebateRoom for room ${roomId}:`,
           error instanceof Error ? error.message : String(error),
         );
-        
+
         // Re-throw NotFoundException (room not found is a valid case)
         if (error instanceof NotFoundException) {
           throw error;
         }
-        
+
         // For connection errors, throw a more user-friendly error
         throw new NotFoundException(
           'Unable to fetch debate room. Please try again later.',
         );
       }
-      
+
       // Re-throw other errors
       throw error;
     }
@@ -315,117 +344,123 @@ export class DebateRoomsService {
     try {
       const where: Prisma.DebateRoomWhereInput = {};
 
-    if (search) {
-      where.OR = [
-        { topic: { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } },
-      ];
-    }
+      if (search) {
+        where.OR = [
+          { topic: { contains: search, mode: 'insensitive' } },
+          { description: { contains: search, mode: 'insensitive' } },
+        ];
+      }
 
-    if (!trending && status) {
-      where.status = status;
-    }
+      if (!trending && status) {
+        where.status = status;
+      }
 
-    const skip = (page - 1) * limit;
-    const include = this.getDebateRoomInclude();
+      const skip = (page - 1) * limit;
+      const include = this.getDebateRoomInclude();
 
-    if (trending) {
-      const now = new Date();
-      const liveWhere: Prisma.DebateRoomWhereInput = {
-        ...where,
-        status: DebateStatus.LIVE,
-      };
-      const waitingWhere: Prisma.DebateRoomWhereInput = {
-        ...where,
-        status: DebateStatus.WAITING,
-        scheduledAt: {
-          gte: now,
-        },
-      };
-
-      const [liveTotal, waitingTotal] = await Promise.all([
-        this.prisma.debateRoom.count({ where: liveWhere }),
-        this.prisma.debateRoom.count({ where: waitingWhere }),
-      ]);
-
-      const total = liveTotal + waitingTotal;
-      if (total === 0) {
-        return {
-          debateRooms: [],
-          total: 0,
-          page,
-          limit,
-          totalPages: 0,
+      if (trending) {
+        const now = new Date();
+        const liveWhere: Prisma.DebateRoomWhereInput = {
+          ...where,
+          status: DebateStatus.LIVE,
         };
-      }
+        const waitingWhere: Prisma.DebateRoomWhereInput = {
+          ...where,
+          status: DebateStatus.WAITING,
+          scheduledAt: {
+            gte: now,
+          },
+        };
 
-      let remainingSkip = skip;
-      let remainingTake = limit;
-      const rooms: any[] = [];
+        const [liveTotal, waitingTotal] = await Promise.all([
+          this.prisma.debateRoom.count({ where: liveWhere }),
+          this.prisma.debateRoom.count({ where: waitingWhere }),
+        ]);
 
-      const liveSkip = Math.min(remainingSkip, liveTotal);
-      remainingSkip -= liveSkip;
-      const liveTake = Math.max(0, Math.min(remainingTake, liveTotal - liveSkip));
+        const total = liveTotal + waitingTotal;
+        if (total === 0) {
+          return {
+            debateRooms: [],
+            total: 0,
+            page,
+            limit,
+            totalPages: 0,
+          };
+        }
 
-      if (liveTake > 0) {
-        const liveRooms = await this.prisma.debateRoom.findMany({
-          where: liveWhere,
-          skip: liveSkip,
-          take: liveTake,
-          orderBy: [{ participants: { _count: 'desc' } }, { createdAt: 'desc' }],
-          include,
-        });
-        rooms.push(...liveRooms);
-        remainingTake -= liveRooms.length;
-      }
+        let remainingSkip = skip;
+        let remainingTake = limit;
+        const rooms: any[] = [];
 
-      if (remainingTake > 0) {
-        const waitingSkip = Math.max(0, remainingSkip);
-        const waitingTake = Math.max(
+        const liveSkip = Math.min(remainingSkip, liveTotal);
+        remainingSkip -= liveSkip;
+        const liveTake = Math.max(
           0,
-          Math.min(remainingTake, waitingTotal - waitingSkip),
+          Math.min(remainingTake, liveTotal - liveSkip),
         );
 
-        if (waitingTake > 0) {
-          const waitingRooms = await this.prisma.debateRoom.findMany({
-            where: waitingWhere,
-            skip: waitingSkip,
-            take: waitingTake,
+        if (liveTake > 0) {
+          const liveRooms = await this.prisma.debateRoom.findMany({
+            where: liveWhere,
+            skip: liveSkip,
+            take: liveTake,
             orderBy: [
-              { scheduledAt: 'asc' },
               { participants: { _count: 'desc' } },
               { createdAt: 'desc' },
             ],
             include,
           });
-          rooms.push(...waitingRooms);
+          rooms.push(...liveRooms);
+          remainingTake -= liveRooms.length;
         }
+
+        if (remainingTake > 0) {
+          const waitingSkip = Math.max(0, remainingSkip);
+          const waitingTake = Math.max(
+            0,
+            Math.min(remainingTake, waitingTotal - waitingSkip),
+          );
+
+          if (waitingTake > 0) {
+            const waitingRooms = await this.prisma.debateRoom.findMany({
+              where: waitingWhere,
+              skip: waitingSkip,
+              take: waitingTake,
+              orderBy: [
+                { scheduledAt: 'asc' },
+                { participants: { _count: 'desc' } },
+                { createdAt: 'desc' },
+              ],
+              include,
+            });
+            rooms.push(...waitingRooms);
+          }
+        }
+
+        return {
+          debateRooms: rooms.map((r) => this.mapToResponse(r)),
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
+        };
       }
 
-      return {
-        debateRooms: rooms.map((r) => this.mapToResponse(r)),
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
-      };
-    }
+      const orderBy: Prisma.DebateRoomOrderByWithRelationInput[] =
+        sort === 'upcoming'
+          ? [{ scheduledAt: 'asc' }, { createdAt: 'desc' }]
+          : [{ createdAt: 'desc' }];
 
-    const orderBy: Prisma.DebateRoomOrderByWithRelationInput[] =
-      sort === 'upcoming'
-        ? [{ scheduledAt: 'asc' }, { createdAt: 'desc' }]
-        : [{ createdAt: 'desc' }];
-
-    const [rooms, total] = await Promise.all([
-      this.prisma.debateRoom.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy,
-        include,
-      }),
-      this.prisma.debateRoom.count({ where }),
-    ]);
+      const [rooms, total] = await Promise.all([
+        this.prisma.debateRoom.findMany({
+          where,
+          skip,
+          take: limit,
+          orderBy,
+          include,
+        }),
+        this.prisma.debateRoom.count({ where }),
+      ]);
 
       return {
         debateRooms: rooms.map((r) => this.mapToResponse(r)),
@@ -441,7 +476,7 @@ export class DebateRoomsService {
           `Database connection error in listDebateRooms:`,
           error instanceof Error ? error.message : String(error),
         );
-        
+
         // Return empty debate rooms as fallback
         return {
           debateRooms: [],
@@ -451,7 +486,7 @@ export class DebateRoomsService {
           totalPages: 0,
         };
       }
-      
+
       // Re-throw other errors
       throw error;
     }
@@ -492,12 +527,16 @@ export class DebateRoomsService {
     }
 
     if (debateRoom.status !== DebateStatus.WAITING) {
-      throw new BadRequestException('Cannot join a debate that has already started');
+      throw new BadRequestException(
+        'Cannot join a debate that has already started',
+      );
     }
 
     // Check if scheduled time has passed
     if (debateRoom.scheduledAt && new Date() > debateRoom.scheduledAt) {
-      throw new BadRequestException('Cannot join after the scheduled time has passed');
+      throw new BadRequestException(
+        'Cannot join after the scheduled time has passed',
+      );
     }
 
     // Check if user is already a participant
@@ -511,12 +550,16 @@ export class DebateRoomsService {
     // Check if user is a moderator and is the only one
     const isModerator = debateRoom.moderators.some((m) => m.userId === user.id);
     if (isModerator && debateRoom.moderators.length === 1) {
-      throw new BadRequestException('You are the only moderator and cannot join as a participant. At least one moderator must remain.');
+      throw new BadRequestException(
+        'You are the only moderator and cannot join as a participant. At least one moderator must remain.',
+      );
     }
 
     // Get team counts
     const forTeam = debateRoom.teams.find((t) => t.side === DebateSide.FOR)!;
-    const againstTeam = debateRoom.teams.find((t) => t.side === DebateSide.AGAINST)!;
+    const againstTeam = debateRoom.teams.find(
+      (t) => t.side === DebateSide.AGAINST,
+    )!;
     const forCount = forTeam.participants.filter(
       (p) => p.status === ParticipantStatus.ACTIVE,
     ).length;
@@ -525,23 +568,32 @@ export class DebateRoomsService {
     ).length;
 
     // Check capacity
-    if (forCount >= debateRoom.maxParticipants && againstCount >= debateRoom.maxParticipants) {
+    if (
+      forCount >= debateRoom.maxParticipants &&
+      againstCount >= debateRoom.maxParticipants
+    ) {
       throw new BadRequestException('Debate room is full');
     }
 
     // Auto-balance: Assign to team with fewer members
     // If equal, consider preference, else random
     let assignedTeam: typeof forTeam;
-    
+
     if (forCount < againstCount) {
       assignedTeam = forTeam;
     } else if (againstCount < forCount) {
       assignedTeam = againstTeam;
     } else {
       // Teams are equal, consider preference or randomize
-      if (dto?.preferredSide === 'FOR' && forCount < debateRoom.maxParticipants) {
+      if (
+        dto?.preferredSide === 'FOR' &&
+        forCount < debateRoom.maxParticipants
+      ) {
         assignedTeam = forTeam;
-      } else if (dto?.preferredSide === 'AGAINST' && againstCount < debateRoom.maxParticipants) {
+      } else if (
+        dto?.preferredSide === 'AGAINST' &&
+        againstCount < debateRoom.maxParticipants
+      ) {
         assignedTeam = againstTeam;
       } else {
         // Random assignment
@@ -648,11 +700,15 @@ export class DebateRoomsService {
 
     // Check max moderators
     if (debateRoom.moderators.length >= MAX_MODERATORS) {
-      throw new BadRequestException(`Maximum ${MAX_MODERATORS} moderators allowed`);
+      throw new BadRequestException(
+        `Maximum ${MAX_MODERATORS} moderators allowed`,
+      );
     }
 
     // Check if target is already a moderator
-    const isAlreadyMod = debateRoom.moderators.some((m) => m.userId === targetUserId);
+    const isAlreadyMod = debateRoom.moderators.some(
+      (m) => m.userId === targetUserId,
+    );
     if (isAlreadyMod) {
       throw new BadRequestException('User is already a moderator');
     }
@@ -674,7 +730,9 @@ export class DebateRoomsService {
       },
     });
 
-    this.logger.log(`User ${targetUserId} promoted to moderator in debate ${roomId}`);
+    this.logger.log(
+      `User ${targetUserId} promoted to moderator in debate ${roomId}`,
+    );
   }
 
   /**
@@ -773,7 +831,9 @@ export class DebateRoomsService {
     }
 
     const validatedScores =
-      dto.scores !== undefined ? this.validateAndNormalizeScores(dto.scores) : undefined;
+      dto.scores !== undefined
+        ? this.validateAndNormalizeScores(dto.scores)
+        : undefined;
 
     const existing = await this.prisma.debateModeratorEvaluation.findUnique({
       where: {
@@ -853,34 +913,41 @@ export class DebateRoomsService {
     query?: ModeratorEvaluationsQueryDto,
   ) {
     try {
-      const { user } = await this.assertModeratorInRoom(roomId, moderatorClerkId);
+      const { user } = await this.assertModeratorInRoom(
+        roomId,
+        moderatorClerkId,
+      );
 
       return await this.prisma.debateModeratorEvaluation.findMany({
-      where: {
-        debateRoomId: roomId,
-        moderatorId: user.id,
-        ...(query?.participantId ? { participantId: query.participantId } : {}),
-        ...(query?.turnNumber !== undefined ? { turnNumber: query.turnNumber } : {}),
-      },
-      include: {
-        participant: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                clerkId: true,
-                name: true,
-                avatar: true,
+        where: {
+          debateRoomId: roomId,
+          moderatorId: user.id,
+          ...(query?.participantId
+            ? { participantId: query.participantId }
+            : {}),
+          ...(query?.turnNumber !== undefined
+            ? { turnNumber: query.turnNumber }
+            : {}),
+        },
+        include: {
+          participant: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  clerkId: true,
+                  name: true,
+                  avatar: true,
+                },
               },
-            },
-            team: {
-              select: { side: true },
+              team: {
+                select: { side: true },
+              },
             },
           },
         },
-      },
-      orderBy: [{ turnNumber: 'desc' }, { updatedAt: 'desc' }],
-    });
+        orderBy: [{ turnNumber: 'desc' }, { updatedAt: 'desc' }],
+      });
     } catch (error) {
       // Handle database connection errors
       if (isConnectionError(error)) {
@@ -888,11 +955,11 @@ export class DebateRoomsService {
           `Database connection error in getModeratorEvaluations for room ${roomId}:`,
           error instanceof Error ? error.message : String(error),
         );
-        
+
         // Return empty evaluations as fallback
         return [];
       }
-      
+
       // Re-throw other errors (ForbiddenException, NotFoundException, etc.)
       throw error;
     }
@@ -908,34 +975,37 @@ export class DebateRoomsService {
     turnNumber?: number,
   ) {
     try {
-      const { user } = await this.assertModeratorInRoom(roomId, moderatorClerkId);
+      const { user } = await this.assertModeratorInRoom(
+        roomId,
+        moderatorClerkId,
+      );
 
       return await this.prisma.debateModeratorEvaluation.findMany({
-      where: {
-        debateRoomId: roomId,
-        moderatorId: user.id,
-        participantId,
-        ...(turnNumber !== undefined ? { turnNumber } : {}),
-      },
-      include: {
-        participant: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                clerkId: true,
-                name: true,
-                avatar: true,
+        where: {
+          debateRoomId: roomId,
+          moderatorId: user.id,
+          participantId,
+          ...(turnNumber !== undefined ? { turnNumber } : {}),
+        },
+        include: {
+          participant: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  clerkId: true,
+                  name: true,
+                  avatar: true,
+                },
               },
-            },
-            team: {
-              select: { side: true },
+              team: {
+                select: { side: true },
+              },
             },
           },
         },
-      },
-      orderBy: [{ turnNumber: 'desc' }, { updatedAt: 'desc' }],
-    });
+        orderBy: [{ turnNumber: 'desc' }, { updatedAt: 'desc' }],
+      });
     } catch (error) {
       // Handle database connection errors
       if (isConnectionError(error)) {
@@ -943,11 +1013,11 @@ export class DebateRoomsService {
           `Database connection error in getParticipantEvaluations for room ${roomId}, participant ${participantId}:`,
           error instanceof Error ? error.message : String(error),
         );
-        
+
         // Return empty evaluations as fallback
         return [];
       }
-      
+
       // Re-throw other errors (ForbiddenException, NotFoundException, etc.)
       throw error;
     }
@@ -956,7 +1026,10 @@ export class DebateRoomsService {
   /**
    * Start prep phase - only moderators can call this
    */
-  async startPrepPhase(roomId: string, userId: string): Promise<{ prepEndTime: number }> {
+  async startPrepPhase(
+    roomId: string,
+    userId: string,
+  ): Promise<{ prepEndTime: number }> {
     const user = await this.prisma.user.findUnique({
       where: { clerkId: userId },
     });
@@ -998,10 +1071,14 @@ export class DebateRoomsService {
 
     // Check minimum participants (at least 1 per team)
     const forTeam = debateRoom.teams.find((t) => t.side === DebateSide.FOR);
-    const againstTeam = debateRoom.teams.find((t) => t.side === DebateSide.AGAINST);
+    const againstTeam = debateRoom.teams.find(
+      (t) => t.side === DebateSide.AGAINST,
+    );
 
     if (!forTeam?.participants.length || !againstTeam?.participants.length) {
-      throw new BadRequestException('Each team must have at least one participant');
+      throw new BadRequestException(
+        'Each team must have at least one participant',
+      );
     }
 
     // Generate turn queue
@@ -1040,24 +1117,32 @@ export class DebateRoomsService {
    * Generate turn queue based on turn order setting
    */
   private async generateTurnQueue(debateRoom: any): Promise<void> {
-    const forParticipants = debateRoom.teams
-      .find((t: any) => t.side === DebateSide.FOR)
-      ?.participants.filter((p: any) => p.status === ParticipantStatus.ACTIVE) || [];
-    
-    const againstParticipants = debateRoom.teams
-      .find((t: any) => t.side === DebateSide.AGAINST)
-      ?.participants.filter((p: any) => p.status === ParticipantStatus.ACTIVE) || [];
+    const forParticipants =
+      debateRoom.teams
+        .find((t: any) => t.side === DebateSide.FOR)
+        ?.participants.filter(
+          (p: any) => p.status === ParticipantStatus.ACTIVE,
+        ) || [];
+
+    const againstParticipants =
+      debateRoom.teams
+        .find((t: any) => t.side === DebateSide.AGAINST)
+        ?.participants.filter(
+          (p: any) => p.status === ParticipantStatus.ACTIVE,
+        ) || [];
 
     // Sort by join time if FIFO, randomize if RANDOM
     if (debateRoom.turnOrder === TurnOrderType.RANDOM) {
       this.shuffleArray(forParticipants);
       this.shuffleArray(againstParticipants);
     } else {
-      forParticipants.sort((a: any, b: any) => 
-        new Date(a.joinedAt).getTime() - new Date(b.joinedAt).getTime()
+      forParticipants.sort(
+        (a: any, b: any) =>
+          new Date(a.joinedAt).getTime() - new Date(b.joinedAt).getTime(),
       );
-      againstParticipants.sort((a: any, b: any) => 
-        new Date(a.joinedAt).getTime() - new Date(b.joinedAt).getTime()
+      againstParticipants.sort(
+        (a: any, b: any) =>
+          new Date(a.joinedAt).getTime() - new Date(b.joinedAt).getTime(),
       );
     }
 
@@ -1068,10 +1153,16 @@ export class DebateRoomsService {
 
     for (let i = 0; i < maxLen; i++) {
       if (forParticipants[i]) {
-        queue.push({ participantId: forParticipants[i].id, turnOrder: turnOrder++ });
+        queue.push({
+          participantId: forParticipants[i].id,
+          turnOrder: turnOrder++,
+        });
       }
       if (againstParticipants[i]) {
-        queue.push({ participantId: againstParticipants[i].id, turnOrder: turnOrder++ });
+        queue.push({
+          participantId: againstParticipants[i].id,
+          turnOrder: turnOrder++,
+        });
       }
     }
 
@@ -1164,7 +1255,10 @@ export class DebateRoomsService {
 
     // Mute all participants, then enable mic for first speaker
     await this.micControlService.muteAllParticipants(roomId, true);
-    await this.micControlService.enableMicForSpeaker(roomId, firstTurn.participant.userId);
+    await this.micControlService.enableMicForSpeaker(
+      roomId,
+      firstTurn.participant.userId,
+    );
 
     this.logger.log(
       `Debate ${roomId} started. First speaker: ${firstTurn.participant.user.name}`,
@@ -1190,7 +1284,10 @@ export class DebateRoomsService {
   }> {
     // Use Redis lock to ensure atomic state change
     const lockKey = `lock:debate:${roomId}:turn`;
-    const lockAcquired = await redisClient.set(lockKey, '1', { NX: true, EX: 5 });
+    const lockAcquired = await redisClient.set(lockKey, '1', {
+      NX: true,
+      EX: 5,
+    });
 
     if (!lockAcquired) {
       this.logger.warn(`Turn advance already in progress for debate ${roomId}`);
@@ -1236,10 +1333,17 @@ export class DebateRoomsService {
         });
 
         // Commit any Redis transcripts to database
-        await this.commitTranscriptsToDb(roomId, currentTurn.participantId, currentTurn.turnOrder);
+        await this.commitTranscriptsToDb(
+          roomId,
+          currentTurn.participantId,
+          currentTurn.turnOrder,
+        );
 
         // Mute previous speaker
-        await this.micControlService.muteParticipant(roomId, currentTurn.participant.userId);
+        await this.micControlService.muteParticipant(
+          roomId,
+          currentTurn.participant.userId,
+        );
       }
 
       // Find next speaker
@@ -1314,7 +1418,10 @@ export class DebateRoomsService {
       );
 
       // Enable mic for next speaker
-      await this.micControlService.enableMicForSpeaker(roomId, nextTurn.participant.userId);
+      await this.micControlService.enableMicForSpeaker(
+        roomId,
+        nextTurn.participant.userId,
+      );
 
       this.logger.log(
         `Debate ${roomId} turn ${nextTurnIndex}: ${nextTurn.participant.user.name}`,
@@ -1370,7 +1477,7 @@ export class DebateRoomsService {
   async streamTranscriptsToDatabase(roomId: string): Promise<number> {
     try {
       const key = REDIS_KEYS.debateTranscripts(roomId);
-      
+
       // Check if key exists
       const exists = await redisClient.exists(key);
       if (!exists) {
@@ -1384,8 +1491,11 @@ export class DebateRoomsService {
       }
 
       // Parse and group by participant
-      const participantChunks = new Map<string, Array<{ text: string; timestamp: number }>>();
-      
+      const participantChunks = new Map<
+        string,
+        Array<{ text: string; timestamp: number }>
+      >();
+
       chunks.forEach((chunkStr) => {
         try {
           const chunk = JSON.parse(chunkStr);
@@ -1424,12 +1534,14 @@ export class DebateRoomsService {
       });
 
       if (!debateRoom) {
-        this.logger.warn(`Debate room ${roomId} not found for transcript streaming`);
+        this.logger.warn(
+          `Debate room ${roomId} not found for transcript streaming`,
+        );
         return 0;
       }
 
       // Commit transcripts for each participant
-      let totalCommitted = 0;
+      const totalCommitted = 0;
       for (const [participantId, texts] of participantChunks.entries()) {
         // Find participant to get current turn number
         const participant = debateRoom.teams
@@ -1491,7 +1603,7 @@ export class DebateRoomsService {
     try {
       const pattern = 'debate:*:transcripts';
       const keys = await redisClient.keys(pattern);
-      
+
       // Extract room IDs from keys (format: debate:{roomId}:transcripts)
       const roomIds = keys
         .map((key) => {
@@ -1523,7 +1635,10 @@ export class DebateRoomsService {
    * Generate result summaries from judge evaluations.
    * AI scoring is intentionally left pending for later integration.
    */
-  async generateResults(roomId: string, userId: string): Promise<DebateResultsResponse> {
+  async generateResults(
+    roomId: string,
+    userId: string,
+  ): Promise<DebateResultsResponse> {
     const user = await this.prisma.user.findUnique({
       where: { clerkId: userId },
     });
@@ -1539,7 +1654,11 @@ export class DebateRoomsService {
         teams: {
           include: {
             participants: {
-              where: { status: { in: [ParticipantStatus.ACTIVE, ParticipantStatus.LEFT] } },
+              where: {
+                status: {
+                  in: [ParticipantStatus.ACTIVE, ParticipantStatus.LEFT],
+                },
+              },
               include: { user: true },
             },
           },
@@ -1558,32 +1677,39 @@ export class DebateRoomsService {
     }
 
     if (debateRoom.status !== DebateStatus.ENDED) {
-      throw new BadRequestException('Debate must be ended before generating results');
+      throw new BadRequestException(
+        'Debate must be ended before generating results',
+      );
     }
 
     const participantIds = debateRoom.teams.flatMap((team) =>
       team.participants.map((participant) => participant.id),
     );
 
-    const moderatorEvaluations = await this.prisma.debateModeratorEvaluation.findMany({
-      where: {
-        debateRoomId: roomId,
-        participantId: { in: participantIds },
-      },
-      include: {
-        moderator: {
-          select: {
-            id: true,
-            name: true,
+    const moderatorEvaluations =
+      await this.prisma.debateModeratorEvaluation.findMany({
+        where: {
+          debateRoomId: roomId,
+          participantId: { in: participantIds },
+        },
+        include: {
+          moderator: {
+            select: {
+              id: true,
+              name: true,
+            },
           },
         },
-      },
-      orderBy: [{ participantId: 'asc' }, { createdAt: 'asc' }],
-    });
+        orderBy: [{ participantId: 'asc' }, { createdAt: 'asc' }],
+      });
 
-    const evaluationsByParticipant = new Map<string, typeof moderatorEvaluations>();
+    const evaluationsByParticipant = new Map<
+      string,
+      typeof moderatorEvaluations
+    >();
     for (const evaluation of moderatorEvaluations) {
-      const existing = evaluationsByParticipant.get(evaluation.participantId) ?? [];
+      const existing =
+        evaluationsByParticipant.get(evaluation.participantId) ?? [];
       existing.push(evaluation);
       evaluationsByParticipant.set(evaluation.participantId, existing);
     }
@@ -1701,7 +1827,9 @@ export class DebateRoomsService {
       data: { status: DebateStatus.PROCESSED },
     });
 
-    this.logger.log(`Debate ${roomId} results generated from judge evaluations`);
+    this.logger.log(
+      `Debate ${roomId} results generated from judge evaluations`,
+    );
 
     return this.getResults(roomId, userId);
   }
@@ -1709,7 +1837,10 @@ export class DebateRoomsService {
   /**
    * Get debate results (respects privacy rules)
    */
-  async getResults(roomId: string, userId: string): Promise<DebateResultsResponse> {
+  async getResults(
+    roomId: string,
+    userId: string,
+  ): Promise<DebateResultsResponse> {
     try {
       const user = await this.prisma.user.findUnique({
         where: { clerkId: userId },
@@ -1720,102 +1851,64 @@ export class DebateRoomsService {
       }
 
       const debateRoom = await this.prisma.debateRoom.findUnique({
-      where: { id: roomId },
-      include: {
-        moderators: true,
-        teams: {
-          include: {
-            participants: {
-              include: {
-                user: true,
-                report: true,
+        where: { id: roomId },
+        include: {
+          moderators: true,
+          teams: {
+            include: {
+              participants: {
+                include: {
+                  user: true,
+                  report: true,
+                },
               },
             },
           },
-        },
-        reports: {
-          include: {
-            participant: {
-              include: {
-                user: true,
-                team: true,
+          reports: {
+            include: {
+              participant: {
+                include: {
+                  user: true,
+                  team: true,
+                },
               },
             },
           },
-        },
-        moderatorEvaluations: {
-          include: {
-            moderator: {
-              select: {
-                id: true,
-                name: true,
+          moderatorEvaluations: {
+            include: {
+              moderator: {
+                select: {
+                  id: true,
+                  name: true,
+                },
               },
             },
+            orderBy: [{ participantId: 'asc' }, { createdAt: 'asc' }],
           },
-          orderBy: [{ participantId: 'asc' }, { createdAt: 'asc' }],
         },
-      },
-    });
+      });
 
-    if (!debateRoom) {
-      throw new NotFoundException('Debate room not found');
-    }
+      if (!debateRoom) {
+        throw new NotFoundException('Debate room not found');
+      }
 
-    if (debateRoom.status !== DebateStatus.PROCESSED) {
-      throw new BadRequestException('Results not yet available');
-    }
+      if (debateRoom.status !== DebateStatus.PROCESSED) {
+        throw new BadRequestException('Results not yet available');
+      }
 
-    const isMod = debateRoom.moderators.some((m) => m.userId === user.id);
-    const userParticipant = debateRoom.teams
-      .flatMap((t) => t.participants)
-      .find((p) => p.userId === user.id);
+      const isMod = debateRoom.moderators.some((m) => m.userId === user.id);
+      const userParticipant = debateRoom.teams
+        .flatMap((t) => t.participants)
+        .find((p) => p.userId === user.id);
 
-    const winningTeam = debateRoom.teams.find((t) => t.isWinner);
+      const winningTeam = debateRoom.teams.find((t) => t.isWinner);
 
-    // Build response based on user role
-    let reports: any[];
+      // Build response based on user role
+      let reports: any[];
 
-    if (isMod) {
-      // Moderators see all reports
-      reports = debateRoom.reports.map((r) => ({
-        participantId: r.participantId,
-        ideaScore: r.ideaScore,
-        clarityScore: r.clarityScore,
-        rebuttalScore: r.rebuttalScore,
-        overallScore: r.overallScore,
-        aiScore: null,
-        strengths: r.strengths,
-        weaknesses: r.weaknesses,
-        suggestions: r.suggestions,
-        summary: r.summary,
-        judgeReviews: debateRoom.moderatorEvaluations
-          .filter((evaluation) => evaluation.participantId === r.participantId)
-          .map((evaluation) => ({
-            moderatorId: evaluation.moderator.id,
-            moderatorName: evaluation.moderator.name,
-            turnNumber: evaluation.turnNumber,
-            notes: evaluation.notes,
-            scores: this.parseScoresJson(evaluation.scores),
-            createdAt: evaluation.createdAt,
-          })),
-        participant: r.participant
-          ? {
-              user: {
-                id: r.participant.user.id,
-                name: r.participant.user.name,
-                avatar: r.participant.user.avatar,
-              },
-              team: {
-                side: r.participant.team.side,
-              },
-            }
-          : undefined,
-      }));
-    } else if (userParticipant?.report) {
-      // Participants only see their own report
-      const r = userParticipant.report;
-      reports = [
-        {
+      if (isMod) {
+        // Moderators see all reports
+        reports = debateRoom.reports.map((r) => ({
           participantId: r.participantId,
           ideaScore: r.ideaScore,
           clarityScore: r.clarityScore,
@@ -1826,25 +1919,65 @@ export class DebateRoomsService {
           weaknesses: r.weaknesses,
           suggestions: r.suggestions,
           summary: r.summary,
-        },
-      ];
-    } else {
-      reports = [];
-    }
+          judgeReviews: debateRoom.moderatorEvaluations
+            .filter(
+              (evaluation) => evaluation.participantId === r.participantId,
+            )
+            .map((evaluation) => ({
+              moderatorId: evaluation.moderator.id,
+              moderatorName: evaluation.moderator.name,
+              turnNumber: evaluation.turnNumber,
+              notes: evaluation.notes,
+              scores: this.parseScoresJson(evaluation.scores),
+              createdAt: evaluation.createdAt,
+            })),
+          participant: r.participant
+            ? {
+                user: {
+                  id: r.participant.user.id,
+                  name: r.participant.user.name,
+                  avatar: r.participant.user.avatar,
+                },
+                team: {
+                  side: r.participant.team.side,
+                },
+              }
+            : undefined,
+        }));
+      } else if (userParticipant?.report) {
+        // Participants only see their own report
+        const r = userParticipant.report;
+        reports = [
+          {
+            participantId: r.participantId,
+            ideaScore: r.ideaScore,
+            clarityScore: r.clarityScore,
+            rebuttalScore: r.rebuttalScore,
+            overallScore: r.overallScore,
+            aiScore: null,
+            strengths: r.strengths,
+            weaknesses: r.weaknesses,
+            suggestions: r.suggestions,
+            summary: r.summary,
+          },
+        ];
+      } else {
+        reports = [];
+      }
 
-    return {
-      debateRoomId: roomId,
-      topic: debateRoom.topic,
-      winningTeam: winningTeam?.side as DebateSideDto || null,
-      aiScoringStatus: 'pending',
-      teams: debateRoom.teams.map((t) => ({
-        side: t.side as DebateSideDto,
-        totalScore: t.totalScore || 0,
-        isWinner: t.isWinner,
-        participantCount: t.participants.length,
-      })),
-      reports,
-    };
+      return {
+        debateRoomId: roomId,
+        topic: debateRoom.topic,
+        winningTeam: (winningTeam?.side as DebateSideDto) || null,
+        aiScoringStatus: 'pending',
+        teams: debateRoom.teams.map((t) => ({
+          side: t.side as DebateSideDto,
+          totalScore: t.totalScore || 0,
+          isWinner: t.isWinner,
+          participantCount: t.participants.length,
+        })),
+        reports,
+      };
     } catch (error) {
       // Handle database connection errors
       if (isConnectionError(error)) {
@@ -1852,18 +1985,21 @@ export class DebateRoomsService {
           `Database connection error in getResults for room ${roomId}:`,
           error instanceof Error ? error.message : String(error),
         );
-        
+
         // Re-throw NotFoundException and BadRequestException (valid cases)
-        if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        if (
+          error instanceof NotFoundException ||
+          error instanceof BadRequestException
+        ) {
           throw error;
         }
-        
+
         // For connection errors, throw a more user-friendly error
         throw new NotFoundException(
           'Unable to fetch debate results. Please try again later.',
         );
       }
-      
+
       // Re-throw other errors
       throw error;
     }
@@ -1875,7 +2011,9 @@ export class DebateRoomsService {
     }
 
     const parsed: Record<string, number> = {};
-    for (const [key, value] of Object.entries(scores as Record<string, unknown>)) {
+    for (const [key, value] of Object.entries(
+      scores as Record<string, unknown>,
+    )) {
       if (typeof value === 'number' && Number.isFinite(value)) {
         parsed[key] = value;
       }
@@ -1903,15 +2041,14 @@ export class DebateRoomsService {
         overallScore: 0,
         strengths: [],
         weaknesses: ['No judge reviews submitted.'],
-        suggestions: ['Ask judges to submit scores before generating final results.'],
+        suggestions: [
+          'Ask judges to submit scores before generating final results.',
+        ],
         summary: 'No judge reviews were available for this participant.',
       };
     }
 
-    const metric = (
-      aliases: string[],
-      fallbackFromAll = false,
-    ): number => {
+    const metric = (aliases: string[], fallbackFromAll = false): number => {
       const values: number[] = [];
 
       for (const evaluation of evaluations) {
@@ -1926,7 +2063,9 @@ export class DebateRoomsService {
         if (chosen === null && fallbackFromAll) {
           const allValues = Object.values(scores);
           if (allValues.length > 0) {
-            chosen = allValues.reduce((sum, value) => sum + value, 0) / allValues.length;
+            chosen =
+              allValues.reduce((sum, value) => sum + value, 0) /
+              allValues.length;
           }
         }
         if (chosen !== null) {
@@ -1938,9 +2077,23 @@ export class DebateRoomsService {
       return values.reduce((sum, value) => sum + value, 0) / values.length;
     };
 
-    const clarityScore = metric(['clarityOfThoughts', 'clarity', 'clarityScore']);
-    const ideaScore = metric(['argumentQuality', 'ideaScore', 'ideas', 'arguments']);
-    const rebuttalScore = metric(['factCheck', 'rebuttalScore', 'rebuttal', 'facts']);
+    const clarityScore = metric([
+      'clarityOfThoughts',
+      'clarity',
+      'clarityScore',
+    ]);
+    const ideaScore = metric([
+      'argumentQuality',
+      'ideaScore',
+      'ideas',
+      'arguments',
+    ]);
+    const rebuttalScore = metric([
+      'factCheck',
+      'rebuttalScore',
+      'rebuttal',
+      'facts',
+    ]);
     const overallScore = metric([], true);
 
     return {
@@ -1969,39 +2122,41 @@ export class DebateRoomsService {
       }
 
       const debateRoom = await this.prisma.debateRoom.findUnique({
-      where: { id: roomId },
-      include: {
-        moderators: true,
-        participants: true,
-      },
-    });
+        where: { id: roomId },
+        include: {
+          moderators: true,
+          participants: true,
+        },
+      });
 
-    if (!debateRoom) {
-      throw new NotFoundException('Debate room not found');
-    }
+      if (!debateRoom) {
+        throw new NotFoundException('Debate room not found');
+      }
 
-    // Check if user is moderator or participant
-    const isMod = debateRoom.moderators.some((m) => m.userId === user.id);
-    const isParticipant = debateRoom.participants.some((p) => p.userId === user.id);
+      // Check if user is moderator or participant
+      const isMod = debateRoom.moderators.some((m) => m.userId === user.id);
+      const isParticipant = debateRoom.participants.some(
+        (p) => p.userId === user.id,
+      );
 
-    if (!isMod && !isParticipant) {
-      throw new ForbiddenException('You are not part of this debate');
-    }
+      if (!isMod && !isParticipant) {
+        throw new ForbiddenException('You are not part of this debate');
+      }
 
-    const token = await this.livekitService.createToken({
-      roomName: debateRoom.livekitRoomName || roomId,
-      identity: user.clerkId, // Use clerkId for consistency with frontend
-      name: user.name,
-      metadata: JSON.stringify({
-        avatar: user.avatar || null, // Include avatar URL for profile picture display
-        isModerator: isMod,
-        debateRoomId: roomId,
-        userId: user.id, // Include database ID in metadata for reference
-      }),
-      publish: true, // Allow all participants to publish video/audio
-      subscribe: true, // Allow subscribing to other tracks
-      publishData: true, // Allow publishing chat messages
-    });
+      const token = await this.livekitService.createToken({
+        roomName: debateRoom.livekitRoomName || roomId,
+        identity: user.clerkId, // Use clerkId for consistency with frontend
+        name: user.name,
+        metadata: JSON.stringify({
+          avatar: user.avatar || null, // Include avatar URL for profile picture display
+          isModerator: isMod,
+          debateRoomId: roomId,
+          userId: user.id, // Include database ID in metadata for reference
+        }),
+        publish: true, // Allow all participants to publish video/audio
+        subscribe: true, // Allow subscribing to other tracks
+        publishData: true, // Allow publishing chat messages
+      });
 
       return token;
     } catch (error) {
@@ -2011,18 +2166,21 @@ export class DebateRoomsService {
           `Database connection error in getLivekitToken for room ${roomId}, user ${userId}:`,
           error instanceof Error ? error.message : String(error),
         );
-        
+
         // Re-throw NotFoundException and ForbiddenException (valid cases)
-        if (error instanceof NotFoundException || error instanceof ForbiddenException) {
+        if (
+          error instanceof NotFoundException ||
+          error instanceof ForbiddenException
+        ) {
           throw error;
         }
-        
+
         // For connection errors, throw a more user-friendly error
         throw new NotFoundException(
           'Unable to generate access token. Please try again later.',
         );
       }
-      
+
       // Re-throw other errors
       throw error;
     }
@@ -2036,9 +2194,12 @@ export class DebateRoomsService {
       const stateStr = await redisClient.get(REDIS_KEYS.debateState(roomId));
       if (!stateStr) return null;
       const state = JSON.parse(stateStr);
-      
+
       // Convert currentSpeakerId from database ID to Clerk ID if needed
-      if (state.currentSpeakerId && !state.currentSpeakerId.startsWith('user_')) {
+      if (
+        state.currentSpeakerId &&
+        !state.currentSpeakerId.startsWith('user_')
+      ) {
         try {
           const user = await this.prisma.user.findUnique({
             where: { id: state.currentSpeakerId },
@@ -2056,13 +2217,18 @@ export class DebateRoomsService {
         } catch (error) {
           // If conversion fails due to connection error, return state as-is
           if (isConnectionError(error)) {
-            this.logger.warn(`Database connection error converting currentSpeakerId for room ${roomId}, returning state as-is`);
+            this.logger.warn(
+              `Database connection error converting currentSpeakerId for room ${roomId}, returning state as-is`,
+            );
           } else {
-            this.logger.warn(`Failed to convert currentSpeakerId for room ${roomId}:`, error);
+            this.logger.warn(
+              `Failed to convert currentSpeakerId for room ${roomId}:`,
+              error,
+            );
           }
         }
       }
-      
+
       return state;
     } catch (error) {
       // Handle database connection errors
@@ -2071,11 +2237,11 @@ export class DebateRoomsService {
           `Database connection error in getDebateState for room ${roomId}:`,
           error instanceof Error ? error.message : String(error),
         );
-        
+
         // Return null as fallback (state not available)
         return null;
       }
-      
+
       // Re-throw other errors
       throw error;
     }
@@ -2124,7 +2290,11 @@ export class DebateRoomsService {
   /**
    * End debate (moderator only)
    */
-  async endDebate(roomId: string, userId: string, reason?: string): Promise<void> {
+  async endDebate(
+    roomId: string,
+    userId: string,
+    reason?: string,
+  ): Promise<void> {
     const user = await this.prisma.user.findUnique({
       where: { clerkId: userId },
     });
@@ -2149,8 +2319,13 @@ export class DebateRoomsService {
       throw new ForbiddenException('Only moderators can end the debate');
     }
 
-    if (debateRoom.status !== DebateStatus.LIVE && debateRoom.status !== DebateStatus.PREP) {
-      throw new BadRequestException('Debate is not in a state that can be ended');
+    if (
+      debateRoom.status !== DebateStatus.LIVE &&
+      debateRoom.status !== DebateStatus.PREP
+    ) {
+      throw new BadRequestException(
+        'Debate is not in a state that can be ended',
+      );
     }
 
     // Update status
@@ -2182,7 +2357,9 @@ export class DebateRoomsService {
     await this.micControlService.muteAllParticipants(roomId, false);
     await this.micControlService.enableMicForModerators(roomId);
 
-    this.logger.log(`Debate ${roomId} ended by moderator ${user.id}. Reason: ${reason || 'No reason provided'}`);
+    this.logger.log(
+      `Debate ${roomId} ended by moderator ${user.id}. Reason: ${reason || 'No reason provided'}`,
+    );
   }
 
   /**
@@ -2275,7 +2452,10 @@ export class DebateRoomsService {
     };
   }
 
-  private async assertModeratorInRoom(roomId: string, moderatorClerkId: string) {
+  private async assertModeratorInRoom(
+    roomId: string,
+    moderatorClerkId: string,
+  ) {
     const user = await this.prisma.user.findUnique({
       where: { clerkId: moderatorClerkId },
     });
@@ -2305,7 +2485,9 @@ export class DebateRoomsService {
     scores: Record<string, number>,
   ): Record<string, number> {
     if (!scores || typeof scores !== 'object' || Array.isArray(scores)) {
-      throw new BadRequestException('Scores must be an object of factor keys and numeric values');
+      throw new BadRequestException(
+        'Scores must be an object of factor keys and numeric values',
+      );
     }
 
     const normalized: Record<string, number> = {};
@@ -2315,12 +2497,20 @@ export class DebateRoomsService {
         throw new BadRequestException('Score factor key cannot be empty');
       }
 
-      if (typeof rawValue !== 'number' || Number.isNaN(rawValue) || !Number.isFinite(rawValue)) {
-        throw new BadRequestException(`Score for "${factorKey}" must be a valid number`);
+      if (
+        typeof rawValue !== 'number' ||
+        Number.isNaN(rawValue) ||
+        !Number.isFinite(rawValue)
+      ) {
+        throw new BadRequestException(
+          `Score for "${factorKey}" must be a valid number`,
+        );
       }
 
       if (rawValue < 0 || rawValue > 10) {
-        throw new BadRequestException(`Score for "${factorKey}" must be between 0 and 10`);
+        throw new BadRequestException(
+          `Score for "${factorKey}" must be between 0 and 10`,
+        );
       }
 
       normalized[factorKey] = rawValue;

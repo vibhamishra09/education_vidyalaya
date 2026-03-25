@@ -26,19 +26,19 @@ export class LivekitController {
     @Req() req: any,
   ) {
     const identity = req.userId as string;
-    
+
     // Fetch user's display name and avatar from database
     const user = await this.prisma.user.findUnique({
       where: { clerkId: identity },
       select: { name: true, avatar: true },
     });
-    
+
     // Include avatar URL in metadata for display in video room
     const userMetadata = JSON.stringify({
       avatar: user?.avatar || null,
       ...(body.metadata ? JSON.parse(body.metadata) : {}),
     });
-    
+
     const token = await this.livekit.createToken({
       roomName: body.roomName,
       identity,
@@ -83,7 +83,8 @@ export class LivekitController {
     return {
       token,
       role: guestToken.guestParticipant.role,
-      isHost: guestToken.guestParticipant.role === StudyRoomParticipantRole.COHOST,
+      isHost:
+        guestToken.guestParticipant.role === StudyRoomParticipantRole.COHOST,
       identity: guestToken.guestParticipant.livekitIdentity,
       name: guestToken.guestParticipant.name,
     };

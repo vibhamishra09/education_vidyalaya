@@ -27,15 +27,29 @@ export interface SessionFeedbackAnswers {
 
   // Q3-Q4: First Impressions
   firstFeeling?: 'Excited' | 'Curious' | 'Confused' | 'Neutral' | 'Disgusting';
-  clarityOfPurpose?: 'Very clear' | 'Somewhat clear' | 'Not clear' | 'Confusing';
+  clarityOfPurpose?:
+    | 'Very clear'
+    | 'Somewhat clear'
+    | 'Not clear'
+    | 'Confusing';
 
   // Q5-Q7: Problem Solving
   problemHopingToSolve?: string;
   problemSolvedExtent?: 'Completely' | 'Mostly' | 'Partially' | 'Not really';
-  previousSolution?: 'YouTube or online videos' | 'Paid courses' | 'Friends or peers' | 'Self-learning' | "Couldn't find a solution";
+  previousSolution?:
+    | 'YouTube or online videos'
+    | 'Paid courses'
+    | 'Friends or peers'
+    | 'Self-learning'
+    | "Couldn't find a solution";
 
   // Q8-Q10: Experience
-  easeOfStart?: 'Extremely easy' | 'Easy' | 'Neutral' | 'Difficult' | 'Very difficult';
+  easeOfStart?:
+    | 'Extremely easy'
+    | 'Easy'
+    | 'Neutral'
+    | 'Difficult'
+    | 'Very difficult';
   confidenceInteracting?: string;
   enjoyedMost?: string;
 
@@ -50,12 +64,22 @@ export interface SessionFeedbackAnswers {
 
   // Q16-Q17: Peer Learning
   believePeerLearningHelpful?: 'Yes' | 'No';
-  trustIncreaseOption?: 'User profiles & credibility' | 'Ratings & reviews' | 'AI Moderation & guidelines' | 'Verified users';
+  trustIncreaseOption?:
+    | 'User profiles & credibility'
+    | 'Ratings & reviews'
+    | 'AI Moderation & guidelines'
+    | 'Verified users';
 
   // Q18-Q20: Platform Comparison
   howDifferent?: string;
   alternativeIfNotExist?: string;
-  platformComparison?: 'Human' | 'Practical' | 'Interactive' | 'Flexible' | 'Confusing' | 'Less useful';
+  platformComparison?:
+    | 'Human'
+    | 'Practical'
+    | 'Interactive'
+    | 'Flexible'
+    | 'Confusing'
+    | 'Less useful';
 
   // Q21-Q23: Future Use
   likelihoodToContinue?: 'Very likely' | 'Likely' | 'Not sure' | 'Unlikely';

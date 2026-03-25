@@ -24,75 +24,91 @@ export class NotificationsService {
     page: number = 1,
     limit: number = 20,
   ) {
-    // No Redis cache: getOrSet + deletePattern races could repopulate a stale list
-    // after a new notification was created while a fetch was in flight.
-    try {
-      const user = await this.prisma.user.findUnique({
-        where: { clerkId: userId },
-        select: { id: true },
-      });
+    // Short TTL: fewer DB reads under load. Stale data is avoided because
+    // createNotification + mark*AsRead invalidate `notifications:list:*{clerkId}*`.
+    const cacheKey = this.cacheService.createKey('notifications:list', {
+      userId,
+      type,
+      viewed,
+      page,
+      limit,
+    });
+    const cacheTTL = 30;
 
-      if (!user) {
-        throw new NotFoundException('User not found');
-      }
+    return this.cacheService.getOrSet(
+      cacheKey,
+      async () => {
+        try {
+          // userId is actually clerkId, so we need to find the user by clerkId first
+          const user = await this.prisma.user.findUnique({
+            where: { clerkId: userId },
+            select: { id: true },
+          });
 
-      const where: Record<string, unknown> = { userId: user.id };
+          if (!user) {
+            throw new NotFoundException('User not found');
+          }
 
-      if (type) where.notifType = type;
-      if (viewed !== undefined) where.viewed = viewed;
+          const where: Record<string, unknown> = { userId: user.id };
 
-      const skip = (page - 1) * limit;
+          if (type) where.notifType = type;
+          if (viewed !== undefined) where.viewed = viewed;
 
-      const [notifications, total, unreadCount] = await Promise.all([
-        this.prisma.notification.findMany({
-          where,
-          skip,
-          take: limit,
-          orderBy: { createdAt: 'desc' },
-        }),
-        this.prisma.notification.count({ where }),
-        this.prisma.notification.count({
-          where: { userId: user.id, viewed: false },
-        }),
-      ]);
+          const skip = (page - 1) * limit;
 
-      return {
-        notifications,
-        unreadCount,
-        pagination: {
-          total,
-          page,
-          limit,
-          totalPages: Math.ceil(total / limit),
-          hasMore: skip + limit < total,
-        },
-      };
-    } catch (error) {
-      if (isConnectionError(error)) {
-        this.logger.error(
-          `Database connection error in getNotifications for user ${userId}:`,
-          error instanceof Error ? error.message : String(error),
-        );
+          const [notifications, total, unreadCount] = await Promise.all([
+            this.prisma.notification.findMany({
+              where,
+              skip,
+              take: limit,
+              orderBy: { createdAt: 'desc' },
+            }),
+            this.prisma.notification.count({ where }),
+            this.prisma.notification.count({
+              where: { userId: user.id, viewed: false },
+            }),
+          ]);
 
-        if (error instanceof NotFoundException) {
+          return {
+            notifications,
+            unreadCount,
+            pagination: {
+              total,
+              page,
+              limit,
+              totalPages: Math.ceil(total / limit),
+              hasMore: skip + limit < total,
+            },
+          };
+        } catch (error) {
+          if (isConnectionError(error)) {
+            this.logger.error(
+              `Database connection error in getNotifications for user ${userId}:`,
+              error instanceof Error ? error.message : String(error),
+            );
+
+            if (error instanceof NotFoundException) {
+              throw error;
+            }
+
+            return {
+              notifications: [],
+              unreadCount: 0,
+              pagination: {
+                total: 0,
+                page,
+                limit,
+                totalPages: 0,
+                hasMore: false,
+              },
+            };
+          }
+
           throw error;
         }
-
-        return {
-          notifications: [],
-          unreadCount: 0,
-          pagination: {
-            total: 0,
-            page,
-            limit,
-            totalPages: 0,
-            hasMore: false,
-          },
-        };
-      }
-
-      throw error;
-    }
+      },
+      cacheTTL,
+    );
   }
 
   async markNotificationAsRead(notificationId: string, userId: string) {
@@ -230,13 +246,16 @@ export class NotificationsService {
 
     // Send push notification if requested (must not fail the in-app notification)
     if (options?.sendPush) {
-      this.logger.debug('🔔 [NotificationsService] Triggering push notification:', {
-        userId,
-        pushTitle: options.pushTitle || 'New Notification',
-        message,
-        notificationId: notification.id,
-        actionType: options.actionType,
-      });
+      this.logger.debug(
+        '🔔 [NotificationsService] Triggering push notification:',
+        {
+          userId,
+          pushTitle: options.pushTitle || 'New Notification',
+          message,
+          notificationId: notification.id,
+          actionType: options.actionType,
+        },
+      );
 
       try {
         await this.pushNotificationService.sendPushNotification(
@@ -262,13 +281,17 @@ export class NotificationsService {
 
     // Send email notification for high priority (URGENT) notifications
     if (type === NotifType.URGENT) {
-      this.logger.debug('📧 [NotificationsService] Sending email for URGENT notification:', {
-        userId,
-        message,
-        notificationId: notification.id,
-      });
+      this.logger.debug(
+        '📧 [NotificationsService] Sending email for URGENT notification:',
+        {
+          userId,
+          message,
+          notificationId: notification.id,
+        },
+      );
 
-      const emailSubject = options?.pushTitle || 'High Priority Notification - Webyalaya';
+      const emailSubject =
+        options?.pushTitle || 'High Priority Notification - Webyalaya';
       try {
         const emailSent = await this.emailService.sendEmailNotification(
           userId,

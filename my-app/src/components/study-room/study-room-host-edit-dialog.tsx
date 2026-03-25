@@ -26,6 +26,17 @@ import { formatDateTimeInTimezone } from "@/lib/utils/study-room-edit";
 import { uploadFile, validateImageFile } from "@/lib/upload";
 import { setAuthToken } from "@/lib/api-client";
 
+/** Whole coins / fee amounts only — rejects decimals so we never truncate silently. */
+function parseNonNegativeIntegerOrZero(raw: string): number | "invalid" {
+  const s = raw.trim();
+  if (s === "") return 0;
+  const n = Number(s);
+  if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0) {
+    return "invalid";
+  }
+  return n;
+}
+
 export type StudyRoomHostEditDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -155,6 +166,15 @@ export function StudyRoomHostEditDialog({
         uploadedUrl = await uploadFile(pendingFile, "document", authToken);
       }
 
+      const joiningFeeParsed = parseNonNegativeIntegerOrZero(joiningFee);
+      if (joiningFeeParsed === "invalid") {
+        showError(
+          "Invalid entry fee",
+          "Enter a whole number 0 or greater (no decimals).",
+        );
+        return;
+      }
+
       const payload: UpdateStudyRoomDto = {
         title: trimmed,
         description: description.trim() || undefined,
@@ -163,7 +183,7 @@ export function StudyRoomHostEditDialog({
         timezone,
         duration: parseInt(duration, 10) || initialDuration,
         maxParticipants: parseInt(maxParticipants, 10) || initialMaxParticipants,
-        joiningFee: parseInt(joiningFee, 10) || 0,
+        joiningFee: joiningFeeParsed,
         skills,
       };
       if (pendingFile) {

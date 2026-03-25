@@ -47,9 +47,15 @@ export class UsersController {
     }
 
     try {
-      return await this.usersService.checkUsernameAvailability(username, userId);
+      return await this.usersService.checkUsernameAvailability(
+        username,
+        userId,
+      );
     } catch (error) {
-      this.logger.debug('Error in checkUsernameAvailability controller:', error);
+      this.logger.debug(
+        'Error in checkUsernameAvailability controller:',
+        error,
+      );
       return { available: false };
     }
   }

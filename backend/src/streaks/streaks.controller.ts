@@ -1,4 +1,11 @@
-import { Controller, Get, Param, ParseIntPipe, UseGuards, Logger } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  ParseIntPipe,
+  UseGuards,
+  Logger,
+} from '@nestjs/common';
 import { StreaksService } from './streaks.service';
 import { ClerkAuthGuard } from '../common/guards/clerk-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';

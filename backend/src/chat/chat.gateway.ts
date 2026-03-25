@@ -16,9 +16,10 @@ import { MessageAudienceType } from '../generated/prisma/client';
 @WebSocketGateway({
   cors: {
     origin: (() => {
-      const envUrls = process.env.FRONTEND_URLS?.split(',')
-        .map((url) => url.trim())
-        .filter(Boolean) || [];
+      const envUrls =
+        process.env.FRONTEND_URLS?.split(',')
+          .map((url) => url.trim())
+          .filter(Boolean) || [];
       const defaultUrls = [
         'https://www.webyalaya.com',
         'https://webyalaya.com',
@@ -68,9 +69,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   private emitScopedMessage(
     channelId: string,
-    message: { 
-      audienceType: MessageAudienceType; 
-      senderId: string | null; 
+    message: {
+      audienceType: MessageAudienceType;
+      senderId: string | null;
       guestSenderId?: string | null;
       targetUserId?: string | null;
     },
@@ -109,7 +110,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       // Verify token directly with Clerk (for WebSocket, we can't use authenticateRequest)
       try {
         // Use environment variable or construct from PORT
-        const baseUrl = process.env.API_URL || `http://localhost:${process.env.PORT || 3001}`;
+        const baseUrl =
+          process.env.API_URL || `http://localhost:${process.env.PORT || 3001}`;
         const clerkRequest = new Request(baseUrl, {
           method: 'GET',
           headers: {
@@ -126,11 +128,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
         if (!requestState.isSignedIn) {
           // Not a valid Clerk token — try guest token path before disconnecting
-          const guestRecord = await this.chatService.validateGuestToken(token).catch(() => null);
+          const guestRecord = await this.chatService
+            .validateGuestToken(token)
+            .catch(() => null);
           if (guestRecord) {
             client.data.isGuest = true;
             client.data.guestName = guestRecord.guestParticipant.name;
-            client.data.guestIdentity = guestRecord.guestParticipant.livekitIdentity;
+            client.data.guestIdentity =
+              guestRecord.guestParticipant.livekitIdentity;
             client.data.guestParticipantId = guestRecord.guestParticipant.id;
             client.data.guestEmail = guestRecord.guestParticipant.email;
             client.data.studyRoomId = guestRecord.studyRoomId;
@@ -166,11 +171,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         this.logger.debug('WebSocket authenticated for user:', auth.userId);
       } catch (verifyError: any) {
         // Clerk auth failed — try guest token path
-        const guestRecord = await this.chatService.validateGuestToken(token).catch(() => null);
+        const guestRecord = await this.chatService
+          .validateGuestToken(token)
+          .catch(() => null);
         if (guestRecord) {
           client.data.isGuest = true;
           client.data.guestName = guestRecord.guestParticipant.name;
-          client.data.guestIdentity = guestRecord.guestParticipant.livekitIdentity;
+          client.data.guestIdentity =
+            guestRecord.guestParticipant.livekitIdentity;
           client.data.guestParticipantId = guestRecord.guestParticipant.id;
           client.data.guestEmail = guestRecord.guestParticipant.email;
           client.data.studyRoomId = guestRecord.studyRoomId;
@@ -196,12 +204,19 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   async handleJoinChannel(client: Socket, payload: { channelId: string }) {
     // Guest path: allow join if the channel belongs to the guest's study room
     if (client.data.isGuest) {
-      const sessionInfo = await this.chatService.getSessionInfoFromChannelId(payload.channelId);
-      if (sessionInfo?.externalType === 'studyRoom' && sessionInfo.externalId === client.data.studyRoomId) {
+      const sessionInfo = await this.chatService.getSessionInfoFromChannelId(
+        payload.channelId,
+      );
+      if (
+        sessionInfo?.externalType === 'studyRoom' &&
+        sessionInfo.externalId === client.data.studyRoomId
+      ) {
         client.join(payload.channelId);
         client.emit('joined:channel', { channelId: payload.channelId });
       } else {
-        client.emit('error', { message: 'Not authorized to join this channel' });
+        client.emit('error', {
+          message: 'Not authorized to join this channel',
+        });
       }
       return;
     }
@@ -240,12 +255,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     // Guest path: save message to database and emit to host
     if (client.data.isGuest) {
       try {
-        const hostDbUserId = await this.chatService.getChannelHostUserId(payload.channelId);
+        const hostDbUserId = await this.chatService.getChannelHostUserId(
+          payload.channelId,
+        );
         if (!hostDbUserId) {
           client.emit('error', { message: 'Host not found for this channel' });
           return;
         }
-        
+
         // Save guest message to database
         const message = await this.chatService.sendGuestMessage(
           payload.channelId,
@@ -255,7 +272,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
           payload.content,
           hostDbUserId,
         );
-        
+
         // Transform message for emission (similar to getMessages transformation)
         const messageToEmit = {
           ...message,
@@ -267,13 +284,17 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
           isGuest: true,
           guestEmail: client.data.guestEmail,
         };
-        
+
         // Emit to host and sender
-        this.server.to(`user:${hostDbUserId}`).emit('message:new', messageToEmit);
+        this.server
+          .to(`user:${hostDbUserId}`)
+          .emit('message:new', messageToEmit);
         client.emit('message:new', messageToEmit);
       } catch (error: any) {
         this.logger.debug('Error sending guest message:', error);
-        client.emit('error', { message: error.message || 'Failed to send message' });
+        client.emit('error', {
+          message: error.message || 'Failed to send message',
+        });
       }
       return;
     }
@@ -285,12 +306,15 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     try {
       // Get session info from channel to check chat permissions
-      const sessionInfo = await this.chatService.getSessionInfoFromChannelId(payload.channelId);
+      const sessionInfo = await this.chatService.getSessionInfoFromChannelId(
+        payload.channelId,
+      );
       const hostDbUserId = sessionInfo
         ? await this.chatService.getChannelHostUserId(payload.channelId)
         : null;
-      const isHostSender = !!hostDbUserId && hostDbUserId === client.data.dbUserId;
-      
+      const isHostSender =
+        !!hostDbUserId && hostDbUserId === client.data.dbUserId;
+
       if (sessionInfo) {
         // Check if user has chat permission for this session
         const canChat = await this.permissionsService.hasPermission(
@@ -299,9 +323,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
           'chat',
           isHostSender,
         );
-        
+
         if (!canChat) {
-          client.emit('error', { 
+          client.emit('error', {
             code: 'CHAT_DISABLED',
             message: 'Chat is disabled by the host',
           });
@@ -312,12 +336,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const audienceType = this.normalizeAudienceType(payload.audienceType);
 
       if (sessionInfo) {
-        const canSendToAudience = await this.permissionsService.hasAudiencePermission(
-          sessionInfo.externalId,
-          client.data.userId,
-          audienceType,
-          isHostSender,
-        );
+        const canSendToAudience =
+          await this.permissionsService.hasAudiencePermission(
+            sessionInfo.externalId,
+            client.data.userId,
+            audienceType,
+            isHostSender,
+          );
         if (!canSendToAudience) {
           client.emit('error', {
             code: 'CHAT_SCOPE_RESTRICTED',

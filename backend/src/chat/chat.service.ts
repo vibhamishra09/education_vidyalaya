@@ -97,11 +97,11 @@ export class ChatService {
           `Database connection error in listChannels for user ${userId}:`,
           error instanceof Error ? error.message : String(error),
         );
-        
+
         // Return empty channels as fallback
         return [];
       }
-      
+
       // Re-throw other errors
       throw error;
     }
@@ -123,7 +123,7 @@ export class ChatService {
     try {
       // Build where clause based on viewer type
       let where: any = { channelId };
-      
+
       if (guestEmail) {
         // Guest user: show EVERYONE messages + their own messages (by email)
         where = {
@@ -150,31 +150,31 @@ export class ChatService {
           audienceType: MessageAudienceType.EVERYONE,
         };
       }
-      
+
       const messages = await this.prisma.message.findMany({
-      where,
-      include: {
-        sender: {
-          select: {
-            id: true,
-            name: true,
-            avatar: true,
+        where,
+        include: {
+          sender: {
+            select: {
+              id: true,
+              name: true,
+              avatar: true,
+            },
+          },
+          targetUser: {
+            select: {
+              id: true,
+              name: true,
+              avatar: true,
+            },
           },
         },
-        targetUser: {
-          select: {
-            id: true,
-            name: true,
-            avatar: true,
-          },
-        },
-      },
-      orderBy: { createdAt: 'asc' }, // Changed to 'asc' to get oldest first, then we'll reverse
-      take: limit,
-      skip: cursor ? 1 : 0,
+        orderBy: { createdAt: 'asc' }, // Changed to 'asc' to get oldest first, then we'll reverse
+        take: limit,
+        skip: cursor ? 1 : 0,
         cursor: cursor ? { id: cursor } : undefined,
       });
-      
+
       // Transform guest messages to include guest info in sender field
       return messages.map((msg) => {
         if (msg.guestSenderId && !msg.sender) {
@@ -199,11 +199,11 @@ export class ChatService {
           `Database connection error in getMessages for channel ${channelId}:`,
           error instanceof Error ? error.message : String(error),
         );
-        
+
         // Return empty messages as fallback
         return [];
       }
-      
+
       // Re-throw other errors
       throw error;
     }
@@ -258,12 +258,16 @@ export class ChatService {
     }
 
     if (!targetUserId) {
-      throw new BadRequestException('targetUserId is required for USER audience');
+      throw new BadRequestException(
+        'targetUserId is required for USER audience',
+      );
     }
 
     const targetIsMember = await this.isChannelMember(channelId, targetUserId);
     if (!targetIsMember) {
-      throw new ForbiddenException('Target user is not a member of this channel');
+      throw new ForbiddenException(
+        'Target user is not a member of this channel',
+      );
     }
 
     return targetUserId;
@@ -404,10 +408,12 @@ export class ChatService {
    * Get session info from a channel ID.
    * Returns the externalType (studyRoom/peerSession) and externalId (sessionId).
    */
-  async getSessionInfoFromChannelId(channelId: string): Promise<{ externalType: string; externalId: string } | null> {
-    const channel = await this.prisma.channel.findUnique({
+  async getSessionInfoFromChannelId(
+    channelId: string,
+  ): Promise<{ externalType: string; externalId: string } | null> {
+    const channel = (await this.prisma.channel.findUnique({
       where: { id: channelId },
-    }) as { externalType?: string | null; externalId?: string | null } | null;
+    })) as { externalType?: string | null; externalId?: string | null } | null;
 
     if (!channel || !channel.externalType || !channel.externalId) {
       return null;
@@ -425,9 +431,9 @@ export class ChatService {
    */
   async validateGuestToken(token: string): Promise<{
     studyRoomId: string;
-    guestParticipant: { 
+    guestParticipant: {
       id: string;
-      name: string; 
+      name: string;
       livekitIdentity: string;
       email: string;
     };

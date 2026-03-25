@@ -11,7 +11,11 @@ import {
 import { Server, Socket } from 'socket.io';
 import { createClerkClient } from '@clerk/backend';
 import { PrismaService } from '../prisma/prisma.service';
-import { DebateRoomsService, DebateStatus, ParticipantStatus } from './debate-rooms.service';
+import {
+  DebateRoomsService,
+  DebateStatus,
+  ParticipantStatus,
+} from './debate-rooms.service';
 import { redisClient } from '../redis/redis.provider';
 import { LoggerService } from '../common/logger';
 
@@ -53,7 +57,7 @@ const DEBATE_EVENTS = {
   START_PREP: 'debate:start_prep',
   ADVANCE_TURN: 'debate:advance_turn',
   END_DEBATE: 'debate:end',
-  
+
   // Server -> Client
   USER_JOINED: 'debate:user_joined',
   USER_LEFT: 'debate:user_left',
@@ -116,7 +120,8 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private debateRoomsService: DebateRoomsService,
     private readonly logger: LoggerService,
   ) {
-    this.logger.setContext(DebateGateway.name);}
+    this.logger.setContext(DebateGateway.name);
+  }
 
   /**
    * Handle WebSocket connection
@@ -129,7 +134,9 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       if (!token) {
         this.logger.warn('No token provided in WebSocket handshake');
-        client.emit(DEBATE_EVENTS.ERROR, { message: 'Authentication required' });
+        client.emit(DEBATE_EVENTS.ERROR, {
+          message: 'Authentication required',
+        });
         client.disconnect();
         return;
       }
@@ -193,15 +200,17 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
   async handleDisconnect(client: Socket) {
     const userId = client.data?.userId;
     const userName = client.data?.userName || 'unknown';
-    
+
     this.logger.log(
       `🔌 Debate WebSocket disconnected - User: ${userName}, Client: ${client.id}`,
     );
 
     if (userId) {
       // Get the room the user was in
-      const roomId = await redisClient.get(REDIS_KEYS.userRoom(client.data.clerkId));
-      
+      const roomId = await redisClient.get(
+        REDIS_KEYS.userRoom(client.data.clerkId),
+      );
+
       if (roomId) {
         // Remove from room connections
         await redisClient.sRem(REDIS_KEYS.roomConnections(roomId), client.id);
@@ -224,10 +233,14 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
    */
   private async handleSpeakerDisconnect(roomId: string, userId: string) {
     const state = await this.debateRoomsService.getDebateState(roomId);
-    
-    if (state && state.status === DebateStatus.LIVE && state.currentSpeakerId === userId) {
+
+    if (
+      state &&
+      state.status === DebateStatus.LIVE &&
+      state.currentSpeakerId === userId
+    ) {
       this.logger.log(`Speaker ${userId} disconnected during their turn`);
-      
+
       // Mark participant as disconnected
       await this.prisma.debateParticipant.updateMany({
         where: {
@@ -242,8 +255,11 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
       });
 
       // Skip their turn and move to next
-      const result = await this.debateRoomsService.advanceToNextTurn(roomId, 'skip');
-      
+      const result = await this.debateRoomsService.advanceToNextTurn(
+        roomId,
+        'skip',
+      );
+
       if (result.finished) {
         this.handleDebateEnd(roomId);
       } else {
@@ -335,18 +351,24 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
 
     const isMod = debateRoom.moderators.some((m) => m.userId === userId);
-    const isParticipant = debateRoom.participants.some((p) => p.userId === userId);
+    const isParticipant = debateRoom.participants.some(
+      (p) => p.userId === userId,
+    );
 
     if (!isMod && !isParticipant) {
-      client.emit(DEBATE_EVENTS.ERROR, { message: 'You are not part of this debate' });
+      client.emit(DEBATE_EVENTS.ERROR, {
+        message: 'You are not part of this debate',
+      });
       return;
     }
 
     // Join socket room
     client.join(roomId);
-    
+
     // Find participant's team
-    const participant = debateRoom.participants.find((p) => p.userId === userId);
+    const participant = debateRoom.participants.find(
+      (p) => p.userId === userId,
+    );
     if (participant) {
       // Join team-specific room for private chat
       client.join(`${roomId}:team:${participant.team.side}`);
@@ -388,7 +410,7 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const userName = client.data.userName;
 
     client.leave(roomId);
-    
+
     // Leave team room too
     const participant = await this.prisma.debateParticipant.findFirst({
       where: { debateRoomId: roomId, userId },
@@ -428,7 +450,9 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
     });
 
     if (!participant) {
-      client.emit(DEBATE_EVENTS.ERROR, { message: 'You are not a participant' });
+      client.emit(DEBATE_EVENTS.ERROR, {
+        message: 'You are not a participant',
+      });
       return;
     }
 
@@ -438,7 +462,9 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
     });
 
     if (debateRoom?.status !== DebateStatus.PREP) {
-      client.emit(DEBATE_EVENTS.ERROR, { message: 'Team chat is only available during prep phase' });
+      client.emit(DEBATE_EVENTS.ERROR, {
+        message: 'Team chat is only available during prep phase',
+      });
       return;
     }
 
@@ -479,8 +505,12 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     // Verify user is current speaker
     const state = await this.debateRoomsService.getDebateState(roomId);
-    
-    if (!state || state.status !== DebateStatus.LIVE || state.currentSpeakerId !== userId) {
+
+    if (
+      !state ||
+      state.status !== DebateStatus.LIVE ||
+      state.currentSpeakerId !== userId
+    ) {
       client.emit(DEBATE_EVENTS.ERROR, { message: 'It is not your turn' });
       return;
     }
@@ -492,7 +522,10 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     // Advance to next turn
     try {
-      const result = await this.debateRoomsService.advanceToNextTurn(roomId, 'buzzer');
+      const result = await this.debateRoomsService.advanceToNextTurn(
+        roomId,
+        'buzzer',
+      );
 
       if (result.finished) {
         this.handleDebateEnd(roomId);
@@ -518,16 +551,17 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
         // Emit TURN_ENDED for current speaker if we have their info
         if (currentState?.currentSpeakerId) {
-          const currentParticipant = await this.prisma.debateParticipant.findFirst({
-            where: {
-              debateRoomId: roomId,
-              userId: currentState.currentSpeakerId,
-            },
-            include: {
-              user: { select: { id: true, name: true, clerkId: true } },
-              team: { select: { side: true } },
-            },
-          });
+          const currentParticipant =
+            await this.prisma.debateParticipant.findFirst({
+              where: {
+                debateRoomId: roomId,
+                userId: currentState.currentSpeakerId,
+              },
+              include: {
+                user: { select: { id: true, name: true, clerkId: true } },
+                team: { select: { side: true } },
+              },
+            });
 
           if (currentParticipant) {
             this.server.to(roomId).emit(DEBATE_EVENTS.TURN_ENDED, {
@@ -564,7 +598,9 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
             side: nextParticipant.team.side,
             turnIndex: result.turnNumber || 0,
             duration: debateRoom?.turnDurationSeconds || 0,
-            startedAt: state?.turnStartedAt ? new Date(state.turnStartedAt).toISOString() : new Date().toISOString(),
+            startedAt: state?.turnStartedAt
+              ? new Date(state.turnStartedAt).toISOString()
+              : new Date().toISOString(),
           });
         }
 
@@ -588,7 +624,10 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const clerkId = client.data.clerkId;
 
     try {
-      const result = await this.debateRoomsService.startPrepPhase(roomId, clerkId);
+      const result = await this.debateRoomsService.startPrepPhase(
+        roomId,
+        clerkId,
+      );
 
       // Get updated room and state
       const debateRoom = await this.prisma.debateRoom.findUnique({
@@ -680,12 +719,17 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     const isMod = debateRoom.moderators.some((m) => m.userId === user.id);
     if (!isMod) {
-      client.emit(DEBATE_EVENTS.ERROR, { message: 'Only moderators can advance turns' });
+      client.emit(DEBATE_EVENTS.ERROR, {
+        message: 'Only moderators can advance turns',
+      });
       return;
     }
 
     try {
-      const result = await this.debateRoomsService.advanceToNextTurn(roomId, 'skip');
+      const result = await this.debateRoomsService.advanceToNextTurn(
+        roomId,
+        'skip',
+      );
 
       if (result.finished) {
         await this.handleDebateEnd(roomId);
@@ -711,16 +755,17 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
         // Emit TURN_ENDED for current speaker if we have their info
         if (currentState?.currentSpeakerId) {
-          const currentParticipant = await this.prisma.debateParticipant.findFirst({
-            where: {
-              debateRoomId: roomId,
-              userId: currentState.currentSpeakerId,
-            },
-            include: {
-              user: { select: { id: true, name: true, clerkId: true } },
-              team: { select: { side: true } },
-            },
-          });
+          const currentParticipant =
+            await this.prisma.debateParticipant.findFirst({
+              where: {
+                debateRoomId: roomId,
+                userId: currentState.currentSpeakerId,
+              },
+              include: {
+                user: { select: { id: true, name: true, clerkId: true } },
+                team: { select: { side: true } },
+              },
+            });
 
           if (currentParticipant) {
             this.server.to(roomId).emit(DEBATE_EVENTS.TURN_ENDED, {
@@ -757,7 +802,9 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
             side: nextParticipant.team.side,
             turnIndex: result.turnNumber || 0,
             duration: debateRoom?.turnDurationSeconds || 0,
-            startedAt: state?.turnStartedAt ? new Date(state.turnStartedAt).toISOString() : new Date().toISOString(),
+            startedAt: state?.turnStartedAt
+              ? new Date(state.turnStartedAt).toISOString()
+              : new Date().toISOString(),
           });
         }
 
@@ -855,13 +902,19 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     const isMod = debateRoom.moderators.some((m) => m.userId === user.id);
     if (!isMod) {
-      client.emit(DEBATE_EVENTS.ERROR, { message: 'Only moderators can perform this action' });
+      client.emit(DEBATE_EVENTS.ERROR, {
+        message: 'Only moderators can perform this action',
+      });
       return;
     }
 
     if (action === 'kick' && targetUserId) {
-      await this.debateRoomsService.banParticipant(roomId, clerkId, targetUserId);
-      
+      await this.debateRoomsService.banParticipant(
+        roomId,
+        clerkId,
+        targetUserId,
+      );
+
       this.server.to(roomId).emit(DEBATE_EVENTS.PARTICIPANT_BANNED, {
         userId: targetUserId,
       });
@@ -959,7 +1012,9 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
           side: firstParticipant.team.side,
           turnIndex: 0,
           duration: debateRoom?.turnDurationSeconds || 0,
-          startedAt: state.turnStartedAt ? new Date(state.turnStartedAt).toISOString() : new Date().toISOString(),
+          startedAt: state.turnStartedAt
+            ? new Date(state.turnStartedAt).toISOString()
+            : new Date().toISOString(),
         });
       }
 
@@ -1022,7 +1077,10 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.clearTurnTimer(roomId);
 
     try {
-      const result = await this.debateRoomsService.advanceToNextTurn(roomId, 'timer');
+      const result = await this.debateRoomsService.advanceToNextTurn(
+        roomId,
+        'timer',
+      );
 
       if (result.finished) {
         this.handleDebateEnd(roomId);
@@ -1048,16 +1106,17 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
         // Emit TURN_ENDED for current speaker if we have their info
         if (currentState?.currentSpeakerId) {
-          const currentParticipant = await this.prisma.debateParticipant.findFirst({
-            where: {
-              debateRoomId: roomId,
-              userId: currentState.currentSpeakerId,
-            },
-            include: {
-              user: { select: { id: true, name: true, clerkId: true } },
-              team: { select: { side: true } },
-            },
-          });
+          const currentParticipant =
+            await this.prisma.debateParticipant.findFirst({
+              where: {
+                debateRoomId: roomId,
+                userId: currentState.currentSpeakerId,
+              },
+              include: {
+                user: { select: { id: true, name: true, clerkId: true } },
+                team: { select: { side: true } },
+              },
+            });
 
           if (currentParticipant) {
             this.server.to(roomId).emit(DEBATE_EVENTS.TURN_ENDED, {
@@ -1094,7 +1153,9 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
             side: nextParticipant.team.side,
             turnIndex: result.turnNumber || 0,
             duration: debateRoom?.turnDurationSeconds || 0,
-            startedAt: state?.turnStartedAt ? new Date(state.turnStartedAt).toISOString() : new Date().toISOString(),
+            startedAt: state?.turnStartedAt
+              ? new Date(state.turnStartedAt).toISOString()
+              : new Date().toISOString(),
           });
         }
 

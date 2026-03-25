@@ -27,34 +27,39 @@ export class SkillsService {
       async () => {
         try {
           const where = search
-          ? {
-              OR: [
-                { name: { contains: search, mode: 'insensitive' as const } },
-                { description: { contains: search, mode: 'insensitive' as const } },
-              ],
-            }
-          : {};
+            ? {
+                OR: [
+                  { name: { contains: search, mode: 'insensitive' as const } },
+                  {
+                    description: {
+                      contains: search,
+                      mode: 'insensitive' as const,
+                    },
+                  },
+                ],
+              }
+            : {};
 
-        const [skills, total] = await Promise.all([
-          this.prisma.skill.findMany({
-            where,
-            take: limit,
-            skip: offset,
-            orderBy: { name: 'asc' },
-          }),
-          this.prisma.skill.count({ where }),
-        ]);
+          const [skills, total] = await Promise.all([
+            this.prisma.skill.findMany({
+              where,
+              take: limit,
+              skip: offset,
+              orderBy: { name: 'asc' },
+            }),
+            this.prisma.skill.count({ where }),
+          ]);
 
-        return {
-          skills,
-          pagination: {
-            total,
-            page: Math.floor(offset / limit) + 1,
-            limit,
-            totalPages: Math.ceil(total / limit),
-            hasMore: offset + limit < total,
-          },
-        };
+          return {
+            skills,
+            pagination: {
+              total,
+              page: Math.floor(offset / limit) + 1,
+              limit,
+              totalPages: Math.ceil(total / limit),
+              hasMore: offset + limit < total,
+            },
+          };
         } catch (error) {
           // Handle database connection errors
           if (isConnectionError(error)) {
@@ -62,7 +67,7 @@ export class SkillsService {
               `Database connection error in getAllSkills:`,
               error instanceof Error ? error.message : String(error),
             );
-            
+
             // Return empty result as fallback
             return {
               skills: [],
@@ -75,7 +80,7 @@ export class SkillsService {
               },
             };
           }
-          
+
           // Re-throw other errors
           throw error;
         }

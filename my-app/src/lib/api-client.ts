@@ -123,7 +123,8 @@ apiClient.interceptors.response.use(
   (response) => response,
   (error: AxiosError<ApiError>) => {
     if (error.response) {
-      const raw = error.response.data;
+      // Axios body may be JSON (ApiError) or HTML string from Next.js "Cannot PATCH/POST/PUT"
+      const raw: unknown = error.response.data;
       const html =
         typeof raw === "string" &&
         (raw.includes("Cannot PATCH") ||

@@ -11,12 +11,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { CacheModule } from '../redis/cache.module';
 
 @Module({
-  imports: [
-    ScheduleModule,
-    LivekitModule,
-    NotificationsModule,
-    CacheModule,
-  ],
+  imports: [ScheduleModule, LivekitModule, NotificationsModule, CacheModule],
   controllers: [DebateRoomsController],
   providers: [
     DebateRoomsService,

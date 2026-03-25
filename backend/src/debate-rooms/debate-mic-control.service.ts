@@ -12,7 +12,8 @@ const REDIS_KEYS = {
 export class DebateMicControlService {
   private readonly roomService: RoomServiceClient;
 
-  constructor(private prisma: PrismaService,
+  constructor(
+    private prisma: PrismaService,
     private readonly logger: LoggerService,
   ) {
     this.logger.setContext(DebateMicControlService.name);
@@ -26,7 +27,11 @@ export class DebateMicControlService {
       );
     }
 
-    this.roomService = new RoomServiceClient(serverUrl || '', apiKey || '', apiSecret || '');
+    this.roomService = new RoomServiceClient(
+      serverUrl || '',
+      apiKey || '',
+      apiSecret || '',
+    );
   }
 
   /**
@@ -46,19 +51,24 @@ export class DebateMicControlService {
       });
 
       if (!debateRoom || !debateRoom.livekitRoomName) {
-        this.logger.warn(`Debate room ${roomId} not found or has no LiveKit room`);
+        this.logger.warn(
+          `Debate room ${roomId} not found or has no LiveKit room`,
+        );
         return;
       }
 
       const livekitRoomName = debateRoom.livekitRoomName;
 
       // Get all participants in the LiveKit room
-      const participants = await this.roomService.listParticipants(livekitRoomName);
+      const participants =
+        await this.roomService.listParticipants(livekitRoomName);
 
       // Enable mic for all moderators
       for (const moderator of debateRoom.moderators) {
         const participant = participants.find(
-          (p) => p.identity === moderator.user.id || p.identity === moderator.user.clerkId,
+          (p) =>
+            p.identity === moderator.user.id ||
+            p.identity === moderator.user.clerkId,
         );
 
         if (participant) {
@@ -75,7 +85,9 @@ export class DebateMicControlService {
                 canPublishSources: [TrackSource.MICROPHONE, TrackSource.CAMERA],
               },
             );
-            this.logger.log(`Enabled mic for moderator ${moderator.user.name} in room ${roomId}`);
+            this.logger.log(
+              `Enabled mic for moderator ${moderator.user.name} in room ${roomId}`,
+            );
           } catch (error) {
             this.logger.error(
               `Failed to enable mic for moderator ${moderator.user.name}:`,
@@ -86,9 +98,16 @@ export class DebateMicControlService {
       }
 
       // Store mic permissions in Redis
-      await this.storeMicPermissions(roomId, debateRoom.moderators.map((m) => m.user.id), []);
+      await this.storeMicPermissions(
+        roomId,
+        debateRoom.moderators.map((m) => m.user.id),
+        [],
+      );
     } catch (error) {
-      this.logger.error(`Failed to enable mic for moderators in room ${roomId}:`, error);
+      this.logger.error(
+        `Failed to enable mic for moderators in room ${roomId}:`,
+        error,
+      );
     }
   }
 
@@ -112,24 +131,30 @@ export class DebateMicControlService {
       });
 
       if (!debateRoom || !debateRoom.livekitRoomName) {
-        this.logger.warn(`Debate room ${roomId} not found or has no LiveKit room`);
+        this.logger.warn(
+          `Debate room ${roomId} not found or has no LiveKit room`,
+        );
         return;
       }
 
       const speaker = debateRoom.participants[0];
       if (!speaker) {
-        this.logger.warn(`Speaker ${speakerId} not found in debate room ${roomId}`);
+        this.logger.warn(
+          `Speaker ${speakerId} not found in debate room ${roomId}`,
+        );
         return;
       }
 
       const livekitRoomName = debateRoom.livekitRoomName;
 
       // Get all participants in the LiveKit room
-      const participants = await this.roomService.listParticipants(livekitRoomName);
+      const participants =
+        await this.roomService.listParticipants(livekitRoomName);
 
       // Find the speaker's participant
       const participant = participants.find(
-        (p) => p.identity === speaker.user.id || p.identity === speaker.user.clerkId,
+        (p) =>
+          p.identity === speaker.user.id || p.identity === speaker.user.clerkId,
       );
 
       if (participant) {
@@ -146,24 +171,37 @@ export class DebateMicControlService {
               canPublishSources: [TrackSource.MICROPHONE, TrackSource.CAMERA],
             },
           );
-          this.logger.log(`Enabled mic for speaker ${speaker.user.name} in room ${roomId}`);
+          this.logger.log(
+            `Enabled mic for speaker ${speaker.user.name} in room ${roomId}`,
+          );
         } catch (error) {
-          this.logger.error(`Failed to enable mic for speaker ${speaker.user.name}:`, error);
+          this.logger.error(
+            `Failed to enable mic for speaker ${speaker.user.name}:`,
+            error,
+          );
         }
       }
 
       // Store mic permissions in Redis
       const currentPermissions = await this.getMicPermissions(roomId);
-      await this.storeMicPermissions(roomId, currentPermissions.enabled, [speakerId]);
+      await this.storeMicPermissions(roomId, currentPermissions.enabled, [
+        speakerId,
+      ]);
     } catch (error) {
-      this.logger.error(`Failed to enable mic for speaker ${speakerId} in room ${roomId}:`, error);
+      this.logger.error(
+        `Failed to enable mic for speaker ${speakerId} in room ${roomId}:`,
+        error,
+      );
     }
   }
 
   /**
    * Mute all participants except moderators
    */
-  async muteAllParticipants(roomId: string, exceptModerators = true): Promise<void> {
+  async muteAllParticipants(
+    roomId: string,
+    exceptModerators = true,
+  ): Promise<void> {
     try {
       const debateRoom = await this.prisma.debateRoom.findUnique({
         where: { id: roomId },
@@ -182,7 +220,9 @@ export class DebateMicControlService {
       });
 
       if (!debateRoom || !debateRoom.livekitRoomName) {
-        this.logger.warn(`Debate room ${roomId} not found or has no LiveKit room`);
+        this.logger.warn(
+          `Debate room ${roomId} not found or has no LiveKit room`,
+        );
         return;
       }
 
@@ -192,7 +232,8 @@ export class DebateMicControlService {
       );
 
       // Get all participants in the LiveKit room
-      const participants = await this.roomService.listParticipants(livekitRoomName);
+      const participants =
+        await this.roomService.listParticipants(livekitRoomName);
 
       const mutedIds: string[] = [];
 
@@ -216,9 +257,14 @@ export class DebateMicControlService {
             },
           );
           mutedIds.push(participant.identity);
-          this.logger.log(`Muted participant ${participant.identity} in room ${roomId}`);
+          this.logger.log(
+            `Muted participant ${participant.identity} in room ${roomId}`,
+          );
         } catch (error) {
-          this.logger.error(`Failed to mute participant ${participant.identity}:`, error);
+          this.logger.error(
+            `Failed to mute participant ${participant.identity}:`,
+            error,
+          );
         }
       }
 
@@ -229,7 +275,10 @@ export class DebateMicControlService {
         : [];
       await this.storeMicPermissions(roomId, enabled, mutedIds);
     } catch (error) {
-      this.logger.error(`Failed to mute all participants in room ${roomId}:`, error);
+      this.logger.error(
+        `Failed to mute all participants in room ${roomId}:`,
+        error,
+      );
     }
   }
 
@@ -243,14 +292,17 @@ export class DebateMicControlService {
       });
 
       if (!debateRoom || !debateRoom.livekitRoomName) {
-        this.logger.warn(`Debate room ${roomId} not found or has no LiveKit room`);
+        this.logger.warn(
+          `Debate room ${roomId} not found or has no LiveKit room`,
+        );
         return;
       }
 
       const livekitRoomName = debateRoom.livekitRoomName;
 
       // Get all participants in the LiveKit room
-      const participants = await this.roomService.listParticipants(livekitRoomName);
+      const participants =
+        await this.roomService.listParticipants(livekitRoomName);
 
       // Find the participant
       const participant = participants.find(
@@ -271,40 +323,56 @@ export class DebateMicControlService {
               canPublishSources: [],
             },
           );
-          this.logger.log(`Muted participant ${participantId} in room ${roomId}`);
+          this.logger.log(
+            `Muted participant ${participantId} in room ${roomId}`,
+          );
 
           // Update Redis
           const currentPermissions = await this.getMicPermissions(roomId);
           const muted = [...currentPermissions.muted, participantId];
-          const enabled = currentPermissions.enabled.filter((id) => id !== participantId);
+          const enabled = currentPermissions.enabled.filter(
+            (id) => id !== participantId,
+          );
           await this.storeMicPermissions(roomId, enabled, muted);
         } catch (error) {
-          this.logger.error(`Failed to mute participant ${participantId}:`, error);
+          this.logger.error(
+            `Failed to mute participant ${participantId}:`,
+            error,
+          );
         }
       }
     } catch (error) {
-      this.logger.error(`Failed to mute participant ${participantId} in room ${roomId}:`, error);
+      this.logger.error(
+        `Failed to mute participant ${participantId} in room ${roomId}:`,
+        error,
+      );
     }
   }
 
   /**
    * Unmute a specific participant
    */
-  async unmuteParticipant(roomId: string, participantId: string): Promise<void> {
+  async unmuteParticipant(
+    roomId: string,
+    participantId: string,
+  ): Promise<void> {
     try {
       const debateRoom = await this.prisma.debateRoom.findUnique({
         where: { id: roomId },
       });
 
       if (!debateRoom || !debateRoom.livekitRoomName) {
-        this.logger.warn(`Debate room ${roomId} not found or has no LiveKit room`);
+        this.logger.warn(
+          `Debate room ${roomId} not found or has no LiveKit room`,
+        );
         return;
       }
 
       const livekitRoomName = debateRoom.livekitRoomName;
 
       // Get all participants in the LiveKit room
-      const participants = await this.roomService.listParticipants(livekitRoomName);
+      const participants =
+        await this.roomService.listParticipants(livekitRoomName);
 
       // Find the participant
       const participant = participants.find(
@@ -325,19 +393,29 @@ export class DebateMicControlService {
               canPublishSources: [TrackSource.MICROPHONE, TrackSource.CAMERA],
             },
           );
-          this.logger.log(`Unmuted participant ${participantId} in room ${roomId}`);
+          this.logger.log(
+            `Unmuted participant ${participantId} in room ${roomId}`,
+          );
 
           // Update Redis
           const currentPermissions = await this.getMicPermissions(roomId);
           const enabled = [...currentPermissions.enabled, participantId];
-          const muted = currentPermissions.muted.filter((id) => id !== participantId);
+          const muted = currentPermissions.muted.filter(
+            (id) => id !== participantId,
+          );
           await this.storeMicPermissions(roomId, enabled, muted);
         } catch (error) {
-          this.logger.error(`Failed to unmute participant ${participantId}:`, error);
+          this.logger.error(
+            `Failed to unmute participant ${participantId}:`,
+            error,
+          );
         }
       }
     } catch (error) {
-      this.logger.error(`Failed to unmute participant ${participantId} in room ${roomId}:`, error);
+      this.logger.error(
+        `Failed to unmute participant ${participantId} in room ${roomId}:`,
+        error,
+      );
     }
   }
 
@@ -356,21 +434,29 @@ export class DebateMicControlService {
         { EX: 86400 }, // 24 hours
       );
     } catch (error) {
-      this.logger.error(`Failed to store mic permissions for room ${roomId}:`, error);
+      this.logger.error(
+        `Failed to store mic permissions for room ${roomId}:`,
+        error,
+      );
     }
   }
 
   /**
    * Get mic permissions from Redis
    */
-  private async getMicPermissions(roomId: string): Promise<{ enabled: string[]; muted: string[] }> {
+  private async getMicPermissions(
+    roomId: string,
+  ): Promise<{ enabled: string[]; muted: string[] }> {
     try {
       const data = await redisClient.get(REDIS_KEYS.micPermissions(roomId));
       if (data) {
         return JSON.parse(data);
       }
     } catch (error) {
-      this.logger.error(`Failed to get mic permissions for room ${roomId}:`, error);
+      this.logger.error(
+        `Failed to get mic permissions for room ${roomId}:`,
+        error,
+      );
     }
     return { enabled: [], muted: [] };
   }

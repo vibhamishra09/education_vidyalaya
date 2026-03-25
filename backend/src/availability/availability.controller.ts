@@ -1,4 +1,15 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, Logger } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+  Logger,
+} from '@nestjs/common';
 import { AvailabilityService } from './availability.service';
 import { ClerkAuthGuard } from '../common/guards/clerk-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';

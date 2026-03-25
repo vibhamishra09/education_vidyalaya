@@ -1,4 +1,14 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards, Logger } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+  Logger,
+} from '@nestjs/common';
 import { PeerSessionsService } from './peer-sessions.service';
 import { ClerkAuthGuard } from '../common/guards/clerk-auth.guard';
 import { OptionalClerkAuthGuard } from '../common/guards/optional-clerk-auth.guard';
@@ -158,6 +168,10 @@ export class PeerSessionsController {
     @CurrentUser() userId: string,
     @Body() dto: UpdatePeerSessionDto,
   ) {
-    return this.peerSessionsService.updatePeerSession(peerSessionId, userId, dto);
+    return this.peerSessionsService.updatePeerSession(
+      peerSessionId,
+      userId,
+      dto,
+    );
   }
 }

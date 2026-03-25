@@ -9,7 +9,6 @@ import { LoggerService } from '../common/logger';
 
 @Injectable()
 export class NotificationSchedulerService {
-
   constructor(
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
@@ -17,7 +16,8 @@ export class NotificationSchedulerService {
     private streaksService: StreaksService,
     private readonly logger: LoggerService,
   ) {
-    this.logger.setContext(NotificationSchedulerService.name);}
+    this.logger.setContext(NotificationSchedulerService.name);
+  }
 
   // Run every 5 minutes to check for session reminders
   @Cron('*/5 * * * *')
@@ -29,7 +29,9 @@ export class NotificationSchedulerService {
     const oneDayFromNow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
     const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
     const fiveMinutesFromNow = new Date(now.getTime() + 5 * 60 * 1000);
-    const oneDayWindowStart = new Date(oneDayFromNow.getTime() - reminderWindowMs);
+    const oneDayWindowStart = new Date(
+      oneDayFromNow.getTime() - reminderWindowMs,
+    );
     const oneHourWindowStart = new Date(
       oneHourFromNow.getTime() - reminderWindowMs,
     );
@@ -612,7 +614,7 @@ export class NotificationSchedulerService {
   }
 
   private async sendPeerSessionEndNotifications(now: Date) {
-    // Find peer sessions that should have ended (start time + duration < now) 
+    // Find peer sessions that should have ended (start time + duration < now)
     // but are still UPCOMING or ONGOING
     const endedSessions = await this.prisma.peerSession.findMany({
       where: {
@@ -641,8 +643,8 @@ export class NotificationSchedulerService {
     for (const session of actuallyEndedSessions) {
       // Update sessions that are either UPCOMING or ONGOING to DONE
       const locked = await this.prisma.peerSession.updateMany({
-        where: { 
-          id: session.id, 
+        where: {
+          id: session.id,
           sessionStatus: {
             in: [SessionStatus.UPCOMING, SessionStatus.ONGOING],
           },
@@ -758,7 +760,7 @@ export class NotificationSchedulerService {
   }
 
   private async sendStudyRoomEndNotifications(now: Date) {
-    // Find study rooms that should have ended (start time + duration < now) 
+    // Find study rooms that should have ended (start time + duration < now)
     // but are still UPCOMING or ONGOING
     const endedRooms = await this.prisma.studyRoom.findMany({
       where: {
@@ -786,8 +788,8 @@ export class NotificationSchedulerService {
     for (const room of actuallyEndedRooms) {
       // Update rooms that are either UPCOMING or ONGOING to DONE
       const locked = await this.prisma.studyRoom.updateMany({
-        where: { 
-          id: room.id, 
+        where: {
+          id: room.id,
           sessionStatus: {
             in: [SessionStatus.UPCOMING, SessionStatus.ONGOING],
           },
