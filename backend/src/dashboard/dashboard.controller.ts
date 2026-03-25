@@ -1,4 +1,4 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, NotFoundException, Query, UseGuards } from '@nestjs/common';
 import {
   DashboardService,
   SessionActivityDataPoint,

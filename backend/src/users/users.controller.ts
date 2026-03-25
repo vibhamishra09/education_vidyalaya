@@ -54,7 +54,7 @@ export class UsersController {
     try {
       return await this.usersService.checkUsernameAvailability(
         username,
-        userId,
+        dbUserId ?? clerkUserId,
       );
     } catch (error) {
       this.logger.debug(

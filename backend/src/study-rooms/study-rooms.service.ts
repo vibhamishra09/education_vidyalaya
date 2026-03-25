@@ -1835,7 +1835,7 @@ export class StudyRoomsService {
       },
     });
     if (!room) throw new NotFoundException('Study room not found');
-    const isHost = room.createdById === user.id;
+    const isHost = room.createdById === userId;
     const isCohost = room.learners.some(
       (p) => p.role === StudyRoomParticipantRole.COHOST,
     );
@@ -2022,7 +2022,7 @@ export class StudyRoomsService {
       throw new NotFoundException('Study room not found');
     }
 
-    if (studyRoom.createdById !== user.id) {
+    if (studyRoom.createdById !== userId) {
       throw new ForbiddenException(
         'Only the creator can cancel this study room',
       );

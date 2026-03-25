@@ -5,6 +5,7 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
+import { createClerkClient } from '@clerk/backend';
 import { Prisma, SessionStatus } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateUserDto } from './dto/user.dto';
@@ -165,7 +166,7 @@ export class UsersService {
   async getCurrentUser(userIdOrClerkId: string) {
     // Cache for 60 seconds - user profile changes infrequently
     const cacheKey = this.cacheService.createKey('user:current', {
-      clerkUserId,
+      userIdOrClerkId,
     });
     const cacheTTL = 60;
 
