@@ -130,19 +130,9 @@ export class ReviewsService {
   }
 
   async createReview(userId: string, createDto: CreateReviewDto) {
-    // userId is actually clerkId, so we need to find the user by clerkId first
-    const user = await this.prisma.user.findUnique({
-      where: { clerkId: userId },
-      select: { id: true },
-    });
-
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
     // Check if already reviewed
     const whereClause: any = {
-      reviewerId: user.id, // Use the database ID, not clerkId
+      reviewerId: userId,
     };
 
     if (createDto.sessionType === 'studyRoom') {
@@ -197,14 +187,14 @@ export class ReviewsService {
         });
       }
 
-      if (studyRoom.createdById === user.id) {
+      if (studyRoom.createdById === userId) {
         throw new ForbiddenException(
           'Creators cannot review their own study rooms',
         );
       }
 
       const isLearner = studyRoom.learners.some(
-        (learner) => learner.userId === user.id,
+        (learner) => learner.userId === userId,
       );
       if (!isLearner) {
         throw new ForbiddenException(
@@ -246,7 +236,7 @@ export class ReviewsService {
       }
 
       revieweeId =
-        peerSession.requestedById === user.id
+        peerSession.requestedById === userId
           ? peerSession.requestedToId
           : peerSession.requestedById;
     }
@@ -254,7 +244,7 @@ export class ReviewsService {
     const reviewData: any = {
       rating: createDto.rating,
       review: createDto.review?.trim() ?? '',
-      reviewerId: user.id, // Use the database ID, not clerkId
+      reviewerId: userId,
       revieweeId,
     };
 
@@ -294,7 +284,7 @@ export class ReviewsService {
     await this.checkAndReleaseEscrowPayment(
       createDto.sessionId,
       createDto.sessionType,
-      user.id,
+      userId,
     );
 
     // Invalidate reviews cache

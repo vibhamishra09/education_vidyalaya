@@ -42,10 +42,13 @@ export const completeOnboarding = async (formData: FormData) => {
       return { error: error.message || 'Failed to complete onboarding' }
     }
 
+    const data = await response.json()
+
     // Update Clerk user metadata to mark onboarding as complete
     await client.users.updateUser(userId, {
       publicMetadata: {
         onboardingComplete: true,
+        ...(data?.user?.id ? { dbUserId: data.user.id } : {}),
       },
     })
 

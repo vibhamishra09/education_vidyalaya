@@ -14,27 +14,15 @@ export class StreaksController {
     private readonly prisma: PrismaService,
   ) {}
 
-  /**
-   * Get current user's streak data
-   */
   @Get('current')
-  async getCurrentStreak(@CurrentUser('id') clerkUserId: string) {
-    this.logger.debug(
-      '🔍 [StreaksController.getCurrentStreak] Called for clerkUserId:',
-      clerkUserId,
-    );
+  async getCurrentStreak(
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
+  ) {
+    const resolvedDbUserId = dbUserId ?? (await this.resolveDbUserId(clerkUserId));
+    this.logger.debug('[StreaksController.getCurrentStreak] Called', { resolvedDbUserId });
 
-    // Convert Clerk ID to database ID
-    const user = await this.prisma.user.findUnique({
-      where: { clerkId: clerkUserId },
-      select: { id: true, name: true },
-    });
-
-    if (!user) {
-      this.logger.debug(
-        '❌ [StreaksController.getCurrentStreak] User not found for clerkId:',
-        clerkUserId,
-      );
+    if (!resolvedDbUserId) {
       return {
         currentStreak: 0,
         longestStreak: 0,
@@ -42,48 +30,42 @@ export class StreaksController {
       };
     }
 
-    const result = await this.streaksService.getUserStreak(user.id);
-    return result;
+    return this.streaksService.getUserStreak(resolvedDbUserId);
   }
 
-  /**
-   * Get streak history for the last N days (default 14)
-   */
   @Get('history/:days')
   async getStreakHistory(
-    @CurrentUser('id') clerkUserId: string,
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
     @Param('days', ParseIntPipe) days: number,
   ) {
-    // Convert Clerk ID to database ID
-    const user = await this.prisma.user.findUnique({
-      where: { clerkId: clerkUserId },
-      select: { id: true },
-    });
-
-    if (!user) {
+    const resolvedDbUserId = dbUserId ?? (await this.resolveDbUserId(clerkUserId));
+    if (!resolvedDbUserId) {
       return { days: [] };
     }
 
-    // Limit to max 90 days
-    const limitedDays = Math.min(days, 90);
-    return this.streaksService.getStreakHistory(user.id, limitedDays);
+    return this.streaksService.getStreakHistory(resolvedDbUserId, Math.min(days, 90));
   }
 
-  /**
-   * Get streak history for default 14 days
-   */
   @Get('history')
-  async getDefaultStreakHistory(@CurrentUser('id') clerkUserId: string) {
-    // Convert Clerk ID to database ID
+  async getDefaultStreakHistory(
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
+  ) {
+    const resolvedDbUserId = dbUserId ?? (await this.resolveDbUserId(clerkUserId));
+    if (!resolvedDbUserId) {
+      return { days: [] };
+    }
+
+    return this.streaksService.getStreakHistory(resolvedDbUserId, 14);
+  }
+
+  private async resolveDbUserId(clerkUserId: string): Promise<string | undefined> {
     const user = await this.prisma.user.findUnique({
       where: { clerkId: clerkUserId },
       select: { id: true },
     });
 
-    if (!user) {
-      return { days: [] };
-    }
-
-    return this.streaksService.getStreakHistory(user.id, 14);
+    return user?.id;
   }
 }

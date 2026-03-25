@@ -73,6 +73,7 @@ export async function POST(req: NextRequest) {
     await client.users.updateUser(userId, {
       publicMetadata: {
         onboardingComplete: true,
+        ...(data?.user?.id ? { dbUserId: data.user.id } : {}),
       },
     });
 
