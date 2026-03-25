@@ -17,29 +17,7 @@ import { corsOriginDelegate } from '../common/cors';
 
 @WebSocketGateway({
   cors: {
-    origin: (() => {
-      const envUrls =
-        process.env.FRONTEND_URLS?.split(',')
-          .map((url) => url.trim())
-          .filter(Boolean) || [];
-      const defaultUrls = [
-        'https://www.webyalaya.com',
-        'https://webyalaya.com',
-        'https://webyalaya-next.vercel.app',
-        'https://test.webyalaya.com',
-        'https://test2.webyalaya.com',
-        'https://webyalaya-next-test.vercel.app',
-        'https://dev.webyalaya.com',
-        'https://dev2.webyalaya.com',
-        'https://hedera.webyalaya.com',
-        'https://webyalaya-green.vercel.app',
-        'https://webyalaya-purple.vercel.app',
-        'http://localhost:3000',
-        'http://localhost:3002',
-        'http://localhost:3007',
-      ];
-      return [...new Set([...envUrls, ...defaultUrls])];
-    })(),
+    origin: corsOriginDelegate,
     credentials: true,
   },
 })

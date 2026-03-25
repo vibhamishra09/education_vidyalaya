@@ -380,10 +380,8 @@ export class StudyRoomsService {
             const hostReviews = (room.createdBy as any).reviewsReceived || [];
             const hostAvgRating =
               hostReviews.length > 0
-                ? hostReviews.reduce(
-                    (sum: number, r: { rating: number }) => sum + r.rating,
-                    0,
-                  ) / hostReviews.length
+                ? hostReviews.reduce((sum: number, r: { rating: number }) => sum + r.rating, 0) /
+                hostReviews.length
                 : undefined;
             const hostTotalSessions =
               ((room.createdBy as any)._count?.studyRooms || 0) +
@@ -480,10 +478,7 @@ export class StudyRoomsService {
             },
             _avg: { rating: true },
             _count: { rating: true },
-            orderBy: [
-              { _avg: { rating: 'desc' } },
-              { _count: { rating: 'desc' } },
-            ],
+            orderBy: [{ _avg: { rating: 'desc' } }, { _count: { rating: 'desc' } }],
             take: normalizedLimit * 4,
           });
 
@@ -762,10 +757,8 @@ export class StudyRoomsService {
       const hostReviews = (room.createdBy as any).reviewsReceived || [];
       const hostAvgRating =
         hostReviews.length > 0
-          ? hostReviews.reduce(
-              (sum: number, r: { rating: number }) => sum + r.rating,
-              0,
-            ) / hostReviews.length
+          ? hostReviews.reduce((sum: number, r: { rating: number }) => sum + r.rating, 0) /
+          hostReviews.length
           : undefined;
       const hostTotalSessions =
         ((room.createdBy as any)._count?.studyRooms || 0) +
@@ -829,9 +822,16 @@ export class StudyRoomsService {
 
   async getStudyRoomDetails(studyRoomId: string, userId?: string) {
     try {
-      const [studyRoom, currentUser, channel] = await Promise.all([
-        this.prisma.studyRoom.findUnique({
-          where: { id: studyRoomId },
+      const [studyRoom, currentUser] = await Promise.all([
+        this.prisma.studyRoom.findFirst({
+          where: {
+            OR: [
+              { id: studyRoomId },
+              { slug: studyRoomId }
+            ],
+            sessionStatus: { in: [SessionStatus.UPCOMING, SessionStatus.ONGOING] }
+          },
+          orderBy: { date: 'asc' },
           include: {
             createdBy: {
               select: {
@@ -897,10 +897,7 @@ export class StudyRoomsService {
           },
         }),
         userId
-          ? this.prisma.user.findUnique({
-              where: { clerkId: userId },
-              select: { id: true },
-            })
+          ? Promise.resolve({ id: userId })
           : Promise.resolve(null),
         this.prisma.channel.findFirst({
           where: { externalType: 'studyRoom', externalId: studyRoomId },
@@ -912,19 +909,23 @@ export class StudyRoomsService {
         throw new NotFoundException('Study room not found');
       }
 
+      const channel = await this.prisma.channel.findFirst({
+        where: { externalType: 'studyRoom', externalId: studyRoom.id },
+        select: { id: true },
+      });
+
       let role: 'teacher' | 'learner' | 'empty' = 'empty';
       if (currentUser) {
         if (studyRoom.createdById === currentUser.id) {
           role = 'teacher';
-        } else if (
-          studyRoom.learners.some((l) => l.userId === currentUser.id)
-        ) {
+        } else if (studyRoom.learners.some((l) => l.userId === currentUser.id)) {
           role = 'learner';
         }
       }
 
       return {
         id: studyRoom.id,
+        slug: (studyRoom as any).slug,
         title: studyRoom.title,
         description: studyRoom.description,
         imageUrl: studyRoom.imageUrl,
@@ -937,18 +938,15 @@ export class StudyRoomsService {
         externalAutoAccept: (studyRoom as any).externalAutoAccept,
         externalPasscode:
           role === 'teacher' ? (studyRoom as any).externalPasscode : null,
-        externalInvites: ((studyRoom as any).externalInvites || []).map(
-          (invite: any) => ({
-            email: invite.email,
-            role:
-              invite.role === ExternalInviteRole.COHOST
-                ? StudyRoomParticipantRoleDto.COHOST
-                : StudyRoomParticipantRoleDto.PARTICIPANT,
-          }),
-        ),
-        pendingExternalJoinRequests: (
-          (studyRoom as any).externalJoinRequests || []
-        ).length,
+        externalInvites: ((studyRoom as any).externalInvites || []).map((invite: any) => ({
+          email: invite.email,
+          role:
+            invite.role === ExternalInviteRole.COHOST
+              ? StudyRoomParticipantRoleDto.COHOST
+              : StudyRoomParticipantRoleDto.PARTICIPANT,
+        })),
+        pendingExternalJoinRequests: ((studyRoom as any).externalJoinRequests || [])
+          .length,
         isRecurring: (studyRoom as any).isRecurring,
         recurrenceMode: (studyRoom as any).recurrenceMode,
         seriesId: (studyRoom as any).seriesId,
@@ -962,18 +960,16 @@ export class StudyRoomsService {
           ...l.user,
           role: l.role ?? StudyRoomParticipantRole.PARTICIPANT,
         })),
-        guestParticipants: ((studyRoom as any).guestParticipants || []).map(
-          (g: any) => ({
-            id: g.id,
-            name: g.name,
-            email: g.email,
-            role:
-              g.role === StudyRoomParticipantRole.COHOST
-                ? StudyRoomParticipantRoleDto.COHOST
-                : StudyRoomParticipantRoleDto.PARTICIPANT,
-            livekitIdentity: g.livekitIdentity,
-          }),
-        ),
+        guestParticipants: ((studyRoom as any).guestParticipants || []).map((g: any) => ({
+          id: g.id,
+          name: g.name,
+          email: g.email,
+          role:
+            g.role === StudyRoomParticipantRole.COHOST
+              ? StudyRoomParticipantRoleDto.COHOST
+              : StudyRoomParticipantRoleDto.PARTICIPANT,
+          livekitIdentity: g.livekitIdentity,
+        })),
         participantCount:
           studyRoom.learners.length +
           (((studyRoom as any).guestParticipants || []).length as number),
