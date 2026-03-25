@@ -4,7 +4,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 
 type Message = { 
 	id: string
-	senderId: string
+	senderId: string | null
 	audienceType?: 'EVERYONE' | 'HOST' | 'USER'
 	targetUserId?: string | null
 	content: string
@@ -50,14 +50,21 @@ export function MessageList({
 		const date = new Date(dateString)
 		if (Number.isNaN(date.getTime())) return '—'
 		const now = new Date()
-		const diffMs = now.getTime() - date.getTime()
-		const diffMins = Math.floor(diffMs / 60000)
-		
-		if (diffMins < 1) return 'Just now'
-		if (diffMins < 60) return `${diffMins}m ago`
-		if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h ago`
-		
-		return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+		const isSameDay = now.toDateString() === date.toDateString()
+
+		if (isSameDay) {
+			return date.toLocaleTimeString('en-US', {
+				hour: '2-digit',
+				minute: '2-digit',
+			})
+		}
+
+		return date.toLocaleString('en-US', {
+			month: 'short',
+			day: 'numeric',
+			hour: '2-digit',
+			minute: '2-digit',
+		})
 	}
 
 	return (

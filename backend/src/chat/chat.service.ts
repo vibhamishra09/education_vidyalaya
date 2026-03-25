@@ -108,6 +108,14 @@ export class ChatService {
   }
 
   async addMember(channelId: string, userId: string) {
+    const existingMember = await this.prisma.channelMember.findFirst({
+      where: { channelId, userId },
+    });
+
+    if (existingMember) {
+      return existingMember;
+    }
+
     return this.prisma.channelMember.create({
       data: { channelId, userId },
     });
@@ -218,6 +226,14 @@ export class ChatService {
       select: { id: true },
     });
     return !!member;
+  }
+
+  async getChannelMemberUserIds(channelId: string): Promise<string[]> {
+    const members = await this.prisma.channelMember.findMany({
+      where: { channelId },
+      select: { userId: true },
+    });
+    return members.map((member) => member.userId);
   }
 
   async getChannelHostUserId(channelId: string): Promise<string | null> {

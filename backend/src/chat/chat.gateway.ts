@@ -11,31 +11,12 @@ import { ChatService } from './chat.service';
 import { createClerkClient } from '@clerk/backend';
 import { PermissionsService } from '../session-moderation/permissions.service';
 import { MessageAudienceType } from '../generated/prisma/client';
+import { corsOriginDelegate } from '../common/cors';
+import { UsersService } from '../users/users.service';
 
 @WebSocketGateway({
   cors: {
-    origin: (() => {
-      const envUrls = process.env.FRONTEND_URLS?.split(',')
-        .map((url) => url.trim())
-        .filter(Boolean) || [];
-      const defaultUrls = [
-        'https://www.webyalaya.com',
-        'https://webyalaya.com',
-        'https://webyalaya-next.vercel.app',
-        'https://test.webyalaya.com',
-        'https://test2.webyalaya.com',
-        'https://webyalaya-next-test.vercel.app',
-        'https://dev.webyalaya.com',
-        'https://dev2.webyalaya.com',
-        'https://hedera.webyalaya.com',
-        'https://webyalaya-green.vercel.app',
-        'https://webyalaya-purple.vercel.app',
-        'http://localhost:3000',
-        'http://localhost:3002',
-        'http://localhost:3007',
-      ];
-      return [...new Set([...envUrls, ...defaultUrls])];
-    })(),
+    origin: corsOriginDelegate,
     credentials: true,
   },
 })
@@ -53,6 +34,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   constructor(
     private chatService: ChatService,
     private permissionsService: PermissionsService,
+    private usersService: UsersService,
   ) {}
 
   private normalizeAudienceType(
@@ -94,11 +76,15 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     };
   }
 
-  private emitScopedMessage(
+  private async emitScopedMessage(
     channelId: string,
     message: ReturnType<ChatGateway['serializeMessageForSocket']>,
   ) {
     if (message.audienceType === MessageAudienceType.EVERYONE) {
+      const memberUserIds = await this.chatService.getChannelMemberUserIds(channelId);
+      for (const userId of memberUserIds) {
+        this.server.to(`user:${userId}`).emit('message:new', message);
+      }
       this.server.to(channelId).emit('message:new', message);
       return;
     }
@@ -146,7 +132,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         );
 
         if (!requestState.isSignedIn) {
-          // Not a valid Clerk token — try guest token path before disconnecting
+          // Not a valid Clerk token, try guest token path before disconnecting
           const guestRecord = await this.chatService.validateGuestToken(token).catch(() => null);
           if (guestRecord) {
             client.data.isGuest = true;
@@ -155,7 +141,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
             client.data.guestParticipantId = guestRecord.guestParticipant.id;
             client.data.guestEmail = guestRecord.guestParticipant.email;
             client.data.studyRoomId = guestRecord.studyRoomId;
-            client.emit('authenticated');
+            client.emit('chat:authenticated');
             return;
           }
           this.logger.debug('User is not authenticated');
@@ -174,19 +160,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         client.data.userId = auth.userId;
         client.data.clerkId = auth.userId;
 
-        const user = await this.chatService.getUserByClerkId(auth.userId);
-        if (!user) {
-          this.logger.debug('No user found for clerkId:', auth.userId);
-          client.disconnect();
-          return;
-        }
+        const user = await this.usersService.ensureUserFromClerk(auth.userId);
 
         client.data.dbUserId = user.id;
         client.join(`user:${user.id}`);
-        client.emit('authenticated');
+        client.emit('chat:authenticated');
         this.logger.debug('WebSocket authenticated for user:', auth.userId);
       } catch (verifyError: any) {
-        // Clerk auth failed — try guest token path
+        // Clerk auth failed, try guest token path
         const guestRecord = await this.chatService.validateGuestToken(token).catch(() => null);
         if (guestRecord) {
           client.data.isGuest = true;
@@ -195,7 +176,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
           client.data.guestParticipantId = guestRecord.guestParticipant.id;
           client.data.guestEmail = guestRecord.guestParticipant.email;
           client.data.studyRoomId = guestRecord.studyRoomId;
-          client.emit('authenticated');
+          client.emit('chat:authenticated');
           return;
         }
         this.logger.debug(
@@ -220,15 +201,15 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const sessionInfo = await this.chatService.getSessionInfoFromChannelId(payload.channelId);
       if (sessionInfo?.externalType === 'studyRoom' && sessionInfo.externalId === client.data.studyRoomId) {
         client.join(payload.channelId);
-        client.emit('joined:channel', { channelId: payload.channelId });
+        client.emit('chat:joined', { channelId: payload.channelId });
       } else {
-        client.emit('error', { message: 'Not authorized to join this channel' });
+        client.emit('chat:error', { message: 'Not authorized to join this channel' });
       }
       return;
     }
 
     if (!client.data.userId || !client.data.dbUserId) {
-      client.emit('error', { message: 'Not authenticated' });
+      client.emit('chat:error', { message: 'Not authenticated' });
       return;
     }
 
@@ -237,7 +218,18 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       client.data.dbUserId,
     );
     if (!isMember) {
-      client.emit('error', {
+      const sessionInfo = await this.chatService.getSessionInfoFromChannelId(payload.channelId);
+      if (sessionInfo?.externalType === 'studyRoom' || sessionInfo?.externalType === 'peerSession') {
+        try {
+          await this.chatService.addMember(payload.channelId, client.data.dbUserId);
+          client.join(payload.channelId);
+          client.emit('chat:joined', { channelId: payload.channelId });
+          return;
+        } catch (error) {
+          this.logger.debug('Failed to auto-add chat member:', error);
+        }
+      }
+      client.emit('chat:error', {
         code: 'NOT_CHANNEL_MEMBER',
         message: 'Not a member of this channel',
       });
@@ -245,7 +237,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
 
     client.join(payload.channelId);
-    client.emit('joined:channel', { channelId: payload.channelId });
+    client.emit('chat:joined', { channelId: payload.channelId });
   }
 
   @SubscribeMessage('message:send')
@@ -263,10 +255,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       try {
         const hostDbUserId = await this.chatService.getChannelHostUserId(payload.channelId);
         if (!hostDbUserId) {
-          client.emit('error', { message: 'Host not found for this channel' });
+          client.emit('chat:error', { message: 'Host not found for this channel' });
           return;
         }
-        
+
         // Save guest message to database
         const message = await this.chatService.sendGuestMessage(
           payload.channelId,
@@ -276,7 +268,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
           payload.content,
           hostDbUserId,
         );
-        
+
         const base = this.serializeMessageForSocket({
           ...message,
           guestSenderId: message.guestSenderId,
@@ -290,19 +282,19 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         });
 
         const messageToEmit = { ...base, isGuest: true };
-        
+
         // Emit to host and sender
         this.server.to(`user:${hostDbUserId}`).emit('message:new', messageToEmit);
         client.emit('message:new', messageToEmit);
       } catch (error: any) {
         this.logger.debug('Error sending guest message:', error);
-        client.emit('error', { message: error.message || 'Failed to send message' });
+        client.emit('chat:error', { message: error.message || 'Failed to send message' });
       }
       return;
     }
 
     if (!client.data.userId || !client.data.dbUserId) {
-      client.emit('error', { message: 'Not authenticated' });
+      client.emit('chat:error', { message: 'Not authenticated' });
       return;
     }
 
@@ -313,7 +305,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         ? await this.chatService.getChannelHostUserId(payload.channelId)
         : null;
       const isHostSender = !!hostDbUserId && hostDbUserId === client.data.dbUserId;
-      
+
       if (sessionInfo) {
         // Check if user has chat permission for this session
         const canChat = await this.permissionsService.hasPermission(
@@ -322,9 +314,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
           'chat',
           isHostSender,
         );
-        
+
         if (!canChat) {
-          client.emit('error', { 
+          client.emit('chat:error', {
             code: 'CHAT_DISABLED',
             message: 'Chat is disabled by the host',
           });
@@ -342,7 +334,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
           isHostSender,
         );
         if (!canSendToAudience) {
-          client.emit('error', {
+          client.emit('chat:error', {
             code: 'CHAT_SCOPE_RESTRICTED',
             message: 'The host has restricted this chat target for you',
           });
@@ -358,10 +350,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         payload.targetUserId,
       );
       const toEmit = this.serializeMessageForSocket(message);
-      this.emitScopedMessage(payload.channelId, toEmit);
+      await this.emitScopedMessage(payload.channelId, toEmit);
     } catch (error: any) {
       this.logger.debug('Error sending message:', error);
-      client.emit('error', {
+      client.emit('chat:error', {
         message: error.message || 'Failed to send message',
       });
     }

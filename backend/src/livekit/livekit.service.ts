@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { AccessToken, VideoGrant } from 'livekit-server-sdk';
 
 @Injectable()
@@ -13,8 +13,15 @@ export class LivekitService {
     publishData?: boolean;
     ttl?: string;
   }) {
-    const key = process.env.LIVEKIT_API_KEY!;
-    const secret = process.env.LIVEKIT_API_SECRET!;
+    const key = process.env.LIVEKIT_API_KEY;
+    const secret = process.env.LIVEKIT_API_SECRET;
+
+    if (!key || !secret) {
+      throw new InternalServerErrorException(
+        'LiveKit is not configured. Missing LIVEKIT_API_KEY or LIVEKIT_API_SECRET in backend/.env.',
+      );
+    }
+
     const ttl = params.ttl ?? '1h';
     const grant: VideoGrant = {
       roomJoin: true,
