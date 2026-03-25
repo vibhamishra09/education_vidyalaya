@@ -91,6 +91,13 @@ type InviteEmailDeliverySummary = {
 
 @Injectable()
 export class StudyRoomsService {
+  private studyRoomSchemaCapabilities:
+    | {
+      slug: boolean;
+      hostDetailsUpdatedAt: boolean;
+    }
+    | null = null;
+
   constructor(
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
@@ -162,6 +169,61 @@ export class StudyRoomsService {
     }
 
     throw new NotFoundException('User not found');
+  }
+
+  private async resolveStudyRoomByIdOrSlug(
+    studyRoomIdOrSlug: string,
+    options?: { select?: any; include?: any },
+  ): Promise<any> {
+    const caps = await this.getStudyRoomSchemaCapabilities();
+
+    if (caps.slug) {
+      return this.prisma.studyRoom.findFirst({
+        where: {
+          OR: [{ id: studyRoomIdOrSlug }, { slug: studyRoomIdOrSlug }],
+        },
+        ...(options?.select ? { select: options.select } : {}),
+        ...(options?.include ? { include: options.include } : {}),
+      });
+    }
+
+    return this.prisma.studyRoom.findUnique({
+      where: { id: studyRoomIdOrSlug },
+      ...(options?.select ? { select: options.select } : {}),
+      ...(options?.include ? { include: options.include } : {}),
+    });
+  }
+
+  private async getStudyRoomSchemaCapabilities() {
+    if (this.studyRoomSchemaCapabilities) {
+      return this.studyRoomSchemaCapabilities;
+    }
+
+    const [slugRows, hostRows] = await Promise.all([
+      this.prisma.$queryRaw<Array<{ exists: boolean }>>(Prisma.sql`
+        SELECT EXISTS (
+          SELECT 1
+          FROM information_schema.columns
+          WHERE LOWER(table_name) = 'studyroom'
+            AND LOWER(column_name) = 'slug'
+        ) AS "exists"
+      `),
+      this.prisma.$queryRaw<Array<{ exists: boolean }>>(Prisma.sql`
+        SELECT EXISTS (
+          SELECT 1
+          FROM information_schema.columns
+          WHERE LOWER(table_name) = 'studyroom'
+            AND LOWER(column_name) = 'hostdetailsupdatedat'
+        ) AS "exists"
+      `),
+    ]);
+
+    this.studyRoomSchemaCapabilities = {
+      slug: Boolean(slugRows?.[0]?.exists),
+      hostDetailsUpdatedAt: Boolean(hostRows?.[0]?.exists),
+    };
+
+    return this.studyRoomSchemaCapabilities;
   }
 
   private async updateExternalInvites(
@@ -874,9 +936,8 @@ export class StudyRoomsService {
 
   async getStudyRoomDetails(studyRoomId: string, userId?: string) {
     try {
-      const [studyRoom, currentUser, channel] = await Promise.all([
-        this.prisma.studyRoom.findUnique({
-          where: { id: studyRoomId },
+      const [studyRoom, currentUser] = await Promise.all([
+        this.resolveStudyRoomByIdOrSlug(studyRoomId, {
           select: {
             id: true,
             title: true,
@@ -971,17 +1032,13 @@ export class StudyRoomsService {
         userId
           ? this.resolveUserIdentity(userId).catch(() => null)
           : Promise.resolve(null),
-        this.prisma.channel.findFirst({
-          where: { externalType: 'studyRoom', externalId: studyRoomId },
-          select: { id: true },
-        }),
       ]);
 
       if (!studyRoom) {
         throw new NotFoundException('Study room not found');
       }
 
-      const channel = await this.prisma.channel.findFirst({
+      const existingChannel = await this.prisma.channel.findFirst({
         where: { externalType: 'studyRoom', externalId: studyRoom.id },
         select: { id: true },
       });
@@ -997,7 +1054,7 @@ export class StudyRoomsService {
 
       return {
         id: studyRoom.id,
-        slug: (studyRoom as any).slug,
+        slug: (studyRoom as any).slug ?? studyRoomId,
         title: studyRoom.title,
         description: studyRoom.description,
         imageUrl: studyRoom.imageUrl,
@@ -1059,10 +1116,8 @@ export class StudyRoomsService {
           review: r.review,
           reviewer: r.reviewer,
         })),
-        chatChannelId: channel?.id ?? null,
-        hostDetailsUpdatedAt: (studyRoom as any).hostDetailsUpdatedAt
-          ? (studyRoom as any).hostDetailsUpdatedAt.toISOString()
-          : null,
+        chatChannelId: existingChannel?.id ?? null,
+        hostDetailsUpdatedAt: null,
       };
     } catch (error) {
       // Handle database connection errors
@@ -1267,8 +1322,24 @@ export class StudyRoomsService {
     userId: string,
     updateDto: UpdateStudyRoomDto,
   ) {
-    const studyRoom = await this.prisma.studyRoom.findUnique({
-      where: { id: studyRoomId },
+    const studyRoom = await this.resolveStudyRoomByIdOrSlug(studyRoomId, {
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        imageUrl: true,
+        sessionStatus: true,
+        date: true,
+        duration: true,
+        maxParticipants: true,
+        joiningFee: true,
+        createdById: true,
+        seriesId: true,
+        seriesRootId: true,
+        occurrenceIndex: true,
+        occurrenceDateLocal: true,
+        timezone: true,
+      },
     });
 
     if (!studyRoom) {
@@ -1555,11 +1626,11 @@ export class StudyRoomsService {
           targetRooms.map((r) => r.id),
           studyRoom.createdById,
           updateDto.title?.trim() ?? studyRoom.title,
-          studyRoomId,
+          studyRoom.id,
         );
       }
 
-      return this.getStudyRoomDetails(studyRoomId, userId);
+      return this.getStudyRoomDetails(studyRoom.id, userId);
     }
 
     await this.prisma.studyRoom.updateMany({
@@ -1627,11 +1698,11 @@ export class StudyRoomsService {
         targetRooms.map((r) => r.id),
         studyRoom.createdById,
         updateDto.title?.trim() ?? studyRoom.title,
-        studyRoomId,
+        studyRoom.id,
       );
     }
 
-    return this.getStudyRoomDetails(studyRoomId, userId);
+    return this.getStudyRoomDetails(studyRoom.id, userId);
   }
 
   async joinStudyRoom(studyRoomId: string, userId: string) {
@@ -1644,8 +1715,7 @@ export class StudyRoomsService {
       throw new NotFoundException('User not found');
     }
 
-    const studyRoom = await this.prisma.studyRoom.findUnique({
-      where: { id: studyRoomId },
+    const studyRoom = await this.resolveStudyRoomByIdOrSlug(studyRoomId, {
       include: {
         learners: true,
         guestParticipants: true,
@@ -1712,7 +1782,7 @@ export class StudyRoomsService {
           paymentStatus: PaymentStatus.ESCROW,
           madeById: user.id, // Use the database ID, not clerkId
           receivedById: studyRoom.createdById,
-          studyRoomId: studyRoomId,
+          studyRoomId: studyRoom.id,
           amountMade: studyRoom.joiningFee,
           amountReceived: studyRoom.joiningFee,
         },
@@ -1722,7 +1792,7 @@ export class StudyRoomsService {
       await tx.studyRoomParticipant.create({
         data: {
           userId: user.id, // Use the database ID, not clerkId
-          studyRoomId,
+          studyRoomId: studyRoom.id,
           role: StudyRoomParticipantRole.PARTICIPANT,
         },
       });
@@ -1730,7 +1800,7 @@ export class StudyRoomsService {
 
     // Get all participants (creator + learners) for the chat channel
     const allParticipants = await this.prisma.studyRoomParticipant.findMany({
-      where: { studyRoomId },
+      where: { studyRoomId: studyRoom.id },
       select: { userId: true },
     });
     const participantIds = [
@@ -1740,7 +1810,7 @@ export class StudyRoomsService {
 
     // Ensure chat channel exists and add the new member
     await this.chatService.getOrCreateChannelForStudyRoom(
-      studyRoomId,
+      studyRoom.id,
       participantIds,
     );
 
@@ -1765,8 +1835,8 @@ export class StudyRoomsService {
       NotifType.NORMAL,
       {
         actionType: 'STUDYROOM_JOINED',
-        studyRoomId: studyRoomId,
-        actionData: { sessionId: studyRoomId, sessionType: 'studyRoom' },
+        studyRoomId: studyRoom.id,
+        actionData: { sessionId: studyRoom.id, sessionType: 'studyRoom' },
       },
     );
 
@@ -1791,8 +1861,7 @@ export class StudyRoomsService {
       role: StudyRoomParticipantRole;
     }
   > {
-    const studyRoom = await this.prisma.studyRoom.findUnique({
-      where: { id: studyRoomId },
+    const studyRoom = await this.resolveStudyRoomByIdOrSlug(studyRoomId, {
       include: {
         externalInvites: true,
         learners: true,
@@ -1832,7 +1901,7 @@ export class StudyRoomsService {
         },
       });
       const guestAccessToken = await this.issueGuestAccessToken(
-        studyRoomId,
+        studyRoom.id,
         participant.id,
       );
       return {
@@ -1859,7 +1928,7 @@ export class StudyRoomsService {
       const existingPendingRequest =
         await this.prisma.studyRoomExternalJoinRequest.findFirst({
           where: {
-            studyRoomId,
+            studyRoomId: studyRoom.id,
             email: normalizedEmail,
             status: ExternalJoinRequestStatus.PENDING,
           },
@@ -1874,7 +1943,7 @@ export class StudyRoomsService {
 
       await this.prisma.studyRoomExternalJoinRequest.create({
         data: {
-          studyRoomId,
+          studyRoomId: studyRoom.id,
           name: dto.name.trim(),
           email: normalizedEmail,
           status: ExternalJoinRequestStatus.PENDING,
@@ -1890,7 +1959,7 @@ export class StudyRoomsService {
     const participant = await this.prisma.studyRoomGuestParticipant.upsert({
       where: {
         studyRoomId_email: {
-          studyRoomId,
+          studyRoomId: studyRoom.id,
           email: normalizedEmail,
         },
       },
@@ -1899,7 +1968,7 @@ export class StudyRoomsService {
         role,
       },
       create: {
-        studyRoomId,
+        studyRoomId: studyRoom.id,
         name: dto.name.trim(),
         email: normalizedEmail,
         role,
@@ -1907,7 +1976,7 @@ export class StudyRoomsService {
       },
     });
     const guestAccessToken = await this.issueGuestAccessToken(
-      studyRoomId,
+      studyRoom.id,
       participant.id,
     );
     return {
@@ -1920,8 +1989,7 @@ export class StudyRoomsService {
   }
 
   private async assertHostOrCohost(studyRoomId: string, userId: string) {
-    const room = await this.prisma.studyRoom.findUnique({
-      where: { id: studyRoomId },
+    const room = await this.resolveStudyRoomByIdOrSlug(studyRoomId, {
       include: {
         learners: {
           where: { userId },
@@ -1941,10 +2009,10 @@ export class StudyRoomsService {
   }
 
   async listPendingExternalJoinRequests(studyRoomId: string, userId: string) {
-    await this.assertHostOrCohost(studyRoomId, userId);
+    const { room } = await this.assertHostOrCohost(studyRoomId, userId);
     const requests = await this.prisma.studyRoomExternalJoinRequest.findMany({
       where: {
-        studyRoomId,
+        studyRoomId: room.id,
         status: ExternalJoinRequestStatus.PENDING,
       },
       orderBy: { createdAt: 'asc' },
@@ -1962,7 +2030,7 @@ export class StudyRoomsService {
     const request = await this.prisma.studyRoomExternalJoinRequest.findUnique({
       where: { id: requestId },
     });
-    if (!request || request.studyRoomId !== studyRoomId) {
+    if (!request || request.studyRoomId !== room.id) {
       throw new NotFoundException('Join request not found');
     }
     if (request.status !== ExternalJoinRequestStatus.PENDING) {
@@ -1983,10 +2051,10 @@ export class StudyRoomsService {
 
     const participantCount =
       (await this.prisma.studyRoomParticipant.count({
-        where: { studyRoomId },
+        where: { studyRoomId: room.id },
       })) +
       (await this.prisma.studyRoomGuestParticipant.count({
-        where: { studyRoomId },
+        where: { studyRoomId: room.id },
       }));
     if (participantCount >= room.maxParticipants) {
       throw new BadRequestException({
@@ -1998,7 +2066,7 @@ export class StudyRoomsService {
     const invite = await this.prisma.studyRoomExternalInvite.findUnique({
       where: {
         studyRoomId_email: {
-          studyRoomId,
+          studyRoomId: room.id,
           email: request.email,
         },
       },
@@ -2007,7 +2075,7 @@ export class StudyRoomsService {
     const participant = await this.prisma.studyRoomGuestParticipant.upsert({
       where: {
         studyRoomId_email: {
-          studyRoomId,
+          studyRoomId: room.id,
           email: request.email,
         },
       },
@@ -2017,7 +2085,7 @@ export class StudyRoomsService {
         approvedBy: user.id,
       },
       create: {
-        studyRoomId,
+        studyRoomId: room.id,
         name: request.name,
         email: request.email,
         role,
@@ -2026,7 +2094,7 @@ export class StudyRoomsService {
       },
     });
     const guestAccessToken = await this.issueGuestAccessToken(
-      studyRoomId,
+      room.id,
       participant.id,
     );
     await this.prisma.studyRoomExternalJoinRequest.update({
@@ -2050,9 +2118,9 @@ export class StudyRoomsService {
     clerkId: string,
     enabled: boolean,
   ) {
-    await this.assertHostOrCohost(studyRoomId, clerkId);
+    const { room } = await this.assertHostOrCohost(studyRoomId, clerkId);
     await this.prisma.studyRoom.update({
-      where: { id: studyRoomId },
+      where: { id: room.id },
       data: { externalAutoAccept: enabled },
     });
     return { success: true, externalAutoAccept: enabled };
@@ -2064,7 +2132,7 @@ export class StudyRoomsService {
     participantIdentity: string,
     role: StudyRoomParticipantRoleDto,
   ) {
-    await this.assertHostOrCohost(studyRoomId, userId);
+    const { room } = await this.assertHostOrCohost(studyRoomId, userId);
     const nextRole = this.toParticipantRole(role);
 
     const user = await this.prisma.user.findUnique({
@@ -2073,20 +2141,27 @@ export class StudyRoomsService {
     });
     if (user) {
       await this.prisma.studyRoomParticipant.updateMany({
-        where: { studyRoomId, userId: user.id },
+        where: { studyRoomId: room.id, userId: user.id },
         data: { role: nextRole },
       });
       return { success: true, role: nextRole };
     }
 
     await this.prisma.studyRoomGuestParticipant.updateMany({
-      where: { studyRoomId, livekitIdentity: participantIdentity },
+      where: { studyRoomId: room.id, livekitIdentity: participantIdentity },
       data: { role: nextRole },
     });
     return { success: true, role: nextRole };
   }
 
   async validateGuestAccessToken(studyRoomId: string, accessToken: string) {
+    const studyRoom = await this.resolveStudyRoomByIdOrSlug(studyRoomId, {
+      select: { id: true },
+    });
+    if (!studyRoom) {
+      throw new NotFoundException('Study room not found');
+    }
+
     const token = await this.prisma.studyRoomGuestAccessToken.findUnique({
       where: { token: accessToken },
       include: {
@@ -2094,7 +2169,7 @@ export class StudyRoomsService {
         studyRoom: true,
       },
     });
-    if (!token || token.studyRoomId !== studyRoomId) {
+    if (!token || token.studyRoomId !== studyRoom.id) {
       throw new ForbiddenException('Invalid guest access token');
     }
     if (token.expiresAt < new Date()) {
@@ -2108,8 +2183,7 @@ export class StudyRoomsService {
     userId: string,
     editScope: StudyRoomEditScope = StudyRoomEditScope.SINGLE,
   ) {
-    const studyRoom = await this.prisma.studyRoom.findUnique({
-      where: { id: studyRoomId },
+    const studyRoom = await this.resolveStudyRoomByIdOrSlug(studyRoomId, {
       select: { id: true, createdById: true, seriesId: true, date: true },
     });
 
@@ -2174,8 +2248,14 @@ export class StudyRoomsService {
       name: user.name,
     });
 
-    const studyRoom = await this.prisma.studyRoom.findUnique({
-      where: { id: studyRoomId },
+    const studyRoom = await this.resolveStudyRoomByIdOrSlug(studyRoomId, {
+      select: {
+        id: true,
+        title: true,
+        date: true,
+        duration: true,
+        createdById: true,
+      },
     });
 
     if (!studyRoom) {
@@ -2199,7 +2279,7 @@ export class StudyRoomsService {
     const isCreator = studyRoom.createdById === user.id;
     const isParticipant = await this.prisma.studyRoomParticipant.findFirst({
       where: {
-        studyRoomId,
+        studyRoomId: studyRoom.id,
         userId: user.id,
       },
     });
@@ -2224,14 +2304,14 @@ export class StudyRoomsService {
       '📝 [completeStudyRoom] Updating study room status to DONE...',
     );
     const updatedRoom = await this.prisma.studyRoom.update({
-      where: { id: studyRoomId },
+      where: { id: studyRoom.id },
       data: { sessionStatus: SessionStatus.DONE },
     });
     this.logger.log('✅ [completeStudyRoom] Study room status updated to DONE');
 
     // Get all participants for streak tracking
     const participants = await this.prisma.studyRoomParticipant.findMany({
-      where: { studyRoomId },
+      where: { studyRoomId: studyRoom.id },
       select: { userId: true },
     });
 
@@ -2302,11 +2382,11 @@ export class StudyRoomsService {
         '🤖 [completeStudyRoom] Generating AI summary for study room',
         studyRoomId,
       );
-      summary = await this.transcriptsService.compileAndSummarize(studyRoomId);
+      summary = await this.transcriptsService.compileAndSummarize(studyRoom.id);
 
       // Store summary in database
       await this.prisma.studyRoom.update({
-        where: { id: studyRoomId },
+        where: { id: studyRoom.id },
         data: { summary },
       });
       this.logger.log(
@@ -2330,18 +2410,13 @@ export class StudyRoomsService {
   }
 
   async checkIsHost(studyRoomId: string, userId: string) {
-    const [studyRoom, user, guestParticipant] = await Promise.all([
-      this.prisma.studyRoom.findUnique({
-        where: { id: studyRoomId },
-        select: { createdById: true },
+    const [studyRoom, user] = await Promise.all([
+      this.resolveStudyRoomByIdOrSlug(studyRoomId, {
+        select: { id: true, createdById: true },
       }),
       this.prisma.user.findUnique({
         where: { id: userId },
         select: { id: true },
-      }),
-      this.prisma.studyRoomGuestParticipant.findFirst({
-        where: { studyRoomId, livekitIdentity: userId },
-        select: { role: true },
       }),
     ]);
 
@@ -2349,12 +2424,17 @@ export class StudyRoomsService {
       throw new NotFoundException('Study room not found');
     }
 
+    const guestParticipant = await this.prisma.studyRoomGuestParticipant.findFirst({
+      where: { studyRoomId: studyRoom.id, livekitIdentity: userId },
+      select: { role: true },
+    });
+
     if (user) {
       if (studyRoom.createdById === user.id) {
         return { isHost: true };
       }
       const participant = await this.prisma.studyRoomParticipant.findFirst({
-        where: { studyRoomId, userId: user.id },
+        where: { studyRoomId: studyRoom.id, userId: user.id },
         select: { role: true },
       });
       return { isHost: participant?.role === StudyRoomParticipantRole.COHOST };
@@ -2386,8 +2466,7 @@ export class StudyRoomsService {
       throw new NotFoundException('User not found');
     }
 
-    const studyRoom = await this.prisma.studyRoom.findUnique({
-      where: { id: studyRoomId },
+    const studyRoom = await this.resolveStudyRoomByIdOrSlug(studyRoomId, {
       select: {
         id: true,
         title: true,
@@ -2417,7 +2496,7 @@ export class StudyRoomsService {
       '📝 [markNotCompleted] Updating study room status to NOT_COMPLETED...',
     );
     const updatedRoom = await this.prisma.studyRoom.update({
-      where: { id: studyRoomId },
+      where: { id: studyRoom.id },
       data: { sessionStatus: SessionStatus.NOT_COMPLETED },
     });
     this.logger.log(
@@ -2447,8 +2526,7 @@ export class StudyRoomsService {
       throw new NotFoundException('User not found');
     }
 
-    const studyRoom = await this.prisma.studyRoom.findUnique({
-      where: { id: studyRoomId },
+    const studyRoom = await this.resolveStudyRoomByIdOrSlug(studyRoomId, {
       select: {
         id: true,
         createdById: true,
@@ -2476,7 +2554,7 @@ export class StudyRoomsService {
     const existingFeedback = await this.prisma.sessionFeedback.findFirst({
       where: {
         userId: user.id,
-        studyRoomId: studyRoomId,
+        studyRoomId: studyRoom.id,
       },
     });
 
@@ -2503,7 +2581,7 @@ export class StudyRoomsService {
       await this.prisma.sessionFeedback.create({
         data: {
           userId: user.id,
-          studyRoomId: studyRoomId,
+          studyRoomId: studyRoom.id,
           isHost: feedbackDto.isHost,
           answers: answersJson,
         },
