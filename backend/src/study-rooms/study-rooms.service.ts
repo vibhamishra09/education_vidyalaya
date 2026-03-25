@@ -800,9 +800,16 @@ export class StudyRoomsService {
 
   async getStudyRoomDetails(studyRoomId: string, userId?: string) {
     try {
-      const [studyRoom, currentUser, channel] = await Promise.all([
-      this.prisma.studyRoom.findUnique({
-        where: { id: studyRoomId },
+      const [studyRoom, currentUser] = await Promise.all([
+      this.prisma.studyRoom.findFirst({
+        where: { 
+          OR: [
+            { id: studyRoomId },
+            { slug: studyRoomId }
+          ],
+          sessionStatus: { in: [SessionStatus.UPCOMING, SessionStatus.ONGOING] }
+        },
+        orderBy: { date: 'asc' },
         include: {
           createdBy: {
             select: {
@@ -880,6 +887,11 @@ export class StudyRoomsService {
       throw new NotFoundException('Study room not found');
     }
 
+    const channel = await this.prisma.channel.findFirst({
+      where: { externalType: 'studyRoom', externalId: studyRoom.id },
+      select: { id: true },
+    });
+
     let role: 'teacher' | 'learner' | 'empty' = 'empty';
     if (currentUser) {
       if (studyRoom.createdById === currentUser.id) {
@@ -891,6 +903,7 @@ export class StudyRoomsService {
 
     return {
       id: studyRoom.id,
+      slug: (studyRoom as any).slug,
       title: studyRoom.title,
       description: studyRoom.description,
       imageUrl: studyRoom.imageUrl,
@@ -1042,6 +1055,7 @@ export class StudyRoomsService {
           data: {
             title: createDto.title,
             description: createDto.description,
+            slug: seriesSlug,
             imageUrl: createDto.imageUrl,
             date: occurrence.utcDate,
             duration: createDto.duration,
@@ -1105,6 +1119,7 @@ export class StudyRoomsService {
     return {
       ...details,
       seriesId,
+      slug: seriesSlug,
       occurrencesCreated: createdRooms.length,
       isRecurring: !!createDto.recurrence,
       emailDelivery,

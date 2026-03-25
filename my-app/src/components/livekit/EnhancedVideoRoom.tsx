@@ -1981,7 +1981,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				return
 			}
 			
-			const videoElement = document.querySelector('.focus-main-video video, .custom-grid-tile video, .lk-participant-tile video') as HTMLVideoElement
+			const videoElement = document.querySelector('.focus-main-video video, .custom-grid-tile video, .lk-participant-tile video, video:not([data-remote-ignore])') as HTMLVideoElement
 			if (videoElement) {
 				// Handle mirroring manually to avoid React re-renders (which close PiP)
 				if (videoElement.classList.contains('scale-x-[-1]') || videoElement.style.transform.includes('scaleX(-1)')) {
@@ -2003,42 +2003,61 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	useEffect(() => {
 		if (isMobileViewport) return
 
-		const handleVisibilityChange = async () => {
-			if (document.hidden && !document.pictureInPictureElement) {
-				const videoElement = document.querySelector('.focus-main-video video, .custom-grid-tile video, .lk-participant-tile video') as HTMLVideoElement
+		const handleVisibilityChange = async (e?: Event) => {
+			// Tab switching is the most reliable signal for PiP
+			const isHidden = document.hidden;
+			const isVisible = !document.hidden;
+
+			console.log(`[PiP] ${e?.type || 'poll'} event: hidden=${isHidden}, pip=${!!document.pictureInPictureElement}`);
+
+			if (isHidden && !document.pictureInPictureElement) {
+				// Search for candidate video
+				const videos = Array.from(document.querySelectorAll('.focus-main-video video, .custom-grid-tile video, .lk-participant-tile video, video:not([data-remote-ignore])')) as HTMLVideoElement[];
+				const videoElement = videos.find(v => v.readyState >= 2 && v.srcObject) || videos.find(v => v.readyState >= 2) || videos[0];
+				
 				if (videoElement && videoElement.readyState >= 2) {
 					try {
-						// Set transform to none before PiP to ensure natural view
+						// A tiny delay helps some browsers (like Chrome) process state changes before requesting PiP again
+						await new Promise(resolve => setTimeout(resolve, 150));
+						
+						// Ensure video is active
+						await videoElement.play().catch(() => {});
+						
 						if (videoElement.classList.contains('scale-x-[-1]') || videoElement.style.transform.includes('scaleX(-1)')) {
-							videoElement.style.transform = 'none'
+							videoElement.style.transform = 'none';
 						}
 						
-						await videoElement.requestPictureInPicture()
-						videoElement.play().catch(() => {}) // Prevent freeze on tab switch
-						setIsPiPActive(true)
-						pipVideoRef.current = videoElement
+						console.log('[PiP] Requesting PiP window...');
+						await videoElement.requestPictureInPicture();
+						setIsPiPActive(true);
+						pipVideoRef.current = videoElement;
 					} catch (error) {
-						// Ignore errors
+						console.warn('[PiP] Auto-PiP failed:', error);
 					}
+				}
+			} else if (isVisible && document.pictureInPictureElement) {
+				try {
+					console.log('[PiP] Tab active, closing PiP');
+					await document.exitPictureInPicture();
+					// Explicitly cleanup state here too
+					setIsPiPActive(false);
+				} catch (error) {
+					// Ignore
 				}
 			}
 		}
 		
 		// Listen for PiP exit
 		const handlePiPExit = () => {
+			console.log('[PiP] leavepictureinpicture event received');
 			setIsPiPActive(false)
 			const videoElement = pipVideoRef.current
 			if (videoElement) {
-				// Restore mirroring if it was previously mirrored (roughly detect via class)
 				if (videoElement.classList.contains('scale-x-[-1]')) {
-					videoElement.style.transform = '' // Clear manual override to restore class transform
+					videoElement.style.transform = '' 
 				}
 			}
 			pipVideoRef.current = null
-			if (pipAnimationFrameRef.current) {
-				cancelAnimationFrame(pipAnimationFrameRef.current)
-				pipAnimationFrameRef.current = null
-			}
 		}
 		
 		document.addEventListener('visibilitychange', handleVisibilityChange)
