@@ -88,7 +88,7 @@ export class ChatController {
       channelId,
       limit ? Number(limit) : 50,
       cursor,
-      resolveddbUserId,
+      resolvedDbUserId,
       resolvedGuestEmail, // Pass guest email for message history filtering
     );
 
