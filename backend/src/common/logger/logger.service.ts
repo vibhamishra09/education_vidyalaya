@@ -17,7 +17,10 @@ export class LoggerService implements NestLoggerService {
   debug(message: any, context?: any): void {
     if (typeof message === 'object' && message !== null) {
       // Structured logging with object
-      this.pinoLogger.debug({ ...message, context: context || message.context });
+      this.pinoLogger.debug({
+        ...message,
+        context: context || message.context,
+      });
     } else {
       // Simple string message
       this.pinoLogger.debug({ context }, message);

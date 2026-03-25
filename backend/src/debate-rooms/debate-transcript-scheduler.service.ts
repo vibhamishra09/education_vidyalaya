@@ -7,7 +7,7 @@ import { CacheService } from '../redis/cache.service';
 /**
  * Scheduler service to periodically stream debate transcripts from Redis to database
  * This prevents Redis cache exhaustion by keeping only recent chunks in memory
- * 
+ *
  * Runs every 30 seconds to commit pending transcripts
  */
 @Injectable()
@@ -23,7 +23,9 @@ export class DebateTranscriptSchedulerService implements OnModuleInit {
   }
 
   onModuleInit() {
-    this.logger.log('Debate transcript streaming scheduler initialized (DISABLED)');
+    this.logger.log(
+      'Debate transcript streaming scheduler initialized (DISABLED)',
+    );
   }
 
   /**

@@ -118,6 +118,7 @@ export interface DebateRoom {
   moderators: DebateModerator[];
   livekitRoomName?: string | null;
   createdAt: string;
+  hostDetailsUpdatedAt?: string | null;
 }
 
 export interface DebateRoomsResponse {
@@ -326,6 +327,24 @@ export interface DebateLivekitTokenResponse {
 
 // User Role in Debate
 export type DebateUserRole = 'host' | 'moderator' | 'participant' | 'spectator' | null;
+
+const DEBATE_HOST_EDIT_BLOCKED: DebateStatus[] = [
+  DebateStatus.ENDED,
+  DebateStatus.PROCESSED,
+  DebateStatus.CANCELLED,
+];
+
+/** Host may edit from list cards; uses internal user id (same as API current user). */
+export function canDebateHostEditFromCard(opts: {
+  currentUserId?: string | null;
+  hostUserId: string;
+  status: DebateStatus;
+}): boolean {
+  if (!opts.currentUserId || opts.currentUserId !== opts.hostUserId) {
+    return false;
+  }
+  return !DEBATE_HOST_EDIT_BLOCKED.includes(opts.status);
+}
 
 // Computed helper to get user's role in debate
 export function getUserDebateRole(

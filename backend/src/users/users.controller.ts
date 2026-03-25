@@ -54,10 +54,13 @@ export class UsersController {
     try {
       return await this.usersService.checkUsernameAvailability(
         username,
-        dbUserId ?? clerkUserId,
+        userId,
       );
     } catch (error) {
-      this.logger.debug('Error in checkUsernameAvailability controller:', error);
+      this.logger.debug(
+        'Error in checkUsernameAvailability controller:',
+        error,
+      );
       return { available: false };
     }
   }

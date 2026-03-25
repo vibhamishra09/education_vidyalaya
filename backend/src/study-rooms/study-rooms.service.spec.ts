@@ -69,7 +69,11 @@ describe('StudyRoomsService.cancelStudyRoom', () => {
     });
 
     await expect(
-      service.cancelStudyRoom('room-1', 'clerk-user', StudyRoomEditScope.SINGLE),
+      service.cancelStudyRoom(
+        'room-1',
+        'clerk-user',
+        StudyRoomEditScope.SINGLE,
+      ),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 });

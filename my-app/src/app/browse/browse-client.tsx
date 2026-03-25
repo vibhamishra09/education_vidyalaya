@@ -26,12 +26,65 @@ import {
   Skill,
   BrowseFilters,
   SessionStatus,
+  type StudyRoomCard,
 } from "@/types/api.types";
 import { useTabPersistence, useLocalStorage } from "@/hooks/use-local-storage";
 import { cn } from "@/lib/utils";
+import { studyRoomCardDisplayLive } from "@/lib/utils/study-room-edit";
 
 const BROWSE_TABS = ["peers", "studyRooms"] as const;
 type BrowseTab = typeof BROWSE_TABS[number];
+
+function studyRoomSkillNames(
+  skills: StudyRoomCard["skills"] | undefined,
+): string[] {
+  if (!skills?.length) return [];
+  return skills
+    .map((s) => {
+      if (typeof s === "string") return s;
+      if (s && typeof s === "object") {
+        if ("name" in s && typeof (s as { name?: string }).name === "string") {
+          return (s as { name: string }).name;
+        }
+        const nested = (s as { skill?: { name?: string } }).skill?.name;
+        if (nested) return nested;
+      }
+      return undefined;
+    })
+    .filter((n): n is string => Boolean(n));
+}
+
+/** First skill label for card badge; API may omit `skills`. */
+function studyRoomCategoryLabel(
+  skills: StudyRoomCard["skills"] | undefined | null,
+): string {
+  const first = skills?.[0];
+  if (first == null) return "General";
+  if (typeof first === "string") return first;
+  // `in` only on objects — primitives throw (e.g. malformed API data).
+  if (typeof first === "object" && first !== null) {
+    if ("name" in first && typeof (first as { name?: string }).name === "string") {
+      return (first as { name: string }).name;
+    }
+    const nested = (first as { skill?: { name?: string } }).skill?.name;
+    if (nested) return nested;
+  }
+  return "General";
+}
+
+function studyRoomCardHost(room: {
+  createdBy?: StudyRoomCard["createdBy"] | null;
+}): { id?: string; name: string; avatar?: string } {
+  const cb = room.createdBy;
+  if (!cb?.name) {
+    return { name: "Host" };
+  }
+  return {
+    id: cb.id,
+    name: cb.name,
+    avatar: cb.avatar,
+  };
+}
 
 function BrowsePageContent() {
   const searchParams = useSearchParams();
@@ -108,7 +161,7 @@ function BrowsePageContent() {
   }
   
   if (selectedSkills.length > 0) {
-    browseFilters.skills = selectedSkills.map(s => s.name);
+    browseFilters.skills = selectedSkills.map((s) => s.name);
   }
 
   if (activeTab === "peers" && peerHasSocialLinks === "withSocial") {
@@ -239,21 +292,28 @@ function BrowsePageContent() {
                       <StudyRoomCardComponent 
                         key={room.id}
                         roomId={room.id}
-                        status={room.sessionStatus === 'ONGOING' ? 'live' : 'scheduled'}
+                        status={
+                          studyRoomCardDisplayLive(room.sessionStatus, room.date)
+                            ? "live"
+                            : "scheduled"
+                        }
                         title={room.title}
                         description={room.description}
                         date={room.date}
                         duration={room.duration}
+                        imageUrl={room.imageUrl}
                         participants={{
                           current: room.participantCount,
                           max: room.maxParticipants
                         }}
-                        host={{
-                          id: room.createdBy.id,
-                          name: room.createdBy.name,
-                          avatar: room.createdBy.avatar
-                        }}
-                        category={typeof room.skills[0] === 'string' ? room.skills[0] : room.skills[0]?.name || "General"}
+                        host={studyRoomCardHost(room)}
+                        category={studyRoomCategoryLabel(room.skills)}
+                        skillNames={studyRoomSkillNames(room.skills)}
+                        sessionStatus={room.sessionStatus}
+                        currentUserId={currentUserData?.user?.id ?? null}
+                        seriesId={room.seriesId ?? null}
+                        joiningFee={room.joiningFee}
+                        timezone={room.timezone ?? null}
                         actionLabel="Join Room"
                         onAction={() => router.push(`/studyroom/${room.id}`)}
                       />
@@ -450,25 +510,28 @@ function BrowsePageContent() {
                     <StudyRoomCardComponent
                       key={`trending-${room.id}`}
                       roomId={room.id}
-                      status={room.sessionStatus === "ONGOING" ? "live" : "scheduled"}
+                      status={
+                        studyRoomCardDisplayLive(room.sessionStatus, room.date)
+                          ? "live"
+                          : "scheduled"
+                      }
                       title={room.title}
                       description={room.description}
                       date={room.date}
                       duration={room.duration}
+                      imageUrl={room.imageUrl}
                       participants={{
                         current: room.participantCount,
                         max: room.maxParticipants,
                       }}
-                      host={{
-                        id: room.createdBy.id,
-                        name: room.createdBy.name,
-                        avatar: room.createdBy.avatar,
-                      }}
-                      category={
-                        typeof room.skills[0] === "string"
-                          ? room.skills[0]
-                          : room.skills[0]?.name || "General"
-                      }
+                      host={studyRoomCardHost(room)}
+                      category={studyRoomCategoryLabel(room.skills)}
+                      skillNames={studyRoomSkillNames(room.skills)}
+                      sessionStatus={room.sessionStatus}
+                      currentUserId={currentUserData?.user?.id ?? null}
+                      seriesId={room.seriesId ?? null}
+                      joiningFee={room.joiningFee}
+                      timezone={room.timezone ?? null}
                       actionLabel="Join Room"
                       onAction={() => router.push(`/studyroom/${room.id}`)}
                     />
@@ -562,21 +625,28 @@ function BrowsePageContent() {
                         <StudyRoomCardComponent 
                           key={room.id}
                           roomId={room.id}
-                          status={room.sessionStatus === 'ONGOING' ? 'live' : 'scheduled'}
+                          status={
+                          studyRoomCardDisplayLive(room.sessionStatus, room.date)
+                            ? "live"
+                            : "scheduled"
+                        }
                           title={room.title}
                           description={room.description}
                           date={room.date}
                           duration={room.duration}
+                          imageUrl={room.imageUrl}
                           participants={{
                             current: room.participantCount,
                             max: room.maxParticipants
                           }}
-                          host={{
-                            id: room.createdBy.id,
-                            name: room.createdBy.name,
-                            avatar: room.createdBy.avatar
-                          }}
-                          category={typeof room.skills[0] === 'string' ? room.skills[0] : room.skills[0]?.name || "General"}
+                          host={studyRoomCardHost(room)}
+                          category={studyRoomCategoryLabel(room.skills)}
+                          skillNames={studyRoomSkillNames(room.skills)}
+                          sessionStatus={room.sessionStatus}
+                          currentUserId={currentUserData?.user?.id ?? null}
+                          seriesId={room.seriesId ?? null}
+                          joiningFee={room.joiningFee}
+                          timezone={room.timezone ?? null}
                           actionLabel="Join Room"
                           onAction={() => router.push(`/studyroom/${room.id}`)}
                         />

@@ -13,6 +13,7 @@ import { Footer } from "@/components/layout/footer";
 import { FadeIn } from "@/components/ui/fade-in";
 import { Button } from "@/components/ui/button";
 import { useStudyRooms, useJoinStudyRoom } from "@/hooks/use-study-rooms";
+import { useCurrentUser } from "@/hooks/use-users";
 import { useDebateRooms } from "@/hooks/use-debate-rooms";
 import { useRequireAuth } from "@/hooks/use-require-auth";
 import { useToast } from "@/contexts/toast-context";
@@ -20,6 +21,7 @@ import { SessionStatus } from "@/types/api.types";
 import { DebateStatus } from "@/types/debate.types";
 import type { StudyRoomCard as StudyRoomCardType } from "@/types/api.types";
 import { Skeleton } from "@/components/ui/skeleton";
+import { studyRoomCardDisplayLive } from "@/lib/utils/study-room-edit";
 
 export function HomeClient() {
   const { isLoaded } = useUser();
@@ -28,6 +30,7 @@ export function HomeClient() {
   const { showSuccess, showError } = useToast();
   const joinStudyRoom = useJoinStudyRoom();
   const [joiningRoomId, setJoiningRoomId] = useState<string | null>(null);
+  const { data: currentUserData } = useCurrentUser();
 
   const { data: studyRoomsData, isLoading: studyRoomsLoading, error: studyRoomsError } = useStudyRooms({
     limit: 6,
@@ -169,7 +172,10 @@ export function HomeClient() {
             ) : (
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
                 {studyRooms.map((room, index) => {
-                  const isLive = room.sessionStatus === SessionStatus.ONGOING;
+                  const isLive = studyRoomCardDisplayLive(
+                    room.sessionStatus,
+                    room.date,
+                  );
                   const isFull = (room.participantCount || 0) >= room.maxParticipants;
                   const joinLoading = joinStudyRoom.isPending && joiningRoomId === room.id;
 
@@ -184,10 +190,16 @@ export function HomeClient() {
                             ? room.skills[0]
                             : room.skills?.[0]?.name || "General"
                         }
+                        skillNames={(room.skills ?? [])
+                          .map((s) =>
+                            typeof s === "string" ? s : s?.name,
+                          )
+                          .filter((n): n is string => Boolean(n))}
                         title={room.title}
                         description={room.description || ""}
                         date={room.date}
                         duration={room.duration}
+                        imageUrl={room.imageUrl}
                         participants={{
                           current: room.participantCount || 0,
                           max: room.maxParticipants,
@@ -197,6 +209,11 @@ export function HomeClient() {
                           name: room.createdBy.name,
                           avatar: room.createdBy.avatar || "",
                         }}
+                        sessionStatus={room.sessionStatus}
+                        currentUserId={currentUserData?.user?.id ?? null}
+                        seriesId={room.seriesId ?? null}
+                        joiningFee={room.joiningFee}
+                        timezone={room.timezone ?? null}
                         actionLabel={
                           isFull ? "Room Full" : isLive ? "Join Live" : "Join Room"
                         }
@@ -287,7 +304,10 @@ export function HomeClient() {
               <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
                 {debateRooms.map((room, index) => (
                   <FadeIn key={room.id} delay={index * 0.1}>
-                    <DebateRoomCard room={room} />
+                    <DebateRoomCard
+                      room={room}
+                      currentUserId={currentUserData?.user?.id ?? null}
+                    />
                   </FadeIn>
                 ))}
               </div>

@@ -4,8 +4,8 @@ import { LoggerService } from './common/logger';
 
 @Controller()
 export class AppController {
-
-  constructor(private readonly appService: AppService,
+  constructor(
+    private readonly appService: AppService,
     private readonly logger: LoggerService,
   ) {
     this.logger.setContext(AppController.name);

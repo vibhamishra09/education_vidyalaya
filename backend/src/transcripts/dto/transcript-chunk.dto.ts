@@ -1,4 +1,10 @@
-import { IsString, IsNumber, IsNotEmpty, IsBoolean, IsOptional } from 'class-validator';
+import {
+  IsString,
+  IsNumber,
+  IsNotEmpty,
+  IsBoolean,
+  IsOptional,
+} from 'class-validator';
 
 export class TranscriptChunkDto {
   @IsString()

@@ -11,13 +11,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   ArrowLeft,
   Clock,
-  Calendar,
   Users,
   ExternalLink,
   Loader2,
   CheckCircle,
   XCircle,
   AlertCircle,
+  Pencil,
 } from "lucide-react";
 import { usePeerSessionDetails, useUpdatePeerSessionStatus } from "@/hooks/use-peer-sessions";
 import { useAuth } from "@clerk/nextjs";
@@ -26,6 +26,7 @@ import { useToast } from "@/contexts/toast-context";
 import Link from "next/link";
 import { SessionStatus } from "@/types";
 import { ReviewsSection } from "@/components/reviews/reviews-section";
+import { PeerSessionEditDialog } from "@/components/peer/peer-session-edit-dialog";
 
 export default function PeerSessionPage({
   params,
@@ -38,6 +39,7 @@ export default function PeerSessionPage({
   const [isUpdating, setIsUpdating] = useState(false);
   const [canJoinVideoCall, setCanJoinVideoCall] = useState(false);
   const [canCancel, setCanCancel] = useState(true);
+  const [editOpen, setEditOpen] = useState(false);
   
   const { data: session, isLoading, error } = usePeerSessionDetails(sessionId);
   const updateSessionStatus = useUpdatePeerSessionStatus();
@@ -167,6 +169,11 @@ export default function PeerSessionPage({
   const isRequester = role === 'requester';
   const isRequestedTo = role === 'requestedTo';
   const isParticipant = role === 'requester' || role === 'requestedTo'; // User is a participant in the session
+  const canEditPeerSession =
+    isParticipant &&
+    session.sessionStatus !== SessionStatus.DONE &&
+    session.sessionStatus !== SessionStatus.CANCELLED &&
+    session.sessionStatus !== SessionStatus.NOT_COMPLETED;
   const canAccept = isRequestedTo && session.sessionStatus === SessionStatus.PENDING;
   // Cancel is allowed only before scheduled time and when status is PENDING or UPCOMING
   const canCancelSession = isParticipant && 
@@ -187,6 +194,18 @@ export default function PeerSessionPage({
   });
 
   const liveRoomName = `peersession-${sessionId}`;
+
+  const myParticipantUserId =
+    role === "requester"
+      ? session.requestedBy.id
+      : role === "requestedTo"
+        ? session.requestedTo.id
+        : null;
+  const showPeerDetailsUpdatedBanner =
+    myParticipantUserId != null &&
+    !!session.hostDetailsUpdatedAt &&
+    !!session.lastDetailsEditedById &&
+    session.lastDetailsEditedById !== myParticipantUserId;
 
   const getStatusBadge = () => {
     switch (session.sessionStatus) {
@@ -218,6 +237,23 @@ export default function PeerSessionPage({
           Back to Dashboard
         </Link>
 
+        {showPeerDetailsUpdatedBanner ? (
+          <div
+            role="status"
+            className="mb-8 rounded-lg border border-primary/25 bg-primary/5 px-4 py-3 text-sm text-foreground"
+          >
+            <p className="font-medium">Meeting details have been changed</p>
+            <p className="text-muted-foreground mt-1 text-xs sm:text-sm">
+              Last updated{" "}
+              {new Date(session.hostDetailsUpdatedAt!).toLocaleString(undefined, {
+                dateStyle: "medium",
+                timeStyle: "short",
+              })}
+              . Check the scheduled time and meeting link below.
+            </p>
+          </div>
+        ) : null}
+
         {/* Header Section */}
         <div className="space-y-8 mb-16">
             <div className="space-y-6">
@@ -235,9 +271,23 @@ export default function PeerSessionPage({
                 </div>
 
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-8">
-                     <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground leading-tight max-w-2xl">
-                        {session.title}
-                     </h1>
+                     <div className="flex flex-wrap items-center gap-3 max-w-2xl">
+                       <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground leading-tight">
+                         {session.title}
+                       </h1>
+                       {canEditPeerSession && (
+                         <Button
+                           type="button"
+                           variant="outline"
+                           size="sm"
+                           className="rounded-full shrink-0"
+                           onClick={() => setEditOpen(true)}
+                         >
+                           <Pencil className="h-4 w-4 mr-1.5" />
+                           Edit
+                         </Button>
+                       )}
+                     </div>
                      
                      <div className="flex flex-wrap gap-3">
                         {canAccept && (
@@ -525,6 +575,13 @@ export default function PeerSessionPage({
         </div>
 
       </main>
+
+      <PeerSessionEditDialog
+        sessionId={sessionId}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        session={session}
+      />
       <Footer />
     </div>
   );

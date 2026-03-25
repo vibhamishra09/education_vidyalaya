@@ -39,11 +39,13 @@ export class SessionExtensionGateway
 
   // Track which sessions each client is connected to
   private clientSessions = new Map<string, string>(); // clientId -> sessionId
-  
-  constructor(private prismaService: PrismaService,
+
+  constructor(
+    private prismaService: PrismaService,
     private readonly logger: LoggerService,
   ) {
-    this.logger.setContext(SessionExtensionGateway.name);}
+    this.logger.setContext(SessionExtensionGateway.name);
+  }
 
   async handleConnection(client: Socket) {
     try {
@@ -59,7 +61,8 @@ export class SessionExtensionGateway
 
       try {
         // Use environment variable or construct from PORT
-        const baseUrl = process.env.API_URL || `http://localhost:${process.env.PORT || 3001}`;
+        const baseUrl =
+          process.env.API_URL || `http://localhost:${process.env.PORT || 3001}`;
         const clerkRequest = new Request(baseUrl, {
           method: 'GET',
           headers: {
@@ -89,10 +92,10 @@ export class SessionExtensionGateway
 
         client.data.userId = auth.userId;
         client.data.clerkId = auth.userId;
-        
+
         // Emit authenticated event so client knows it can join sessions
         client.emit('authenticated');
-        
+
         this.logger.log(
           `🔌 Session Extension WebSocket connected - User: ${auth.userId}, Client: ${client.id}`,
         );
@@ -113,13 +116,15 @@ export class SessionExtensionGateway
   handleDisconnect(client: Socket) {
     const userId = client.data?.userId || 'unknown';
     const sessionId = this.clientSessions.get(client.id);
-    
+
     if (sessionId) {
       client.leave(sessionId);
       this.clientSessions.delete(client.id);
     }
-    
-    this.logger.log(`🔌 Session Extension WebSocket disconnected - User: ${userId}, Client: ${client.id}`);
+
+    this.logger.log(
+      `🔌 Session Extension WebSocket disconnected - User: ${userId}, Client: ${client.id}`,
+    );
   }
 
   /**
@@ -131,27 +136,35 @@ export class SessionExtensionGateway
     payload: { sessionId: string; sessionType: 'studyRoom' | 'peerSession' },
   ) {
     if (!client.data.userId) {
-      this.logger.warn(`Join session rejected - not authenticated: ${client.id}`);
+      this.logger.warn(
+        `Join session rejected - not authenticated: ${client.id}`,
+      );
       client.emit('extension-error', { message: 'Not authenticated' });
       return;
     }
 
     const { sessionId, sessionType } = payload;
-    
+
     if (!sessionId || !sessionType) {
-      client.emit('extension-error', { message: 'Invalid payload - missing sessionId or sessionType' });
+      client.emit('extension-error', {
+        message: 'Invalid payload - missing sessionId or sessionType',
+      });
       return;
     }
 
     // Join the session room
     client.join(sessionId);
     this.clientSessions.set(client.id, sessionId);
-    
+
     // Get current extension state for this session
-    const state = sessionExtensionState.get(sessionId) || { hasExtended: false };
-    
-    this.logger.log(`✅ User ${client.data.userId} joined session ${sessionId}`);
-    
+    const state = sessionExtensionState.get(sessionId) || {
+      hasExtended: false,
+    };
+
+    this.logger.log(
+      `✅ User ${client.data.userId} joined session ${sessionId}`,
+    );
+
     // Send current extension state to the client
     client.emit('extension-state', {
       sessionId,
@@ -194,7 +207,7 @@ export class SessionExtensionGateway
     }
 
     const { sessionId, sessionType } = payload;
-    
+
     if (!sessionId || !sessionType) {
       client.emit('extension-error', { message: 'Invalid payload' });
       return;
@@ -203,14 +216,18 @@ export class SessionExtensionGateway
     // Check if already extended
     const state = sessionExtensionState.get(sessionId);
     if (state?.hasExtended) {
-      client.emit('extension-error', { message: 'Session has already been extended' });
+      client.emit('extension-error', {
+        message: 'Session has already been extended',
+      });
       return;
     }
 
     // Get the user's name for the notification
     const userName = await this.getUserName(client.data.userId);
 
-    this.logger.log(`📨 Extension request from ${userName} for session ${sessionId}`);
+    this.logger.log(
+      `📨 Extension request from ${userName} for session ${sessionId}`,
+    );
 
     // Broadcast the request to all participants in the session (host will receive it)
     this.server.to(sessionId).emit('extension-requested', {
@@ -247,8 +264,13 @@ export class SessionExtensionGateway
       return;
     }
 
-    const { sessionId, sessionType, currentEndTime, extensionMinutes = 10 } = payload;
-    
+    const {
+      sessionId,
+      sessionType,
+      currentEndTime,
+      extensionMinutes = 10,
+    } = payload;
+
     if (!sessionId || !sessionType || !currentEndTime) {
       client.emit('extension-error', { message: 'Invalid payload' });
       return;
@@ -257,7 +279,9 @@ export class SessionExtensionGateway
     // Check if already extended
     const existingState = sessionExtensionState.get(sessionId);
     if (existingState?.hasExtended) {
-      client.emit('extension-error', { message: 'Session has already been extended' });
+      client.emit('extension-error', {
+        message: 'Session has already been extended',
+      });
       return;
     }
 
@@ -276,20 +300,20 @@ export class SessionExtensionGateway
 
       // Verify host status based on session type
       let isHost = false;
-      
+
       if (sessionType === 'studyRoom') {
         const studyRoom = await this.prismaService.studyRoom.findUnique({
           where: { id: sessionId },
           select: { createdById: true, duration: true },
         });
-        
+
         if (!studyRoom) {
           client.emit('extension-error', { message: 'Study room not found' });
           return;
         }
-        
+
         isHost = studyRoom.createdById === user.id;
-        
+
         // Update duration in database
         if (isHost) {
           await this.prismaService.studyRoom.update({
@@ -302,15 +326,15 @@ export class SessionExtensionGateway
           where: { id: sessionId },
           select: { requestedToId: true, duration: true },
         });
-        
+
         if (!peerSession) {
           client.emit('extension-error', { message: 'Peer session not found' });
           return;
         }
-        
+
         // In peer sessions, the person being requested (teacher) is the host
         isHost = peerSession.requestedToId === user.id;
-        
+
         // Update duration in database
         if (isHost) {
           await this.prismaService.peerSession.update({
@@ -321,12 +345,14 @@ export class SessionExtensionGateway
       }
 
       if (!isHost) {
-        client.emit('extension-error', { message: 'Only the host can extend the session' });
+        client.emit('extension-error', {
+          message: 'Only the host can extend the session',
+        });
         return;
       }
 
       // Calculate new end time
-      const newEndTime = currentEndTime + (extensionMinutes * 60 * 1000);
+      const newEndTime = currentEndTime + extensionMinutes * 60 * 1000;
 
       // Update extension state
       sessionExtensionState.set(sessionId, {
@@ -334,7 +360,9 @@ export class SessionExtensionGateway
         newEndTime,
       });
 
-      this.logger.log(`✅ Session ${sessionId} extended by ${extensionMinutes} minutes`);
+      this.logger.log(
+        `✅ Session ${sessionId} extended by ${extensionMinutes} minutes`,
+      );
 
       // Broadcast the session update to all participants
       this.server.to(sessionId).emit('session-extended', {
@@ -348,12 +376,11 @@ export class SessionExtensionGateway
         },
         timestamp: Date.now(),
       });
-
     } catch (error: any) {
       this.logger.error(`❌ Error extending session ${sessionId}:`, error);
-      client.emit('extension-error', { 
-        message: 'Failed to extend session', 
-        error: error.message 
+      client.emit('extension-error', {
+        message: 'Failed to extend session',
+        error: error.message,
       });
     }
   }
@@ -362,19 +389,18 @@ export class SessionExtensionGateway
    * Get current extension state for a session
    */
   @SubscribeMessage('get-extension-state')
-  handleGetExtensionState(
-    client: Socket,
-    payload: { sessionId: string },
-  ) {
+  handleGetExtensionState(client: Socket, payload: { sessionId: string }) {
     const { sessionId } = payload;
-    
+
     if (!sessionId) {
       client.emit('extension-error', { message: 'Invalid payload' });
       return;
     }
 
-    const state = sessionExtensionState.get(sessionId) || { hasExtended: false };
-    
+    const state = sessionExtensionState.get(sessionId) || {
+      hasExtended: false,
+    };
+
     client.emit('extension-state', {
       sessionId,
       hasExtended: state.hasExtended,

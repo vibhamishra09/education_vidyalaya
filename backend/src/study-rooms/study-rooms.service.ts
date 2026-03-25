@@ -114,7 +114,10 @@ export class StudyRoomsService {
   }
 
   private toParticipantRole(
-    role?: StudyRoomParticipantRoleDto | ExternalInviteRole | StudyRoomParticipantRole,
+    role?:
+      | StudyRoomParticipantRoleDto
+      | ExternalInviteRole
+      | StudyRoomParticipantRole,
   ): StudyRoomParticipantRole {
     if (String(role) === 'COHOST') {
       return StudyRoomParticipantRole.COHOST;
@@ -122,7 +125,10 @@ export class StudyRoomsService {
     return StudyRoomParticipantRole.PARTICIPANT;
   }
 
-  private async issueGuestAccessToken(studyRoomId: string, guestParticipantId: string) {
+  private async issueGuestAccessToken(
+    studyRoomId: string,
+    guestParticipantId: string,
+  ) {
     const token = randomUUID();
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
     await this.prisma.studyRoomGuestAccessToken.create({
@@ -374,8 +380,10 @@ export class StudyRoomsService {
             const hostReviews = (room.createdBy as any).reviewsReceived || [];
             const hostAvgRating =
               hostReviews.length > 0
-                ? hostReviews.reduce((sum: number, r: { rating: number }) => sum + r.rating, 0) /
-                hostReviews.length
+                ? hostReviews.reduce(
+                    (sum: number, r: { rating: number }) => sum + r.rating,
+                    0,
+                  ) / hostReviews.length
                 : undefined;
             const hostTotalSessions =
               ((room.createdBy as any)._count?.studyRooms || 0) +
@@ -410,7 +418,9 @@ export class StudyRoomsService {
 
           // Handle database connection errors
           if (isConnectionError(error)) {
-            this.logger.warn('[StudyRooms] Returning fallback empty study rooms due to connection error');
+            this.logger.warn(
+              '[StudyRooms] Returning fallback empty study rooms due to connection error',
+            );
             return {
               studyRooms: [],
               pagination: {
@@ -470,7 +480,10 @@ export class StudyRoomsService {
             },
             _avg: { rating: true },
             _count: { rating: true },
-            orderBy: [{ _avg: { rating: 'desc' } }, { _count: { rating: 'desc' } }],
+            orderBy: [
+              { _avg: { rating: 'desc' } },
+              { _count: { rating: 'desc' } },
+            ],
             take: normalizedLimit * 4,
           });
 
@@ -622,8 +635,13 @@ export class StudyRoomsService {
             })
             .slice(0, normalizedLimit);
 
-          const studyRoomCards = sortedRooms.map(({ room, rating, reviewCount, totalSessions }) =>
-            this.buildStudyRoomCard(room, { avgRating: rating, reviewCount, totalSessions }),
+          const studyRoomCards = sortedRooms.map(
+            ({ room, rating, reviewCount, totalSessions }) =>
+              this.buildStudyRoomCard(room, {
+                avgRating: rating,
+                reviewCount,
+                totalSessions,
+              }),
           );
 
           const dbDuration = Date.now() - dbStartTime;
@@ -744,8 +762,10 @@ export class StudyRoomsService {
       const hostReviews = (room.createdBy as any).reviewsReceived || [];
       const hostAvgRating =
         hostReviews.length > 0
-          ? hostReviews.reduce((sum: number, r: { rating: number }) => sum + r.rating, 0) /
-          hostReviews.length
+          ? hostReviews.reduce(
+              (sum: number, r: { rating: number }) => sum + r.rating,
+              0,
+            ) / hostReviews.length
           : undefined;
       const hostTotalSessions =
         ((room.createdBy as any)._count?.studyRooms || 0) +
@@ -772,7 +792,11 @@ export class StudyRoomsService {
 
   private buildStudyRoomCard(
     room: StudyRoomWithRelations,
-    rating?: { avgRating?: number; reviewCount?: number; totalSessions?: number },
+    rating?: {
+      avgRating?: number;
+      reviewCount?: number;
+      totalSessions?: number;
+    },
   ) {
     return {
       id: room.id,
@@ -805,16 +829,9 @@ export class StudyRoomsService {
 
   async getStudyRoomDetails(studyRoomId: string, userId?: string) {
     try {
-      const [studyRoom, currentUser] = await Promise.all([
-        this.prisma.studyRoom.findFirst({
-          where: {
-            OR: [
-              { id: studyRoomId },
-              { slug: studyRoomId }
-            ],
-            sessionStatus: { in: [SessionStatus.UPCOMING, SessionStatus.ONGOING] }
-          },
-          orderBy: { date: 'asc' },
+      const [studyRoom, currentUser, channel] = await Promise.all([
+        this.prisma.studyRoom.findUnique({
+          where: { id: studyRoomId },
           include: {
             createdBy: {
               select: {
@@ -880,7 +897,10 @@ export class StudyRoomsService {
           },
         }),
         userId
-          ? Promise.resolve({ id: userId })
+          ? this.prisma.user.findUnique({
+              where: { clerkId: userId },
+              select: { id: true },
+            })
           : Promise.resolve(null),
         this.prisma.channel.findFirst({
           where: { externalType: 'studyRoom', externalId: studyRoomId },
@@ -892,23 +912,19 @@ export class StudyRoomsService {
         throw new NotFoundException('Study room not found');
       }
 
-      const channel = await this.prisma.channel.findFirst({
-        where: { externalType: 'studyRoom', externalId: studyRoom.id },
-        select: { id: true },
-      });
-
       let role: 'teacher' | 'learner' | 'empty' = 'empty';
       if (currentUser) {
         if (studyRoom.createdById === currentUser.id) {
           role = 'teacher';
-        } else if (studyRoom.learners.some((l) => l.userId === currentUser.id)) {
+        } else if (
+          studyRoom.learners.some((l) => l.userId === currentUser.id)
+        ) {
           role = 'learner';
         }
       }
 
       return {
         id: studyRoom.id,
-        slug: (studyRoom as any).slug,
         title: studyRoom.title,
         description: studyRoom.description,
         imageUrl: studyRoom.imageUrl,
@@ -921,15 +937,18 @@ export class StudyRoomsService {
         externalAutoAccept: (studyRoom as any).externalAutoAccept,
         externalPasscode:
           role === 'teacher' ? (studyRoom as any).externalPasscode : null,
-        externalInvites: ((studyRoom as any).externalInvites || []).map((invite: any) => ({
-          email: invite.email,
-          role:
-            invite.role === ExternalInviteRole.COHOST
-              ? StudyRoomParticipantRoleDto.COHOST
-              : StudyRoomParticipantRoleDto.PARTICIPANT,
-        })),
-        pendingExternalJoinRequests: ((studyRoom as any).externalJoinRequests || [])
-          .length,
+        externalInvites: ((studyRoom as any).externalInvites || []).map(
+          (invite: any) => ({
+            email: invite.email,
+            role:
+              invite.role === ExternalInviteRole.COHOST
+                ? StudyRoomParticipantRoleDto.COHOST
+                : StudyRoomParticipantRoleDto.PARTICIPANT,
+          }),
+        ),
+        pendingExternalJoinRequests: (
+          (studyRoom as any).externalJoinRequests || []
+        ).length,
         isRecurring: (studyRoom as any).isRecurring,
         recurrenceMode: (studyRoom as any).recurrenceMode,
         seriesId: (studyRoom as any).seriesId,
@@ -943,16 +962,18 @@ export class StudyRoomsService {
           ...l.user,
           role: l.role ?? StudyRoomParticipantRole.PARTICIPANT,
         })),
-        guestParticipants: ((studyRoom as any).guestParticipants || []).map((g: any) => ({
-          id: g.id,
-          name: g.name,
-          email: g.email,
-          role:
-            g.role === StudyRoomParticipantRole.COHOST
-              ? StudyRoomParticipantRoleDto.COHOST
-              : StudyRoomParticipantRoleDto.PARTICIPANT,
-          livekitIdentity: g.livekitIdentity,
-        })),
+        guestParticipants: ((studyRoom as any).guestParticipants || []).map(
+          (g: any) => ({
+            id: g.id,
+            name: g.name,
+            email: g.email,
+            role:
+              g.role === StudyRoomParticipantRole.COHOST
+                ? StudyRoomParticipantRoleDto.COHOST
+                : StudyRoomParticipantRoleDto.PARTICIPANT,
+            livekitIdentity: g.livekitIdentity,
+          }),
+        ),
         participantCount:
           studyRoom.learners.length +
           (((studyRoom as any).guestParticipants || []).length as number),
@@ -971,6 +992,9 @@ export class StudyRoomsService {
           reviewer: r.reviewer,
         })),
         chatChannelId: channel?.id ?? null,
+        hostDetailsUpdatedAt: studyRoom.hostDetailsUpdatedAt
+          ? studyRoom.hostDetailsUpdatedAt.toISOString()
+          : null,
       };
     } catch (error) {
       // Handle database connection errors
@@ -1021,7 +1045,8 @@ export class StudyRoomsService {
     } catch (error) {
       throw new BadRequestException({
         code: 'INVALID_RECURRENCE',
-        message: error instanceof Error ? error.message : 'Invalid recurrence config',
+        message:
+          error instanceof Error ? error.message : 'Invalid recurrence config',
       });
     }
 
@@ -1104,7 +1129,11 @@ export class StudyRoomsService {
       }
 
       if (rows.length > 0 && allowExternalUsers) {
-        await this.updateExternalInvites(tx, rows[0].id, normalizedExternalInvites);
+        await this.updateExternalInvites(
+          tx,
+          rows[0].id,
+          normalizedExternalInvites,
+        );
       }
 
       return rows;
@@ -1116,7 +1145,11 @@ export class StudyRoomsService {
 
     const details = await this.getStudyRoomDetails(createdRooms[0].id, userId);
     let emailDelivery: InviteEmailDeliverySummary | undefined;
-    if (allowExternalUsers && externalPasscode && normalizedExternalInvites.length > 0) {
+    if (
+      allowExternalUsers &&
+      externalPasscode &&
+      normalizedExternalInvites.length > 0
+    ) {
       emailDelivery = await this.sendExternalInviteEmails(
         createdRooms[0].id,
         createDto.title,
@@ -1153,16 +1186,31 @@ export class StudyRoomsService {
       );
     }
 
+    const studyRoomEditClosedStatuses: SessionStatus[] = [
+      SessionStatus.DONE,
+      SessionStatus.CANCELLED,
+      SessionStatus.NOT_COMPLETED,
+    ];
+    if (studyRoomEditClosedStatuses.includes(studyRoom.sessionStatus)) {
+      throw new BadRequestException(
+        'Cannot edit this study room after the meeting has ended, been cancelled, or was marked not completed.',
+      );
+    }
+
     const editScope = updateDto.editScope ?? StudyRoomEditScope.SINGLE;
     const timezone = updateDto.timezone ?? studyRoom.timezone ?? 'UTC';
 
     const updateData: Prisma.StudyRoomUpdateManyMutationInput = {};
     if (updateDto.title) updateData.title = updateDto.title;
-    if (updateDto.description !== undefined) updateData.description = updateDto.description;
-    if (updateDto.imageUrl !== undefined) updateData.imageUrl = updateDto.imageUrl;
+    if (updateDto.description !== undefined)
+      updateData.description = updateDto.description;
+    if (updateDto.imageUrl !== undefined)
+      updateData.imageUrl = updateDto.imageUrl;
     if (updateDto.duration) updateData.duration = updateDto.duration;
-    if (updateDto.maxParticipants) updateData.maxParticipants = updateDto.maxParticipants;
-    if (updateDto.joiningFee !== undefined) updateData.joiningFee = updateDto.joiningFee;
+    if (updateDto.maxParticipants)
+      updateData.maxParticipants = updateDto.maxParticipants;
+    if (updateDto.joiningFee !== undefined)
+      updateData.joiningFee = updateDto.joiningFee;
     if (updateDto.status) {
       updateData.sessionStatus = updateDto.status;
     }
@@ -1193,6 +1241,39 @@ export class StudyRoomsService {
       );
     }
 
+    const newScheduledStart =
+      updateData.date != null
+        ? new Date(updateData.date as Date)
+        : studyRoom.date;
+    const dateOrTimeChanged = Boolean(updateDto.date || updateDto.time);
+    const willRegenerateSeries =
+      !!updateDto.recurrence &&
+      editScope !== StudyRoomEditScope.SINGLE &&
+      !!studyRoom.seriesId;
+
+    if (
+      !willRegenerateSeries &&
+      studyRoom.sessionStatus === SessionStatus.ONGOING &&
+      updateDto.status === undefined &&
+      dateOrTimeChanged &&
+      newScheduledStart.getTime() > Date.now()
+    ) {
+      updateData.sessionStatus = SessionStatus.UPCOMING;
+    }
+
+    const updateFieldKeys = Object.keys(updateData);
+    const hasNonStatusChange = updateFieldKeys.some(
+      (k) => k !== 'sessionStatus',
+    );
+    const shouldMarkHostDetailsEdited =
+      hasNonStatusChange ||
+      updateDto.skills !== undefined ||
+      updateDto.externalInvites !== undefined ||
+      updateDto.allowExternalUsers !== undefined;
+    if (shouldMarkHostDetailsEdited) {
+      updateData.hostDetailsUpdatedAt = new Date();
+    }
+
     const whereForScope: Prisma.StudyRoomWhereInput =
       editScope === StudyRoomEditScope.SINGLE || !studyRoom.seriesId
         ? { id: studyRoom.id }
@@ -1207,7 +1288,9 @@ export class StudyRoomsService {
     });
 
     if (targetRooms.length === 0) {
-      throw new NotFoundException('No study room occurrences found for requested scope');
+      throw new NotFoundException(
+        'No study room occurrences found for requested scope',
+      );
     }
 
     const shouldRegenerateSeries =
@@ -1221,7 +1304,8 @@ export class StudyRoomsService {
         (studyRoom.occurrenceDateLocal
           ? studyRoom.occurrenceDateLocal.toISOString().split('T')[0]
           : studyRoom.date.toISOString().split('T')[0]);
-      const time = updateDto.time ?? studyRoom.date.toISOString().substring(11, 16);
+      const time =
+        updateDto.time ?? studyRoom.date.toISOString().substring(11, 16);
 
       let regeneratedOccurrences;
       try {
@@ -1234,7 +1318,10 @@ export class StudyRoomsService {
       } catch (error) {
         throw new BadRequestException({
           code: 'INVALID_RECURRENCE',
-          message: error instanceof Error ? error.message : 'Invalid recurrence config',
+          message:
+            error instanceof Error
+              ? error.message
+              : 'Invalid recurrence config',
         });
       }
 
@@ -1251,7 +1338,11 @@ export class StudyRoomsService {
       const createdRoomIds = await this.prisma.$transaction(async (tx) => {
         const createdIds: string[] = [];
 
-        for (let i = 0; i < Math.max(targetRooms.length, regeneratedOccurrences.length); i++) {
+        for (
+          let i = 0;
+          i < Math.max(targetRooms.length, regeneratedOccurrences.length);
+          i++
+        ) {
           const target = targetRooms[i];
           const occurrence = regeneratedOccurrences[i];
 
@@ -1261,7 +1352,11 @@ export class StudyRoomsService {
               data: {
                 ...updateData,
                 date: occurrence.utcDate,
-                occurrenceDateLocal: convertLocalToUTC(occurrence.localDate, '00:00', timezone),
+                occurrenceDateLocal: convertLocalToUTC(
+                  occurrence.localDate,
+                  '00:00',
+                  timezone,
+                ),
                 occurrenceIndex: occurrence.occurrenceIndex,
                 recurrenceMode: updateDto.recurrence!.mode,
                 recurrenceEndDate: convertLocalToUTC(
@@ -1275,10 +1370,15 @@ export class StudyRoomsService {
             });
 
             if (skillIds) {
-              await tx.studyRoomSkill.deleteMany({ where: { studyRoomId: target.id } });
+              await tx.studyRoomSkill.deleteMany({
+                where: { studyRoomId: target.id },
+              });
               if (skillIds.length > 0) {
                 await tx.studyRoomSkill.createMany({
-                  data: skillIds.map((skillId) => ({ studyRoomId: target.id, skillId })),
+                  data: skillIds.map((skillId) => ({
+                    studyRoomId: target.id,
+                    skillId,
+                  })),
                   skipDuplicates: true,
                 });
               }
@@ -1299,8 +1399,10 @@ export class StudyRoomsService {
                 imageUrl: updateDto.imageUrl ?? studyRoom.imageUrl,
                 date: occurrence.utcDate,
                 duration: updateDto.duration ?? studyRoom.duration,
-                maxParticipants: updateDto.maxParticipants ?? studyRoom.maxParticipants,
-                joiningFee: updateDto.joiningFee ?? (studyRoom.joiningFee as any),
+                maxParticipants:
+                  updateDto.maxParticipants ?? studyRoom.maxParticipants,
+                joiningFee:
+                  updateDto.joiningFee ?? (studyRoom.joiningFee as any),
                 sessionStatus: updateDto.status ?? SessionStatus.UPCOMING,
                 createdById: studyRoom.createdById,
                 isRecurring: true,
@@ -1313,7 +1415,11 @@ export class StudyRoomsService {
                   time,
                   timezone,
                 ),
-                occurrenceDateLocal: convertLocalToUTC(occurrence.localDate, '00:00', timezone),
+                occurrenceDateLocal: convertLocalToUTC(
+                  occurrence.localDate,
+                  '00:00',
+                  timezone,
+                ),
                 timezone,
               },
               select: { id: true },
@@ -1330,7 +1436,10 @@ export class StudyRoomsService {
               ).map((row) => row.skillId);
             if (baseSkillIds.length > 0) {
               await tx.studyRoomSkill.createMany({
-                data: baseSkillIds.map((skillId) => ({ studyRoomId: created.id, skillId })),
+                data: baseSkillIds.map((skillId) => ({
+                  studyRoomId: created.id,
+                  skillId,
+                })),
                 skipDuplicates: true,
               });
             }
@@ -1341,7 +1450,18 @@ export class StudyRoomsService {
       });
 
       for (const createdId of createdRoomIds) {
-        await this.chatService.getOrCreateChannelForStudyRoom(createdId, [studyRoom.createdById]);
+        await this.chatService.getOrCreateChannelForStudyRoom(createdId, [
+          studyRoom.createdById,
+        ]);
+      }
+
+      if (shouldMarkHostDetailsEdited) {
+        await this.notifyStudyRoomLearnersDetailsUpdated(
+          targetRooms.map((r) => r.id),
+          studyRoom.createdById,
+          updateDto.title?.trim() ?? studyRoom.title,
+          studyRoomId,
+        );
       }
 
       return this.getStudyRoomDetails(studyRoomId, userId);
@@ -1362,10 +1482,15 @@ export class StudyRoomsService {
 
       await this.prisma.$transaction(async (tx) => {
         for (const room of targetRooms) {
-          await tx.studyRoomSkill.deleteMany({ where: { studyRoomId: room.id } });
+          await tx.studyRoomSkill.deleteMany({
+            where: { studyRoomId: room.id },
+          });
           if (skillIds.length > 0) {
             await tx.studyRoomSkill.createMany({
-              data: skillIds.map((skillId) => ({ studyRoomId: room.id, skillId })),
+              data: skillIds.map((skillId) => ({
+                studyRoomId: room.id,
+                skillId,
+              })),
               skipDuplicates: true,
             });
           }
@@ -1373,7 +1498,10 @@ export class StudyRoomsService {
       });
     }
 
-    if (updateDto.externalInvites !== undefined || updateDto.allowExternalUsers === false) {
+    if (
+      updateDto.externalInvites !== undefined ||
+      updateDto.allowExternalUsers === false
+    ) {
       await this.prisma.$transaction(async (tx) => {
         for (const room of targetRooms) {
           await tx.studyRoomExternalInvite.deleteMany({
@@ -1397,6 +1525,15 @@ export class StudyRoomsService {
           }
         }
       });
+    }
+
+    if (shouldMarkHostDetailsEdited) {
+      await this.notifyStudyRoomLearnersDetailsUpdated(
+        targetRooms.map((r) => r.id),
+        studyRoom.createdById,
+        updateDto.title?.trim() ?? studyRoom.title,
+        studyRoomId,
+      );
     }
 
     return this.getStudyRoomDetails(studyRoomId, userId);
@@ -1569,9 +1706,14 @@ export class StudyRoomsService {
     });
     if (!studyRoom) throw new NotFoundException('Study room not found');
     if (!studyRoom.allowExternalUsers) {
-      throw new BadRequestException('External access is disabled for this room');
+      throw new BadRequestException(
+        'External access is disabled for this room',
+      );
     }
-    if (!studyRoom.externalPasscode || studyRoom.externalPasscode !== dto.passcode) {
+    if (
+      !studyRoom.externalPasscode ||
+      studyRoom.externalPasscode !== dto.passcode
+    ) {
       throw new BadRequestException('Invalid passcode');
     }
     const normalizedEmail = this.normalizeEmail(dto.email);
@@ -1693,8 +1835,10 @@ export class StudyRoomsService {
       },
     });
     if (!room) throw new NotFoundException('Study room not found');
-    const isHost = room.createdById === userId;
-    const isCohost = room.learners.some((p) => p.role === StudyRoomParticipantRole.COHOST);
+    const isHost = room.createdById === user.id;
+    const isCohost = room.learners.some(
+      (p) => p.role === StudyRoomParticipantRole.COHOST,
+    );
     if (!isHost && !isCohost) {
       throw new ForbiddenException('Only host/cohost can perform this action');
     }
@@ -1743,8 +1887,12 @@ export class StudyRoomsService {
     }
 
     const participantCount =
-      (await this.prisma.studyRoomParticipant.count({ where: { studyRoomId } })) +
-      (await this.prisma.studyRoomGuestParticipant.count({ where: { studyRoomId } }));
+      (await this.prisma.studyRoomParticipant.count({
+        where: { studyRoomId },
+      })) +
+      (await this.prisma.studyRoomGuestParticipant.count({
+        where: { studyRoomId },
+      }));
     if (participantCount >= room.maxParticipants) {
       throw new BadRequestException({
         code: 'ROOM_FULL',
@@ -1802,8 +1950,12 @@ export class StudyRoomsService {
     };
   }
 
-  async setExternalAutoAccept(studyRoomId: string, userId: string, enabled: boolean) {
-    await this.assertHostOrCohost(studyRoomId, userId);
+  async setExternalAutoAccept(
+    studyRoomId: string,
+    clerkId: string,
+    enabled: boolean,
+  ) {
+    await this.assertHostOrCohost(studyRoomId, clerkId);
     await this.prisma.studyRoom.update({
       where: { id: studyRoomId },
       data: { externalAutoAccept: enabled },
@@ -1870,8 +2022,10 @@ export class StudyRoomsService {
       throw new NotFoundException('Study room not found');
     }
 
-    if (studyRoom.createdById !== userId) {
-      throw new ForbiddenException('Only the creator can cancel this study room');
+    if (studyRoom.createdById !== user.id) {
+      throw new ForbiddenException(
+        'Only the creator can cancel this study room',
+      );
     }
 
     const whereForScope: Prisma.StudyRoomWhereInput =
@@ -1971,7 +2125,9 @@ export class StudyRoomsService {
     }
 
     // Update study room status to COMPLETED
-    this.logger.debug('📝 [completeStudyRoom] Updating study room status to DONE...');
+    this.logger.debug(
+      '📝 [completeStudyRoom] Updating study room status to DONE...',
+    );
     const updatedRoom = await this.prisma.studyRoom.update({
       where: { id: studyRoomId },
       data: { sessionStatus: SessionStatus.DONE },
@@ -2065,7 +2221,7 @@ export class StudyRoomsService {
       this.logger.error(
         '⚠️ [completeStudyRoom] Failed to generate summary',
         error instanceof Error ? error.stack : undefined,
-        `studyRoomId: ${studyRoomId}, error: ${error instanceof Error ? error.message : String(error)}`
+        `studyRoomId: ${studyRoomId}, error: ${error instanceof Error ? error.message : String(error)}`,
       );
       // Continue execution even if summary generation fails
     }
@@ -2109,7 +2265,9 @@ export class StudyRoomsService {
       return { isHost: participant?.role === StudyRoomParticipantRole.COHOST };
     }
 
-    return { isHost: guestParticipant?.role === StudyRoomParticipantRole.COHOST };
+    return {
+      isHost: guestParticipant?.role === StudyRoomParticipantRole.COHOST,
+    };
   }
 
   async markNotCompleted(studyRoomId: string, userId: string) {
@@ -2160,12 +2318,16 @@ export class StudyRoomsService {
     }
 
     // Update study room status to NOT_COMPLETED
-    this.logger.debug('📝 [markNotCompleted] Updating study room status to NOT_COMPLETED...');
+    this.logger.debug(
+      '📝 [markNotCompleted] Updating study room status to NOT_COMPLETED...',
+    );
     const updatedRoom = await this.prisma.studyRoom.update({
       where: { id: studyRoomId },
       data: { sessionStatus: SessionStatus.NOT_COMPLETED },
     });
-    this.logger.log('✅ [markNotCompleted] Study room status updated to NOT_COMPLETED');
+    this.logger.log(
+      '✅ [markNotCompleted] Study room status updated to NOT_COMPLETED',
+    );
 
     // No streak updates, no achievements, no summary for NOT_COMPLETED sessions
     return {
@@ -2224,7 +2386,8 @@ export class StudyRoomsService {
     });
 
     // Store all answers as JSON (cast to Prisma's InputJsonValue type)
-    const answersJson = (feedbackDto.answers || {}) as unknown as Prisma.InputJsonValue;
+    const answersJson = (feedbackDto.answers ||
+      {}) as unknown as Prisma.InputJsonValue;
 
     if (existingFeedback) {
       // Update existing feedback
@@ -2236,7 +2399,8 @@ export class StudyRoomsService {
         },
       });
 
-      this.logger.log('✅ [saveSessionFeedback] Feedback updated for study room',
+      this.logger.log(
+        '✅ [saveSessionFeedback] Feedback updated for study room',
         studyRoomId,
       );
     } else {
@@ -2250,7 +2414,8 @@ export class StudyRoomsService {
         },
       });
 
-      this.logger.log('✅ [saveSessionFeedback] Feedback created for study room',
+      this.logger.log(
+        '✅ [saveSessionFeedback] Feedback created for study room',
         studyRoomId,
       );
     }
@@ -2260,5 +2425,58 @@ export class StudyRoomsService {
       message: 'Feedback submitted successfully',
       studyRoomId,
     };
+  }
+
+  /** Notify enrolled learners (and co-hosts) when the teacher updates session details. */
+  private async notifyStudyRoomLearnersDetailsUpdated(
+    roomIds: string[],
+    hostUserId: string,
+    titleSnippet: string,
+    primaryStudyRoomId: string,
+  ) {
+    if (roomIds.length === 0) return;
+    const rows = await this.prisma.studyRoomParticipant.findMany({
+      where: { studyRoomId: { in: roomIds } },
+      select: { userId: true, studyRoomId: true },
+    });
+    /** One notification per user; link to the occurrence they joined (not only the edited row). */
+    const userToRoomId = new Map<string, string>();
+    for (const row of rows) {
+      if (row.userId === hostUserId) continue;
+      if (!userToRoomId.has(row.userId)) {
+        userToRoomId.set(row.userId, row.studyRoomId);
+      }
+    }
+    if (userToRoomId.size === 0) return;
+    const timeLabel = new Intl.DateTimeFormat('en-US', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }).format(new Date());
+    const safeTitle =
+      titleSnippet.length > 80 ? `${titleSnippet.slice(0, 77)}…` : titleSnippet;
+    const message = `The session you enrolled in (“${safeTitle}”) has updated details (${timeLabel}).`;
+    for (const [uid, studyRoomIdForLink] of userToRoomId) {
+      try {
+        await this.notificationsService.createAndPushNotification(
+          uid,
+          message,
+          'Study session updated',
+          NotifType.NORMAL,
+          {
+            actionType: 'STUDY_ROOM_DETAILS_UPDATED',
+            studyRoomId: studyRoomIdForLink,
+            actionData: {
+              sessionId: studyRoomIdForLink,
+              sessionType: 'studyRoom',
+            },
+          },
+        );
+      } catch (err) {
+        this.logger.error(
+          `Failed to notify user ${uid} of study room details update (${primaryStudyRoomId})`,
+          err instanceof Error ? err.message : String(err),
+        );
+      }
+    }
   }
 }

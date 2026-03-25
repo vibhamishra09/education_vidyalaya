@@ -1,22 +1,26 @@
 "use client";
 
+import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Users, Loader2, Share2, Play, Calendar, Clock, Swords, Trophy } from "lucide-react";
+import { Users, Loader2, Play, Calendar, Clock, Swords, Trophy, Pencil } from "lucide-react";
 import { motion } from "framer-motion";
 import { ShareButton } from "@/components/share/share-button";
 import { cn } from "@/lib/utils";
 import { getRelativeTimeString } from "@/lib/utils/date-time";
-import { DebateRoom, DebateStatus } from "@/types/debate.types";
+import { DebateRoom, DebateStatus, canDebateHostEditFromCard } from "@/types/debate.types";
 import { useRouter } from "next/navigation";
 import { useRequireAuth } from "@/hooks/use-require-auth";
+import { DebateRoomHostEditDialog } from "@/components/debate/debate-room-host-edit-dialog";
 
 type ButtonVariant = "default" | "outline" | "secondary" | "ghost" | "destructive" | "link";
 
 interface DebateRoomCardProps {
   room: DebateRoom;
+  /** Internal DB user id from useCurrentUser (matches host.id). */
+  currentUserId?: string | null;
   actionLabel?: string;
   actionVariant?: ButtonVariant;
   onAction?: () => void;
@@ -26,6 +30,7 @@ interface DebateRoomCardProps {
 
 export function DebateRoomCard({
   room,
+  currentUserId = null,
   actionLabel,
   actionVariant,
   onAction,
@@ -34,6 +39,13 @@ export function DebateRoomCard({
 }: DebateRoomCardProps) {
   const router = useRouter();
   const requireAuth = useRequireAuth();
+  const [editOpen, setEditOpen] = useState(false);
+
+  const showHostEdit = canDebateHostEditFromCard({
+    currentUserId,
+    hostUserId: room.host.id,
+    status: room.status,
+  });
   
   // Map status to display labels
   const getStatusDisplay = () => {
@@ -261,8 +273,8 @@ export function DebateRoomCard({
              </div>
           </div>
 
-          {/* Actions: Share & CTA Button */}
-          <div className="flex items-center gap-2">
+          {/* Actions: Share, host Edit, CTA */}
+          <div className="flex items-center gap-2 flex-wrap justify-end">
              <ShareButton
                 url={`${typeof window !== "undefined" ? window.location.origin : ""}/debateroom/${room.id}`}
                 title={room.topic}
@@ -271,6 +283,22 @@ export function DebateRoomCard({
                 size="icon"
                 className="h-9 w-9 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all"
              />
+
+            {showHostEdit && (
+              <Button
+                type="button"
+                variant="secondary"
+                className="inline-flex items-center rounded-full px-2.5 py-0.5 h-9 min-h-9 text-xs font-medium shadow-none border-transparent bg-primary/10 text-primary hover:bg-primary/20 gap-1.5"
+                aria-label="Edit debate (host)"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEditOpen(true);
+                }}
+              >
+                <Pencil className="h-3 w-3 shrink-0" aria-hidden />
+                Edit
+              </Button>
+            )}
             
             <Button
               className={cn(
@@ -293,6 +321,15 @@ export function DebateRoomCard({
           </div>
         </div>
       </Card>
+
+      {showHostEdit && (
+        <DebateRoomHostEditDialog
+          roomId={room.id}
+          open={editOpen}
+          onOpenChange={setEditOpen}
+          room={editOpen ? room : null}
+        />
+      )}
     </motion.div>
   );
 }

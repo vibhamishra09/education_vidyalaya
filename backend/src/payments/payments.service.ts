@@ -1,4 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaymentStatus, Prisma } from '../generated/prisma/client';
 import { CacheService } from '../redis/cache.service';
@@ -63,7 +67,9 @@ export class PaymentsService {
                 skip,
                 take: limit,
                 include: {
-                  receivedBy: { select: { id: true, name: true, avatar: true } },
+                  receivedBy: {
+                    select: { id: true, name: true, avatar: true },
+                  },
                   peerSession: { select: { id: true, title: true } },
                   studyRoom: { select: { id: true, title: true } },
                 },
@@ -184,22 +190,27 @@ export class PaymentsService {
           };
         } catch (error) {
           // Handle database connection errors
-          const isConnectionError = 
+          const isConnectionError =
             error instanceof Prisma.PrismaClientKnownRequestError &&
             ['P1001', 'P1002', 'P1008', 'P1017', 'P2024'].includes(error.code);
-          
-          const isConnectionErrorMessage = 
+
+          const isConnectionErrorMessage =
             error instanceof Error &&
-            ['ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'Connection terminated', 'Connection closed', 'socket hang up'].some(
-              msg => error.message.includes(msg)
-            );
+            [
+              'ETIMEDOUT',
+              'ECONNRESET',
+              'ECONNREFUSED',
+              'Connection terminated',
+              'Connection closed',
+              'socket hang up',
+            ].some((msg) => error.message.includes(msg));
 
           if (isConnectionError || isConnectionErrorMessage) {
             this.logger.error(
               `Database connection error in getTransactionHistory for user ${userId}:`,
               error instanceof Error ? error.message : String(error),
             );
-            
+
             // Return empty result as fallback instead of failing the request
             // This allows the UI to still function, showing empty state
             return {

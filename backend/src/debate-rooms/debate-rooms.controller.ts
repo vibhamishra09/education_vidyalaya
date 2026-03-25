@@ -15,6 +15,7 @@ import { OptionalClerkAuthGuard } from '../common/guards/optional-clerk-auth.gua
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import {
   CreateDebateRoomDto,
+  UpdateDebateRoomDto,
   JoinDebateRoomDto,
   DebateRoomQueryDto,
   PromoteModeratorDto,
@@ -64,6 +65,19 @@ export class DebateRoomsController {
     @Body() dto: CreateDebateRoomDto,
   ) {
     return this.debateRoomsService.createDebateRoom(userId, dto);
+  }
+
+  /**
+   * Update debate room settings (host only, until debate is finished or cancelled)
+   */
+  @Patch(':roomId')
+  @UseGuards(ClerkAuthGuard)
+  async updateDebateRoom(
+    @Param('roomId') roomId: string,
+    @CurrentUser() userId: string,
+    @Body() dto: UpdateDebateRoomDto,
+  ) {
+    return this.debateRoomsService.updateDebateRoom(roomId, userId, dto);
   }
 
   /**
@@ -171,19 +185,22 @@ export class DebateRoomsController {
     @CurrentUser('dbUserId') userId: string,
   ) {
     const token = await this.debateRoomsService.getLivekitToken(roomId, userId);
-    const serverUrl = process.env.LIVEKIT_URL || process.env.LIVEKIT_SERVER_URL || process.env.LIVEKIT_WS_URL;
-    
+    const serverUrl =
+      process.env.LIVEKIT_URL ||
+      process.env.LIVEKIT_SERVER_URL ||
+      process.env.LIVEKIT_WS_URL;
+
     // Get debate room to fetch livekitRoomName
     const debateRoom = await this.debateRoomsService.getDebateRoom(roomId);
     const roomName = debateRoom.livekitRoomName || roomId;
-    
+
     // console.log('[DebateRooms] Token endpoint called for room:', roomId);
     // console.log('[DebateRooms] User:', userId);
     // console.log('[DebateRooms] Token generated:', token ? `${token.substring(0, 50)}...` : 'MISSING');
     // console.log('[DebateRooms] Server URL:', serverUrl || 'MISSING');
     // console.log('[DebateRooms] Room Name:', roomName);
-    
-    return { 
+
+    return {
       token,
       serverUrl: serverUrl,
       roomName,
@@ -210,11 +227,12 @@ export class DebateRoomsController {
     @CurrentUser('dbUserId') userId: string,
     @Body() dto: UpsertModeratorEvaluationDto,
   ) {
-    const evaluation = await this.debateRoomsService.createOrUpdateModeratorEvaluation(
-      roomId,
-      userId,
-      dto,
-    );
+    const evaluation =
+      await this.debateRoomsService.createOrUpdateModeratorEvaluation(
+        roomId,
+        userId,
+        dto,
+      );
     return { evaluation };
   }
 

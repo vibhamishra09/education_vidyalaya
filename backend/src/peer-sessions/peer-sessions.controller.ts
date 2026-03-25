@@ -1,4 +1,14 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards, Logger } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+  Logger,
+} from '@nestjs/common';
 import { PeerSessionsService } from './peer-sessions.service';
 import { ClerkAuthGuard } from '../common/guards/clerk-auth.guard';
 import { OptionalClerkAuthGuard } from '../common/guards/optional-clerk-auth.guard';
@@ -6,6 +16,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import {
   RequestSessionDto,
   UpdateSessionStatusDto,
+  UpdatePeerSessionDto,
 } from './dto/peer-session.dto';
 import { SessionFeedbackDto } from '../common/dto/session-feedback.dto';
 import { SessionStatus } from '../generated/prisma/client';
@@ -147,6 +158,20 @@ export class PeerSessionsController {
       peerSessionId,
       userId,
       feedbackDto,
+    );
+  }
+
+  @Patch(':peerSessionId')
+  @UseGuards(ClerkAuthGuard)
+  async updatePeerSession(
+    @Param('peerSessionId') peerSessionId: string,
+    @CurrentUser() userId: string,
+    @Body() dto: UpdatePeerSessionDto,
+  ) {
+    return this.peerSessionsService.updatePeerSession(
+      peerSessionId,
+      userId,
+      dto,
     );
   }
 }
