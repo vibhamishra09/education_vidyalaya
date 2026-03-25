@@ -227,8 +227,8 @@ export function SessionList({
                     <Link
                       href={
                         isPeerSession
-                         ? `/sessions/${session.slug || session.id}`
-                         : `/studyroom/${session.slug || session.id}`
+                         ? `/sessions/${session.id}`
+                         : `/studyroom/${session.id}`
                       }
                       className="flex-1"
                     >
