@@ -63,6 +63,9 @@ export class ChatController {
     @CurrentUser('clerkId') clerkUserId?: string,
     @Query('limit') limit?: string,
     @Query('cursor') cursor?: string,
+    @Query('guestEmail') guestEmail?: string, // For guest users to see their message history
+    @Query('guestAccessToken') guestAccessToken?: string,
+    @Query('includeMeta') includeMeta?: string,
   ) {
     let resolvedDbUserId = dbUserId;
     if (!resolvedDbUserId && clerkUserId) {
@@ -72,12 +75,32 @@ export class ChatController {
       }
     }
 
-    return this.chatService.getMessages(
+    let resolvedGuestEmail = guestEmail;
+    if (!resolvedGuestEmail?.trim() && guestAccessToken?.trim()) {
+      const guestRecord =
+        await this.chatService.validateGuestToken(guestAccessToken.trim());
+      if (guestRecord) {
+        resolvedGuestEmail = guestRecord.guestParticipant.email;
+      }
+    }
+
+    const messages = await this.chatService.getMessages(
       channelId,
       limit ? Number(limit) : 50,
       cursor,
-      resolvedDbUserId,
+      dbUserId,
+      resolvedGuestEmail, // Pass guest email for message history filtering
     );
+
+    const wantMeta = includeMeta === '1';
+    if (wantMeta && resolvedGuestEmail?.trim()) {
+      return {
+        messages,
+        meta: { viewerGuestEmail: resolvedGuestEmail.trim() },
+      };
+    }
+
+    return messages;
   }
 
   @UseGuards(ClerkAuthGuard)

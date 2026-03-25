@@ -57,7 +57,10 @@ export async function POST(req: NextRequest) {
     });
 
     if (!response.ok) {
-      const error = await response.json();
+      const errorText = await response.text();
+      console.error('❌ Backend error:', response.status, errorText);
+      let error;
+      try { error = JSON.parse(errorText); } catch { error = { message: errorText }; }
       return NextResponse.json(
         { error: error.message || "Failed to complete onboarding" },
         { status: response.status }
@@ -76,9 +79,10 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(data);
   } catch (error) {
-    console.error("Onboarding API error:", error);
+    console.error("❌ Onboarding failed at some step:", error instanceof Error ? error.message : error);
+    console.error("❌ Stack:", error instanceof Error ? error.stack : 'no stack');
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: error instanceof Error ? error.message : "Internal server error" },
       { status: 500 }
     );
   }
