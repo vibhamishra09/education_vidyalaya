@@ -11,10 +11,11 @@ import { Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { DebateChatService } from './debate-chat.service';
 import { DebateSide } from '../generated/prisma/client';
+import { corsOriginDelegate } from '../common/cors';
 
 @WebSocketGateway({
   cors: {
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: corsOriginDelegate,
     credentials: true,
   },
   namespace: '/debate-chat',

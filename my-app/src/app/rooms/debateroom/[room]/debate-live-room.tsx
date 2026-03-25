@@ -49,6 +49,9 @@ import {
   Zap,
   Play,
   Loader2,
+  MousePointer2,
+  MousePointerClick,
+  MousePointer,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
@@ -74,6 +77,8 @@ import { useDebateMicControl } from '@/hooks/use-debate-mic-control';
 import { MicEnabledEvent, MicDisabledEvent } from '@/types/debate.types';
 import { useToast } from '@/contexts/toast-context';
 import { useParticipantEvaluations, useUpsertModeratorEvaluation } from '@/hooks/use-debate-rooms';
+import { useRemoteControl } from '@/hooks/use-remote-control';
+import { RemoteControlOverlay } from '@/components/livekit/RemoteControlOverlay';
 
 interface ChatMessage {
   id: string;
@@ -345,6 +350,23 @@ function DebateLiveContent({
   const socketRef = useRef<Socket | null>(null);
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+
+  const isHost = userRole === 'host';
+
+  // Remote Control Hook
+  const {
+    isControlling,
+    isRequestPending,
+    targetScreenShareId,
+    requestControl,
+    stopControl,
+    sendInputEvent,
+    controllerId,
+    pendingRequestFrom,
+    grantControl,
+    denyControl,
+    revokeControl
+  } = useRemoteControl()
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -1045,14 +1067,88 @@ function DebateLiveContent({
 
           {/* Screen Share Overlay */}
           {activeScreenShare && (
-            <div className="absolute inset-0 z-10 bg-black/90 flex items-center justify-center p-4">
-              <div className="w-full h-full max-h-[80vh] relative rounded-lg overflow-hidden">
-                {isTrackReference(activeScreenShare) && activeScreenShare.publication?.track && (
-                  <VideoTrack trackRef={activeScreenShare} className="w-full h-full object-contain" />
-                )}
-                <div className="absolute bottom-4 left-4 bg-blue-500 text-white text-sm px-3 py-1 rounded-full flex items-center gap-2">
+            <div className="absolute inset-0 z-10 bg-black/90 flex flex-col items-center justify-center p-4">
+              <div className="w-full h-full max-h-[75vh] flex items-center justify-center relative group">
+                <div className="relative inline-block max-w-full max-h-full">
+                  {isTrackReference(activeScreenShare) && activeScreenShare.publication?.track && (
+                    <VideoTrack trackRef={activeScreenShare} className="w-auto h-auto max-w-full max-h-[75vh] object-contain rounded-lg" />
+                  )}
+                  
+                  {/* Remote Control Overlay */}
+                  <RemoteControlOverlay
+                    isControlling={isControlling}
+                    isSharing={activeScreenShare.participant.identity === localParticipant?.identity}
+                    controllerId={controllerId}
+                    onSendInput={sendInputEvent}
+                    onStopControl={stopControl}
+                    onRevokeControl={revokeControl}
+                  />
+                </div>
+
+                <div className="absolute bottom-4 left-4 bg-blue-500 text-white text-sm px-3 py-1 rounded-full flex items-center gap-2 shadow-lg z-20">
                   <MonitorUp className="h-4 w-4" />
                   <span>{activeScreenShare.participant.name || activeScreenShare.participant.identity} - Screen Share</span>
+                </div>
+              </div>
+              
+              {/* Remote Control Request Button */}
+              {activeScreenShare.participant.identity !== localParticipant?.identity && (
+                <div className="mt-4 shrink-0 transition-opacity duration-300">
+                  {isControlling ? (
+                    <Button 
+                      key="stop-btn"
+                      variant="destructive" 
+                      onClick={stopControl}
+                      className="gap-2 shadow-xl animate-in fade-in slide-in-from-bottom-2"
+                    >
+                      <MousePointer className="h-4 w-4" /> Stop Controlling
+                    </Button>
+                  ) : (
+                    <Button 
+                      key="req-btn"
+                      variant="secondary" 
+                      onClick={() => requestControl(activeScreenShare.participant.identity)}
+                      disabled={isRequestPending}
+                      className="gap-2 bg-sky-500/20 text-sky-400 hover:bg-sky-500/30 hover:text-sky-300 border border-sky-500/30 shadow-xl backdrop-blur-md animate-in fade-in slide-in-from-bottom-2"
+                    >
+                      <MousePointerClick className="h-4 w-4" />
+                      {isRequestPending ? 'Request Pending...' : 'Request Remote Control'}
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Remote Control Consent UI (Screen Sharer Side) */}
+          {pendingRequestFrom && (
+            <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-top-4 fade-in duration-300">
+              <div className="bg-[#1a1a1a]/95 backdrop-blur-xl border border-sky-500/30 shadow-2xl rounded-2xl p-5 w-80 max-w-[calc(100vw-32px)] text-center relative overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-b from-sky-500/10 to-transparent pointer-events-none" />
+                
+                <div className="h-12 w-12 rounded-full bg-sky-500/20 flex items-center justify-center mx-auto mb-3">
+                  <MousePointer2 className="h-6 w-6 text-sky-400" />
+                </div>
+                
+                <h3 className="text-white font-bold text-lg">Remote Control Request</h3>
+                <p className="text-white/70 text-sm mt-1 mb-4 leading-relaxed">
+                  <span className="text-white font-semibold">{pendingRequestFrom.name}</span> would like to control your shared screen.
+                </p>
+                
+                <div className="flex gap-2 w-full">
+                  <Button
+                    variant="outline"
+                    className="flex-1 bg-white/5 border-white/10 text-white/70 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30"
+                    onClick={denyControl}
+                  >
+                    Deny
+                  </Button>
+                  <Button
+                    className="flex-1 bg-sky-500 text-white hover:bg-sky-400"
+                    onClick={grantControl}
+                  >
+                    Grant Control
+                  </Button>
                 </div>
               </div>
             </div>

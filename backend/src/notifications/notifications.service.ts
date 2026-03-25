@@ -112,21 +112,11 @@ export class NotificationsService {
   }
 
   async markNotificationAsRead(notificationId: string, userId: string) {
-    // userId is actually clerkId, so we need to find the user by clerkId first
-    const user = await this.prisma.user.findUnique({
-      where: { clerkId: userId },
-      select: { id: true },
-    });
-
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
     const existingNotification = await this.prisma.notification.findUnique({
       where: { id: notificationId },
     });
 
-    if (!existingNotification || existingNotification.userId !== user.id) {
+    if (!existingNotification || existingNotification.userId !== userId) {
       throw new NotFoundException('Notification not found');
     }
 
@@ -142,18 +132,8 @@ export class NotificationsService {
   }
 
   async markAllNotificationsAsRead(userId: string) {
-    // userId is actually clerkId, so we need to find the user by clerkId first
-    const user = await this.prisma.user.findUnique({
-      where: { clerkId: userId },
-      select: { id: true },
-    });
-
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
     const result = await this.prisma.notification.updateMany({
-      where: { userId: user.id, viewed: false },
+      where: { userId, viewed: false },
       data: { viewed: true },
     });
 
@@ -174,20 +154,11 @@ export class NotificationsService {
       };
     }
 
-    const user = await this.prisma.user.findUnique({
-      where: { clerkId: userId },
-      select: { id: true },
-    });
-
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
     const uniqueNotificationIds = Array.from(new Set(notificationIds));
 
     const result = await this.prisma.notification.updateMany({
       where: {
-        userId: user.id,
+        userId,
         id: { in: uniqueNotificationIds },
         viewed: false,
       },

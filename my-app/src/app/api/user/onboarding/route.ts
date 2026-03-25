@@ -11,6 +11,10 @@ export async function POST(req: NextRequest) {
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const token = await getToken();
+    if (!token) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
     const token = await getToken();
     if (!token) {
@@ -85,14 +89,16 @@ export async function POST(req: NextRequest) {
     await client.users.updateUser(userId, {
       publicMetadata: {
         onboardingComplete: true,
+        ...(data?.user?.id ? { dbUserId: data.user.id } : {}),
       },
     });
 
     return NextResponse.json(data);
   } catch (error) {
-    console.error("Onboarding API error:", error);
+    console.error("❌ Onboarding failed at some step:", error instanceof Error ? error.message : error);
+    console.error("❌ Stack:", error instanceof Error ? error.stack : 'no stack');
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: error instanceof Error ? error.message : "Internal server error" },
       { status: 500 }
     );
   }

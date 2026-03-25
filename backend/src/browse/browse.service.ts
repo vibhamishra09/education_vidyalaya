@@ -15,12 +15,39 @@ export class BrowseService {
     this.logger.setContext(BrowseService.name);
   }
 
+  private async resolveDbUserId(userIdOrClerkId: string): Promise<string | null> {
+    const userById = await this.prisma.user.findUnique({
+      where: { id: userIdOrClerkId },
+      select: { id: true },
+    });
+
+    if (userById) {
+      return userById.id;
+    }
+
+    const userByClerkId = await this.prisma.user.findUnique({
+      where: { clerkId: userIdOrClerkId },
+      select: { id: true },
+    });
+
+    return userByClerkId?.id ?? null;
+  }
+
   /**
    * Get personalized recommendations for a user based on their "want to learn" skills.
    * Returns peers who can teach those skills and study rooms covering those topics.
    */
   async getRecommendations(userId: string, limit: number = 8) {
     try {
+      const dbUserId = await this.resolveDbUserId(userId);
+      if (!dbUserId) {
+        return {
+          peers: [],
+          studyRooms: [],
+          basedOnSkills: [],
+        };
+      }
+
       // First, get the user's "want to learn" skills
       const userSkills = await this.prisma.userSkill.findMany({
         where: {

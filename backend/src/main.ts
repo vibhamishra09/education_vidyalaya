@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-misused-promises */
+/* eslint-disable prettier/prettier */
 // Sentry must be imported and initialized before anything else
 import 'dotenv/config';
 import * as Sentry from '@sentry/nestjs';
@@ -18,6 +20,7 @@ import { AppModule } from './app.module';
 import { redisClient } from './redis/redis.provider';
 import { SentryInterceptor, SentryExceptionFilter } from './common/sentry';
 import { LoggerService } from './common/logger';
+import { corsOriginDelegate, getAllowedOrigins } from './common/cors';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -66,8 +69,9 @@ async function bootstrap() {
   const allowedOrigins = [...new Set([...envUrls, ...defaultUrls])];
 
   app.enableCors({
-    origin: allowedOrigins,
+    origin: corsOriginDelegate,
     credentials: true,
+    optionsSuccessStatus: 204,
   });
 
   logger.log(`🌐 CORS enabled for origins: ${JSON.stringify(allowedOrigins)}`);

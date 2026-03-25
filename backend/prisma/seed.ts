@@ -1,3 +1,7 @@
+/* eslint-disable prettier/prettier */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { PrismaClient } from '../src/generated/prisma/client';
 
 const prisma = new PrismaClient();
@@ -252,7 +256,7 @@ async function main() {
   console.log(`  MILESTONE: 1 achievement`);
   console.log(`  TEACHING: 3 achievements`);
   console.log(`  SOCIAL: 1 achievement`);
-  
+
   console.log('\n🎉 Achievements seed completed successfully!');
 }
 

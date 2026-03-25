@@ -12,8 +12,14 @@ export class AchievementsController {
    * Get all achievements with user's progress
    */
   @Get()
-  async getUserAchievements(@CurrentUser('id') userId: string) {
-    const result = await this.achievementsService.getUserAchievements(userId);
+  async getUserAchievements(
+    @CurrentUser('clerkId') clerkUserId: string,
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+  ) {
+    const result = await this.achievementsService.getUserAchievements(
+      clerkUserId,
+      dbUserId,
+    );
     return result;
   }
 
@@ -21,8 +27,14 @@ export class AchievementsController {
    * Get only unlocked achievements
    */
   @Get('unlocked')
-  async getUnlockedAchievements(@CurrentUser('id') userId: string) {
-    const data = await this.achievementsService.getUserAchievements(userId);
+  async getUnlockedAchievements(
+    @CurrentUser('clerkId') clerkUserId: string,
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+  ) {
+    const data = await this.achievementsService.getUserAchievements(
+      clerkUserId,
+      dbUserId,
+    );
     return {
       achievements: data.unlocked,
       total: data.totalUnlocked,
@@ -33,8 +45,14 @@ export class AchievementsController {
    * Get achievements in progress
    */
   @Get('progress')
-  async getInProgressAchievements(@CurrentUser('id') userId: string) {
-    const data = await this.achievementsService.getUserAchievements(userId);
+  async getInProgressAchievements(
+    @CurrentUser('clerkId') clerkUserId: string,
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+  ) {
+    const data = await this.achievementsService.getUserAchievements(
+      clerkUserId,
+      dbUserId,
+    );
     return {
       achievements: data.inProgress,
       total: data.inProgress.length,

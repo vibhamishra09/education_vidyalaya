@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ClerkAuthGuard } from '../common/guards/clerk-auth.guard';
 import { StudyRoomsService } from '../study-rooms/study-rooms.service';
 import { StudyRoomParticipantRole } from '../generated/prisma/client';
+import { UsersService } from '../users/users.service';
 
 @Controller('api/livekit')
 export class LivekitController {
@@ -11,6 +12,7 @@ export class LivekitController {
     private readonly livekit: LivekitService,
     private readonly prisma: PrismaService,
     private readonly studyRoomsService: StudyRoomsService,
+    private readonly usersService: UsersService,
   ) {}
 
   @Post('token')

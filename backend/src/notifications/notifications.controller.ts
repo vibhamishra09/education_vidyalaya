@@ -8,6 +8,7 @@ import {
   Query,
   Body,
   UseGuards,
+  NotFoundException,
 } from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
 import { PushNotificationService } from './push-notification.service';
@@ -27,12 +28,16 @@ export class NotificationsController {
 
   @Get()
   async getNotifications(
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string | undefined,
     @Query('type') type?: NotifType,
     @Query('viewed') viewed?: string,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
   ) {
+    if (!userId) {
+      throw new NotFoundException('Authenticated user ID missing from token');
+    }
+
     const viewedBool = viewed !== undefined ? viewed === 'true' : undefined;
 
     return this.notificationsService.getNotifications(
@@ -47,8 +52,12 @@ export class NotificationsController {
   @Patch(':notificationId/read')
   async markNotificationAsRead(
     @Param('notificationId') notificationId: string,
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string | undefined,
   ) {
+    if (!userId) {
+      throw new NotFoundException('Authenticated user ID missing from token');
+    }
+
     return this.notificationsService.markNotificationAsRead(
       notificationId,
       userId,
@@ -56,15 +65,23 @@ export class NotificationsController {
   }
 
   @Patch('read-all')
-  async markAllNotificationsAsRead(@CurrentUser() userId: string) {
+  async markAllNotificationsAsRead(@CurrentUser('dbUserId') userId: string | undefined) {
+    if (!userId) {
+      throw new NotFoundException('Authenticated user ID missing from token');
+    }
+
     return this.notificationsService.markAllNotificationsAsRead(userId);
   }
 
   @Patch('read')
   async markNotificationsAsRead(
     @Body() body: MarkNotificationsReadDto,
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string | undefined,
   ) {
+    if (!userId) {
+      throw new NotFoundException('Authenticated user ID missing from token');
+    }
+
     return this.notificationsService.markNotificationsAsRead(
       body.notificationIds,
       userId,
@@ -80,39 +97,27 @@ export class NotificationsController {
 
   @Post('push/subscribe')
   async subscribeToPush(
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string | undefined,
     @Body('subscription') subscription: PushSubscriptionDto,
   ) {
-    // Convert clerkId to database ID
-    const user = await this.notificationsService['prisma'].user.findUnique({
-      where: { clerkId: userId },
-      select: { id: true },
-    });
-
-    if (!user) {
-      throw new Error('User not found');
+    if (!userId) {
+      throw new NotFoundException('Authenticated user ID missing from token');
     }
 
-    await this.pushNotificationService.subscribeToPush(user.id, subscription);
+    await this.pushNotificationService.subscribeToPush(userId, subscription);
     return { success: true };
   }
 
   @Delete('push/unsubscribe')
   async unsubscribeFromPush(
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string | undefined,
     @Body('endpoint') endpoint: string,
   ) {
-    // Convert clerkId to database ID
-    const user = await this.notificationsService['prisma'].user.findUnique({
-      where: { clerkId: userId },
-      select: { id: true },
-    });
-
-    if (!user) {
-      throw new Error('User not found');
+    if (!userId) {
+      throw new NotFoundException('Authenticated user ID missing from token');
     }
 
-    await this.pushNotificationService.unsubscribeFromPush(user.id, endpoint);
+    await this.pushNotificationService.unsubscribeFromPush(userId, endpoint);
     return { success: true };
   }
 }

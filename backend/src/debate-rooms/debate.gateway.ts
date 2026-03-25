@@ -18,6 +18,7 @@ import {
 } from './debate-rooms.service';
 import { redisClient } from '../redis/redis.provider';
 import { LoggerService } from '../common/logger';
+import { corsOriginDelegate } from '../common/cors';
 
 // Socket.io event types
 interface JoinRoomPayload {
@@ -86,18 +87,7 @@ const REDIS_KEYS = {
 @WebSocketGateway({
   namespace: '/debate',
   cors: {
-    origin: process.env.FRONTEND_URLS?.split(',')
-      .map((url) => url.trim())
-      .filter(Boolean)
-      .concat([
-        'http://localhost:3000',
-        'http://localhost:3002',
-        'http://localhost:3007',
-      ]) || [
-      'http://localhost:3000',
-      'http://localhost:3002',
-      'http://localhost:3007',
-    ],
+    origin: corsOriginDelegate,
     credentials: true,
   },
 })

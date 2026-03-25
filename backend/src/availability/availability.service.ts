@@ -38,6 +38,15 @@ export class AvailabilityService {
     return user.id;
   }
 
+  async getUserAvailabilityForUser(userId: string) {
+    const availability = await this.prisma.userAvailability.findMany({
+      where: { userId },
+      orderBy: { dayOfWeek: 'asc' },
+    });
+
+    return { availability };
+  }
+
   /**
    * Get all availability settings for a user
    * Note: userId can be either clerkId or database userId
@@ -80,11 +89,9 @@ export class AvailabilityService {
    * Set or update availability for a specific day
    */
   async setDayAvailability(
-    userId: string, // This is clerkId
+    userId: string,
     data: UserAvailabilityDto,
   ) {
-    const dbUserId = await this.getDbUserId(userId);
-
     // Validate that endTime is after startTime
     if (data.startTime >= data.endTime) {
       throw new BadRequestException('End time must be after start time');
@@ -94,12 +101,12 @@ export class AvailabilityService {
     const availability = await this.prisma.userAvailability.upsert({
       where: {
         userId_dayOfWeek: {
-          userId: dbUserId,
+          userId,
           dayOfWeek: data.dayOfWeek,
         },
       },
       create: {
-        userId: dbUserId,
+        userId,
         dayOfWeek: data.dayOfWeek,
         startTime: data.startTime,
         endTime: data.endTime,
@@ -119,11 +126,9 @@ export class AvailabilityService {
    * Set availability for multiple days at once
    */
   async setMultipleDaysAvailability(
-    userId: string, // This is clerkId
+    userId: string,
     data: SetAvailabilityDto,
   ) {
-    const dbUserId = await this.getDbUserId(userId);
-
     // Validate all entries
     for (const avail of data.availability) {
       if (avail.startTime >= avail.endTime) {
@@ -139,12 +144,12 @@ export class AvailabilityService {
         this.prisma.userAvailability.upsert({
           where: {
             userId_dayOfWeek: {
-              userId: dbUserId, // Use database ID instead of clerkId
+              userId,
               dayOfWeek: avail.dayOfWeek,
             },
           },
           create: {
-            userId: dbUserId, // Use database ID instead of clerkId
+            userId,
             dayOfWeek: avail.dayOfWeek,
             startTime: avail.startTime,
             endTime: avail.endTime,
@@ -166,12 +171,10 @@ export class AvailabilityService {
    * Update availability for a specific day
    */
   async updateDayAvailability(
-    userId: string, // This is clerkId
+    userId: string,
     availabilityId: string,
     data: UpdateAvailabilityDto,
   ) {
-    const dbUserId = await this.getDbUserId(userId);
-
     // Check if availability exists and belongs to user
     const existing = await this.prisma.userAvailability.findUnique({
       where: { id: availabilityId },
@@ -181,7 +184,7 @@ export class AvailabilityService {
       throw new NotFoundException('Availability setting not found');
     }
 
-    if (existing.userId !== dbUserId) {
+    if (existing.userId !== userId) {
       throw new ForbiddenException(
         "You cannot update another user's availability",
       );
@@ -207,8 +210,6 @@ export class AvailabilityService {
    * Delete availability for a specific day
    */
   async deleteDayAvailability(userId: string, availabilityId: string) {
-    const dbUserId = await this.getDbUserId(userId);
-
     // Check if availability exists and belongs to user
     const existing = await this.prisma.userAvailability.findUnique({
       where: { id: availabilityId },
@@ -218,7 +219,7 @@ export class AvailabilityService {
       throw new NotFoundException('Availability setting not found');
     }
 
-    if (existing.userId !== dbUserId) {
+    if (existing.userId !== userId) {
       throw new ForbiddenException(
         "You cannot delete another user's availability",
       );
@@ -254,12 +255,19 @@ export class AvailabilityService {
     return { blockedSlots };
   }
 
+  async getBlockedSlotsForUser(userId: string) {
+    const blockedSlots = await this.prisma.blockedTimeSlot.findMany({
+      where: { userId },
+      orderBy: { startTime: 'asc' },
+    });
+
+    return { blockedSlots };
+  }
+
   /**
    * Create a blocked time slot
    */
   async createBlockedSlot(userId: string, data: CreateBlockedSlotDto) {
-    const dbUserId = await this.getDbUserId(userId);
-
     const startTime = new Date(data.startTime);
     const endTime = new Date(data.endTime);
 
@@ -275,7 +283,7 @@ export class AvailabilityService {
 
     const blockedSlot = await this.prisma.blockedTimeSlot.create({
       data: {
-        userId: dbUserId,
+        userId,
         startTime,
         endTime,
         reason: data.reason,
@@ -289,8 +297,6 @@ export class AvailabilityService {
    * Delete a blocked time slot
    */
   async deleteBlockedSlot(userId: string, blockedSlotId: string) {
-    const dbUserId = await this.getDbUserId(userId);
-
     // Check if blocked slot exists and belongs to user
     const existing = await this.prisma.blockedTimeSlot.findUnique({
       where: { id: blockedSlotId },
@@ -300,7 +306,7 @@ export class AvailabilityService {
       throw new NotFoundException('Blocked time slot not found');
     }
 
-    if (existing.userId !== dbUserId) {
+    if (existing.userId !== userId) {
       throw new ForbiddenException(
         "You cannot delete another user's blocked time slot",
       );
@@ -317,10 +323,8 @@ export class AvailabilityService {
    * Update user booking preferences (buffer time, advance time, etc.)
    */
   async updateUserPreferences(userId: string, data: UpdateUserPreferencesDto) {
-    const dbUserId = await this.getDbUserId(userId);
-
     const user = await this.prisma.user.update({
-      where: { id: dbUserId },
+      where: { id: userId },
       data: {
         bufferTime: data.bufferTime,
         minAdvanceTime: data.minAdvanceTime,
@@ -341,10 +345,8 @@ export class AvailabilityService {
    * Get user booking preferences
    */
   async getUserPreferences(userId: string) {
-    const dbUserId = await this.getDbUserId(userId);
-
     const user = await this.prisma.user.findUnique({
-      where: { id: dbUserId },
+      where: { id: userId },
       select: {
         id: true,
         bufferTime: true,

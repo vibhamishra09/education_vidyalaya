@@ -15,7 +15,7 @@ import { MessageAudienceType } from '../generated/prisma/client';
 
 @Controller('api/chat')
 export class ChatController {
-  constructor(private readonly chatService: ChatService) {}
+  constructor(private readonly chatService: ChatService) { }
 
   @UseGuards(ClerkAuthGuard)
   @Post('channels')
@@ -31,9 +31,15 @@ export class ChatController {
 
   @UseGuards(ClerkAuthGuard)
   @Get('channels')
-  async listChannels(@CurrentUser() userId: string) {
-    // Get user DB ID from clerkId
-    const user = await this.chatService.getUserByClerkId(userId);
+  async listChannels(
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
+  ) {
+    if (dbUserId) {
+      return this.chatService.listChannels(dbUserId);
+    }
+
+    const user = await this.chatService.getUserByClerkId(clerkUserId);
     if (!user) {
       throw new Error('User not found');
     }
@@ -53,35 +59,56 @@ export class ChatController {
   @Get('channels/:id/messages')
   async getMessages(
     @Param('id') channelId: string,
-    @CurrentUser() userId?: string,
+    @CurrentUser('dbUserId') dbUserId?: string,
+    @CurrentUser('clerkId') clerkUserId?: string,
     @Query('limit') limit?: string,
     @Query('cursor') cursor?: string,
     @Query('guestEmail') guestEmail?: string, // For guest users to see their message history
+    @Query('guestAccessToken') guestAccessToken?: string,
+    @Query('includeMeta') includeMeta?: string,
   ) {
-    // For authenticated users, get their DB user ID
-    // For guest users, userId will be undefined
-    let dbUserId: string | undefined;
-    if (userId) {
-      const user = await this.chatService.getUserByClerkId(userId);
+    let resolvedDbUserId = dbUserId;
+    if (!resolvedDbUserId && clerkUserId) {
+      const user = await this.chatService.getUserByClerkId(clerkUserId);
       if (user) {
-        dbUserId = user.id;
+        resolvedDbUserId = user.id;
       }
     }
 
-    return this.chatService.getMessages(
+    let resolvedGuestEmail = guestEmail;
+    if (!resolvedGuestEmail?.trim() && guestAccessToken?.trim()) {
+      const guestRecord =
+        await this.chatService.validateGuestToken(guestAccessToken.trim());
+      if (guestRecord) {
+        resolvedGuestEmail = guestRecord.guestParticipant.email;
+      }
+    }
+
+    const messages = await this.chatService.getMessages(
       channelId,
       limit ? Number(limit) : 50,
       cursor,
-      dbUserId,
-      guestEmail, // Pass guest email for message history filtering
+      resolvedDbUserId,
+      resolvedGuestEmail, // Pass guest email for message history filtering
     );
+
+    const wantMeta = includeMeta === '1';
+    if (wantMeta && resolvedGuestEmail?.trim()) {
+      return {
+        messages,
+        meta: { viewerGuestEmail: resolvedGuestEmail.trim() },
+      };
+    }
+
+    return messages;
   }
 
   @UseGuards(ClerkAuthGuard)
   @Post('channels/:id/messages')
   async sendMessage(
     @Param('id') channelId: string,
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
     @Body()
     body: {
       content: string;
@@ -89,14 +116,18 @@ export class ChatController {
       targetUserId?: string;
     },
   ) {
-    // Get user DB ID from clerkId
-    const user = await this.chatService.getUserByClerkId(userId);
-    if (!user) {
-      throw new Error('User not found');
+    let resolvedDbUserId = dbUserId;
+    if (!resolvedDbUserId) {
+      const user = await this.chatService.getUserByClerkId(clerkUserId);
+      if (!user) {
+        throw new Error('User not found');
+      }
+      resolvedDbUserId = user.id;
     }
+
     return this.chatService.sendMessage(
       channelId,
-      user.id,
+      resolvedDbUserId,
       body.content,
       body.audienceType ?? MessageAudienceType.EVERYONE,
       body.targetUserId,

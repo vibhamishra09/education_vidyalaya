@@ -79,7 +79,7 @@ export class DebateRoomsService {
   ): Promise<DebateRoomResponse> {
     // Get user's internal ID from Clerk ID
     const user = await this.prisma.user.findUnique({
-      where: { clerkId: userId },
+      where: { id: userId },
     });
 
     if (!user) {
@@ -502,7 +502,7 @@ export class DebateRoomsService {
     dto?: JoinDebateRoomDto,
   ): Promise<{ team: DebateSide; participantId: string }> {
     const user = await this.prisma.user.findUnique({
-      where: { clerkId: userId },
+      where: { id: userId },
     });
 
     if (!user) {
@@ -626,7 +626,7 @@ export class DebateRoomsService {
    */
   async leaveDebateRoom(roomId: string, userId: string): Promise<void> {
     const user = await this.prisma.user.findUnique({
-      where: { clerkId: userId },
+      where: { id: userId },
     });
 
     if (!user) {
@@ -677,7 +677,7 @@ export class DebateRoomsService {
     targetUserId: string,
   ): Promise<void> {
     const host = await this.prisma.user.findUnique({
-      where: { clerkId: hostUserId },
+      where: { id: hostUserId },
     });
 
     if (!host) {
@@ -745,7 +745,7 @@ export class DebateRoomsService {
     reason?: string,
   ): Promise<void> {
     const moderator = await this.prisma.user.findUnique({
-      where: { clerkId: moderatorUserId },
+      where: { id: moderatorUserId },
     });
 
     if (!moderator) {
@@ -1031,7 +1031,7 @@ export class DebateRoomsService {
     userId: string,
   ): Promise<{ prepEndTime: number }> {
     const user = await this.prisma.user.findUnique({
-      where: { clerkId: userId },
+      where: { id: userId },
     });
 
     if (!user) {
@@ -1640,7 +1640,7 @@ export class DebateRoomsService {
     userId: string,
   ): Promise<DebateResultsResponse> {
     const user = await this.prisma.user.findUnique({
-      where: { clerkId: userId },
+      where: { id: userId },
     });
 
     if (!user) {
@@ -1843,7 +1843,7 @@ export class DebateRoomsService {
   ): Promise<DebateResultsResponse> {
     try {
       const user = await this.prisma.user.findUnique({
-        where: { clerkId: userId },
+        where: { id: userId },
       });
 
       if (!user) {
@@ -2114,7 +2114,7 @@ export class DebateRoomsService {
   async getLivekitToken(roomId: string, userId: string): Promise<string> {
     try {
       const user = await this.prisma.user.findUnique({
-        where: { clerkId: userId },
+        where: { id: userId },
       });
 
       if (!user) {
@@ -2252,7 +2252,7 @@ export class DebateRoomsService {
    */
   async cancelDebate(roomId: string, userId: string): Promise<void> {
     const user = await this.prisma.user.findUnique({
-      where: { clerkId: userId },
+      where: { id: userId },
     });
 
     if (!user) {
@@ -2296,7 +2296,7 @@ export class DebateRoomsService {
     reason?: string,
   ): Promise<void> {
     const user = await this.prisma.user.findUnique({
-      where: { clerkId: userId },
+      where: { id: userId },
     });
 
     if (!user) {
@@ -2457,7 +2457,7 @@ export class DebateRoomsService {
     moderatorClerkId: string,
   ) {
     const user = await this.prisma.user.findUnique({
-      where: { clerkId: moderatorClerkId },
+      where: { id: moderatorClerkId },
     });
 
     if (!user) {

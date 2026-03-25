@@ -109,6 +109,7 @@ export const SessionsTab = memo(function SessionsTab({ publicStats, isLoading = 
   );
 
   const formatPeerSession = (session: UpcomingSession | PastSession) => ({
+    ...session,
     id: session.id,
     title: session.title,
     date: session.date,
@@ -125,6 +126,7 @@ export const SessionsTab = memo(function SessionsTab({ publicStats, isLoading = 
   });
 
   const formatStudyRoom = (room: UpcomingStudyRoom | PastStudyRoom) => ({
+    ...room,
     id: room.id,
     title: room.title,
     date: room.date,

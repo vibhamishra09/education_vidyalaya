@@ -50,7 +50,7 @@ export class DebateRoomsController {
   @UseGuards(OptionalClerkAuthGuard)
   async getDebateRoom(
     @Param('roomId') roomId: string,
-    @CurrentUser() userId?: string,
+    @CurrentUser('dbUserId') userId?: string,
   ) {
     return this.debateRoomsService.getDebateRoom(roomId, userId);
   }
@@ -61,7 +61,7 @@ export class DebateRoomsController {
   @Post()
   @UseGuards(ClerkAuthGuard)
   async createDebateRoom(
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string,
     @Body() dto: CreateDebateRoomDto,
   ) {
     return this.debateRoomsService.createDebateRoom(userId, dto);
@@ -87,7 +87,7 @@ export class DebateRoomsController {
   @UseGuards(ClerkAuthGuard)
   async joinDebateRoom(
     @Param('roomId') roomId: string,
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string,
     @Body() dto?: JoinDebateRoomDto,
   ) {
     return this.debateRoomsService.joinDebateRoom(roomId, userId, dto);
@@ -100,7 +100,7 @@ export class DebateRoomsController {
   @UseGuards(ClerkAuthGuard)
   async leaveDebateRoom(
     @Param('roomId') roomId: string,
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string,
   ) {
     await this.debateRoomsService.leaveDebateRoom(roomId, userId);
     return { success: true };
@@ -113,7 +113,7 @@ export class DebateRoomsController {
   @UseGuards(ClerkAuthGuard)
   async promoteModerator(
     @Param('roomId') roomId: string,
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string,
     @Body() dto: PromoteModeratorDto,
   ) {
     await this.debateRoomsService.promoteModerator(roomId, userId, dto.userId);
@@ -127,7 +127,7 @@ export class DebateRoomsController {
   @UseGuards(ClerkAuthGuard)
   async banParticipant(
     @Param('roomId') roomId: string,
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string,
     @Body() dto: BanParticipantDto,
   ) {
     await this.debateRoomsService.banParticipant(
@@ -146,7 +146,7 @@ export class DebateRoomsController {
   @UseGuards(ClerkAuthGuard)
   async startPrepPhase(
     @Param('roomId') roomId: string,
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string,
   ) {
     return this.debateRoomsService.startPrepPhase(roomId, userId);
   }
@@ -158,7 +158,7 @@ export class DebateRoomsController {
   @UseGuards(ClerkAuthGuard)
   async generateResults(
     @Param('roomId') roomId: string,
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string,
   ) {
     return this.debateRoomsService.generateResults(roomId, userId);
   }
@@ -170,7 +170,7 @@ export class DebateRoomsController {
   @UseGuards(ClerkAuthGuard)
   async getResults(
     @Param('roomId') roomId: string,
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string,
   ) {
     return this.debateRoomsService.getResults(roomId, userId);
   }
@@ -182,7 +182,7 @@ export class DebateRoomsController {
   @UseGuards(ClerkAuthGuard)
   async getLivekitToken(
     @Param('roomId') roomId: string,
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string,
   ) {
     const token = await this.debateRoomsService.getLivekitToken(roomId, userId);
     const serverUrl =
@@ -224,7 +224,7 @@ export class DebateRoomsController {
   @UseGuards(ClerkAuthGuard)
   async upsertModeratorEvaluation(
     @Param('roomId') roomId: string,
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string,
     @Body() dto: UpsertModeratorEvaluationDto,
   ) {
     const evaluation =
@@ -243,7 +243,7 @@ export class DebateRoomsController {
   @UseGuards(ClerkAuthGuard)
   async getModeratorEvaluations(
     @Param('roomId') roomId: string,
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string,
     @Query() query: ModeratorEvaluationsQueryDto,
   ) {
     const evaluations = await this.debateRoomsService.getModeratorEvaluations(
@@ -262,7 +262,7 @@ export class DebateRoomsController {
   async getParticipantEvaluations(
     @Param('roomId') roomId: string,
     @Param('participantId') participantId: string,
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string,
     @Query() query: ModeratorEvaluationsQueryDto,
   ) {
     const evaluations = await this.debateRoomsService.getParticipantEvaluations(
@@ -281,7 +281,7 @@ export class DebateRoomsController {
   @UseGuards(ClerkAuthGuard)
   async cancelDebate(
     @Param('roomId') roomId: string,
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string,
   ) {
     await this.debateRoomsService.cancelDebate(roomId, userId);
     return { success: true };

@@ -92,6 +92,7 @@ model StudyRoom {
   reminder24hSent Boolean                @default(false)
   reminder1hSent  Boolean                @default(false)
   reminder5mSent  Boolean                @default(false)
+  slug String? 
   gmeetLink       String?
   summary         String?                @db.Text
   /// Host saved participant-visible details — enrollees see “Edited” + get a notification.
@@ -113,6 +114,7 @@ model StudyRoom {
   @@index([seriesId, date])
   @@index([seriesId, occurrenceIndex])
   @@index([seriesId, sessionStatus, date])
+  @@index([slug])
 }
 
 model PeerSession {

@@ -38,13 +38,13 @@ export class PaymentsService {
   }
 
   async getTransactionHistory(
-    clerkUserId: string,
+    userId: string,
     page: number = 1,
     limit: number = 20,
   ) {
     // Create cache key - user-specific with pagination
     const cacheKey = this.cacheService.createKey('payments:history', {
-      clerkUserId,
+      userId,
       page,
       limit,
     });
@@ -57,23 +57,13 @@ export class PaymentsService {
       cacheKey,
       async () => {
         try {
-          // Find user by clerkId
-          const user = await this.prisma.user.findUnique({
-            where: { clerkId: clerkUserId },
-            select: { id: true },
-          });
-
-          if (!user) {
-            throw new NotFoundException('User not found');
-          }
-
           const skip = (page - 1) * limit;
 
           // Get payments made and received
           const [paymentsMade, paymentsReceived, totalMade, totalReceived] =
             await Promise.all([
               this.prisma.payment.findMany({
-                where: { madeById: user.id },
+                where: { madeById: userId },
                 skip,
                 take: limit,
                 include: {
@@ -86,7 +76,7 @@ export class PaymentsService {
                 orderBy: { id: 'desc' },
               }),
               this.prisma.payment.findMany({
-                where: { receivedById: user.id },
+                where: { receivedById: userId },
                 skip,
                 take: limit,
                 include: {
@@ -96,8 +86,8 @@ export class PaymentsService {
                 },
                 orderBy: { id: 'desc' },
               }),
-              this.prisma.payment.count({ where: { madeById: user.id } }),
-              this.prisma.payment.count({ where: { receivedById: user.id } }),
+              this.prisma.payment.count({ where: { madeById: userId } }),
+              this.prisma.payment.count({ where: { receivedById: userId } }),
             ]);
 
           // Combine and format transactions
@@ -217,7 +207,7 @@ export class PaymentsService {
 
           if (isConnectionError || isConnectionErrorMessage) {
             this.logger.error(
-              `Database connection error in getTransactionHistory for user ${clerkUserId}:`,
+              `Database connection error in getTransactionHistory for user ${userId}:`,
               error instanceof Error ? error.message : String(error),
             );
 

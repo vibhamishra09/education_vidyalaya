@@ -17,13 +17,152 @@ import {
 @Injectable()
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
+  private readonly clerkClient = createClerkClient({
+    secretKey: process.env.CLERK_SECRET_KEY,
+    publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
+  });
 
   constructor(
     private prisma: PrismaService,
     private readonly cacheService: CacheService,
   ) {}
 
-  async getCurrentUser(clerkUserId: string) {
+  private buildClerkDisplayName(clerkUser: any): string {
+    const firstName = typeof clerkUser?.firstName === 'string' ? clerkUser.firstName.trim() : '';
+    const lastName = typeof clerkUser?.lastName === 'string' ? clerkUser.lastName.trim() : '';
+    const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
+    if (fullName) return fullName;
+    if (typeof clerkUser?.username === 'string' && clerkUser.username.trim()) {
+      return clerkUser.username.trim();
+    }
+    const primaryEmail = clerkUser?.emailAddresses?.find(
+      (email: any) => email.id === clerkUser?.primaryEmailAddressId,
+    )?.emailAddress || clerkUser?.emailAddresses?.[0]?.emailAddress;
+    if (typeof primaryEmail === 'string' && primaryEmail.includes('@')) {
+      return primaryEmail.split('@')[0];
+    }
+    return clerkUser?.id || 'User';
+  }
+
+  async ensureUserFromClerk(clerkId: string) {
+    const existingByClerkId = await this.prisma.user.findUnique({
+      where: { clerkId },
+      select: {
+        id: true,
+        clerkId: true,
+        name: true,
+        email: true,
+        avatar: true,
+        onboarded: true,
+      },
+    });
+
+    if (existingByClerkId) {
+      return existingByClerkId;
+    }
+
+    const clerkUser = await this.clerkClient.users.getUser(clerkId);
+    const primaryEmail =
+      clerkUser.emailAddresses.find(
+        (email) => email.id === clerkUser.primaryEmailAddressId,
+      )?.emailAddress || clerkUser.emailAddresses[0]?.emailAddress;
+
+    if (!primaryEmail) {
+      throw new BadRequestException('Clerk user does not have an email address');
+    }
+
+    const displayName = this.buildClerkDisplayName(clerkUser);
+    const normalizedEmail = primaryEmail.trim().toLowerCase();
+    const avatar = clerkUser.imageUrl || null;
+
+    const existingByEmail = await this.prisma.user.findUnique({
+      where: { email: normalizedEmail },
+      select: {
+        id: true,
+        clerkId: true,
+        name: true,
+        email: true,
+        avatar: true,
+        onboarded: true,
+      },
+    });
+
+    const user = existingByEmail
+      ? await this.prisma.user.update({
+          where: { id: existingByEmail.id },
+          data: {
+            clerkId,
+            name: existingByEmail.name || displayName,
+            avatar: existingByEmail.avatar || avatar,
+          },
+          select: {
+            id: true,
+            clerkId: true,
+            name: true,
+            email: true,
+            avatar: true,
+            onboarded: true,
+          },
+        })
+      : await this.prisma.user.create({
+          data: {
+            clerkId,
+            email: normalizedEmail,
+            name: displayName,
+            avatar,
+            onboarded: false,
+          },
+          select: {
+            id: true,
+            clerkId: true,
+            name: true,
+            email: true,
+            avatar: true,
+            onboarded: true,
+          },
+        });
+
+    await this.syncClerkMetadata(clerkId, user.id);
+    return user;
+  }
+
+  private async findUserByIdOrClerkId(
+    userIdOrClerkId: string,
+    args?: Omit<Prisma.UserFindUniqueArgs, 'where'>,
+  ): Promise<any | null> {
+    const userById = await this.prisma.user.findUnique({
+      ...(args || {}),
+      where: { id: userIdOrClerkId },
+    });
+
+    if (userById) {
+      return userById;
+    }
+
+    return this.prisma.user.findUnique({
+      ...(args || {}),
+      where: { clerkId: userIdOrClerkId },
+    });
+  }
+
+  private async syncClerkMetadata(clerkId: string, dbUserId: string) {
+    try {
+      const clerkUser = await this.clerkClient.users.getUser(clerkId);
+      await this.clerkClient.users.updateUser(clerkId, {
+        publicMetadata: {
+          ...(clerkUser.publicMetadata || {}),
+          onboardingComplete: true,
+          dbUserId,
+        },
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Failed to sync Clerk metadata for ${clerkId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  async getCurrentUser(userIdOrClerkId: string) {
     // Cache for 60 seconds - user profile changes infrequently
     const cacheKey = this.cacheService.createKey('user:current', {
       clerkUserId,
@@ -35,8 +174,7 @@ export class UsersService {
       async () => {
         try {
           const user = await withQueryTimeout(
-            this.prisma.user.findUnique({
-              where: { clerkId: clerkUserId },
+            this.findUserByIdOrClerkId(userIdOrClerkId, {
               include: {
                 userSkills: {
                   include: {
@@ -46,7 +184,7 @@ export class UsersService {
               },
             }),
             25000, // 25 second timeout
-            `getCurrentUser - findUnique user ${clerkUserId}`,
+            `getCurrentUser - findUnique user ${userIdOrClerkId}`,
           );
 
           const isNewUser = !user;
@@ -131,7 +269,7 @@ export class UsersService {
               }),
             ]),
             25000, // 25 second timeout
-            `getCurrentUser - Promise.all stats for user ${clerkUserId}`,
+            `getCurrentUser - Promise.all stats for user ${userIdOrClerkId}`,
           );
 
           // Total sessions taught includes both peer sessions and study rooms hosted
@@ -175,7 +313,7 @@ export class UsersService {
           // Handle database connection errors
           if (isConnectionError(error)) {
             this.logger.error(
-              `Database connection error in getCurrentUser for ${clerkUserId}:`,
+              `Database connection error in getCurrentUser for ${userIdOrClerkId}:`,
               error instanceof Error ? error.message : String(error),
             );
 
@@ -213,9 +351,8 @@ export class UsersService {
     } = updateDto;
 
     // Get current user to check existing username
-    const currentUser = await this.prisma.user.findUnique({
-      where: { clerkId: userId },
-      select: { id: true, username: true },
+    const currentUser = await this.findUserByIdOrClerkId(userId, {
+      select: { id: true, clerkId: true, username: true },
     });
 
     if (!currentUser) {
@@ -241,7 +378,7 @@ export class UsersService {
 
     // Update user name, bio, avatar, location, school, username, hourly rate, and social links
     const user = await this.prisma.user.update({
-      where: { clerkId: userId },
+      where: { id: currentUser.id },
       data: {
         name: name !== undefined ? name : undefined,
         bio,
@@ -313,7 +450,7 @@ export class UsersService {
     await this.cacheService.deletePattern(`user:public:${userId}*`);
 
     // Return updated user with skills
-    return this.getCurrentUser(userId);
+    return this.getCurrentUser(currentUser.id);
   }
 
   async getPublicUserProfile(userId: string) {
@@ -492,8 +629,7 @@ export class UsersService {
       // If checking for current user, allow if it's their own username
       if (currentUserId) {
         try {
-          const currentUser = await this.prisma.user.findUnique({
-            where: { clerkId: currentUserId },
+          const currentUser = await this.findUserByIdOrClerkId(currentUserId, {
             select: { id: true, username: true },
           });
 
@@ -518,8 +654,8 @@ export class UsersService {
 
   async getUserSkills(userId: string, type?: 'HAS' | 'WANTS') {
     // First get the user to get the internal ID
-    const user = await this.prisma.user.findUnique({
-      where: { clerkId: userId },
+    const user = await this.findUserByIdOrClerkId(userId, {
+      select: { id: true },
     });
 
     if (!user) {
@@ -612,6 +748,8 @@ export class UsersService {
           });
 
     this.logger.debug('🔍 User created:', user);
+
+    await this.syncClerkMetadata(clerkId, user.id);
 
     // Process skills - first ensure they exist in the Skill table
     const allSkills = [...data.skillsIHave, ...data.skillsIWant];

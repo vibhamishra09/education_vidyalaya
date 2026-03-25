@@ -13,6 +13,7 @@ import { PeerSessionsService } from '../peer-sessions/peer-sessions.service';
 import { PermissionsService, FlashQuestion } from './permissions.service';
 import { LoggerService } from '../common/logger';
 import { PrismaService } from '../prisma/prisma.service';
+import { corsOriginDelegate } from '../common/cors';
 
 @WebSocketGateway({
   cors: {

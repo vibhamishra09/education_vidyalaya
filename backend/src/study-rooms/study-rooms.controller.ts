@@ -110,7 +110,7 @@ export class StudyRoomsController {
   @UseGuards(OptionalClerkAuthGuard)
   async getStudyRoomDetails(
     @Param('studyRoomId') studyRoomId: string,
-    @CurrentUser() userId?: string,
+    @CurrentUser('dbUserId') userId?: string,
   ) {
     return this.studyRoomsService.getStudyRoomDetails(studyRoomId, userId);
   }
@@ -118,7 +118,7 @@ export class StudyRoomsController {
   @Post()
   @UseGuards(ClerkAuthGuard)
   async createStudyRoom(
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string,
     @Body() createDto: CreateStudyRoomDto,
   ) {
     this.logger.debug({
@@ -132,7 +132,7 @@ export class StudyRoomsController {
   @UseGuards(ClerkAuthGuard)
   async updateStudyRoom(
     @Param('studyRoomId') studyRoomId: string,
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string,
     @Body() updateDto: UpdateStudyRoomDto,
   ) {
     return this.studyRoomsService.updateStudyRoom(
@@ -146,7 +146,7 @@ export class StudyRoomsController {
   @UseGuards(ClerkAuthGuard)
   async joinStudyRoom(
     @Param('studyRoomId') studyRoomId: string,
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string,
   ) {
     return this.studyRoomsService.joinStudyRoom(studyRoomId, userId);
   }
@@ -163,7 +163,7 @@ export class StudyRoomsController {
   @UseGuards(ClerkAuthGuard)
   async listExternalJoinRequests(
     @Param('studyRoomId') studyRoomId: string,
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string,
   ) {
     return this.studyRoomsService.listPendingExternalJoinRequests(
       studyRoomId,
@@ -176,7 +176,7 @@ export class StudyRoomsController {
   async resolveExternalJoinRequest(
     @Param('studyRoomId') studyRoomId: string,
     @Param('requestId') requestId: string,
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string,
     @Body() dto: ResolveExternalJoinRequestDto,
   ) {
     return this.studyRoomsService.resolveExternalJoinRequest(
@@ -191,7 +191,7 @@ export class StudyRoomsController {
   @UseGuards(ClerkAuthGuard)
   async toggleExternalAutoAccept(
     @Param('studyRoomId') studyRoomId: string,
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string,
     @Body() dto: ToggleExternalAutoAcceptDto,
   ) {
     return this.studyRoomsService.setExternalAutoAccept(
@@ -205,7 +205,7 @@ export class StudyRoomsController {
   @UseGuards(ClerkAuthGuard)
   async updateParticipantRole(
     @Param('studyRoomId') studyRoomId: string,
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string,
     @Body() dto: PromoteParticipantRoleDto,
   ) {
     return this.studyRoomsService.updateParticipantRole(
@@ -220,7 +220,7 @@ export class StudyRoomsController {
   @UseGuards(ClerkAuthGuard)
   async cancelStudyRoom(
     @Param('studyRoomId') studyRoomId: string,
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string,
     @Body('editScope') editScope?: StudyRoomEditScope,
   ) {
     return this.studyRoomsService.cancelStudyRoom(
@@ -234,7 +234,7 @@ export class StudyRoomsController {
   @UseGuards(ClerkAuthGuard)
   async completeStudyRoom(
     @Param('studyRoomId') studyRoomId: string,
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string,
   ) {
     this.logger.debug({
       message: '🎯 [StudyRoomsController.completeStudyRoom] Endpoint called',
@@ -255,7 +255,7 @@ export class StudyRoomsController {
   @UseGuards(ClerkAuthGuard)
   async markNotCompleted(
     @Param('studyRoomId') studyRoomId: string,
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string,
   ) {
     this.logger.debug({
       message: '⏱️ [StudyRoomsController.markNotCompleted] Endpoint called',
@@ -269,7 +269,7 @@ export class StudyRoomsController {
   @UseGuards(ClerkAuthGuard)
   async checkIsHost(
     @Param('studyRoomId') studyRoomId: string,
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string,
   ) {
     return this.studyRoomsService.checkIsHost(studyRoomId, userId);
   }
@@ -278,7 +278,7 @@ export class StudyRoomsController {
   @UseGuards(ClerkAuthGuard)
   async submitSessionFeedback(
     @Param('studyRoomId') studyRoomId: string,
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string,
     @Body() feedbackDto: SessionFeedbackDto,
   ) {
     this.logger.debug({

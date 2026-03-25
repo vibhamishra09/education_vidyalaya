@@ -1,3 +1,8 @@
+/* eslint-disable @typescript-eslint/no-unsafe-return */
+/* eslint-disable prettier/prettier */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 import {
   Injectable,
   NotFoundException,
@@ -1016,16 +1021,9 @@ export class StudyRoomsService {
   }
 
   async createStudyRoom(userId: string, createDto: CreateStudyRoomDto) {
-    // userId is actually clerkId, so we need to find the user by clerkId first
-    const user = await this.prisma.user.findUnique({
-      where: { clerkId: userId },
-      select: { id: true },
-    });
-
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
+    const slugBase = createDto.title.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
+    const uniqueHash = Math.random().toString(36).substring(2, 6);
+    const seriesSlug = `${slugBase}-${uniqueHash}`;
     let occurrences;
     const normalizedExternalInvites = (createDto.externalInvites || []).map(
       (invite) => ({
@@ -1072,10 +1070,10 @@ export class StudyRoomsService {
     const seriesId = createDto.recurrence ? randomUUID() : null;
     const recurrenceEndDate = createDto.recurrence
       ? convertLocalToUTC(
-          createDto.recurrence.repeatUntil,
-          createDto.time,
-          createDto.timezone,
-        )
+        createDto.recurrence.repeatUntil,
+        createDto.time,
+        createDto.timezone,
+      )
       : null;
     const createdRooms = await this.prisma.$transaction(async (tx) => {
       const rows: Array<{ id: string; date: Date }> = [];
@@ -1090,13 +1088,14 @@ export class StudyRoomsService {
           data: {
             title: createDto.title,
             description: createDto.description,
+            slug: seriesSlug,
             imageUrl: createDto.imageUrl,
             date: occurrence.utcDate,
             duration: createDto.duration,
             maxParticipants: createDto.maxParticipants,
             joiningFee: createDto.joiningFee || 0,
             sessionStatus,
-            createdById: user.id,
+            createdById: userId,
             isRecurring: !!createDto.recurrence,
             recurrenceMode: createDto.recurrence?.mode,
             seriesId,
@@ -1141,7 +1140,7 @@ export class StudyRoomsService {
     });
 
     for (const room of createdRooms) {
-      await this.chatService.getOrCreateChannelForStudyRoom(room.id, [user.id]);
+      await this.chatService.getOrCreateChannelForStudyRoom(room.id, [userId]);
     }
 
     const details = await this.getStudyRoomDetails(createdRooms[0].id, userId);
@@ -1161,6 +1160,7 @@ export class StudyRoomsService {
     return {
       ...details,
       seriesId,
+      slug: seriesSlug,
       occurrencesCreated: createdRooms.length,
       isRecurring: !!createDto.recurrence,
       emailDelivery,
@@ -1172,16 +1172,6 @@ export class StudyRoomsService {
     userId: string,
     updateDto: UpdateStudyRoomDto,
   ) {
-    // userId is actually clerkId, so we need to find the user by clerkId first
-    const user = await this.prisma.user.findUnique({
-      where: { clerkId: userId },
-      select: { id: true },
-    });
-
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
     const studyRoom = await this.prisma.studyRoom.findUnique({
       where: { id: studyRoomId },
     });
@@ -1190,7 +1180,7 @@ export class StudyRoomsService {
       throw new NotFoundException('Study room not found');
     }
 
-    if (studyRoom.createdById !== user.id) {
+    if (studyRoom.createdById !== userId) {
       throw new ForbiddenException(
         'Only the creator can update this study room',
       );
@@ -1338,11 +1328,11 @@ export class StudyRoomsService {
       const skillIds =
         updateDto.skills && updateDto.skills.length > 0
           ? (
-              await this.prisma.skill.findMany({
-                where: { name: { in: updateDto.skills } },
-                select: { id: true },
-              })
-            ).map((skill) => skill.id)
+            await this.prisma.skill.findMany({
+              where: { name: { in: updateDto.skills } },
+              select: { id: true },
+            })
+          ).map((skill) => skill.id)
           : null;
 
       const createdRoomIds = await this.prisma.$transaction(async (tx) => {
@@ -1439,11 +1429,11 @@ export class StudyRoomsService {
             const baseSkillIds = skillIds
               ? skillIds
               : (
-                  await tx.studyRoomSkill.findMany({
-                    where: { studyRoomId: studyRoom.id },
-                    select: { skillId: true },
-                  })
-                ).map((row) => row.skillId);
+                await tx.studyRoomSkill.findMany({
+                  where: { studyRoomId: studyRoom.id },
+                  select: { skillId: true },
+                })
+              ).map((row) => row.skillId);
             if (baseSkillIds.length > 0) {
               await tx.studyRoomSkill.createMany({
                 data: baseSkillIds.map((skillId) => ({
@@ -1550,9 +1540,8 @@ export class StudyRoomsService {
   }
 
   async joinStudyRoom(studyRoomId: string, userId: string) {
-    // userId is actually clerkId, so we need to find the user by clerkId first
     const user = await this.prisma.user.findUnique({
-      where: { clerkId: userId },
+      where: { id: userId },
       select: { id: true, coins: true },
     });
 
@@ -1700,12 +1689,12 @@ export class StudyRoomsService {
   ): Promise<
     | { status: 'PENDING'; message: string }
     | {
-        status: 'APPROVED';
-        message: string;
-        guestAccessToken: string;
-        participantIdentity: string;
-        role: StudyRoomParticipantRole;
-      }
+      status: 'APPROVED';
+      message: string;
+      guestAccessToken: string;
+      participantIdentity: string;
+      role: StudyRoomParticipantRole;
+    }
   > {
     const studyRoom = await this.prisma.studyRoom.findUnique({
       where: { id: studyRoomId },
@@ -1835,19 +1824,12 @@ export class StudyRoomsService {
     };
   }
 
-  private async assertHostOrCohost(studyRoomId: string, clerkId: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { clerkId },
-      select: { id: true },
-    });
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
+  private async assertHostOrCohost(studyRoomId: string, userId: string) {
     const room = await this.prisma.studyRoom.findUnique({
       where: { id: studyRoomId },
       include: {
         learners: {
-          where: { userId: user.id },
+          where: { userId },
           select: { role: true },
         },
       },
@@ -1860,11 +1842,11 @@ export class StudyRoomsService {
     if (!isHost && !isCohost) {
       throw new ForbiddenException('Only host/cohost can perform this action');
     }
-    return { room, user };
+    return { room, user: { id: userId } };
   }
 
-  async listPendingExternalJoinRequests(studyRoomId: string, clerkId: string) {
-    await this.assertHostOrCohost(studyRoomId, clerkId);
+  async listPendingExternalJoinRequests(studyRoomId: string, userId: string) {
+    await this.assertHostOrCohost(studyRoomId, userId);
     const requests = await this.prisma.studyRoomExternalJoinRequest.findMany({
       where: {
         studyRoomId,
@@ -1878,10 +1860,10 @@ export class StudyRoomsService {
   async resolveExternalJoinRequest(
     studyRoomId: string,
     requestId: string,
-    clerkId: string,
+    userId: string,
     approve: boolean,
   ) {
-    const { room, user } = await this.assertHostOrCohost(studyRoomId, clerkId);
+    const { room, user } = await this.assertHostOrCohost(studyRoomId, userId);
     const request = await this.prisma.studyRoomExternalJoinRequest.findUnique({
       where: { id: requestId },
     });
@@ -1983,11 +1965,11 @@ export class StudyRoomsService {
 
   async updateParticipantRole(
     studyRoomId: string,
-    clerkId: string,
+    userId: string,
     participantIdentity: string,
     role: StudyRoomParticipantRoleDto,
   ) {
-    await this.assertHostOrCohost(studyRoomId, clerkId);
+    await this.assertHostOrCohost(studyRoomId, userId);
     const nextRole = this.toParticipantRole(role);
 
     const user = await this.prisma.user.findUnique({
@@ -2031,15 +2013,6 @@ export class StudyRoomsService {
     userId: string,
     editScope: StudyRoomEditScope = StudyRoomEditScope.SINGLE,
   ) {
-    const user = await this.prisma.user.findUnique({
-      where: { clerkId: userId },
-      select: { id: true },
-    });
-
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
     const studyRoom = await this.prisma.studyRoom.findUnique({
       where: { id: studyRoomId },
       select: { id: true, createdById: true, seriesId: true, date: true },
@@ -2083,12 +2056,12 @@ export class StudyRoomsService {
     this.logger.debug({
       message: '🎯 [completeStudyRoom] Called with',
       studyRoomId,
-      clerkUserId: userId,
+      userId,
     });
 
     // userId is actually clerkId, so we need to find the user by clerkId first
     const user = await this.prisma.user.findUnique({
-      where: { clerkId: userId },
+      where: { id: userId },
       select: { id: true, name: true },
     });
 
@@ -2268,7 +2241,7 @@ export class StudyRoomsService {
         select: { createdById: true },
       }),
       this.prisma.user.findUnique({
-        where: { clerkId: userId },
+        where: { id: userId },
         select: { id: true },
       }),
       this.prisma.studyRoomGuestParticipant.findFirst({
@@ -2306,7 +2279,7 @@ export class StudyRoomsService {
 
     // userId is actually clerkId, so we need to find the user by clerkId first
     const user = await this.prisma.user.findUnique({
-      where: { clerkId: userId },
+      where: { id: userId },
       select: { id: true, name: true },
     });
 
@@ -2371,7 +2344,7 @@ export class StudyRoomsService {
   ) {
     // userId is actually clerkId, so we need to find the user by clerkId first
     const user = await this.prisma.user.findUnique({
-      where: { clerkId: userId },
+      where: { id: userId },
       select: { id: true, name: true },
     });
 

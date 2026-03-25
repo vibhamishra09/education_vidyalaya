@@ -2,6 +2,13 @@ import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'ax
 import { ApiError } from '@/types/api.types';
 import { USER_FACING_TRY_AGAIN } from '@/lib/utils/error-handling';
 
+declare module 'axios' {
+  interface AxiosRequestConfig {
+    /** When true, do not attach Clerk or default Bearer token (e.g. guest chat history). */
+    skipClerkAuth?: boolean;
+  }
+}
+
 // Extend Window interface to include Clerk
 declare global {
   interface Window {
@@ -90,6 +97,13 @@ const apiClient: AxiosInstance = axios.create({
 // Request interceptor to add auth token
 apiClient.interceptors.request.use(
   async (config: InternalAxiosRequestConfig) => {
+    if (config.skipClerkAuth) {
+      if (config.headers) {
+        delete config.headers.Authorization;
+      }
+      return config;
+    }
+
     // Check if token is already set in headers (manually set via setAuthToken)
     if (config.headers && config.headers.Authorization) {
       // Token already set, use it

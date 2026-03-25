@@ -11,21 +11,11 @@ import { TranscriptsService } from './transcripts.service';
 import { createClerkClient } from '@clerk/backend';
 import { PrismaService } from '../prisma/prisma.service';
 import { LoggerService } from '../common/logger';
+import { corsOriginDelegate } from '../common/cors';
 
 @WebSocketGateway({
   cors: {
-    origin: process.env.FRONTEND_URLS?.split(',')
-      .map((url) => url.trim())
-      .filter(Boolean)
-      .concat([
-        'http://localhost:3000',
-        'http://localhost:3002',
-        'http://localhost:3007',
-      ]) || [
-      'http://localhost:3000',
-      'http://localhost:3002',
-      'http://localhost:3007',
-    ],
+    origin: corsOriginDelegate,
     credentials: true,
   },
 })

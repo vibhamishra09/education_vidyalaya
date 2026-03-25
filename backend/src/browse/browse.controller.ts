@@ -34,11 +34,12 @@ export class BrowseController {
   @Get('recommendations')
   @UseGuards(ClerkAuthGuard)
   async getRecommendations(
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
     @Query('limit') limit?: string,
   ) {
     return this.browseService.getRecommendations(
-      userId,
+      dbUserId ?? clerkUserId,
       limit ? parseInt(limit, 10) : 8,
     );
   }
