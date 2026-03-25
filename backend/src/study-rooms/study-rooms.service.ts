@@ -142,6 +142,28 @@ export class StudyRoomsService {
     return token;
   }
 
+  private async resolveUserIdentity(userIdOrClerkId: string) {
+    const byId = await this.prisma.user.findUnique({
+      where: { id: userIdOrClerkId },
+      select: { id: true, clerkId: true },
+    });
+
+    if (byId) {
+      return byId;
+    }
+
+    const byClerkId = await this.prisma.user.findUnique({
+      where: { clerkId: userIdOrClerkId },
+      select: { id: true, clerkId: true },
+    });
+
+    if (byClerkId) {
+      return byClerkId;
+    }
+
+    throw new NotFoundException('User not found');
+  }
+
   private async updateExternalInvites(
     tx: Prisma.TransactionClient,
     studyRoomId: string,
@@ -380,10 +402,8 @@ export class StudyRoomsService {
             const hostReviews = (room.createdBy as any).reviewsReceived || [];
             const hostAvgRating =
               hostReviews.length > 0
-                ? hostReviews.reduce(
-                    (sum: number, r: { rating: number }) => sum + r.rating,
-                    0,
-                  ) / hostReviews.length
+                ? hostReviews.reduce((sum: number, r: { rating: number }) => sum + r.rating, 0) /
+                hostReviews.length
                 : undefined;
             const hostTotalSessions =
               ((room.createdBy as any)._count?.studyRooms || 0) +
@@ -480,10 +500,7 @@ export class StudyRoomsService {
             },
             _avg: { rating: true },
             _count: { rating: true },
-            orderBy: [
-              { _avg: { rating: 'desc' } },
-              { _count: { rating: 'desc' } },
-            ],
+            orderBy: [{ _avg: { rating: 'desc' } }, { _count: { rating: 'desc' } }],
             take: normalizedLimit * 4,
           });
 
@@ -706,88 +723,116 @@ export class StudyRoomsService {
   }
 
   private async getFallbackTrendingRooms(limit: number, fromDate: Date) {
-    const studyRooms = await this.prisma.studyRoom.findMany({
-      where: {
-        sessionStatus: SessionStatus.UPCOMING,
-        date: { gte: fromDate },
-      },
-      take: limit,
-      orderBy: { date: 'asc' },
-      include: {
-        createdBy: {
-          select: {
-            id: true,
-            name: true,
-            avatar: true,
-            reviewsReceived: {
-              select: { rating: true },
-            },
-            _count: {
-              select: {
-                studyRooms: {
-                  where: { sessionStatus: SessionStatus.DONE },
+    try {
+      const studyRooms = await this.prisma.studyRoom.findMany({
+        where: {
+          sessionStatus: SessionStatus.UPCOMING,
+          date: { gte: fromDate },
+        },
+        take: limit,
+        orderBy: { date: 'asc' },
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          imageUrl: true,
+          sessionStatus: true,
+          date: true,
+          duration: true,
+          maxParticipants: true,
+          joiningFee: true,
+          createdBy: {
+            select: {
+              id: true,
+              name: true,
+              avatar: true,
+              reviewsReceived: {
+                select: { rating: true },
+              },
+              _count: {
+                select: {
+                  studyRooms: {
+                    where: { sessionStatus: SessionStatus.DONE },
+                  },
+                  peerSessionsReceived: {
+                    where: { sessionStatus: SessionStatus.DONE },
+                  },
                 },
-                peerSessionsReceived: {
-                  where: { sessionStatus: SessionStatus.DONE },
+              },
+            },
+          },
+          skills: {
+            select: {
+              skill: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          },
+          learners: {
+            select: {
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  avatar: true,
                 },
               },
             },
           },
         },
-        skills: {
-          include: {
-            skill: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-          },
-        },
-        learners: {
-          select: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                avatar: true,
-              },
-            },
-          },
-        },
-      },
-    });
+      });
 
-    const studyRoomCards = studyRooms.map((room) => {
-      const hostReviews = (room.createdBy as any).reviewsReceived || [];
-      const hostAvgRating =
-        hostReviews.length > 0
-          ? hostReviews.reduce(
+      const studyRoomCards = studyRooms.map((room) => {
+        const hostReviews = (room.createdBy as any).reviewsReceived || [];
+        const hostAvgRating =
+          hostReviews.length > 0
+            ? hostReviews.reduce(
               (sum: number, r: { rating: number }) => sum + r.rating,
               0,
             ) / hostReviews.length
-          : undefined;
-      const hostTotalSessions =
-        ((room.createdBy as any)._count?.studyRooms || 0) +
-        ((room.createdBy as any)._count?.peerSessionsReceived || 0);
+            : undefined;
+        const hostTotalSessions =
+          ((room.createdBy as any)._count?.studyRooms || 0) +
+          ((room.createdBy as any)._count?.peerSessionsReceived || 0);
 
-      return this.buildStudyRoomCard(room, {
-        avgRating: hostAvgRating,
-        reviewCount: hostReviews.length,
-        totalSessions: hostTotalSessions,
+        return this.buildStudyRoomCard(room, {
+          avgRating: hostAvgRating,
+          reviewCount: hostReviews.length,
+          totalSessions: hostTotalSessions,
+        });
       });
-    });
 
-    return {
-      studyRooms: studyRoomCards,
-      pagination: {
-        total: studyRoomCards.length,
-        page: 1,
+      return {
+        studyRooms: studyRoomCards,
+        pagination: {
+          total: studyRoomCards.length,
+          page: 1,
+          limit,
+          totalPages: 1,
+          hasMore: false,
+        },
+      };
+    } catch (error) {
+      this.logger.warn({
+        message: '[StudyRooms] Fallback trending rooms query failed; returning empty list',
         limit,
-        totalPages: 1,
-        hasMore: false,
-      },
-    };
+        error: error instanceof Error ? error.message : String(error),
+      });
+
+      return {
+        studyRooms: [],
+        pagination: {
+          total: 0,
+          page: 1,
+          limit,
+          totalPages: 0,
+          hasMore: false,
+        },
+      };
+    }
   }
 
   private buildStudyRoomCard(
@@ -832,7 +877,27 @@ export class StudyRoomsService {
       const [studyRoom, currentUser, channel] = await Promise.all([
         this.prisma.studyRoom.findUnique({
           where: { id: studyRoomId },
-          include: {
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            imageUrl: true,
+            sessionStatus: true,
+            date: true,
+            duration: true,
+            maxParticipants: true,
+            joiningFee: true,
+            createdById: true,
+            summary: true,
+            allowExternalUsers: true,
+            externalAutoAccept: true,
+            externalPasscode: true,
+            isRecurring: true,
+            recurrenceMode: true,
+            seriesId: true,
+            seriesRootId: true,
+            occurrenceIndex: true,
+            timezone: true,
             createdBy: {
               select: {
                 id: true,
@@ -841,7 +906,8 @@ export class StudyRoomsService {
               },
             },
             skills: {
-              include: {
+              select: {
+                id: true,
                 skill: {
                   select: {
                     id: true,
@@ -851,7 +917,10 @@ export class StudyRoomsService {
               },
             },
             learners: {
-              include: {
+              select: {
+                id: true,
+                userId: true,
+                role: true,
                 user: {
                   select: {
                     id: true,
@@ -882,9 +951,10 @@ export class StudyRoomsService {
               select: { id: true },
             },
             reviews: {
-              orderBy: { id: 'desc' },
-              take: 20,
-              include: {
+              select: {
+                id: true,
+                rating: true,
+                review: true,
                 reviewer: {
                   select: {
                     id: true,
@@ -893,14 +963,13 @@ export class StudyRoomsService {
                   },
                 },
               },
+              orderBy: { id: 'desc' },
+              take: 20,
             },
           },
         }),
         userId
-          ? this.prisma.user.findUnique({
-              where: { clerkId: userId },
-              select: { id: true },
-            })
+          ? this.resolveUserIdentity(userId).catch(() => null)
           : Promise.resolve(null),
         this.prisma.channel.findFirst({
           where: { externalType: 'studyRoom', externalId: studyRoomId },
@@ -912,19 +981,23 @@ export class StudyRoomsService {
         throw new NotFoundException('Study room not found');
       }
 
+      const channel = await this.prisma.channel.findFirst({
+        where: { externalType: 'studyRoom', externalId: studyRoom.id },
+        select: { id: true },
+      });
+
       let role: 'teacher' | 'learner' | 'empty' = 'empty';
       if (currentUser) {
         if (studyRoom.createdById === currentUser.id) {
           role = 'teacher';
-        } else if (
-          studyRoom.learners.some((l) => l.userId === currentUser.id)
-        ) {
+        } else if (studyRoom.learners.some((l) => l.userId === currentUser.id)) {
           role = 'learner';
         }
       }
 
       return {
         id: studyRoom.id,
+        slug: (studyRoom as any).slug,
         title: studyRoom.title,
         description: studyRoom.description,
         imageUrl: studyRoom.imageUrl,
@@ -937,18 +1010,15 @@ export class StudyRoomsService {
         externalAutoAccept: (studyRoom as any).externalAutoAccept,
         externalPasscode:
           role === 'teacher' ? (studyRoom as any).externalPasscode : null,
-        externalInvites: ((studyRoom as any).externalInvites || []).map(
-          (invite: any) => ({
-            email: invite.email,
-            role:
-              invite.role === ExternalInviteRole.COHOST
-                ? StudyRoomParticipantRoleDto.COHOST
-                : StudyRoomParticipantRoleDto.PARTICIPANT,
-          }),
-        ),
-        pendingExternalJoinRequests: (
-          (studyRoom as any).externalJoinRequests || []
-        ).length,
+        externalInvites: ((studyRoom as any).externalInvites || []).map((invite: any) => ({
+          email: invite.email,
+          role:
+            invite.role === ExternalInviteRole.COHOST
+              ? StudyRoomParticipantRoleDto.COHOST
+              : StudyRoomParticipantRoleDto.PARTICIPANT,
+        })),
+        pendingExternalJoinRequests: ((studyRoom as any).externalJoinRequests || [])
+          .length,
         isRecurring: (studyRoom as any).isRecurring,
         recurrenceMode: (studyRoom as any).recurrenceMode,
         seriesId: (studyRoom as any).seriesId,
@@ -962,18 +1032,16 @@ export class StudyRoomsService {
           ...l.user,
           role: l.role ?? StudyRoomParticipantRole.PARTICIPANT,
         })),
-        guestParticipants: ((studyRoom as any).guestParticipants || []).map(
-          (g: any) => ({
-            id: g.id,
-            name: g.name,
-            email: g.email,
-            role:
-              g.role === StudyRoomParticipantRole.COHOST
-                ? StudyRoomParticipantRoleDto.COHOST
-                : StudyRoomParticipantRoleDto.PARTICIPANT,
-            livekitIdentity: g.livekitIdentity,
-          }),
-        ),
+        guestParticipants: ((studyRoom as any).guestParticipants || []).map((g: any) => ({
+          id: g.id,
+          name: g.name,
+          email: g.email,
+          role:
+            g.role === StudyRoomParticipantRole.COHOST
+              ? StudyRoomParticipantRoleDto.COHOST
+              : StudyRoomParticipantRoleDto.PARTICIPANT,
+          livekitIdentity: g.livekitIdentity,
+        })),
         participantCount:
           studyRoom.learners.length +
           (((studyRoom as any).guestParticipants || []).length as number),
@@ -992,8 +1060,8 @@ export class StudyRoomsService {
           reviewer: r.reviewer,
         })),
         chatChannelId: channel?.id ?? null,
-        hostDetailsUpdatedAt: studyRoom.hostDetailsUpdatedAt
-          ? studyRoom.hostDetailsUpdatedAt.toISOString()
+        hostDetailsUpdatedAt: (studyRoom as any).hostDetailsUpdatedAt
+          ? (studyRoom as any).hostDetailsUpdatedAt.toISOString()
           : null,
       };
     } catch (error) {
@@ -1021,6 +1089,7 @@ export class StudyRoomsService {
   }
 
   async createStudyRoom(userId: string, createDto: CreateStudyRoomDto) {
+    const creator = await this.resolveUserIdentity(userId);
     const slugBase = createDto.title.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
     const uniqueHash = Math.random().toString(36).substring(2, 6);
     const seriesSlug = `${slugBase}-${uniqueHash}`;
@@ -1095,7 +1164,7 @@ export class StudyRoomsService {
             maxParticipants: createDto.maxParticipants,
             joiningFee: createDto.joiningFee || 0,
             sessionStatus,
-            createdById: userId,
+            createdById: creator.id,
             isRecurring: !!createDto.recurrence,
             recurrenceMode: createDto.recurrence?.mode,
             seriesId,
@@ -1140,10 +1209,9 @@ export class StudyRoomsService {
     });
 
     for (const room of createdRooms) {
-      await this.chatService.getOrCreateChannelForStudyRoom(room.id, [userId]);
+      await this.chatService.getOrCreateChannelForStudyRoom(room.id, [creator.id]);
     }
 
-    const details = await this.getStudyRoomDetails(createdRooms[0].id, userId);
     let emailDelivery: InviteEmailDeliverySummary | undefined;
     if (
       allowExternalUsers &&
@@ -1157,11 +1225,38 @@ export class StudyRoomsService {
         normalizedExternalInvites,
       );
     }
+
+    const firstRoom = createdRooms[0];
     return {
-      ...details,
-      seriesId,
-      slug: seriesSlug,
+      id: firstRoom.id,
+      title: createDto.title,
+      description: createDto.description ?? null,
+      imageUrl: createDto.imageUrl ?? null,
+      sessionStatus:
+        firstRoom.date.getTime() <= now.getTime()
+          ? SessionStatus.ONGOING
+          : SessionStatus.UPCOMING,
+      date: firstRoom.date,
+      duration: createDto.duration,
+      maxParticipants: createDto.maxParticipants,
+      joiningFee: createDto.joiningFee || 0,
+      createdBy: {
+        id: creator.id,
+        name: '',
+        avatar: null,
+      },
+      skills: createDto.skills,
+      participantCount: 0,
+      participants: [],
+      role: 'teacher',
+      reviews: [],
+      chatChannelId: null,
+      summary: null,
+      allowExternalUsers,
+      externalAutoAccept: allowExternalUsers && !!createDto.externalAutoAccept,
+      externalPasscode: allowExternalUsers ? externalPasscode : null,
       occurrencesCreated: createdRooms.length,
+      slug: seriesSlug,
       isRecurring: !!createDto.recurrence,
       emailDelivery,
     };

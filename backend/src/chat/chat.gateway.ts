@@ -16,29 +16,7 @@ import { UsersService } from '../users/users.service';
 
 @WebSocketGateway({
   cors: {
-    origin: (() => {
-      const envUrls =
-        process.env.FRONTEND_URLS?.split(',')
-          .map((url) => url.trim())
-          .filter(Boolean) || [];
-      const defaultUrls = [
-        'https://www.webyalaya.com',
-        'https://webyalaya.com',
-        'https://webyalaya-next.vercel.app',
-        'https://test.webyalaya.com',
-        'https://test2.webyalaya.com',
-        'https://webyalaya-next-test.vercel.app',
-        'https://dev.webyalaya.com',
-        'https://dev2.webyalaya.com',
-        'https://hedera.webyalaya.com',
-        'https://webyalaya-green.vercel.app',
-        'https://webyalaya-purple.vercel.app',
-        'http://localhost:3000',
-        'http://localhost:3002',
-        'http://localhost:3007',
-      ];
-      return [...new Set([...envUrls, ...defaultUrls])];
-    })(),
+    origin: corsOriginDelegate,
     credentials: true,
   },
 })
@@ -160,10 +138,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         );
 
         if (!requestState.isSignedIn) {
-          // Not a valid Clerk token — try guest token path before disconnecting
-          const guestRecord = await this.chatService
-            .validateGuestToken(token)
-            .catch(() => null);
+          // Not a valid Clerk token, try guest token path before disconnecting
+          const guestRecord = await this.chatService.validateGuestToken(token).catch(() => null);
           if (guestRecord) {
             client.data.isGuest = true;
             client.data.guestName = guestRecord.guestParticipant.name;
@@ -198,10 +174,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         client.emit('chat:authenticated');
         this.logger.debug('WebSocket authenticated for user:', auth.userId);
       } catch (verifyError: any) {
-        // Clerk auth failed — try guest token path
-        const guestRecord = await this.chatService
-          .validateGuestToken(token)
-          .catch(() => null);
+        // Clerk auth failed, try guest token path
+        const guestRecord = await this.chatService.validateGuestToken(token).catch(() => null);
         if (guestRecord) {
           client.data.isGuest = true;
           client.data.guestName = guestRecord.guestParticipant.name;
@@ -242,9 +216,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         client.join(payload.channelId);
         client.emit('chat:joined', { channelId: payload.channelId });
       } else {
-        client.emit('error', {
-          message: 'Not authorized to join this channel',
-        });
+        client.emit('chat:error', { message: 'Not authorized to join this channel' });
       }
       return;
     }
@@ -312,17 +284,19 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
           hostDbUserId,
         );
 
-        // Transform message for emission (similar to getMessages transformation)
-        const messageToEmit = {
+        const base = this.serializeMessageForSocket({
           ...message,
-          sender: message.sender || {
-            id: client.data.guestIdentity || 'guest',
-            name: client.data.guestName || 'Guest',
-            avatar: null,
-          },
-          isGuest: true,
-          guestEmail: client.data.guestEmail,
-        };
+          guestSenderId: message.guestSenderId,
+          guestEmail: message.guestEmail ?? client.data.guestEmail,
+          sender:
+            message.sender || {
+              id: client.data.guestParticipantId || client.data.guestIdentity || 'guest',
+              name: client.data.guestName || 'Guest',
+              avatar: null,
+            },
+        });
+
+        const messageToEmit = { ...base, isGuest: true };
 
         // Emit to host and sender
         this.server
@@ -331,9 +305,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         client.emit('message:new', messageToEmit);
       } catch (error: any) {
         this.logger.debug('Error sending guest message:', error);
-        client.emit('error', {
-          message: error.message || 'Failed to send message',
-        });
+        client.emit('chat:error', { message: error.message || 'Failed to send message' });
       }
       return;
     }
@@ -351,8 +323,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const hostDbUserId = sessionInfo
         ? await this.chatService.getChannelHostUserId(payload.channelId)
         : null;
-      const isHostSender =
-        !!hostDbUserId && hostDbUserId === client.data.dbUserId;
+      const isHostSender = !!hostDbUserId && hostDbUserId === client.data.dbUserId;
 
       if (sessionInfo) {
         // Check if user has chat permission for this session
@@ -364,7 +335,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         );
 
         if (!canChat) {
-          client.emit('error', {
+          client.emit('chat:error', {
             code: 'CHAT_DISABLED',
             message: 'Chat is disabled by the host',
           });

@@ -30,11 +30,8 @@ export class LivekitController {
     const identity = req.userId as string;
 
     // Fetch user's display name and avatar from database
-    const user = await this.prisma.user.findUnique({
-      where: { clerkId: identity },
-      select: { name: true, avatar: true },
-    });
-
+    const user = await this.usersService.ensureUserFromClerk(identity);
+    
     // Include avatar URL in metadata for display in video room
     const userMetadata = JSON.stringify({
       avatar: user?.avatar || null,
