@@ -270,7 +270,17 @@ export default function RoomPage() {
 				}
 			} catch (e: unknown) {
 				if (!mounted) return
-				const errorMessage = e instanceof Error ? e.message : 'Failed to initialize'
+				const errorMessage = axios.isAxiosError(e)
+					? ((typeof e.response?.data === 'object' &&
+							e.response?.data &&
+							'message' in e.response.data
+								? e.response.data.message
+								: null) as string | null) ||
+					  e.message ||
+					  'Failed to initialize'
+					: e instanceof Error
+						? e.message
+						: 'Failed to initialize'
 				setError(errorMessage)
 			} finally {
 				if (mounted) setLoading(false)

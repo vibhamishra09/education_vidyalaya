@@ -59,21 +59,8 @@ export class PeerSessionsService {
       async () => {
         try {
           this.logger.debug('userId', userId);
-          // userId is actually clerkId, so we need to find the user by clerkId first
-          const user = await this.prisma.user.findUnique({
-          where: { clerkId: userId },
-          select: { id: true },
-        });
-
-        if (!user) {
-          throw new BadRequestException({
-            code: 'USER_NOT_FOUND',
-            message: 'User not found',
-          });
-        }
-
         const where: any = {
-          OR: [{ requestedById: user.id }, { requestedToId: user.id }],
+          OR: [{ requestedById: userId }, { requestedToId: userId }],
         };
 
         if (status) where.sessionStatus = status;
@@ -288,10 +275,9 @@ export class PeerSessionsService {
     // Determine user role in the session
     let role: 'requester' | 'requestedTo' | 'empty' = 'empty';
     if (userId) {
-      // userId is actually clerkId
-      if (peerSession.requestedBy.clerkId === userId) {
+      if (peerSession.requestedBy.id === userId) {
         role = 'requester';
-      } else if (peerSession.requestedTo.clerkId === userId) {
+      } else if (peerSession.requestedTo.id === userId) {
         role = 'requestedTo';
       }
     }
@@ -358,9 +344,8 @@ export class PeerSessionsService {
   }
 
   async requestPeerSession(userId: string, requestDto: RequestSessionDto) {
-    // userId is actually clerkId, so we need to find the user by clerkId
     const user = await this.prisma.user.findUnique({
-      where: { clerkId: userId },
+      where: { id: userId },
     });
 
     if (!user) {
@@ -512,19 +497,6 @@ export class PeerSessionsService {
     userId: string,
     updateDto: UpdateSessionStatusDto,
   ) {
-    // userId is actually clerkId, so we need to find the user by clerkId first
-    const user = await this.prisma.user.findUnique({
-      where: { clerkId: userId },
-      select: { id: true },
-    });
-
-    if (!user) {
-      throw new BadRequestException({
-        code: 'USER_NOT_FOUND',
-        message: 'User not found',
-      });
-    }
-
     const peerSession = await this.prisma.peerSession.findUnique({
       where: { id: peerSessionId },
       include: {
@@ -542,7 +514,7 @@ export class PeerSessionsService {
     this.validateStatusTransition(
       peerSession.sessionStatus,
       updateDto.status,
-      user.id,
+      userId,
       peerSession,
     );
 
@@ -687,11 +659,11 @@ export class PeerSessionsService {
 
       // Notify the other party about cancellation
       const otherPartyId =
-        user.id === peerSession.requestedById
+        userId === peerSession.requestedById
           ? peerSession.requestedToId
           : peerSession.requestedById;
       const otherPartyName =
-        user.id === peerSession.requestedById
+        userId === peerSession.requestedById
           ? peerSession.requestedTo.name
           : peerSession.requestedBy.name;
 
@@ -757,19 +729,6 @@ export class PeerSessionsService {
   async markNotCompleted(peerSessionId: string, userId: string) {
     this.logger.debug('⏱️ [markNotCompleted] Marking session as NOT_COMPLETED:', { peerSessionId, userId });
     
-    // userId is actually clerkId
-    const user = await this.prisma.user.findUnique({
-      where: { clerkId: userId },
-      select: { id: true },
-    });
-
-    if (!user) {
-      throw new BadRequestException({
-        code: 'USER_NOT_FOUND',
-        message: 'User not found',
-      });
-    }
-
     const peerSession = await this.prisma.peerSession.findUnique({
       where: { id: peerSessionId },
       include: {
@@ -784,7 +743,7 @@ export class PeerSessionsService {
     }
 
     // Only participants can mark as not completed
-    if (peerSession.requestedById !== user.id && peerSession.requestedToId !== user.id) {
+    if (peerSession.requestedById !== userId && peerSession.requestedToId !== userId) {
       throw new ForbiddenException('Only session participants can mark session as not completed');
     }
 
@@ -893,19 +852,6 @@ export class PeerSessionsService {
   }
 
   async checkIsHost(peerSessionId: string, userId: string) {
-    // userId is actually clerkId, so we need to find the user by clerkId first
-    const user = await this.prisma.user.findUnique({
-      where: { clerkId: userId },
-      select: { id: true },
-    });
-
-    if (!user) {
-      throw new BadRequestException({
-        code: 'USER_NOT_FOUND',
-        message: 'User not found',
-      });
-    }
-
     const peerSession = await this.prisma.peerSession.findUnique({
       where: { id: peerSessionId },
       select: { requestedToId: true },
@@ -916,7 +862,7 @@ export class PeerSessionsService {
     }
 
     // For peer sessions, the host is the tutor (requestedToId)
-    const isHost = peerSession.requestedToId === user.id;
+    const isHost = peerSession.requestedToId === userId;
 
     return { isHost };
   }
@@ -926,16 +872,6 @@ export class PeerSessionsService {
     userId: string,
     feedbackDto: SessionFeedbackDto,
   ) {
-    // userId is actually clerkId, so we need to find the user by clerkId first
-    const user = await this.prisma.user.findUnique({
-      where: { clerkId: userId },
-      select: { id: true, name: true },
-    });
-
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
     const peerSession = await this.prisma.peerSession.findUnique({
       where: { id: peerSessionId },
       select: {
@@ -950,8 +886,8 @@ export class PeerSessionsService {
     }
 
     // Check if user is either the requester or the requested tutor
-    const isRequester = peerSession.requestedById === user.id;
-    const isTutor = peerSession.requestedToId === user.id;
+    const isRequester = peerSession.requestedById === userId;
+    const isTutor = peerSession.requestedToId === userId;
 
     if (!isRequester && !isTutor) {
       throw new ForbiddenException(
@@ -962,7 +898,7 @@ export class PeerSessionsService {
     // Check if user has already submitted feedback for this session
     const existingFeedback = await this.prisma.sessionFeedback.findFirst({
       where: {
-        userId: user.id,
+        userId,
         peerSessionId: peerSessionId,
       },
     });
@@ -988,7 +924,7 @@ export class PeerSessionsService {
       // Create new feedback entry
       await this.prisma.sessionFeedback.create({
         data: {
-          userId: user.id,
+          userId,
           peerSessionId: peerSessionId,
           isHost: feedbackDto.isHost,
           answers: answersJson,

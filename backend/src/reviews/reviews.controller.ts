@@ -37,7 +37,7 @@ export class ReviewsController {
   @Post()
   @UseGuards(ClerkAuthGuard)
   async createReview(
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string,
     @Body() createDto: CreateReviewDto,
   ) {
     return this.reviewsService.createReview(userId, createDto);

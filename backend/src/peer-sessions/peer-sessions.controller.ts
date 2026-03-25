@@ -19,7 +19,7 @@ export class PeerSessionsController {
   @Get()
   @UseGuards(ClerkAuthGuard)
   async getPeerSessions(
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string,
     @Query('status') status?: SessionStatus,
     @Query('requestedBy') requestedBy?: string,
     @Query('requestedTo') requestedTo?: string,
@@ -41,7 +41,7 @@ export class PeerSessionsController {
   @UseGuards(OptionalClerkAuthGuard)
   async getPeerSessionDetails(
     @Param('peerSessionId') peerSessionId: string,
-    @CurrentUser() userId?: string,
+    @CurrentUser('dbUserId') userId?: string,
   ) {
     return this.peerSessionsService.getPeerSessionDetails(
       peerSessionId,
@@ -52,7 +52,7 @@ export class PeerSessionsController {
   @Post()
   @UseGuards(ClerkAuthGuard)
   async requestPeerSession(
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string,
     @Body() requestDto: RequestSessionDto,
   ) {
     return this.peerSessionsService.requestPeerSession(userId, requestDto);
@@ -62,7 +62,7 @@ export class PeerSessionsController {
   @UseGuards(ClerkAuthGuard)
   async updatePeerSessionStatus(
     @Param('peerSessionId') peerSessionId: string,
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string,
     @Body() updateDto: UpdateSessionStatusDto,
   ) {
     return this.peerSessionsService.updatePeerSessionStatus(
@@ -76,7 +76,7 @@ export class PeerSessionsController {
   @UseGuards(ClerkAuthGuard)
   async acceptPeerSession(
     @Param('peerSessionId') peerSessionId: string,
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string,
   ) {
     return this.peerSessionsService.acceptPeerSession(peerSessionId, userId);
   }
@@ -85,7 +85,7 @@ export class PeerSessionsController {
   @UseGuards(ClerkAuthGuard)
   async rejectPeerSession(
     @Param('peerSessionId') peerSessionId: string,
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string,
   ) {
     return this.peerSessionsService.rejectPeerSession(peerSessionId, userId);
   }
@@ -94,7 +94,7 @@ export class PeerSessionsController {
   @UseGuards(ClerkAuthGuard)
   async completePeerSession(
     @Param('peerSessionId') peerSessionId: string,
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string,
   ) {
     this.logger.debug(
       '🎯 [PeerSessionsController.completePeerSession] Endpoint called:',
@@ -114,7 +114,7 @@ export class PeerSessionsController {
   @UseGuards(ClerkAuthGuard)
   async checkIsHost(
     @Param('peerSessionId') peerSessionId: string,
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string,
   ) {
     return this.peerSessionsService.checkIsHost(peerSessionId, userId);
   }
@@ -123,7 +123,7 @@ export class PeerSessionsController {
   @UseGuards(ClerkAuthGuard)
   async markNotCompleted(
     @Param('peerSessionId') peerSessionId: string,
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string,
   ) {
     this.logger.debug(
       '⏱️ [PeerSessionsController.markNotCompleted] Endpoint called:',
@@ -136,7 +136,7 @@ export class PeerSessionsController {
   @UseGuards(ClerkAuthGuard)
   async submitSessionFeedback(
     @Param('peerSessionId') peerSessionId: string,
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string,
     @Body() feedbackDto: SessionFeedbackDto,
   ) {
     this.logger.debug(

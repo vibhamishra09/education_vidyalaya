@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ClerkAuthGuard } from '../common/guards/clerk-auth.guard';
 import { StudyRoomsService } from '../study-rooms/study-rooms.service';
 import { StudyRoomParticipantRole } from '../generated/prisma/client';
+import { UsersService } from '../users/users.service';
 
 @Controller('api/livekit')
 export class LivekitController {
@@ -11,6 +12,7 @@ export class LivekitController {
     private readonly livekit: LivekitService,
     private readonly prisma: PrismaService,
     private readonly studyRoomsService: StudyRoomsService,
+    private readonly usersService: UsersService,
   ) {}
 
   @Post('token')
@@ -28,10 +30,7 @@ export class LivekitController {
     const identity = req.userId as string;
     
     // Fetch user's display name and avatar from database
-    const user = await this.prisma.user.findUnique({
-      where: { clerkId: identity },
-      select: { name: true, avatar: true },
-    });
+    const user = await this.usersService.ensureUserFromClerk(identity);
     
     // Include avatar URL in metadata for display in video room
     const userMetadata = JSON.stringify({
