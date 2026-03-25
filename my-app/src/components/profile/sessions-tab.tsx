@@ -105,6 +105,7 @@ export const SessionsTab = memo(function SessionsTab({ publicStats, isLoading = 
   );
 
   const formatPeerSession = (session: UpcomingSession | PastSession) => ({
+    ...session,
     id: session.id,
     title: session.title,
     date: session.date,
@@ -113,9 +114,11 @@ export const SessionsTab = memo(function SessionsTab({ publicStats, isLoading = 
     description: session.description,
     requestedBy: session.requestedBy,
     hostName: session.peer?.name,
+    slug: session.slug
   });
 
   const formatStudyRoom = (room: UpcomingStudyRoom | PastStudyRoom) => ({
+    ...room,
     id: room.id,
     title: room.title,
     date: room.date,
@@ -125,6 +128,7 @@ export const SessionsTab = memo(function SessionsTab({ publicStats, isLoading = 
     participantCount: room.participantCount,
     maxParticipants: room.maxParticipants,
     hostName: room.createdBy?.name,
+    slug: room.slug
   });
 
   const upcomingList = useMemo(
