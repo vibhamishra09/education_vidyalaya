@@ -2971,7 +2971,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 													{isScreenShareFocused && showScreenShareInMain && (
 														<div className="absolute inset-0 z-[2] overflow-auto bg-black/40">
 															<div
-																className="flex min-h-full min-w-full items-center justify-center p-4 box-border"
+																className="relative flex min-h-full min-w-full items-center justify-center p-4 box-border"
 																style={{
 																	transform: `scale(${screenShareZoom})`,
 																	transformOrigin: 'center center',
@@ -2981,20 +2981,19 @@ const VideoRoomContent = memo(function VideoRoomContent({
 																<div className="relative inline-block w-full">
 																	<VideoTrack
 																		trackRef={focusedTrack}
-																		className="h-auto w-full max-w-full max-h-[78vh] object-contain"
-																	/>
-																	
-																	<RemoteControlOverlay
-																		isControlling={isControlling && targetScreenShareId === focusedParticipantForDisplay.identity}
-																		isSharing={focusedParticipantForDisplay.isLocal}
-																		controllerId={controllerId}
-																		targetScreenShareId={targetScreenShareId}
-																		onSendInput={sendInputEvent}
-																		onStopControl={stopControl}
-																		onRevokeControl={revokeControl}
+																		className="h-auto w-full max-w-full max-h-[70vh] object-contain"
 																	/>
 																</div>
 																
+																<RemoteControlOverlay
+																	isControlling={isControlling && targetScreenShareId === focusedParticipantForDisplay.identity}
+																	isSharing={focusedParticipantForDisplay.isLocal}
+																	controllerId={controllerId}
+																	onSendInput={sendInputEvent}
+																	onStopControl={stopControl}
+																	onRevokeControl={revokeControl}
+																/>
+
 																{/* Remote Control Actions */}
 																{!focusedParticipantForDisplay.isLocal && !isControlling && (
 																	<div className="absolute top-4 left-4 z-30">
@@ -3405,7 +3404,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 										</Button>
 									</div>
 								</div>
-								<div className="flex flex-1 items-center justify-center overflow-auto p-4">
+								<div className="relative flex flex-1 items-center justify-center overflow-auto p-4">
 									<div
 										style={{
 											transform: `scale(${screenShareZoom})`,
@@ -3416,18 +3415,18 @@ const VideoRoomContent = memo(function VideoRoomContent({
 										<div className="relative inline-block w-full">
 											<VideoTrack
 												trackRef={focusedTrack}
-												className="max-h-[min(90vh,calc(100vw-2rem))] w-auto max-w-full object-contain"
-											/>
-											<RemoteControlOverlay
-												isControlling={isControlling && targetScreenShareId === focusedTrack.participant.identity}
-												isSharing={focusedTrack.participant.isLocal}
-												controllerId={controllerId}
-												targetScreenShareId={targetScreenShareId}
-												onSendInput={sendInputEvent}
-												onStopControl={stopControl}
-												onRevokeControl={revokeControl}
+												className="max-h-[min(82vh,calc(100vw-4rem))] w-auto max-w-full object-contain"
 											/>
 										</div>
+										
+										<RemoteControlOverlay
+											isControlling={isControlling && targetScreenShareId === focusedTrack.participant.identity}
+											isSharing={focusedTrack.participant.isLocal}
+											controllerId={controllerId}
+											onSendInput={sendInputEvent}
+											onStopControl={stopControl}
+											onRevokeControl={revokeControl}
+										/>
 									</div>
 								</div>
 							</div>

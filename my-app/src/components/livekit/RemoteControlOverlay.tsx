@@ -1,15 +1,14 @@
-import React, { useRef, useEffect, MouseEvent as ReactMouseEvent, KeyboardEvent as ReactKeyboardEvent, WheelEvent as ReactWheelEvent, useState } from 'react';
+import React, { useRef, useEffect, MouseEvent as ReactMouseEvent, WheelEvent as ReactWheelEvent, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { MousePointer2, X, StopCircle } from 'lucide-react';
+import { MousePointer2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { RemoteControlEventType } from '@/hooks/use-remote-control';
+import { RemoteControlEventType, RemoteControlMessage } from '@/hooks/use-remote-control';
 
 interface RemoteControlOverlayProps {
   isControlling: boolean;
   isSharing: boolean;
   controllerId: string | null;
-  targetScreenShareId: string | null;
-  onSendInput: (type: RemoteControlEventType, data: any) => void;
+  onSendInput: (type: RemoteControlEventType, data: Partial<RemoteControlMessage>) => void;
   onStopControl: () => void;
   onRevokeControl: () => void;
   className?: string;
@@ -19,7 +18,6 @@ export function RemoteControlOverlay({
   isControlling,
   isSharing,
   controllerId,
-  targetScreenShareId,
   onSendInput,
   onStopControl,
   onRevokeControl,
@@ -27,195 +25,201 @@ export function RemoteControlOverlay({
 }: RemoteControlOverlayProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const cursorRef = useRef<HTMLDivElement>(null);
-  const [remoteCursor, setRemoteCursor] = useState<{ x: number; y: number } | null>(null);
   const [clicks, setClicks] = useState<{ x: number; y: number; id: number }[]>([]);
 
-  // Normalize coordinates relative to the video container
+  /**
+   * IMPORTANT: Coordinate mapping logic for the CONTROLLER side.
+   * Maps clientX/Y to normalized [0, 1] coordinates relative to the actual video content.
+   * Accounts for letterboxing (black bars) resulting from 'object-contain' scaling.
+   */
   const getNormalizedCoords = (clientX: number, clientY: number) => {
     if (!overlayRef.current) return { x: 0, y: 0 };
-    const rect = overlayRef.current.getBoundingClientRect();
     
-    // Calculate position relative to container
-    const x = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-    const y = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
+    // Find the video element in the same container
+    const container = overlayRef.current.parentElement;
+    const video = container?.querySelector('video');
     
-    return { x, y };
+    if (video && video.videoWidth > 0 && video.videoHeight > 0) {
+        const videoRect = video.getBoundingClientRect();
+        
+        // Account for 'object-fit: contain' black bars
+        const videoRatio = video.videoWidth / video.videoHeight;
+        const elementRatio = videoRect.width / videoRect.height;
+        
+        let contentWidth = videoRect.width;
+        let contentHeight = videoRect.height;
+        let leftOffset = 0;
+        let topOffset = 0;
+        
+        if (videoRatio > elementRatio) {
+            // Letterboxed (bars top/bottom)
+            contentHeight = videoRect.width / videoRatio;
+            topOffset = (videoRect.height - contentHeight) / 2;
+        } else {
+            // Pillarboxed (bars left/right)
+            contentWidth = videoRect.height * videoRatio;
+            leftOffset = (videoRect.width - contentWidth) / 2;
+        }
+        
+        // Calculate coords relative to the actual video pixels area
+        const x = (clientX - (videoRect.left + leftOffset)) / contentWidth;
+        const y = (clientY - (videoRect.top + topOffset)) / contentHeight;
+        
+        return { 
+            x: Math.max(0, Math.min(1, x)), 
+            y: Math.max(0, Math.min(1, y)) 
+        };
+    }
+    
+    // Fallback mapping if video element is not available (not ideal)
+    const containerRect = overlayRef.current.getBoundingClientRect();
+    return { 
+        x: Math.max(0, Math.min(1, (clientX - containerRect.left) / containerRect.width)), 
+        y: Math.max(0, Math.min(1, (clientY - containerRect.top) / containerRect.height)) 
+    };
   };
 
-  // --- Event Handlers for the Controller ---
+  // --- Handlers for Controller Side ---
 
-  const handleMouseMove = (e: ReactMouseEvent) => {
+  const sendMove = (clientX: number, clientY: number) => {
     if (!isControlling) return;
-    const { x, y } = getNormalizedCoords(e.clientX, e.clientY);
-    onSendInput('mousemove', { x, y });
+    onSendInput('mousemove', getNormalizedCoords(clientX, clientY));
   };
 
   const handleMouseDown = (e: ReactMouseEvent) => {
     if (!isControlling) return;
-    const { x, y } = getNormalizedCoords(e.clientX, e.clientY);
-    onSendInput('mousedown', { x, y, button: e.button });
+    onSendInput('mousedown', { ...getNormalizedCoords(e.clientX, e.clientY), button: e.button });
   };
 
   const handleMouseUp = (e: ReactMouseEvent) => {
     if (!isControlling) return;
-    const { x, y } = getNormalizedCoords(e.clientX, e.clientY);
-    onSendInput('mouseup', { x, y, button: e.button });
+    onSendInput('mouseup', { ...getNormalizedCoords(e.clientX, e.clientY), button: e.button });
   };
 
   const handleClick = (e: ReactMouseEvent) => {
     if (!isControlling) return;
-    const { x, y } = getNormalizedCoords(e.clientX, e.clientY);
-    onSendInput('click', { x, y, button: e.button });
+    const coords = getNormalizedCoords(e.clientX, e.clientY);
+    onSendInput('click', { ...coords, button: e.button });
 
-    // Add click ripple
+    // Ripple animaion
     const clickId = Date.now();
-    setClicks(prev => [...prev, { x, y, id: clickId }]);
-    setTimeout(() => {
-      setClicks(prev => prev.filter(c => c.id !== clickId));
-    }, 600);
+    setClicks(prev => [...prev, { ...coords, id: clickId }]);
+    setTimeout(() => setClicks(prev => prev.filter(c => c.id !== clickId)), 600);
 
-    // Prevent default so we don't accidentally click things in the local UI
     e.preventDefault();
     e.stopPropagation();
   };
 
-  const handleContext = (e: ReactMouseEvent) => {
-    if (!isControlling) return;
-    e.preventDefault(); // Prevent local context menu
-  };
-
   const handleWheel = (e: ReactWheelEvent) => {
     if (!isControlling) return;
-    const { x, y } = getNormalizedCoords(e.clientX, e.clientY);
-    onSendInput('wheel', { x, y, deltaY: e.deltaY });
-    // Prevent scrolling the local page
-    if (Math.abs(e.deltaY) > 0) {
-      e.preventDefault();
-    }
+    onSendInput('wheel', { ...getNormalizedCoords(e.clientX, e.clientY), deltaY: e.deltaY });
+    if (Math.abs(e.deltaY) > 0) e.preventDefault();
   };
 
-  // Keyboard events need to be captured globally when controlling
+  // Capture global keyboard events
   useEffect(() => {
     if (!isControlling) return;
-
-    const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      // Don't capture standard browser shortcuts (Ctrl+R, Ctrl+T, etc)
+    const onKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
-      
       onSendInput('keydown', { key: e.key });
-      
-      // Prevent scrolling from arrow keys/spacebar locally
-      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) {
-        e.preventDefault();
-      }
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
     };
-
-    const handleGlobalKeyUp = (e: KeyboardEvent) => {
+    const onKeyUp = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       onSendInput('keyup', { key: e.key });
     };
-
-    window.addEventListener('keydown', handleGlobalKeyDown, { capture: true });
-    window.addEventListener('keyup', handleGlobalKeyUp, { capture: true });
-
+    window.addEventListener('keydown', onKeyDown, { capture: true });
+    window.addEventListener('keyup', onKeyUp, { capture: true });
     return () => {
-      window.removeEventListener('keydown', handleGlobalKeyDown, { capture: true });
-      window.removeEventListener('keyup', handleGlobalKeyUp, { capture: true });
+      window.removeEventListener('keydown', onKeyDown, { capture: true });
+      window.removeEventListener('keyup', onKeyUp, { capture: true });
     };
   }, [isControlling, onSendInput]);
 
-  // --- Visual Feedback for the Sharer ---
+  // --- Visuals for Sharer Side ---
   
   useEffect(() => {
     if (!isSharing || !controllerId) return;
 
-    const handleRemoteCursorMove = (e: Event) => {
-      const customEvent = e as CustomEvent<{x: number, y: number}>;
-      if (customEvent.detail) {
-        // Update state so we can use it in React rendering
-        setRemoteCursor({ x: customEvent.detail.x, y: customEvent.detail.y });
+    const onRemoteCursorUpdate = (e: Event) => {
+      const { detail } = e as CustomEvent<{x: number, y: number, type?: string}>;
+      if (detail && cursorRef.current) {
+        // Move the fake pointer
+        cursorRef.current.style.left = `${detail.x * 100}%`;
+        cursorRef.current.style.top = `${detail.y * 100}%`;
+        cursorRef.current.style.display = 'flex';
         
-        // Also directly set style for smooth movement (avoid React re-render latency)
-        if (cursorRef.current) {
-          cursorRef.current.style.left = `${customEvent.detail.x * 100}%`;
-          cursorRef.current.style.top = `${customEvent.detail.y * 100}%`;
-          cursorRef.current.style.display = 'block';
+        // Visual compression effect on click
+        if (detail.type === 'click' || detail.type === 'mousedown') {
+            cursorRef.current.style.transform = 'scale(0.8)';
+            setTimeout(() => { if (cursorRef.current) cursorRef.current.style.transform = 'scale(1)'; }, 100);
         }
       }
     };
 
-    window.addEventListener('remote-cursor-move', handleRemoteCursorMove);
-    return () => {
-      window.removeEventListener('remote-cursor-move', handleRemoteCursorMove);
-    };
+    window.addEventListener('remote-cursor-move', onRemoteCursorUpdate);
+    return () => window.removeEventListener('remote-cursor-move', onRemoteCursorUpdate);
   }, [isSharing, controllerId]);
 
-  // If neither controlling nor sharing with active controller, don't render interaction layer
-  if (!isControlling && (!isSharing || !controllerId)) {
-    return null;
-  }
+  if (!isControlling && (!isSharing || !controllerId)) return null;
 
   return (
     <>
-      {/* Interaction Overlay (Controller side) */}
+      {/* (CONTROLLER) Interaction Layer */}
       {isControlling && (
         <div
           ref={overlayRef}
           data-remote-ignore="true"
           className={cn(
-            "absolute inset-0 z-40 cursor-crosshair",
+            "absolute inset-0 z-[200] cursor-crosshair overflow-hidden touch-none",
             className
           )}
-          style={{ touchAction: 'none' }} // Prevent touch scrolling on mobile
-          onMouseMove={handleMouseMove}
+          onMouseMove={(e) => sendMove(e.clientX, e.clientY)}
           onMouseDown={handleMouseDown}
           onMouseUp={handleMouseUp}
           onClick={handleClick}
-          onContextMenu={handleContext}
+          onContextMenu={(e) => { e.preventDefault(); if (isControlling) onSendInput('click', { ...getNormalizedCoords(e.clientX, e.clientY), button: 2 }); }}
           onWheel={handleWheel}
         >
-          {/* Top warning bar for controller */}
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-blue-600/90 text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-3 backdrop-blur-sm animate-in slide-in-from-top-4">
-            <span className="relative flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
+          {/* Status Bar */}
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-sky-600/95 text-white px-5 py-2 rounded-full shadow-[0_0_20px_rgba(0,0,0,0.5)] flex items-center gap-3 backdrop-blur-md border border-sky-300/30 animate-in slide-in-from-top-4">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
             </span>
-            <span className="text-sm font-medium">You are controlling this screen</span>
+            <span className="text-[11px] font-black uppercase tracking-widest">Active Controlling</span>
             <Button 
               size="sm" 
               variant="destructive" 
-              className="h-7 px-3 ml-2 rounded-full text-xs font-semibold"
-              onClick={(e) => {
-                e.stopPropagation();
-                onStopControl();
-              }}
+              className="h-7 px-4 ml-2 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-500 hover:bg-rose-600 border-none shadow-lg"
+              onClick={(e) => { e.stopPropagation(); onStopControl(); }}
             >
-              Stop Control
+              Stop
             </Button>
           </div>
 
-          {/* Click Ripples - inside the overlay so they stay positioned relative to it */}
+          {/* Click Ripples */}
           {clicks.map(click => (
             <div 
               key={click.id}
-              className="absolute w-8 h-8 -ml-4 -mt-4 border-2 border-sky-400 rounded-full animate-ping pointer-events-none z-[101]"
+              className="absolute w-14 h-14 -ml-7 -mt-7 border-2 border-sky-400 rounded-full animate-ping pointer-events-none z-[101] shadow-[0_0_20px_rgba(56,189,248,0.6)]"
               style={{ left: `${click.x * 100}%`, top: `${click.y * 100}%` }}
             />
           ))}
         </div>
       )}
 
-      {/* Warning Overlay (Sharer side) - fixed position so it doesn't depend on parent */}
+      {/* (SHARER) Control Status Banner */}
       {isSharing && controllerId && (
         <div 
           data-remote-ignore="true"
-          className="fixed top-4 left-1/2 -translate-x-1/2 z-[200] bg-amber-500/90 text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-3 backdrop-blur-sm animate-in slide-in-from-top-4 pointer-events-auto">
-          <MousePointer2 className="h-4 w-4 animate-pulse" />
-          <span className="text-sm font-medium">Someone is controlling your screen</span>
+          className="fixed top-4 left-1/2 -translate-x-1/2 z-[2147483647] bg-amber-500/95 text-white px-5 py-2.5 rounded-full shadow-2xl flex items-center gap-3 backdrop-blur-md border border-amber-300/30 animate-in slide-in-from-top-4 pointer-events-auto">
+          <MousePointer2 className="h-4 w-4 animate-bounce" />
+          <span className="text-xs font-black uppercase tracking-tight">Access Granted: Remote control active</span>
           <Button 
             size="sm" 
             variant="destructive" 
-            className="h-7 px-3 ml-2 rounded-full text-xs font-semibold"
+            className="h-8 px-4 ml-4 rounded-full text-[11px] font-black uppercase tracking-widest bg-rose-600 hover:bg-rose-700 shadow-xl"
             onClick={onRevokeControl}
           >
             Revoke
@@ -223,41 +227,30 @@ export function RemoteControlOverlay({
         </div>
       )}
 
-      {/* Fake Cursor (Sharer side) - uses fixed position to be always visible on the full page */}
+      {/* (SHARER) Neon Fake Pointer */}
       {isSharing && controllerId && (
         <div
           ref={cursorRef}
-          className="fixed z-[199] pointer-events-none"
-          style={{ 
-            left: '50%', 
-            top: '50%',
-            display: 'none', // Hidden until first cursor move event
-            willChange: 'left, top',
-          }}
+          className="fixed z-[2147483646] pointer-events-none hidden flex-col items-center transition-transform duration-75"
+          style={{ left: '50%', top: '50%', willChange: 'left, top' }}
         >
-          {/* Arrow cursor SVG for better visibility */}
-          <svg 
-            width="32" 
-            height="32" 
-            viewBox="0 0 24 24" 
-            fill="none" 
-            xmlns="http://www.w3.org/2000/svg"
-            style={{ 
-              filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))',
-              transform: 'translate(-4px, -2px)',
-            }}
-          >
-            <path 
-              d="M5 3L19 12L12 13L9 20L5 3Z" 
-              fill="#ef4444" 
-              stroke="#ffffff" 
-              strokeWidth="1.5" 
-              strokeLinejoin="round"
-            />
-          </svg>
-          {/* Label below cursor */}
-          <div className="absolute top-7 left-2 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap shadow-lg">
-            Remote
+          <div className="relative">
+              {/* Ultra-visible Neon Pointer SVG */}
+              <svg width="48" height="48" viewBox="0 0 24 24" className="drop-shadow-[0_0_10px_rgba(0,255,255,1)]">
+                <path 
+                  d="M5 3L19 12L12 13L9 20L5 3Z" 
+                  fill="#00ffff" 
+                  stroke="#000" 
+                  strokeWidth="1.2" 
+                  strokeLinejoin="round"
+                />
+              </svg>
+              {/* Center point */}
+              <div className="absolute top-[3px] left-[5px] w-2 h-2 bg-white rounded-full blur-[0.5px]"></div>
+          </div>
+          
+          <div className="mt-1 bg-[#00ffff] text-black text-[10px] font-black px-2 py-0.5 rounded shadow-xl tracking-tighter uppercase border border-black/20">
+            Remote Controller
           </div>
         </div>
       )}
