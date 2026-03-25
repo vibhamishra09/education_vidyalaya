@@ -130,5 +130,5 @@ export default async function StudyRoomPage({
   const { roomId } = await params;
   
   const room = await getStudyRoomData(roomId);
-  return <StudyRoomClient roomId={room?.id!} />;
+  return <StudyRoomClient roomId={room?.id ?? roomId} />;
 }
