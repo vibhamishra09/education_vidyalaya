@@ -17,6 +17,28 @@ export class NotificationsService {
     private readonly cacheService: CacheService,
   ) {}
 
+  private async resolveUserIdentity(userIdOrClerkId: string) {
+    const byId = await this.prisma.user.findUnique({
+      where: { id: userIdOrClerkId },
+      select: { id: true, clerkId: true },
+    });
+
+    if (byId) {
+      return byId;
+    }
+
+    const byClerkId = await this.prisma.user.findUnique({
+      where: { clerkId: userIdOrClerkId },
+      select: { id: true, clerkId: true },
+    });
+
+    if (byClerkId) {
+      return byClerkId;
+    }
+
+    throw new NotFoundException('User not found');
+  }
+
   async getNotifications(
     userId: string,
     type?: NotifType,
@@ -39,15 +61,7 @@ export class NotificationsService {
       cacheKey,
       async () => {
         try {
-          // userId is actually clerkId, so we need to find the user by clerkId first
-          const user = await this.prisma.user.findUnique({
-            where: { clerkId: userId },
-            select: { id: true },
-          });
-
-          if (!user) {
-            throw new NotFoundException('User not found');
-          }
+          const user = await this.resolveUserIdentity(userId);
 
           const where: Record<string, unknown> = { userId: user.id };
 
@@ -112,11 +126,12 @@ export class NotificationsService {
   }
 
   async markNotificationAsRead(notificationId: string, userId: string) {
+    const user = await this.resolveUserIdentity(userId);
     const existingNotification = await this.prisma.notification.findUnique({
       where: { id: notificationId },
     });
 
-    if (!existingNotification || existingNotification.userId !== userId) {
+    if (!existingNotification || existingNotification.userId !== user.id) {
       throw new NotFoundException('Notification not found');
     }
 
@@ -127,18 +142,29 @@ export class NotificationsService {
 
     // Invalidate notifications cache for this user
     await this.cacheService.deletePattern(`notifications:list:*${userId}*`);
+    if (user.clerkId) {
+      await this.cacheService.deletePattern(
+        `notifications:list:*${user.clerkId}*`,
+      );
+    }
 
     return notification;
   }
 
   async markAllNotificationsAsRead(userId: string) {
+    const user = await this.resolveUserIdentity(userId);
     const result = await this.prisma.notification.updateMany({
-      where: { userId, viewed: false },
+      where: { userId: user.id, viewed: false },
       data: { viewed: true },
     });
 
     // Invalidate notifications cache for this user
     await this.cacheService.deletePattern(`notifications:list:*${userId}*`);
+    if (user.clerkId) {
+      await this.cacheService.deletePattern(
+        `notifications:list:*${user.clerkId}*`,
+      );
+    }
 
     return {
       success: true,
@@ -147,6 +173,7 @@ export class NotificationsService {
   }
 
   async markNotificationsAsRead(notificationIds: string[], userId: string) {
+    const user = await this.resolveUserIdentity(userId);
     if (!notificationIds || notificationIds.length === 0) {
       return {
         success: true,
@@ -158,7 +185,7 @@ export class NotificationsService {
 
     const result = await this.prisma.notification.updateMany({
       where: {
-        userId,
+        userId: user.id,
         id: { in: uniqueNotificationIds },
         viewed: false,
       },
@@ -167,6 +194,11 @@ export class NotificationsService {
 
     // Invalidate notifications cache for this user
     await this.cacheService.deletePattern(`notifications:list:*${userId}*`);
+    if (user.clerkId) {
+      await this.cacheService.deletePattern(
+        `notifications:list:*${user.clerkId}*`,
+      );
+    }
 
     return {
       success: true,
