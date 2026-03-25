@@ -19,6 +19,105 @@ export class UsersService {
     private readonly cacheService: CacheService,
   ) {}
 
+  private buildClerkDisplayName(clerkUser: any): string {
+    const firstName = typeof clerkUser?.firstName === 'string' ? clerkUser.firstName.trim() : '';
+    const lastName = typeof clerkUser?.lastName === 'string' ? clerkUser.lastName.trim() : '';
+    const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
+    if (fullName) return fullName;
+    if (typeof clerkUser?.username === 'string' && clerkUser.username.trim()) {
+      return clerkUser.username.trim();
+    }
+    const primaryEmail = clerkUser?.emailAddresses?.find(
+      (email: any) => email.id === clerkUser?.primaryEmailAddressId,
+    )?.emailAddress || clerkUser?.emailAddresses?.[0]?.emailAddress;
+    if (typeof primaryEmail === 'string' && primaryEmail.includes('@')) {
+      return primaryEmail.split('@')[0];
+    }
+    return clerkUser?.id || 'User';
+  }
+
+  async ensureUserFromClerk(clerkId: string) {
+    const existingByClerkId = await this.prisma.user.findUnique({
+      where: { clerkId },
+      select: {
+        id: true,
+        clerkId: true,
+        name: true,
+        email: true,
+        avatar: true,
+        onboarded: true,
+      },
+    });
+
+    if (existingByClerkId) {
+      return existingByClerkId;
+    }
+
+    const clerkUser = await this.clerkClient.users.getUser(clerkId);
+    const primaryEmail =
+      clerkUser.emailAddresses.find(
+        (email) => email.id === clerkUser.primaryEmailAddressId,
+      )?.emailAddress || clerkUser.emailAddresses[0]?.emailAddress;
+
+    if (!primaryEmail) {
+      throw new BadRequestException('Clerk user does not have an email address');
+    }
+
+    const displayName = this.buildClerkDisplayName(clerkUser);
+    const normalizedEmail = primaryEmail.trim().toLowerCase();
+    const avatar = clerkUser.imageUrl || null;
+
+    const existingByEmail = await this.prisma.user.findUnique({
+      where: { email: normalizedEmail },
+      select: {
+        id: true,
+        clerkId: true,
+        name: true,
+        email: true,
+        avatar: true,
+        onboarded: true,
+      },
+    });
+
+    const user = existingByEmail
+      ? await this.prisma.user.update({
+          where: { id: existingByEmail.id },
+          data: {
+            clerkId,
+            name: existingByEmail.name || displayName,
+            avatar: existingByEmail.avatar || avatar,
+          },
+          select: {
+            id: true,
+            clerkId: true,
+            name: true,
+            email: true,
+            avatar: true,
+            onboarded: true,
+          },
+        })
+      : await this.prisma.user.create({
+          data: {
+            clerkId,
+            email: normalizedEmail,
+            name: displayName,
+            avatar,
+            onboarded: false,
+          },
+          select: {
+            id: true,
+            clerkId: true,
+            name: true,
+            email: true,
+            avatar: true,
+            onboarded: true,
+          },
+        });
+
+    await this.syncClerkMetadata(clerkId, user.id);
+    return user;
+  }
+
   private async findUserByIdOrClerkId(
     userIdOrClerkId: string,
     args?: Omit<Prisma.UserFindUniqueArgs, 'where'>,

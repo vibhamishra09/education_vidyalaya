@@ -4,9 +4,10 @@ import { LivekitController } from './livekit.controller';
 import { LivekitWebhooksController } from './livekit.webhooks.controller';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { StudyRoomsModule } from '../study-rooms/study-rooms.module';
+import { UsersModule } from '../users/users.module';
 
 @Module({
-  imports: [NotificationsModule, StudyRoomsModule],
+  imports: [NotificationsModule, StudyRoomsModule, UsersModule],
   controllers: [LivekitController, LivekitWebhooksController],
   providers: [LivekitService],
   exports: [LivekitService],
