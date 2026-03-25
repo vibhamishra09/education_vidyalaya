@@ -13,6 +13,8 @@ type Message = {
 	targetUserId?: string | null
 	content: string
 	createdAt: string
+	guestEmail?: string | null
+	guestSenderId?: string | null
 	sender?: {
 		id: string
 		name: string
@@ -23,6 +25,75 @@ type Message = {
 		name: string
 		avatar?: string | null
 	} | null
+}
+
+function normalizeChatMessage(raw: unknown): Message {
+	const m =
+		raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+	const createdRaw = m.createdAt
+	let createdAt: string
+	if (createdRaw instanceof Date) {
+		createdAt = createdRaw.toISOString()
+	} else if (typeof createdRaw === 'number' && Number.isFinite(createdRaw)) {
+		const d = new Date(createdRaw)
+		createdAt = Number.isNaN(d.getTime()) ? new Date(0).toISOString() : d.toISOString()
+	} else if (typeof createdRaw === 'string' && createdRaw.length > 0) {
+		const d = new Date(createdRaw)
+		createdAt = Number.isNaN(d.getTime()) ? new Date(0).toISOString() : d.toISOString()
+	} else {
+		createdAt = new Date(0).toISOString()
+	}
+
+	const guestEmail =
+		typeof m.guestEmail === 'string' && m.guestEmail.length > 0 ? m.guestEmail : null
+	const guestSenderId =
+		typeof m.guestSenderId === 'string' && m.guestSenderId.length > 0
+			? m.guestSenderId
+			: null
+
+	const baseSender = m.sender as Record<string, unknown> | null | undefined
+	let sender: Message['sender']
+	if (baseSender && typeof baseSender.name === 'string' && baseSender.name.length > 0) {
+		sender = {
+			id: String(baseSender.id ?? guestSenderId ?? 'unknown'),
+			name: baseSender.name,
+			avatar: (baseSender.avatar as string | null | undefined) ?? null,
+		}
+	} else if (guestEmail) {
+		const local = guestEmail.split('@')[0] || 'Guest'
+		sender = {
+			id: guestSenderId || 'guest',
+			name: local,
+			avatar: null,
+		}
+	} else {
+		sender = {
+			id: guestSenderId || (typeof m.senderId === 'string' ? m.senderId : '') || 'guest',
+			name: 'Guest',
+			avatar: null,
+		}
+	}
+
+	const senderId =
+		typeof m.senderId === 'string' && m.senderId.length > 0
+			? m.senderId
+			: guestSenderId || ''
+
+	return {
+		id: String(m.id ?? ''),
+		senderId,
+		audienceType: m.audienceType as Message['audienceType'],
+		targetUserId:
+			typeof m.targetUserId === 'string' || m.targetUserId === null
+				? (m.targetUserId as string | null)
+				: null,
+		content: typeof m.content === 'string' ? m.content : '',
+		createdAt,
+		guestEmail,
+		guestSenderId,
+		sender,
+		targetUser: m.targetUser as Message['targetUser'],
+	}
 }
 
 // Keep chat history in-memory per channel so closing/reopening the panel
@@ -40,9 +111,13 @@ function mergeMessages(existing: Message[], incoming: Message[]): Message[] {
 		byId.set(message.id, message)
 	}
 
-	return Array.from(byId.values()).sort(
-		(a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-	)
+	return Array.from(byId.values()).sort((a, b) => {
+		const ta = new Date(a.createdAt).getTime()
+		const tb = new Date(b.createdAt).getTime()
+		const na = Number.isNaN(ta) ? 0 : ta
+		const nb = Number.isNaN(tb) ? 0 : tb
+		return na - nb
+	})
 }
 
 interface ChatWidgetProps {
@@ -74,11 +149,19 @@ export function ChatWidget({
 	const userId = user?.id
 	const [messages, setMessages] = useState<Message[]>(() => {
 		if (!channelId) return []
-		return channelMessageCache.get(channelId) || []
+		const cached = channelMessageCache.get(channelId) || []
+		return cached.map(normalizeChatMessage)
 	})
+	const [viewerGuestEmail, setViewerGuestEmail] = useState<string | null>(
+		() => guestEmail ?? null,
+	)
 	const socketRef = useRef<Socket | null>(null)
 	const [error, setError] = useState<string | null>(null)
 	const [isConnecting, setIsConnecting] = useState(false)
+
+	useEffect(() => {
+		if (guestEmail) setViewerGuestEmail(guestEmail)
+	}, [guestEmail])
 
 	// Debug: Log chatDisabled prop changes
 	useEffect(() => {
@@ -89,29 +172,56 @@ export function ChatWidget({
 		if (!channelId) {
 			setMessages([])
 			setError(null)
+			setViewerGuestEmail(guestEmail ?? null)
 			return
 		}
 		const activeChannelId = channelId
 
 		const cachedMessages = channelMessageCache.get(activeChannelId)
 		if (cachedMessages) {
-			setMessages(cachedMessages)
+			setMessages(cachedMessages.map(normalizeChatMessage))
 		}
 
 		let mounted = true
 		async function loadHistory() {
 			try {
 				console.log('Loading chat history for channel:', channelId)
-				// Load more messages to show complete history
 				const params: Record<string, string | number> = { limit: 200 }
-				// For guests, pass email to filter their message history
-				if (isGuestMode && guestEmail) {
-					params.guestEmail = guestEmail
+				if (isGuestMode) {
+					params.includeMeta = '1'
+					if (guestEmail) {
+						params.guestEmail = guestEmail
+					} else if (guestToken) {
+						params.guestAccessToken = guestToken
+					}
 				}
-				const res = await apiClient.get(`/api/chat/channels/${activeChannelId}/messages`, { params })
+				const res = await apiClient.get(`/api/chat/channels/${activeChannelId}/messages`, {
+					params,
+					skipClerkAuth: isGuestMode,
+				})
 				if (!mounted) return
-				console.log('Loaded messages:', res.data?.length || 0, 'messages')
-				const historyMessages: Message[] = Array.isArray(res.data) ? res.data : []
+
+				let rawList: unknown[] = []
+				if (
+					isGuestMode &&
+					res.data &&
+					typeof res.data === 'object' &&
+					!Array.isArray(res.data)
+				) {
+					const body = res.data as {
+						messages?: unknown[]
+						meta?: { viewerGuestEmail?: string }
+					}
+					rawList = Array.isArray(body.messages) ? body.messages : []
+					if (body.meta?.viewerGuestEmail) {
+						setViewerGuestEmail(body.meta.viewerGuestEmail)
+					}
+				} else {
+					rawList = Array.isArray(res.data) ? res.data : []
+				}
+
+				const historyMessages = rawList.map(normalizeChatMessage)
+				console.log('Loaded messages:', historyMessages.length, 'messages')
 				setMessages((prev) => {
 					const merged = mergeMessages(prev, historyMessages)
 					channelMessageCache.set(activeChannelId, merged)
@@ -217,15 +327,15 @@ export function ChatWidget({
 					}
 				})
 				
-			s.on('message:new', (msg: Message) => {
-				console.log('📩 [Chat] Received new message:', msg.id)
+			s.on('message:new', (msg: unknown) => {
+				const normalized = normalizeChatMessage(msg)
+				console.log('📩 [Chat] Received new message:', normalized.id)
 				setMessages((prev) => {
-					// Prevent duplicate messages
-					if (prev.some(m => m.id === msg.id)) {
-						console.warn('⚠️ [Chat] Duplicate message detected, ignoring:', msg.id)
+					if (prev.some((m) => m.id === normalized.id)) {
+						console.warn('⚠️ [Chat] Duplicate message detected, ignoring:', normalized.id)
 						return prev
 					}
-					const next = [...prev, msg]
+					const next = [...prev, normalized]
 					channelMessageCache.set(activeChannelId, next)
 					return next
 				})
@@ -240,6 +350,18 @@ export function ChatWidget({
 					
 					// Only show error after multiple failed attempts (persistent failure)
 					if (isMounted && reconnectAttempts >= 3) {
+						if (
+							isGuestMode &&
+							(err.message.includes('auth') ||
+								err.message.includes('401') ||
+								err.message.includes('unauthorized'))
+						) {
+							setError(
+								'Chat connection failed. Try refreshing the page or reopening your guest link.',
+							)
+							setIsConnecting(false)
+							return
+						}
 						// Check for auth errors (fatal)
 						if (err.message.includes('auth') || err.message.includes('401') || err.message.includes('unauthorized')) {
 							setError('Authentication failed')
@@ -408,6 +530,8 @@ export function ChatWidget({
 					messages={messages}
 					currentUserId={currentUserDbId || undefined}
 					hostUserId={hostUserId}
+					viewerIsGuest={isGuestMode}
+					viewerGuestEmail={viewerGuestEmail ?? undefined}
 				/>
 			</div>
 			{/* Input area - always at bottom */}

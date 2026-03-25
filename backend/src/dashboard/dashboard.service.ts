@@ -387,6 +387,7 @@ export class DashboardService {
                 skills: sr.skills.map((s) => s.skill),
                 description: sr.description,
                 sessionStatus: sr.sessionStatus,
+                slug: sr.slug
               })),
               pastStudyRooms: pastStudyRooms.map((sr) => ({
                 id: sr.id,
@@ -399,6 +400,7 @@ export class DashboardService {
                 skills: sr.skills.map((s) => s.skill),
                 description: sr.description,
                 sessionStatus: sr.sessionStatus,
+                slug: sr.slug
               })),
               sessionsPagination: {
                 upcomingSessions: {

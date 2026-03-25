@@ -23,6 +23,7 @@ interface StudyRoomData {
     avatar?: string;
   };
   skills?: SkillData[];
+  slug: string
 }
 
 // Server-side function to fetch room data for metadata
@@ -128,5 +129,6 @@ export default async function StudyRoomPage({
 }) {
   const { roomId } = await params;
   
-  return <StudyRoomClient roomId={roomId} />;
+  const room = await getStudyRoomData(roomId);
+  return <StudyRoomClient roomId={room?.id!} />;
 }
