@@ -247,6 +247,7 @@ export class DebateRoomResponse {
   moderators: DebateModeratorResponse[];
   livekitRoomName?: string | null;
   createdAt: Date;
+  hostDetailsUpdatedAt?: string | null;
 }
 
 export class DebateReportResponse {

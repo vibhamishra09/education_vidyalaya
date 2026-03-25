@@ -5,6 +5,7 @@ import { setAuthToken } from '@/lib/api-client';
 import {
   RequestSessionDto,
   SessionStatus,
+  UpdatePeerSessionDto,
 } from '@/types/api.types';
 
 // Query Keys
@@ -110,6 +111,46 @@ export function useUpdatePeerSessionStatus() {
       await queryClient.refetchQueries({ 
         queryKey: peerSessionKeys.detail(sessionId),
         type: 'active' 
+      });
+    },
+  });
+}
+
+export function useUpdatePeerSession() {
+  const queryClient = useQueryClient();
+  const { getToken, isLoaded, isSignedIn } = useAuth();
+
+  return useMutation({
+    mutationFn: async ({
+      sessionId,
+      dto,
+    }: {
+      sessionId: string;
+      dto: UpdatePeerSessionDto;
+    }) => {
+      if (!isLoaded) {
+        throw new Error(
+          'Authentication is still loading. Wait a moment and try again.',
+        );
+      }
+      if (!isSignedIn) {
+        throw new Error('Please sign in to save changes.');
+      }
+      const token = await getToken({ skipCache: true });
+      if (!token) {
+        throw new Error(
+          'Could not get a session token. Try refreshing the page or signing out and back in.',
+        );
+      }
+      setAuthToken(token);
+      return peerSessionsApi.updatePeerSession(sessionId, dto);
+    },
+    onSuccess: async (_, { sessionId }) => {
+      queryClient.invalidateQueries({ queryKey: peerSessionKeys.detail(sessionId) });
+      queryClient.invalidateQueries({ queryKey: peerSessionKeys.lists() });
+      await queryClient.refetchQueries({
+        queryKey: peerSessionKeys.detail(sessionId),
+        type: 'active',
       });
     },
   });

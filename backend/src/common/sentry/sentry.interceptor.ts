@@ -42,7 +42,7 @@ export class SentryInterceptor implements NestInterceptor {
         // Capture exceptions to Sentry
         if (error instanceof HttpException) {
           const status = error.getStatus();
-          
+
           // Only report server errors (5xx) to Sentry
           // You can adjust this logic based on your needs
           if (status >= 500) {
@@ -90,7 +90,7 @@ export class SentryInterceptor implements NestInterceptor {
         }
 
         return throwError(() => error);
-      })
+      }),
     );
   }
 }

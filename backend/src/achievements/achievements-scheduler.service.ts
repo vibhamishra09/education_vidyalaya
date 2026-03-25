@@ -5,11 +5,12 @@ import { LoggerService } from '../common/logger';
 
 @Injectable()
 export class AchievementsSchedulerService {
-
-  constructor(private achievementsService: AchievementsService,
+  constructor(
+    private achievementsService: AchievementsService,
     private readonly logger: LoggerService,
   ) {
-    this.logger.setContext(AchievementsSchedulerService.name);}
+    this.logger.setContext(AchievementsSchedulerService.name);
+  }
 
   /**
    * Awards monthly "Top Learner" and "Top Teacher" badges

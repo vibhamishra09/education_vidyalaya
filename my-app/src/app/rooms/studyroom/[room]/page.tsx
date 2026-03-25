@@ -54,7 +54,7 @@ export default function RoomPage() {
 	const searchParams = useSearchParams()
 	const router = useRouter()
 	const roomName = params.room
-	const { getToken } = useAuth()
+	const { getToken, isLoaded: clerkLoaded } = useAuth()
 	const [token, setToken] = useState<string | null>(null)
 	const [channelId, setChannelId] = useState<string | null>(null)
 	const [sessionData, setSessionData] = useState<{
@@ -126,6 +126,10 @@ export default function RoomPage() {
 	}, [refreshChatRecipients])
 
 	useEffect(() => {
+		if (!roomName) return
+		// Avoid racing Clerk: getToken() can be null before isLoaded, which used to show "Not authenticated".
+		if (!guestAccessToken && !clerkLoaded) return
+
 		let mounted = true
 		async function initialize() {
 			try {
@@ -286,13 +290,11 @@ export default function RoomPage() {
 				if (mounted) setLoading(false)
 			}
 		}
-		if (roomName) {
-			initialize()
-		}
+		void initialize()
 		return () => {
 			mounted = false
 		}
-	}, [roomName, getToken, guestAccessToken])
+	}, [roomName, getToken, guestAccessToken, clerkLoaded])
 
 	if (loading) {
 		return (

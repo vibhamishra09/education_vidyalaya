@@ -8,6 +8,7 @@ import {
   Min,
   Max,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import { SessionStatus } from '../../generated/prisma/client';
 
 export class PeerSessionDto {
@@ -70,4 +71,36 @@ export class RequestSessionDto {
 export class UpdateSessionStatusDto {
   @IsString()
   status: SessionStatus;
+}
+
+/** Partial update for title, schedule, meet link, skills (either participant; not terminal). */
+export class UpdatePeerSessionDto {
+  @IsOptional()
+  @IsString()
+  title?: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(240)
+  @Type(() => Number)
+  duration?: number;
+
+  /** Empty string clears the link. */
+  @IsOptional()
+  @IsString()
+  gmeetLink?: string;
+
+  @IsOptional()
+  @IsDateString({ strict: false })
+  scheduledAt?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  skills?: string[];
 }

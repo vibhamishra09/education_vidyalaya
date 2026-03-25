@@ -6,13 +6,13 @@ import { LoggerService } from '../common/logger';
 
 @Controller('api/livekit/webhooks')
 export class LivekitWebhooksController {
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService,
     private readonly logger: LoggerService,
   ) {
-    this.logger.setContext(LivekitWebhooksController.name);}
+    this.logger.setContext(LivekitWebhooksController.name);
+  }
 
   @Post()
   async handleEvent(

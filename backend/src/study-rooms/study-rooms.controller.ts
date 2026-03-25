@@ -165,7 +165,10 @@ export class StudyRoomsController {
     @Param('studyRoomId') studyRoomId: string,
     @CurrentUser('dbUserId') userId: string,
   ) {
-    return this.studyRoomsService.listPendingExternalJoinRequests(studyRoomId, userId);
+    return this.studyRoomsService.listPendingExternalJoinRequests(
+      studyRoomId,
+      userId,
+    );
   }
 
   @Post(':studyRoomId/external/requests/:requestId/resolve')
@@ -191,7 +194,11 @@ export class StudyRoomsController {
     @CurrentUser('dbUserId') userId: string,
     @Body() dto: ToggleExternalAutoAcceptDto,
   ) {
-    return this.studyRoomsService.setExternalAutoAccept(studyRoomId, userId, dto.enabled);
+    return this.studyRoomsService.setExternalAutoAccept(
+      studyRoomId,
+      userId,
+      dto.enabled,
+    );
   }
 
   @Post(':studyRoomId/participants/role')
@@ -238,7 +245,9 @@ export class StudyRoomsController {
       studyRoomId,
       userId,
     );
-    this.logger.log('✅ [StudyRoomsController.completeStudyRoom] Completed successfully');
+    this.logger.log(
+      '✅ [StudyRoomsController.completeStudyRoom] Completed successfully',
+    );
     return result;
   }
 
@@ -273,7 +282,8 @@ export class StudyRoomsController {
     @Body() feedbackDto: SessionFeedbackDto,
   ) {
     this.logger.debug({
-      message: '📝 [StudyRoomsController.submitSessionFeedback] Endpoint called',
+      message:
+        '📝 [StudyRoomsController.submitSessionFeedback] Endpoint called',
       studyRoomId,
       userId,
       isHost: feedbackDto.isHost,

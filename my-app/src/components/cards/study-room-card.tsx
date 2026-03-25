@@ -1,15 +1,19 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Users, Loader2, Share2, Play, Calendar, Clock } from "lucide-react";
+import { Users, Loader2, Play, Calendar, Clock, Pencil } from "lucide-react";
 import { motion } from "framer-motion";
 import { ShareButton } from "@/components/share/share-button";
 import { cn } from "@/lib/utils";
 import { formatDate } from "@/lib/utils/date-time";
+import { SessionStatus } from "@/types";
+import { canStudyRoomHostEditFromCard } from "@/lib/utils/study-room-edit";
+import { StudyRoomHostEditDialog } from "@/components/study-room/study-room-host-edit-dialog";
 
 type ButtonVariant = "default" | "outline" | "secondary" | "ghost" | "destructive" | "link";
 
@@ -36,6 +40,15 @@ interface StudyRoomCardProps {
   onAction?: () => void;
   actionDisabled?: boolean;
   actionLoading?: boolean;
+  /** When set with currentUserId, host may see Edit until the session is finished */
+  sessionStatus?: SessionStatus;
+  currentUserId?: string | null;
+  seriesId?: string | null;
+  joiningFee?: number;
+  /** All skill names (for edit dialog); category uses first only */
+  skillNames?: string[];
+  /** Room timezone from API (improves schedule editing accuracy) */
+  timezone?: string | null;
 }
 
 export function StudyRoomCard({
@@ -54,12 +67,34 @@ export function StudyRoomCard({
   onAction,
   actionDisabled = false,
   actionLoading = false,
+  sessionStatus,
+  currentUserId,
+  seriesId,
+  joiningFee = 0,
+  skillNames,
+  timezone: roomTimezone,
 }: StudyRoomCardProps) {
   const router = useRouter();
+  const [editOpen, setEditOpen] = useState(false);
   const statusIsLive = status === "live";
   const participantCurrent = participants?.current ?? 0;
   const participantMax = participants?.max ?? 0;
   const hostInitial = host?.name?.charAt(0) || "U";
+
+  const resolvedSkillNames =
+    skillNames ??
+    (category && category !== "General" ? [category] : []);
+
+  const showHostMenu =
+    sessionStatus != null &&
+    date != null &&
+    duration != null &&
+    host?.id != null &&
+    canStudyRoomHostEditFromCard({
+      currentUserId: currentUserId ?? null,
+      hostUserId: host.id,
+      sessionStatus,
+    });
 
   // Format date/time if available
   const formattedDateTime = date ? formatDate(date, "datetime") : null;
@@ -98,29 +133,45 @@ export function StudyRoomCard({
       className="h-full group"
     >
       <Card className={cn(
-        "h-full flex flex-col p-4 bg-gradient-to-br transition-all duration-300 border shadow-sm hover:shadow-lg",
+        "relative h-full flex flex-col p-4 bg-gradient-to-br transition-all duration-300 border shadow-sm hover:shadow-lg overflow-visible",
         theme.gradient,
         theme.border,
         theme.hoverBorder
       )}>
-        
-        {/* Header: Category Badge & Status */}
-        <div className="flex items-center justify-between mb-3">
+        {/* Header: category left; LIVE/SCHEDULED + Edit stacked right with shared alignment */}
+        <div className="mb-3 flex items-start justify-between gap-2">
           <Badge variant="secondary" className={cn(
-            "text-xs font-bold px-2 py-0.5 transition-colors uppercase tracking-wider rounded-lg border-0",
+            "text-xs font-bold px-2 py-0.5 transition-colors uppercase tracking-wider rounded-lg border-0 shrink-0",
             theme.badge
           )}>
             {category}
           </Badge>
-          
-          <div className={cn("flex items-center gap-2", theme.iconColor)}>
-            <span className="relative flex h-2 w-2">
-              {statusIsLive && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>}
-              <span className={cn("relative inline-flex rounded-full h-2 w-2", statusIsLive ? "bg-red-500" : "bg-emerald-500")}></span>
-            </span>
-            <span className="text-[11px] font-extrabold tracking-widest uppercase">
-              {statusIsLive ? "LIVE" : "SCHEDULED"}
-            </span>
+
+          <div className="flex min-w-0 flex-col items-end gap-2 shrink-0">
+            <div className={cn("flex items-center gap-2", theme.iconColor)}>
+              <span className="relative flex h-2 w-2">
+                {statusIsLive && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>}
+                <span className={cn("relative inline-flex rounded-full h-2 w-2", statusIsLive ? "bg-red-500" : "bg-emerald-500")}></span>
+              </span>
+              <span className="text-[11px] font-extrabold tracking-widest uppercase">
+                {statusIsLive ? "LIVE" : "SCHEDULED"}
+              </span>
+            </div>
+            {showHostMenu && (
+              <Button
+                type="button"
+                variant="secondary"
+                className="inline-flex items-center rounded-full px-2.5 py-0.5 h-auto min-h-0 text-xs font-medium shadow-none border-transparent bg-primary/10 text-primary hover:bg-primary/20 gap-1.5"
+                aria-label="Edit study room (host)"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEditOpen(true);
+                }}
+              >
+                <Pencil className="h-3 w-3 shrink-0" aria-hidden />
+                Edit
+              </Button>
+            )}
           </div>
         </div>
 
@@ -234,6 +285,24 @@ export function StudyRoomCard({
           </div>
         </div>
       </Card>
+
+      {showHostMenu && date != null && duration != null && (
+        <StudyRoomHostEditDialog
+          open={editOpen}
+          onOpenChange={setEditOpen}
+          roomId={roomId}
+          initialTitle={title}
+          initialDescription={description}
+          initialDate={date}
+          initialDuration={duration}
+          initialMaxParticipants={participants?.max ?? 5}
+          initialJoiningFee={joiningFee}
+          initialSkillNames={resolvedSkillNames}
+          initialTimezone={roomTimezone ?? null}
+          initialImageUrl={imageUrl ?? null}
+          seriesId={seriesId ?? null}
+        />
+      )}
     </motion.div>
   );
 }

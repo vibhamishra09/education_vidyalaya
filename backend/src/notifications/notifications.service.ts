@@ -24,7 +24,8 @@ export class NotificationsService {
     page: number = 1,
     limit: number = 20,
   ) {
-    // Cache for 30 seconds - notifications change frequently
+    // Short TTL: fewer DB reads under load. Stale data is avoided because
+    // createNotification + mark*AsRead invalidate `notifications:list:*{clerkId}*`.
     const cacheKey = this.cacheService.createKey('notifications:list', {
       userId,
       type,
@@ -38,51 +39,58 @@ export class NotificationsService {
       cacheKey,
       async () => {
         try {
-        const where: any = { userId };
+          // userId is actually clerkId, so we need to find the user by clerkId first
+          const user = await this.prisma.user.findUnique({
+            where: { clerkId: userId },
+            select: { id: true },
+          });
 
-        if (type) where.notifType = type;
-        if (viewed !== undefined) where.viewed = viewed;
+          if (!user) {
+            throw new NotFoundException('User not found');
+          }
 
-        const skip = (page - 1) * limit;
+          const where: Record<string, unknown> = { userId: user.id };
 
-        const [notifications, total, unreadCount] = await Promise.all([
-          this.prisma.notification.findMany({
-            where,
-            skip,
-            take: limit,
-            orderBy: { createdAt: 'desc' },
-          }),
-          this.prisma.notification.count({ where }),
-          this.prisma.notification.count({
-            where: { userId, viewed: false },
-          }),
-        ]);
+          if (type) where.notifType = type;
+          if (viewed !== undefined) where.viewed = viewed;
 
-        return {
-          notifications,
-          unreadCount,
-          pagination: {
-            total,
-            page,
-            limit,
-            totalPages: Math.ceil(total / limit),
-            hasMore: skip + limit < total,
-          },
-        };
+          const skip = (page - 1) * limit;
+
+          const [notifications, total, unreadCount] = await Promise.all([
+            this.prisma.notification.findMany({
+              where,
+              skip,
+              take: limit,
+              orderBy: { createdAt: 'desc' },
+            }),
+            this.prisma.notification.count({ where }),
+            this.prisma.notification.count({
+              where: { userId: user.id, viewed: false },
+            }),
+          ]);
+
+          return {
+            notifications,
+            unreadCount,
+            pagination: {
+              total,
+              page,
+              limit,
+              totalPages: Math.ceil(total / limit),
+              hasMore: skip + limit < total,
+            },
+          };
         } catch (error) {
-          // Handle database connection errors
           if (isConnectionError(error)) {
             this.logger.error(
               `Database connection error in getNotifications for user ${userId}:`,
               error instanceof Error ? error.message : String(error),
             );
-            
-            // Re-throw NotFoundException (user not found is a valid case)
+
             if (error instanceof NotFoundException) {
               throw error;
             }
-            
-            // Return empty notifications as fallback
+
             return {
               notifications: [],
               unreadCount: 0,
@@ -95,8 +103,7 @@ export class NotificationsService {
               },
             };
           }
-          
-          // Re-throw other errors
+
           throw error;
         }
       },
@@ -197,41 +204,65 @@ export class NotificationsService {
       },
     });
 
-    // Send push notification if requested
-    if (options?.sendPush) {
-      this.logger.debug('🔔 [NotificationsService] Triggering push notification:', {
-        userId,
-        pushTitle: options.pushTitle || 'New Notification',
-        message,
-        notificationId: notification.id,
-        actionType: options.actionType,
-      });
+    // Bust list cache before push so GET /notifications sees the new row even if push throws
+    const owner = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { clerkId: true },
+    });
+    if (owner?.clerkId) {
+      await this.cacheService.deletePattern(
+        `notifications:list:*${owner.clerkId}*`,
+      );
+    }
 
-      await this.pushNotificationService.sendPushNotification(
-        userId,
-        options.pushTitle || 'New Notification',
-        message,
+    // Send push notification if requested (must not fail the in-app notification)
+    if (options?.sendPush) {
+      this.logger.debug(
+        '🔔 [NotificationsService] Triggering push notification:',
         {
+          userId,
+          pushTitle: options.pushTitle || 'New Notification',
+          message,
           notificationId: notification.id,
           actionType: options.actionType,
-          ...options.actionData,
         },
       );
 
-      this.logger.debug(
-        '✅ [NotificationsService] Push notification triggered successfully',
-      );
+      try {
+        await this.pushNotificationService.sendPushNotification(
+          userId,
+          options.pushTitle || 'New Notification',
+          message,
+          {
+            notificationId: notification.id,
+            actionType: options.actionType,
+            ...options.actionData,
+          },
+        );
+        this.logger.debug(
+          '✅ [NotificationsService] Push notification triggered successfully',
+        );
+      } catch (pushError) {
+        this.logger.error(
+          'Push failed after notification was saved (in-app list still updated)',
+          pushError instanceof Error ? pushError.stack : String(pushError),
+        );
+      }
     }
 
     // Send email notification for high priority (URGENT) notifications
     if (type === NotifType.URGENT) {
-      this.logger.debug('📧 [NotificationsService] Sending email for URGENT notification:', {
-        userId,
-        message,
-        notificationId: notification.id,
-      });
+      this.logger.debug(
+        '📧 [NotificationsService] Sending email for URGENT notification:',
+        {
+          userId,
+          message,
+          notificationId: notification.id,
+        },
+      );
 
-      const emailSubject = options?.pushTitle || 'High Priority Notification - Webyalaya';
+      const emailSubject =
+        options?.pushTitle || 'High Priority Notification - Webyalaya';
       try {
         const emailSent = await this.emailService.sendEmailNotification(
           userId,
@@ -261,9 +292,6 @@ export class NotificationsService {
         );
       }
     }
-
-    // Invalidate notifications cache for this user
-    await this.cacheService.deletePattern(`notifications:list:*${userId}*`);
 
     return notification;
   }

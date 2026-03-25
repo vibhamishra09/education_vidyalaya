@@ -1,5 +1,9 @@
-import { Controller, Get, Query, UseGuards, NotFoundException } from '@nestjs/common';
-import { DashboardService, SessionActivityDataPoint, WalletActivityDataPoint } from './dashboard.service';
+import { Controller, Get, NotFoundException, Query, UseGuards } from '@nestjs/common';
+import {
+  DashboardService,
+  SessionActivityDataPoint,
+  WalletActivityDataPoint,
+} from './dashboard.service';
 import { ClerkAuthGuard } from '../common/guards/clerk-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { DashboardQueryDto } from './dto/dashboard-query.dto';

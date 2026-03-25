@@ -1,4 +1,11 @@
-import { IsString, IsBoolean, IsOptional, IsEnum, IsNumber, IsArray } from 'class-validator';
+import {
+  IsString,
+  IsBoolean,
+  IsOptional,
+  IsEnum,
+  IsNumber,
+  IsArray,
+} from 'class-validator';
 
 export class SessionFeedbackAnswersDto {
   // Q1-Q2: Getting Started

@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 import { DebateRoomCard } from '@/components/cards/debate-room-card';
 import { useDebateRooms, useCreateDebateRoom } from '@/hooks/use-debate-rooms';
+import { useCurrentUser } from '@/hooks/use-users';
 import { useToast } from '@/contexts/toast-context';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
@@ -63,6 +64,7 @@ export default function DebateRoomsPage() {
   };
 
   const { data, isLoading, error } = useDebateRooms(filters);
+  const { data: currentUserData } = useCurrentUser();
 
   useEffect(() => {
     setPage(1);
@@ -466,7 +468,11 @@ export default function DebateRoomsPage() {
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                 {data.debateRooms.map((room) => (
-                  <DebateRoomCard key={room.id} room={room} />
+                  <DebateRoomCard
+                    key={room.id}
+                    room={room}
+                    currentUserId={currentUserData?.user?.id ?? null}
+                  />
                 ))}
               </div>
             )}

@@ -57,7 +57,10 @@ export class UsersController {
         dbUserId ?? clerkUserId,
       );
     } catch (error) {
-      this.logger.debug('Error in checkUsernameAvailability controller:', error);
+      this.logger.debug(
+        'Error in checkUsernameAvailability controller:',
+        error,
+      );
       return { available: false };
     }
   }

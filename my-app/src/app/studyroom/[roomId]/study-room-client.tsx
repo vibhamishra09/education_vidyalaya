@@ -17,6 +17,7 @@ import {
   Coins,
   Loader2,
   Check,
+  Pencil,
 } from "lucide-react";
 import {
   useStudyRoomDetails,
@@ -26,7 +27,7 @@ import {
   useResolveExternalJoinRequest,
   useToggleExternalAutoAccept,
 } from "@/hooks/use-study-rooms";
-import { useAuth, useUser } from "@clerk/nextjs";
+import { useAuth } from "@clerk/nextjs";
 import { setAuthToken } from "@/lib/api-client";
 import { useToast } from "@/contexts/toast-context";
 import Link from "next/link";
@@ -36,23 +37,27 @@ import { ReviewsSection } from "@/components/reviews/reviews-section";
 import { formatCoins } from "@/lib/utils/coin-format";
 import { ShareButton } from "@/components/share/share-button";
 import { studyRoomsApi } from "@/lib/api/study-rooms.api";
+import { useCurrentUser } from "@/hooks/use-users";
+import { canStudyRoomHostEditFromCard } from "@/lib/utils/study-room-edit";
+import { StudyRoomHostEditDialog } from "@/components/study-room/study-room-host-edit-dialog";
 
 interface StudyRoomClientProps {
   roomId: string;
 }
 
 export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
-  const { getToken } = useAuth();
-  const { isSignedIn } = useUser();
+  const { getToken, isSignedIn, isLoaded: authLoaded } = useAuth();
   const { showSuccess, showError } = useToast();
   const [isJoining, setIsJoining] = useState(false);
   const [canJoinVideoCall, setCanJoinVideoCall] = useState(false);
   
   const { data: room, isLoading, error } = useStudyRoomDetails(roomId);
-  console.log(room);
   const joinStudyRoom = useJoinStudyRoom();
   const cancelStudyRoom = useCancelStudyRoom(roomId);
-  const { data: externalRequests } = useExternalJoinRequests(roomId, !!isSignedIn);
+  const { data: externalRequests } = useExternalJoinRequests(
+    roomId,
+    authLoaded && !!isSignedIn,
+  );
   const resolveExternalJoin = useResolveExternalJoinRequest(roomId);
   const toggleAutoAccept = useToggleExternalAutoAccept(roomId);
   const [guestEmail, setGuestEmail] = useState("");
@@ -63,11 +68,12 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
     passcode: string;
   } | null>(null);
   const [isPasscodeCopied, setIsPasscodeCopied] = useState(false);
+  const [hostEditOpen, setHostEditOpen] = useState(false);
+  const { data: currentUserData } = useCurrentUser();
 
-  // Check if video call can be joined (within 5 minutes of start time)
+  // Video join: hosts can enter anytime while upcoming; learners within 5 min of start
   useEffect(() => {
     if (!room || room.sessionStatus === SessionStatus.ONGOING) {
-      // If session is ongoing, always allow joining
       setCanJoinVideoCall(true);
       return;
     }
@@ -77,21 +83,26 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
       return;
     }
 
+    const role = room.role || "empty";
+    if (role === "teacher") {
+      setCanJoinVideoCall(true);
+      return;
+    }
+
     const checkVideoCallAvailability = () => {
       const now = new Date();
       const scheduledStart = new Date(room.date);
-      const fiveMinutesBefore = new Date(scheduledStart.getTime() - 5 * 60 * 1000); // 5 minutes in milliseconds
-      
-      // Enable if current time is >= 5 minutes before start time
-      setCanJoinVideoCall(now >= fiveMinutesBefore);
+      const startMs = scheduledStart.getTime();
+      if (Number.isNaN(startMs)) {
+        setCanJoinVideoCall(false);
+        return;
+      }
+      const fiveMinutesBefore = startMs - 5 * 60 * 1000;
+      setCanJoinVideoCall(now.getTime() >= fiveMinutesBefore);
     };
 
-    // Check immediately
     checkVideoCallAvailability();
-
-    // Update every minute to handle the 5-minute window
     const interval = setInterval(checkVideoCallAvailability, 60000);
-
     return () => clearInterval(interval);
   }, [room]);
 
@@ -295,6 +306,23 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
 
   const liveRoomName = `studyroom-${roomId}`;
 
+  const hostEditSkillNames = (room.skills || [])
+    .map(
+      (skill: string | { name?: string; skill?: { name?: string } }) =>
+        typeof skill === "string"
+          ? skill
+          : skill.name || skill.skill?.name || "",
+    )
+    .filter(Boolean) as string[];
+
+  const showHostDetailMenu =
+    role === "teacher" &&
+    canStudyRoomHostEditFromCard({
+      currentUserId: currentUserData?.user?.id ?? null,
+      hostUserId: room.createdBy?.id ?? "",
+      sessionStatus: room.sessionStatus,
+    });
+
   return (
     <div className="min-h-screen flex flex-col bg-background selection:bg-primary/10 selection:text-primary">
       <Navigation />
@@ -311,7 +339,8 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
             <div className="lg:col-span-2 space-y-5">
                 {/* Header Section */}
                 <div className="space-y-4">
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex flex-wrap items-center gap-2 min-w-0">
                         <Badge
                             variant={room.sessionStatus === SessionStatus.ONGOING ? "destructive" : "secondary"}
                             className="rounded-full px-2.5 py-0.5 text-xs font-medium shadow-none border-transparent bg-primary/10 text-primary hover:bg-primary/20"
@@ -335,6 +364,27 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
                         {role === "learner" && (
                             <Badge className="rounded-full px-2.5 py-0.5 text-xs bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 shadow-none border-transparent">Enrolled</Badge>
                         )}
+                        {role !== "teacher" && room.hostDetailsUpdatedAt && (
+                          <Badge
+                            variant="outline"
+                            className="rounded-full px-2.5 py-0.5 text-xs font-semibold border-amber-500/40 text-amber-800 dark:text-amber-200 bg-amber-500/10"
+                          >
+                            Edited
+                          </Badge>
+                        )}
+                      </div>
+                      {showHostDetailMenu && (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="shrink-0 inline-flex items-center rounded-full px-2.5 py-0.5 h-auto min-h-0 text-xs font-medium shadow-none border-transparent bg-primary/10 text-primary hover:bg-primary/20 gap-1.5"
+                          aria-label="Edit study room (host)"
+                          onClick={() => setHostEditOpen(true)}
+                        >
+                          <Pencil className="h-3 w-3 shrink-0" aria-hidden />
+                          Edit
+                        </Button>
+                      )}
                     </div>
 
                     <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground leading-tight">
@@ -691,6 +741,24 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
 
       </main>
       <Footer />
+
+      {showHostDetailMenu && (
+        <StudyRoomHostEditDialog
+          open={hostEditOpen}
+          onOpenChange={setHostEditOpen}
+          roomId={roomId}
+          initialTitle={room.title}
+          initialDescription={room.description}
+          initialDate={room.date}
+          initialDuration={room.duration}
+          initialMaxParticipants={room.maxParticipants}
+          initialJoiningFee={Number(room.joiningFee ?? 0)}
+          initialSkillNames={hostEditSkillNames}
+          initialTimezone={room.timezone ?? null}
+          initialImageUrl={room.imageUrl ?? null}
+          seriesId={room.seriesId ?? null}
+        />
+      )}
     </div>
   );
 }

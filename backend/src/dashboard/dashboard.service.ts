@@ -1,10 +1,10 @@
 /* eslint-disable prettier/prettier */
 /* eslint-disable @typescript-eslint/no-unsafe-return */
-/* eslint-disable @typescript-eslint/no-unused-vars */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-import { Injectable } from '@nestjs/common';
+ 
+ 
+ 
+ 
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SessionStatus } from '../generated/prisma/client';
 import { StreaksService } from '../streaks/streaks.service';
@@ -353,6 +353,10 @@ export class DashboardService {
                 description: ps.description,
                 requestedBy: ps.requestedBy,
                 sessionStatus: ps.sessionStatus,
+                hostDetailsUpdatedAt: ps.hostDetailsUpdatedAt
+                  ? ps.hostDetailsUpdatedAt.toISOString()
+                  : null,
+                lastDetailsEditedById: ps.lastDetailsEditedById ?? null,
               })),
               pastSessions: pastSessions.map((ps) => ({
                 id: ps.id,
@@ -364,6 +368,10 @@ export class DashboardService {
                 description: ps.description,
                 requestedBy: ps.requestedBy,
                 sessionStatus: ps.sessionStatus,
+                hostDetailsUpdatedAt: ps.hostDetailsUpdatedAt
+                  ? ps.hostDetailsUpdatedAt.toISOString()
+                  : null,
+                lastDetailsEditedById: ps.lastDetailsEditedById ?? null,
               })),
               upcomingStudyRooms: upcomingStudyRooms.map((sr) => ({
                 id: sr.id,
@@ -376,7 +384,9 @@ export class DashboardService {
                 skills: sr.skills.map((s) => s.skill),
                 description: sr.description,
                 sessionStatus: sr.sessionStatus,
-                slug: sr.slug
+                hostDetailsUpdatedAt: sr.hostDetailsUpdatedAt
+                  ? sr.hostDetailsUpdatedAt.toISOString()
+                  : null,
               })),
               pastStudyRooms: pastStudyRooms.map((sr) => ({
                 id: sr.id,
@@ -389,7 +399,9 @@ export class DashboardService {
                 skills: sr.skills.map((s) => s.skill),
                 description: sr.description,
                 sessionStatus: sr.sessionStatus,
-                slug: sr.slug
+                hostDetailsUpdatedAt: sr.hostDetailsUpdatedAt
+                  ? sr.hostDetailsUpdatedAt.toISOString()
+                  : null,
               })),
               sessionsPagination: {
                 upcomingSessions: {

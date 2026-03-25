@@ -36,23 +36,29 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
   const [unreadCount, setUnreadCount] = useState(0);
   const { isSignedIn } = useUser();
 
-  const fetchNotifications = useCallback(async (page: number = 1, append: boolean = false) => {
+  const fetchNotifications = useCallback(async (
+    page: number = 1,
+    append: boolean = false,
+    opts?: { silent?: boolean },
+  ) => {
     if (!isSignedIn) {
       setNotifications([]);
       setUnreadCount(0);
       return;
     }
 
+    const silent = opts?.silent === true;
+
     try {
       if (append) {
         setIsLoadingMore(true);
-      } else {
+      } else if (!silent) {
         setIsLoading(true);
         setCurrentPage(1);
       }
-      setError(null);
       const response = await notificationsApi.getNotifications(page, 20);
-      
+      setError(null);
+
       if (append) {
         setNotifications((prev) => [...prev, ...response.notifications]);
       } else {
@@ -63,11 +69,9 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
       setHasMore(response.pagination.hasMore);
       setCurrentPage(page);
     } catch (err: unknown) {
-      // Only set error on the first attempt, silently fail on subsequent background refreshes
-      if (!append && page === 1) {
+      if (!append && page === 1 && !silent) {
         setError('Failed to load notifications');
       }
-      // Keep existing notifications on error instead of clearing them
     } finally {
       setIsLoading(false);
       setIsLoadingMore(false);
@@ -160,16 +164,19 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     }
   }, [isSignedIn, fetchNotifications]);
 
-  // Set up periodic refetching when user is signed in
-  // Refetch only the first page to get latest notifications
   useEffect(() => {
     if (!isSignedIn) return;
-
-    const interval = setInterval(() => {
-      fetchNotifications(1, false);
-    }, 30000); // Refetch every 30 seconds
-
-    return () => clearInterval(interval);
+    const silentRefresh = () =>
+      void fetchNotifications(1, false, { silent: true });
+    const interval = setInterval(silentRefresh, 8000);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') silentRefresh();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [isSignedIn, fetchNotifications]);
 
   const value: NotificationContextType = {
@@ -179,7 +186,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     isLoadingMore,
     error,
     hasMore,
-    refetchNotifications: () => fetchNotifications(1, false),
+    refetchNotifications: () => fetchNotifications(1, false, { silent: true }),
     loadMoreNotifications,
     markAsRead,
     markAllAsRead,

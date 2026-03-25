@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@clerk/nextjs';
 import { studyRoomsApi } from '@/lib/api';
 import { setAuthToken } from '@/lib/api-client';
+import { browseKeys } from '@/hooks/use-browse';
 import {
   CreateStudyRoomDto,
   StudyRoomEditScope,
@@ -32,7 +33,9 @@ export function useStudyRoomDetails(studyRoomId: string) {
   const { getToken, isLoaded } = useAuth();
 
   return useQuery({
-    queryKey: studyRoomKeys.detail(studyRoomId),
+    // Include isLoaded so the first anonymous fetch is not cached as the only result
+    // after Clerk becomes ready (host/learner role depends on Authorization).
+    queryKey: [...studyRoomKeys.detail(studyRoomId), isLoaded] as const,
     queryFn: async () => {
       // If auth is ready, attach token; don't block this public endpoint on Clerk load.
       if (isLoaded) {
@@ -88,6 +91,7 @@ export function useUpdateStudyRoom(studyRoomId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: studyRoomKeys.detail(studyRoomId) });
       queryClient.invalidateQueries({ queryKey: studyRoomKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: browseKeys.all });
     },
   });
 }
@@ -244,6 +248,7 @@ export function useCancelStudyRoom(studyRoomId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: studyRoomKeys.detail(studyRoomId) });
       queryClient.invalidateQueries({ queryKey: studyRoomKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: browseKeys.all });
     },
   });
 }

@@ -12,7 +12,7 @@ export class BrowseController {
   async getBrowseData(@Query() query: BrowseQueryDto) {
     // Ensure tab has a valid default value for mobile browsers
     const tab = query.tab || 'peers';
-    
+
     return this.browseService.getBrowseData(
       tab,
       query.search,

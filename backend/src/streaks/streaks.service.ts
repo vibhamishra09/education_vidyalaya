@@ -237,56 +237,56 @@ export class StreaksService {
 
       const timezone = user?.timezone || 'UTC';
 
-    // Calculate date range in user's timezone
-    const endDate = DateTime.now().setZone(timezone).startOf('day');
-    const startDate = endDate.minus({ days: days - 1 });
+      // Calculate date range in user's timezone
+      const endDate = DateTime.now().setZone(timezone).startOf('day');
+      const startDate = endDate.minus({ days: days - 1 });
 
-    // Fetch activities in the date range
-    const activities = await this.prisma.dailyActivity.findMany({
-      where: {
-        userId,
-        date: {
-          gte: startDate.toJSDate(),
-          lte: endDate.toJSDate(),
+      // Fetch activities in the date range
+      const activities = await this.prisma.dailyActivity.findMany({
+        where: {
+          userId,
+          date: {
+            gte: startDate.toJSDate(),
+            lte: endDate.toJSDate(),
+          },
         },
-      },
-      orderBy: { date: 'asc' },
-    });
-
-    // Create a map for quick lookup
-    const activityMap = new Map(
-      activities.map((a) => [
-        DateTime.fromJSDate(a.date).setZone(timezone).toISODate(),
-        a,
-      ]),
-    );
-
-    // Generate array for all days in range
-    type StreakDay = {
-      date: Date;
-      hasActivity: boolean;
-      sessionCount: number;
-      minutesLearned: number;
-      minutesTaught: number;
-    };
-
-    const streakDays: StreakDay[] = [];
-    let currentDate = startDate;
-
-    for (let i = 0; i < days; i++) {
-      const dateKey = currentDate.toISODate();
-      const activity = activityMap.get(dateKey);
-
-      streakDays.push({
-        date: currentDate.toJSDate(),
-        hasActivity: !!activity,
-        sessionCount: activity?.sessionCount || 0,
-        minutesLearned: activity?.minutesLearned || 0,
-        minutesTaught: activity?.minutesTaught || 0,
+        orderBy: { date: 'asc' },
       });
 
-      currentDate = currentDate.plus({ days: 1 });
-    }
+      // Create a map for quick lookup
+      const activityMap = new Map(
+        activities.map((a) => [
+          DateTime.fromJSDate(a.date).setZone(timezone).toISODate(),
+          a,
+        ]),
+      );
+
+      // Generate array for all days in range
+      type StreakDay = {
+        date: Date;
+        hasActivity: boolean;
+        sessionCount: number;
+        minutesLearned: number;
+        minutesTaught: number;
+      };
+
+      const streakDays: StreakDay[] = [];
+      let currentDate = startDate;
+
+      for (let i = 0; i < days; i++) {
+        const dateKey = currentDate.toISODate();
+        const activity = activityMap.get(dateKey);
+
+        streakDays.push({
+          date: currentDate.toJSDate(),
+          hasActivity: !!activity,
+          sessionCount: activity?.sessionCount || 0,
+          minutesLearned: activity?.minutesLearned || 0,
+          minutesTaught: activity?.minutesTaught || 0,
+        });
+
+        currentDate = currentDate.plus({ days: 1 });
+      }
 
       return streakDays;
     } catch (error) {
@@ -296,11 +296,11 @@ export class StreaksService {
           `Database connection error in getStreakHistory for user ${userId}:`,
           error instanceof Error ? error.message : String(error),
         );
-        
+
         // Return empty streak history as fallback
         return [];
       }
-      
+
       // Re-throw other errors
       throw error;
     }
@@ -325,7 +325,10 @@ export class StreaksService {
       });
 
       if (!user) {
-        this.logger.debug('⚠️ [StreaksService.getUserStreak] User not found:', userId);
+        this.logger.debug(
+          '⚠️ [StreaksService.getUserStreak] User not found:',
+          userId,
+        );
         return {
           currentStreak: 0,
           longestStreak: 0,
@@ -345,7 +348,7 @@ export class StreaksService {
           `Database connection error in getUserStreak for user ${userId}:`,
           error instanceof Error ? error.message : String(error),
         );
-        
+
         // Return default streak values as fallback
         return {
           currentStreak: 0,
@@ -353,7 +356,7 @@ export class StreaksService {
           lastActivityDate: null,
         };
       }
-      
+
       // Re-throw other errors
       throw error;
     }

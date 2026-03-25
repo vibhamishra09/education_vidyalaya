@@ -19,6 +19,7 @@ export interface RecommendationsResponse {
     id: string;
     title: string;
     description?: string;
+    imageUrl?: string;
     sessionStatus: string;
     date: string;
     duration: number;
@@ -32,6 +33,8 @@ export interface RecommendationsResponse {
     };
     skills: string[];
     matchingSkills: string[];
+    seriesId?: string | null;
+    timezone?: string | null;
     hostAvgRating: number | null;
     hostReviewCount: number;
     hostTotalSessions: number;

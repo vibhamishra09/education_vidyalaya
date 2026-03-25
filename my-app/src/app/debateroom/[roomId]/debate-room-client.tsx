@@ -7,6 +7,24 @@ import { Navigation } from '@/components/layout/navigation';
 import { Footer } from '@/components/layout/footer';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -33,6 +51,7 @@ import {
   Shield,
   Calendar,
   AlertCircle,
+  Pencil,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useToast } from '@/contexts/toast-context';
@@ -46,11 +65,13 @@ import {
   useDebateLivekitToken,
   useDebateResults,
   useGenerateResults,
+  useUpdateDebateRoom,
 } from '@/hooks/use-debate-rooms';
 import { useDebateSocket } from '@/hooks/use-debate-socket';
 import {
   DebateStatus,
   DebateSide,
+  TurnOrderType,
   getUserDebateRole,
   getUserTeamSide,
 } from '@/types/debate.types';
@@ -63,6 +84,7 @@ import {
   DebateResultsDisplay,
 } from '@/components/debate';
 import { ShareButton } from '@/components/share/share-button';
+import { extractHttpErrorMessage } from '@/lib/utils/error-handling';
 
 interface DebateRoomClientProps {
   roomId: string;
@@ -178,6 +200,13 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
   // State
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [showLeaveDialog, setShowLeaveDialog] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editTopic, setEditTopic] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editMaxPerTeam, setEditMaxPerTeam] = useState(3);
+  const [editTurnDuration, setEditTurnDuration] = useState(120);
+  const [editPrepTime, setEditPrepTime] = useState(30);
+  const [editTurnOrder, setEditTurnOrder] = useState<TurnOrderType>(TurnOrderType.FIFO);
   const [selectedSide, setSelectedSide] = useState<DebateSide | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [calculatedPrepCountdown, setCalculatedPrepCountdown] = useState<number | null>(null);
@@ -214,6 +243,7 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
   const cancelDebateRoom = useCancelDebateRoom();
   const startPrepPhase = useStartPrepPhase();
   const generateResults = useGenerateResults();
+  const updateDebateRoom = useUpdateDebateRoom(roomId);
 
   // Get user's role and team
   const userRole = room && user ? getUserDebateRole(room, user.id) : null;
@@ -358,6 +388,48 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
     }
   };
 
+  useEffect(() => {
+    if (!editOpen || !room) return;
+    setEditTopic(room.topic);
+    setEditDescription(room.description ?? '');
+    setEditMaxPerTeam(room.maxParticipants);
+    setEditTurnDuration(room.turnDurationSeconds);
+    setEditPrepTime(room.prepTimeSeconds);
+    setEditTurnOrder(room.turnOrder);
+  }, [editOpen, room]);
+
+  const handleSaveEdits = async () => {
+    if (!editTopic.trim()) {
+      showError('Validation', 'Topic is required');
+      return;
+    }
+    const max = Math.round(Math.min(10, Math.max(1, Number(editMaxPerTeam))));
+    const turnSec = Math.round(Math.min(600, Math.max(30, Number(editTurnDuration))));
+    const prepSec = Math.round(Math.min(120, Math.max(10, Number(editPrepTime))));
+    if (!Number.isFinite(max) || !Number.isFinite(turnSec) || !Number.isFinite(prepSec)) {
+      showError('Validation', 'Please enter valid numbers');
+      return;
+    }
+    try {
+      await updateDebateRoom.mutateAsync({
+        topic: editTopic.trim(),
+        description: editDescription.trim() || undefined,
+        maxParticipants: max,
+        turnDurationSeconds: turnSec,
+        prepTimeSeconds: prepSec,
+        turnOrder: editTurnOrder,
+      });
+      showSuccess('Updated', 'Changes saved.');
+      setEditOpen(false);
+      void refetch();
+    } catch (err: unknown) {
+      showError(
+        'Update failed',
+        extractHttpErrorMessage(err, 'Could not update debate room'),
+      );
+    }
+  };
+
   // Loading state
   if (isLoading) {
     return (
@@ -437,6 +509,12 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
   // Check if user is the only moderator
   const isOnlyModerator = isModerator && room.moderators.length === 1;
 
+  const hostCanEditRoomSettings =
+    isHost &&
+    room.status !== DebateStatus.ENDED &&
+    room.status !== DebateStatus.PROCESSED &&
+    room.status !== DebateStatus.CANCELLED;
+
   return (
     <div className="min-h-screen flex flex-col bg-background selection:bg-primary/10 selection:text-primary">
       <Navigation />
@@ -488,11 +566,34 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
                     Enrolled
                   </Badge>
                 )}
+                {!isHost && room.hostDetailsUpdatedAt && (
+                  <Badge
+                    variant="outline"
+                    className="rounded-full px-2.5 py-0.5 text-xs font-semibold border-amber-500/40 text-amber-800 dark:text-amber-200 bg-amber-500/10"
+                  >
+                    Edited
+                  </Badge>
+                )}
               </div>
 
-              <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground leading-tight">
-                {room.topic}
-              </h1>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground leading-tight flex-1 min-w-0">
+                  {room.topic}
+                </h1>
+                {hostCanEditRoomSettings && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 rounded-full border-dashed"
+                    aria-label="Edit debate (host)"
+                    onClick={() => setEditOpen(true)}
+                  >
+                    <Pencil className="h-3.5 w-3.5 mr-1.5" aria-hidden />
+                    Edit
+                  </Button>
+                )}
+              </div>
           
               {room.description && (
                 <p className="text-sm text-muted-foreground leading-relaxed">
@@ -1206,6 +1307,112 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit debate</DialogTitle>
+            <DialogDescription>
+              Only you (the host) see this. You can change topic, timing, and team size whenever
+              you want until the debate is closed — that means ended, completed (results), or
+              cancelled. Then editing stays locked.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="debate-edit-topic">Topic</Label>
+              <Input
+                id="debate-edit-topic"
+                value={editTopic}
+                onChange={(e) => setEditTopic(e.target.value)}
+                placeholder="Debate topic / motion"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="debate-edit-desc">Description</Label>
+              <Textarea
+                id="debate-edit-desc"
+                value={editDescription}
+                onChange={(e) => setEditDescription(e.target.value)}
+                rows={3}
+                placeholder="Optional context or rules"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="debate-edit-max">Max per team</Label>
+                <Input
+                  id="debate-edit-max"
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={editMaxPerTeam}
+                  onChange={(e) => setEditMaxPerTeam(Number(e.target.value))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="debate-edit-turn">Turn (seconds)</Label>
+                <Input
+                  id="debate-edit-turn"
+                  type="number"
+                  min={30}
+                  max={600}
+                  step={10}
+                  value={editTurnDuration}
+                  onChange={(e) => setEditTurnDuration(Number(e.target.value))}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="debate-edit-prep">Prep (seconds)</Label>
+                <Input
+                  id="debate-edit-prep"
+                  type="number"
+                  min={10}
+                  max={120}
+                  value={editPrepTime}
+                  onChange={(e) => setEditPrepTime(Number(e.target.value))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Turn order</Label>
+                <Select
+                  value={editTurnOrder}
+                  onValueChange={(v) => setEditTurnOrder(v as TurnOrderType)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={TurnOrderType.FIFO}>FIFO (join order)</SelectItem>
+                    <SelectItem value={TurnOrderType.RANDOM}>Random</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="outline" onClick={() => setEditOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void handleSaveEdits()}
+              disabled={updateDebateRoom.isPending}
+            >
+              {updateDebateRoom.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Saving…
+                </>
+              ) : (
+                'Save changes'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

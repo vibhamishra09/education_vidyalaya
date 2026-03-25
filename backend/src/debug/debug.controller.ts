@@ -1,9 +1,14 @@
-import { Controller, Get, InternalServerErrorException, ServiceUnavailableException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  InternalServerErrorException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
  * Debug Controller
- * 
+ *
  * This controller provides debugging and testing endpoints.
  * These endpoints are PUBLIC (no auth guard) to facilitate testing.
  */
@@ -13,10 +18,10 @@ export class DebugController {
 
   /**
    * GET /debug/trigger-500
-   * 
+   *
    * Intentionally throws a 500 Internal Server Error.
    * Used for testing error monitoring, alerts, and Prometheus/Grafana configuration.
-   * 
+   *
    * @throws {InternalServerErrorException} Always throws this error
    */
   @Get('trigger-500')
@@ -28,9 +33,9 @@ export class DebugController {
 
   /**
    * GET /debug/health
-   * 
+   *
    * Simple health check endpoint for testing.
-   * 
+   *
    * @returns {object} Health status
    */
   @Get('health')

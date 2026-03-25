@@ -75,11 +75,11 @@ export class AvailabilityService {
           `Database connection error in getUserAvailability for user ${userId}:`,
           error instanceof Error ? error.message : String(error),
         );
-        
+
         // Return empty availability as fallback
         return { availability: [] };
       }
-      
+
       // Re-throw other errors
       throw error;
     }
@@ -625,8 +625,9 @@ export class AvailabilityService {
     const nowYear = now.getFullYear();
     const nowMonth = now.getMonth();
     const nowDay = now.getDate();
-    const isToday = (year === nowYear && month - 1 === nowMonth && day === nowDay);
-    const effectiveStart = isToday 
+    const isToday =
+      year === nowYear && month - 1 === nowMonth && day === nowDay;
+    const effectiveStart = isToday
       ? new Date(Math.max(dayStart.getTime(), now.getTime() + 15 * 60 * 1000)) // 15min buffer
       : dayStart;
 
@@ -991,8 +992,9 @@ export class AvailabilityService {
     const nowYear = now.getFullYear();
     const nowMonth = now.getMonth();
     const nowDay = now.getDate();
-    const isToday = (year === nowYear && month - 1 === nowMonth && day === nowDay);
-    const effectiveStart = isToday 
+    const isToday =
+      year === nowYear && month - 1 === nowMonth && day === nowDay;
+    const effectiveStart = isToday
       ? new Date(Math.max(dayStart.getTime(), now.getTime() + 15 * 60 * 1000)) // Start from now + 15min if today
       : dayStart;
 
