@@ -21,11 +21,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2 } from "lucide-react";
+import { Calendar, Loader2 } from "lucide-react";
 import { useUpdateDebateRoom, debateRoomKeys } from "@/hooks/use-debate-rooms";
 import { useToast } from "@/contexts/toast-context";
 import { extractHttpErrorMessage } from "@/lib/utils/error-handling";
-import { DebateRoom, TurnOrderType } from "@/types/debate.types";
+import {
+  DebateRoom,
+  DebateStatus,
+  TurnOrderType,
+  type UpdateDebateRoomDto,
+} from "@/types/debate.types";
 
 export type DebateRoomHostEditDialogProps = {
   roomId: string;
@@ -50,6 +55,11 @@ export function DebateRoomHostEditDialog({
   const [turnDuration, setTurnDuration] = useState(120);
   const [prepTime, setPrepTime] = useState(30);
   const [turnOrder, setTurnOrder] = useState<TurnOrderType>(TurnOrderType.FIFO);
+  /** "none" = no fixed start; "scheduled" = use schedDate/schedTime */
+  const [scheduleMode, setScheduleMode] = useState<"none" | "scheduled">("none");
+  const [schedDate, setSchedDate] = useState("");
+  const [schedTime, setSchedTime] = useState("");
+  const [debateSessionMinutes, setDebateSessionMinutes] = useState(60);
 
   useEffect(() => {
     if (!open || !room) return;
@@ -59,9 +69,28 @@ export function DebateRoomHostEditDialog({
     setTurnDuration(room.turnDurationSeconds);
     setPrepTime(room.prepTimeSeconds);
     setTurnOrder(room.turnOrder);
+    setDebateSessionMinutes(room.debateDurationMinutes ?? 60);
+    if (room.scheduledAt) {
+      setScheduleMode("scheduled");
+      const d = new Date(room.scheduledAt);
+      if (!Number.isNaN(d.getTime())) {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        setSchedDate(`${y}-${m}-${day}`);
+        const h = String(d.getHours()).padStart(2, "0");
+        const min = String(d.getMinutes()).padStart(2, "0");
+        setSchedTime(`${h}:${min}`);
+      }
+    } else {
+      setScheduleMode("none");
+      setSchedDate("");
+      setSchedTime("");
+    }
   }, [open, room]);
 
   const handleSave = async () => {
+    if (!room) return;
     if (!topic.trim()) {
       showError("Validation", "Topic is required");
       return;
@@ -74,14 +103,34 @@ export function DebateRoomHostEditDialog({
       return;
     }
     try {
-      await updateDebateRoom.mutateAsync({
+      const payload: UpdateDebateRoomDto = {
         topic: topic.trim(),
         description: description.trim() || undefined,
         maxParticipants: max,
         turnDurationSeconds: turnSec,
         prepTimeSeconds: prepSec,
         turnOrder,
-      });
+      };
+
+      if (room.status === DebateStatus.WAITING) {
+        const sessionM = Math.round(Number(debateSessionMinutes));
+        if (!Number.isFinite(sessionM) || sessionM < 5 || sessionM > 24 * 60) {
+          showError("Validation", "Debate duration must be between 5 and 1440 minutes.");
+          return;
+        }
+        payload.debateDurationMinutes = sessionM;
+        if (scheduleMode === "scheduled") {
+          if (!schedDate || !schedTime) {
+            showError("Validation", "Choose both date and time for a scheduled start, or switch to “No fixed time”.");
+            return;
+          }
+          payload.scheduledAt = `${schedDate}T${schedTime}:00`;
+        } else if (room.scheduledAt) {
+          payload.clearScheduledAt = true;
+        }
+      }
+
+      await updateDebateRoom.mutateAsync(payload);
       showSuccess("Updated", "Changes saved.");
       onOpenChange(false);
       void queryClient.invalidateQueries({ queryKey: debateRoomKeys.lists() });
@@ -151,6 +200,80 @@ export function DebateRoomHostEditDialog({
               />
             </div>
           </div>
+          {room?.status === DebateStatus.WAITING && (
+            <div className="space-y-2">
+              <Label htmlFor={fieldId("session-mins")}>Debate duration (minutes)</Label>
+              <p className="text-xs text-muted-foreground">
+                Total planned session length. Joining stays open until scheduled start + this duration (lobby window).
+              </p>
+              <Input
+                id={fieldId("session-mins")}
+                type="number"
+                min={5}
+                max={1440}
+                step={1}
+                value={debateSessionMinutes}
+                onChange={(e) => setDebateSessionMinutes(Number(e.target.value))}
+              />
+            </div>
+          )}
+          {room?.status === DebateStatus.WAITING && (
+            <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-3">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+                Scheduled start (optional)
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Set a fixed date and time for when the debate should begin, or leave “No fixed time” so people can join whenever.
+              </p>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <label className="flex cursor-pointer items-center gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name={`debate-sched-${roomId}`}
+                    checked={scheduleMode === "none"}
+                    onChange={() => setScheduleMode("none")}
+                    className="h-4 w-4"
+                  />
+                  No fixed time
+                </label>
+                <label className="flex cursor-pointer items-center gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name={`debate-sched-${roomId}`}
+                    checked={scheduleMode === "scheduled"}
+                    onChange={() => setScheduleMode("scheduled")}
+                    className="h-4 w-4"
+                  />
+                  Schedule date &amp; time
+                </label>
+              </div>
+              {scheduleMode === "scheduled" && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label htmlFor={fieldId("sdate")}>Date</Label>
+                    <Input
+                      id={fieldId("sdate")}
+                      type="date"
+                      value={schedDate}
+                      onChange={(e) => setSchedDate(e.target.value)}
+                      min={new Date().toISOString().split("T")[0]}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor={fieldId("stime")}>Time</Label>
+                    <Input
+                      id={fieldId("stime")}
+                      type="time"
+                      value={schedTime}
+                      onChange={(e) => setSchedTime(e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label htmlFor={fieldId("prep")}>Prep (seconds)</Label>

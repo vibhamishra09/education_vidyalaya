@@ -51,6 +51,8 @@ import {
   MousePointer2,
   MousePointerClick,
   MousePointer,
+  Pin,
+  PinOff,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
@@ -342,6 +344,7 @@ function DebateLiveContent({
   const [isAudioOutputEnabled, setIsAudioOutputEnabled] = useState(true);
   const [viewMode, setViewMode] = useState<'speaker' | 'grid'>('speaker');
   const [isRoomConnected, setIsRoomConnected] = useState(false);
+  const [pinnedParticipantId, setPinnedParticipantId] = useState<string | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [isModeratorOnly, setIsModeratorOnly] = useState(false);
@@ -540,6 +543,16 @@ function DebateLiveContent({
   const screenShareTracks = useTracks(
     [{ source: Track.Source.ScreenShare, withPlaceholder: false }]
   );
+
+  // Pinned track
+  const pinnedTrack = useMemo(() => {
+    if (!pinnedParticipantId) return null;
+    return cameraTracks.find(t => t.participant.identity === pinnedParticipantId);
+  }, [cameraTracks, pinnedParticipantId]);
+
+  const togglePin = useCallback((participantId: string) => {
+    setPinnedParticipantId(prev => (prev === participantId ? null : participantId));
+  }, []);
   
 
   // Track room connection state
@@ -612,6 +625,17 @@ function DebateLiveContent({
       chatScrollRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
     }
   }, [chatMessages, sidebarTab]);
+
+  // Get participant avatar from metadata
+  const getParticipantAvatar = useCallback((participant: { metadata?: string | null }): string | null => {
+    if (!participant.metadata) return null;
+    try {
+      const metadata = JSON.parse(participant.metadata);
+      return metadata.avatar || null;
+    } catch (e) {
+      return null;
+    }
+  }, []);
 
   // Send chat message via API
   const sendChatMessage = useCallback(async () => {
@@ -1066,8 +1090,8 @@ function DebateLiveContent({
             </div>
           )}
 
-          {/* Screen Share Overlay */}
-          {activeScreenShare && (
+          {/* Screen Share Overlay - Only shown if no participant is pinned and not in split mode */}
+          {activeScreenShare && !pinnedParticipantId && (
             <div className="absolute inset-0 z-10 bg-black/90 flex flex-col items-center justify-center p-4">
               <div className="w-full h-full max-h-[75vh] flex items-center justify-center relative group">
                 <div className="relative inline-block max-w-full max-h-full">
@@ -1121,6 +1145,125 @@ function DebateLiveContent({
             </div>
           )}
 
+          {/* Split Screen Overlay - Shown when BOTH are active */}
+          {activeScreenShare && pinnedParticipantId && pinnedTrack && (
+            <div className="absolute inset-0 z-10 bg-[#0a0a0a] flex flex-col md:flex-row gap-3 p-3">
+              {/* Screen Share Side */}
+              <div className="flex-1 relative bg-black/40 rounded-xl overflow-hidden group border border-white/5 flex items-center justify-center">
+                {isTrackReference(activeScreenShare) ? (
+                  <VideoTrack
+                    trackRef={activeScreenShare}
+                    className="w-full h-full object-contain rounded-lg"
+                  />
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <MonitorUp className="h-16 w-16 text-white/10" />
+                  </div>
+                )}
+                <div className="absolute bottom-4 left-4 bg-blue-500/90 backdrop-blur-md text-white text-[10px] font-bold px-3 py-1 rounded-full flex items-center gap-2 shadow-lg z-20 border border-white/10">
+                  <MonitorUp className="h-3 w-3" />
+                  <span>{activeScreenShare.participant.name || activeScreenShare.participant.identity} - SCREEN</span>
+                </div>
+                
+                <RemoteControlOverlay
+                  isControlling={isControlling}
+                  isSharing={activeScreenShare.participant.identity === localParticipant?.identity}
+                  controllerId={controllerId}
+                  onSendInput={sendInputEvent}
+                  onStopControl={stopControl}
+                  onRevokeControl={revokeControl}
+                />
+              </div>
+
+              {/* Pinned Participant Side */}
+              <div className="flex-1 relative bg-[#1a1a1a] rounded-xl overflow-hidden group border border-blue-500/30 flex items-center justify-center">
+                {pinnedTrack && isTrackReference(pinnedTrack) && pinnedTrack.publication?.track ? (
+                  <VideoTrack
+                    trackRef={pinnedTrack}
+                    className={`w-full h-full object-contain rounded-lg ${pinnedTrack.participant.isLocal ? 'scale-x-[-1]' : ''}`}
+                  />
+                ) : (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-[#252525] to-[#1a1a1a]">
+                    {(() => {
+                      const avatarUrl = getParticipantAvatar(pinnedTrack.participant);
+                      return avatarUrl ? (
+                        <Image
+                          src={avatarUrl}
+                          alt={pinnedTrack.participant.name || 'Participant'}
+                          width={100}
+                          height={100}
+                          className="w-24 h-24 rounded-full object-cover shadow-2xl border-4 border-white/10"
+                        />
+                      ) : (
+                        <div className="w-24 h-24 rounded-full bg-gradient-to-b from-[#3a3a3a] to-[#2a2a2a] flex items-center justify-center shadow-2xl border-4 border-white/10">
+                          <User className="w-12 h-12 text-white/10" />
+                        </div>
+                      )
+                    })()}
+                    <p className="mt-4 text-white/50 text-[10px] font-bold tracking-[0.2em] uppercase bg-black/30 px-4 py-1.5 rounded-full border border-white/5">Camera Off</p>
+                  </div>
+                )}
+                <div className="absolute bottom-4 left-4 bg-blue-600/90 backdrop-blur-md text-white text-[10px] font-bold px-3 py-1 rounded-full flex items-center gap-2 shadow-lg z-20 border border-white/10">
+                  <Pin className="h-3 w-3 fill-current" />
+                  <span>PINNED: {pinnedTrack?.participant.name || pinnedTrack?.participant.identity}</span>
+                </div>
+                <Button
+                  onClick={() => setPinnedParticipantId(null)}
+                  className="absolute top-4 right-4 bg-black/60 hover:bg-black/80 text-white backdrop-blur-md border border-white/10 rounded-full h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                  title="Unpin"
+                >
+                  <PinOff className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Pinned Participant Overlay - Only shown if NO screen share */}
+          {pinnedTrack && !activeScreenShare && (
+            <div className="absolute inset-0 z-10 bg-black/90 flex flex-col items-center justify-center p-4">
+              <div className="w-full h-full max-h-[85vh] flex items-center justify-center relative group">
+                <div className="relative inline-block max-w-full max-h-full">
+                  {isTrackReference(pinnedTrack) && pinnedTrack.publication?.track ? (
+                    <VideoTrack 
+                      trackRef={pinnedTrack} 
+                      className="w-full h-full object-contain rounded-lg border-2 border-blue-500 shadow-2xl shadow-blue-500/20"
+                    />
+                  ) : (
+                    <div className="bg-gray-800 rounded-lg flex flex-col items-center justify-center w-[600px] aspect-video max-w-full">
+                      {(() => {
+                        const avatarUrl = getParticipantAvatar(pinnedTrack.participant);
+                        return avatarUrl ? (
+                          <Image
+                            src={avatarUrl}
+                            alt={pinnedTrack.participant.name || 'Participant'}
+                            width={160}
+                            height={160}
+                            className="w-40 h-40 rounded-full object-cover shadow-2xl border-4 border-white/10"
+                          />
+                        ) : (
+                          <User className="h-24 w-24 text-white/20 mb-4" />
+                        )
+                      })()}
+                      <p className="text-white font-medium text-xl mt-4">{pinnedTrack.participant.name || pinnedTrack.participant.identity}</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="absolute bottom-4 left-4 bg-blue-600 text-white text-sm px-4 py-2 rounded-full flex items-center gap-2 shadow-xl z-20 font-bold border border-blue-400/30">
+                  <Pin className="h-4 w-4 fill-current text-white" />
+                  <span>Pinned: {pinnedTrack.participant.name || pinnedTrack.participant.identity}</span>
+                </div>
+
+                <Button
+                  onClick={() => setPinnedParticipantId(null)}
+                  className="absolute top-4 right-4 bg-black/60 hover:bg-black/80 text-white backdrop-blur-md border border-white/10 rounded-full h-10 w-10 p-0"
+                  title="Unpin"
+                >
+                  <PinOff className="h-5 w-5" />
+                </Button>
+              </div>
+            </div>
+          )}
           {/* Remote Control Consent UI (Screen Sharer Side) */}
           {pendingRequestFrom && (
             <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-top-4 fade-in duration-300">
@@ -1384,6 +1527,46 @@ function DebateLiveContent({
                         </div>
                       </div>
                     )}
+
+                    {/* Room settings (start + total session length) */}
+                    <div className="rounded-lg border border-white/10 bg-white/5 p-3 space-y-2">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Clock className="h-3.5 w-3.5 text-white/50" />
+                        <span className="text-xs font-semibold text-white/80 uppercase tracking-wide">
+                          Room settings
+                        </span>
+                      </div>
+                      <div className="flex justify-between gap-2 text-xs">
+                        <span className="text-white/50 shrink-0">Start time</span>
+                        <span className="text-white text-right max-w-[min(100%,14rem)]">
+                          {debateRoom.scheduledAt
+                            ? new Date(debateRoom.scheduledAt).toLocaleString()
+                            : debateRoom.startTime
+                              ? new Date(debateRoom.startTime).toLocaleString()
+                              : debateRoom.status === DebateStatus.WAITING
+                                ? 'Flexible'
+                                : '—'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between gap-2 text-xs">
+                        <span className="text-white/50">Debate duration</span>
+                        <span className="text-white font-medium text-right">
+                          {debateRoom.debateDurationMinutes != null ? (
+                            `${debateRoom.debateDurationMinutes} min`
+                          ) : (
+                            <>
+                              ~
+                              {estimateDebateSessionMinutes(
+                                debateRoom.turnDurationSeconds,
+                                debateRoom.maxParticipants,
+                              )}{' '}
+                              min
+                              <span className="text-white/50 font-normal"> (est.)</span>
+                            </>
+                          )}
+                        </span>
+                      </div>
+                    </div>
                     
                     {/* Team FOR Section */}
                     <div>
@@ -1915,9 +2098,33 @@ function TeamVideoGrid({
             {/* Video layer - on top when available */}
             {hasVideo && (
               <div className="absolute inset-0 z-[2]">
-                <VideoTrack trackRef={trackRef} className="w-full h-full object-cover" />
+                <VideoTrack 
+                  trackRef={trackRef} 
+                  className="w-full h-full object-cover"
+                />
               </div>
             )}
+
+            {/* Pin button overlay */}
+            <div className="absolute top-2 left-2 z-[20] opacity-0 group-hover:opacity-100 transition-opacity">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onTogglePin(trackRef.participant.identity)}
+                className={cn(
+                  "h-7 w-7 p-0 rounded-full border backdrop-blur-md",
+                  pinnedParticipantId === trackRef.participant.identity
+                    ? "bg-blue-600 border-blue-400 text-white"
+                    : "bg-black/40 border-white/10 text-white/70 hover:bg-black/60 hover:text-white"
+                )}
+              >
+                {pinnedParticipantId === trackRef.participant.identity ? (
+                  <PinOff className="h-3.5 w-3.5" />
+                ) : (
+                  <Pin className="h-3.5 w-3.5" />
+                )}
+              </Button>
+            </div>
 
             {/* Name label */}
             <div className="absolute bottom-1 sm:bottom-2 left-1 sm:left-2 right-1 sm:right-2 flex items-center justify-between z-[10]">
