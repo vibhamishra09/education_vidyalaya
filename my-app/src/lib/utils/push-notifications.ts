@@ -12,6 +12,10 @@ export function urlBase64ToUint8Array(base64String: string): Uint8Array {
     .replace(/\-/g, '+')
     .replace(/_/g, '/');
 
+  if (typeof window === 'undefined') {
+    return new Uint8Array(0);
+  }
+
   const rawData = window.atob(base64);
   const outputArray = new Uint8Array(rawData.length);
 
@@ -25,6 +29,9 @@ export function urlBase64ToUint8Array(base64String: string): Uint8Array {
  * Check if push notifications are supported
  */
 export function isPushNotificationSupported(): boolean {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+    return false;
+  }
   return (
     'serviceWorker' in navigator &&
     'PushManager' in window &&
@@ -36,7 +43,7 @@ export function isPushNotificationSupported(): boolean {
  * Get current notification permission status
  */
 export function getNotificationPermissionStatus(): NotificationPermission {
-  if (!('Notification' in window)) {
+  if (typeof window === 'undefined' || !('Notification' in window)) {
     return 'denied';
   }
   return Notification.permission;
@@ -53,7 +60,7 @@ export function hasNotificationPermission(): boolean {
  * Request notification permission from user
  */
 export async function requestNotificationPermission(): Promise<NotificationPermission> {
-  if (!('Notification' in window)) {
+  if (typeof window === 'undefined' || !('Notification' in window)) {
     console.warn('Notifications not supported');
     return 'denied';
   }
@@ -75,7 +82,7 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
  * Register service worker
  */
 export async function registerServiceWorker(): Promise<ServiceWorkerRegistration | null> {
-  if (!('serviceWorker' in navigator)) {
+  if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
     console.warn('Service workers not supported');
     return null;
   }
@@ -98,7 +105,7 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
  * Get existing service worker registration
  */
 export async function getServiceWorkerRegistration(): Promise<ServiceWorkerRegistration | null> {
-  if (!('serviceWorker' in navigator)) {
+  if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
     console.log('🔧 Service workers not supported in navigator');
     return null;
   }

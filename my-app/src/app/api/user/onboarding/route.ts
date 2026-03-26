@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     // Get user data from Clerk
     const client = await clerkClient();
     const clerkUser = await client.users.getUser(userId);
-    
+
     const clerkId = userId;
     const name = displayName || clerkUser.fullName || clerkUser.username || 'Anonymous';
     const email = clerkUser.primaryEmailAddress?.emailAddress || '';

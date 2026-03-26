@@ -50,9 +50,10 @@ export class DebateRoomsController {
   @UseGuards(OptionalClerkAuthGuard)
   async getDebateRoom(
     @Param('roomId') roomId: string,
-    @CurrentUser('dbUserId') userId?: string,
+    @CurrentUser('dbUserId') dbUserId?: string,
+    @CurrentUser('clerkId') clerkUserId?: string,
   ) {
-    return this.debateRoomsService.getDebateRoom(roomId, userId);
+    return this.debateRoomsService.getDebateRoom(roomId, dbUserId ?? clerkUserId);
   }
 
   /**
@@ -61,10 +62,11 @@ export class DebateRoomsController {
   @Post()
   @UseGuards(ClerkAuthGuard)
   async createDebateRoom(
-    @CurrentUser('dbUserId') userId: string,
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
     @Body() dto: CreateDebateRoomDto,
   ) {
-    return this.debateRoomsService.createDebateRoom(userId, dto);
+    return this.debateRoomsService.createDebateRoom(dbUserId ?? clerkUserId, dto);
   }
 
   /**
@@ -74,10 +76,11 @@ export class DebateRoomsController {
   @UseGuards(ClerkAuthGuard)
   async updateDebateRoom(
     @Param('roomId') roomId: string,
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
     @Body() dto: UpdateDebateRoomDto,
   ) {
-    return this.debateRoomsService.updateDebateRoom(roomId, userId, dto);
+    return this.debateRoomsService.updateDebateRoom(roomId, dbUserId ?? clerkUserId, dto);
   }
 
   /**
@@ -87,10 +90,11 @@ export class DebateRoomsController {
   @UseGuards(ClerkAuthGuard)
   async joinDebateRoom(
     @Param('roomId') roomId: string,
-    @CurrentUser('dbUserId') userId: string,
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
     @Body() dto?: JoinDebateRoomDto,
   ) {
-    return this.debateRoomsService.joinDebateRoom(roomId, userId, dto);
+    return this.debateRoomsService.joinDebateRoom(roomId, dbUserId ?? clerkUserId, dto);
   }
 
   /**
@@ -100,9 +104,10 @@ export class DebateRoomsController {
   @UseGuards(ClerkAuthGuard)
   async leaveDebateRoom(
     @Param('roomId') roomId: string,
-    @CurrentUser('dbUserId') userId: string,
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
   ) {
-    await this.debateRoomsService.leaveDebateRoom(roomId, userId);
+    await this.debateRoomsService.leaveDebateRoom(roomId, dbUserId ?? clerkUserId);
     return { success: true };
   }
 
@@ -113,10 +118,11 @@ export class DebateRoomsController {
   @UseGuards(ClerkAuthGuard)
   async promoteModerator(
     @Param('roomId') roomId: string,
-    @CurrentUser('dbUserId') userId: string,
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
     @Body() dto: PromoteModeratorDto,
   ) {
-    await this.debateRoomsService.promoteModerator(roomId, userId, dto.userId);
+    await this.debateRoomsService.promoteModerator(roomId, dbUserId ?? clerkUserId, dto.userId);
     return { success: true };
   }
 
@@ -127,12 +133,13 @@ export class DebateRoomsController {
   @UseGuards(ClerkAuthGuard)
   async banParticipant(
     @Param('roomId') roomId: string,
-    @CurrentUser('dbUserId') userId: string,
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
     @Body() dto: BanParticipantDto,
   ) {
     await this.debateRoomsService.banParticipant(
       roomId,
-      userId,
+      dbUserId ?? clerkUserId,
       dto.participantUserId,
       dto.reason,
     );
@@ -146,9 +153,10 @@ export class DebateRoomsController {
   @UseGuards(ClerkAuthGuard)
   async startPrepPhase(
     @Param('roomId') roomId: string,
-    @CurrentUser('dbUserId') userId: string,
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
   ) {
-    return this.debateRoomsService.startPrepPhase(roomId, userId);
+    return this.debateRoomsService.startPrepPhase(roomId, dbUserId ?? clerkUserId);
   }
 
   /**
@@ -158,9 +166,10 @@ export class DebateRoomsController {
   @UseGuards(ClerkAuthGuard)
   async generateResults(
     @Param('roomId') roomId: string,
-    @CurrentUser('dbUserId') userId: string,
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
   ) {
-    return this.debateRoomsService.generateResults(roomId, userId);
+    return this.debateRoomsService.generateResults(roomId, dbUserId ?? clerkUserId);
   }
 
   /**
@@ -170,9 +179,10 @@ export class DebateRoomsController {
   @UseGuards(ClerkAuthGuard)
   async getResults(
     @Param('roomId') roomId: string,
-    @CurrentUser('dbUserId') userId: string,
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
   ) {
-    return this.debateRoomsService.getResults(roomId, userId);
+    return this.debateRoomsService.getResults(roomId, dbUserId ?? clerkUserId);
   }
 
   /**
@@ -182,9 +192,10 @@ export class DebateRoomsController {
   @UseGuards(ClerkAuthGuard)
   async getLivekitToken(
     @Param('roomId') roomId: string,
-    @CurrentUser('dbUserId') userId: string,
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
   ) {
-    const token = await this.debateRoomsService.getLivekitToken(roomId, userId);
+    const token = await this.debateRoomsService.getLivekitToken(roomId, dbUserId ?? clerkUserId);
     const serverUrl =
       process.env.LIVEKIT_URL ||
       process.env.LIVEKIT_SERVER_URL ||
@@ -224,13 +235,14 @@ export class DebateRoomsController {
   @UseGuards(ClerkAuthGuard)
   async upsertModeratorEvaluation(
     @Param('roomId') roomId: string,
-    @CurrentUser('dbUserId') userId: string,
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
     @Body() dto: UpsertModeratorEvaluationDto,
   ) {
     const evaluation =
       await this.debateRoomsService.createOrUpdateModeratorEvaluation(
         roomId,
-        userId,
+        dbUserId ?? clerkUserId,
         dto,
       );
     return { evaluation };
@@ -243,12 +255,13 @@ export class DebateRoomsController {
   @UseGuards(ClerkAuthGuard)
   async getModeratorEvaluations(
     @Param('roomId') roomId: string,
-    @CurrentUser('dbUserId') userId: string,
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
     @Query() query: ModeratorEvaluationsQueryDto,
   ) {
     const evaluations = await this.debateRoomsService.getModeratorEvaluations(
       roomId,
-      userId,
+      dbUserId ?? clerkUserId,
       query,
     );
     return { evaluations };
@@ -262,12 +275,13 @@ export class DebateRoomsController {
   async getParticipantEvaluations(
     @Param('roomId') roomId: string,
     @Param('participantId') participantId: string,
-    @CurrentUser('dbUserId') userId: string,
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
     @Query() query: ModeratorEvaluationsQueryDto,
   ) {
     const evaluations = await this.debateRoomsService.getParticipantEvaluations(
       roomId,
-      userId,
+      dbUserId ?? clerkUserId,
       participantId,
       query.turnNumber,
     );
@@ -281,9 +295,10 @@ export class DebateRoomsController {
   @UseGuards(ClerkAuthGuard)
   async cancelDebate(
     @Param('roomId') roomId: string,
-    @CurrentUser('dbUserId') userId: string,
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
   ) {
-    await this.debateRoomsService.cancelDebate(roomId, userId);
+    await this.debateRoomsService.cancelDebate(roomId, dbUserId ?? clerkUserId);
     return { success: true };
   }
 }
