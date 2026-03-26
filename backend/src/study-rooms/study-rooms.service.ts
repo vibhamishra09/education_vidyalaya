@@ -959,6 +959,7 @@ export class StudyRoomsService {
             seriesRootId: true,
             occurrenceIndex: true,
             timezone: true,
+            hostDetailsUpdatedAt: true,
             createdBy: {
               select: {
                 id: true,
@@ -1117,7 +1118,8 @@ export class StudyRoomsService {
           reviewer: r.reviewer,
         })),
         chatChannelId: existingChannel?.id ?? null,
-        hostDetailsUpdatedAt: null,
+        hostDetailsUpdatedAt: (studyRoom as { hostDetailsUpdatedAt?: Date | null })
+          .hostDetailsUpdatedAt ?? null,
       };
     } catch (error) {
       // Handle database connection errors
@@ -1346,7 +1348,8 @@ export class StudyRoomsService {
       throw new NotFoundException('Study room not found');
     }
 
-    if (studyRoom.createdById !== userId) {
+    const actor = await this.resolveUserIdentity(userId);
+    if (studyRoom.createdById !== actor.id) {
       throw new ForbiddenException(
         'Only the creator can update this study room',
       );
