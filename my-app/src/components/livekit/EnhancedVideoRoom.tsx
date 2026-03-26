@@ -6,12 +6,12 @@ import '@livekit/components-styles'
 import { BackgroundProcessor, BackgroundBlur, VirtualBackground, BackgroundOptions } from '@livekit/track-processors'
 import { ChatWidget } from '@/components/chat/ChatWidget'
 import { Button } from '@/components/ui/button'
-import { 
-  MessageSquare, X, Users, Maximize2, Minimize2, Video, VideoOff, Mic, MicOff, 
-  Clock, MonitorUp, MonitorOff, Grid2X2, Presentation, Pin, 
-  PinOff, User, PictureInPicture2, Camera, CameraOff, Sparkles, Lock, Settings2, 
-  PhoneOff, ChevronUp, ChevronLeft, ChevronRight, ShieldCheck, Ban, Aperture, 
-  ImageIcon, LayoutGrid, Check, Timer, Power, LogOut, Zap, ZoomIn, ZoomOut, MousePointer2
+import {
+	MessageSquare, X, Users, Maximize2, Minimize2, Video, VideoOff, Mic, MicOff,
+	Clock, MonitorUp, MonitorOff, Grid2X2, Presentation, Pin,
+	PinOff, User, PictureInPicture2, Camera, CameraOff, Sparkles, Lock, Settings2,
+	PhoneOff, ChevronUp, ChevronLeft, ChevronRight, ShieldCheck, Ban, Aperture,
+	ImageIcon, LayoutGrid, Check, Timer, Power, LogOut, Zap, ZoomIn, ZoomOut, MousePointer2
 } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
@@ -160,17 +160,17 @@ export function EnhancedVideoRoom({
 			// Best-effort alert sound; ignore if browser blocks autoplay/audio context.
 		}
 	}, [])
-	
+
 	// Socket.io for transcripts
 	const [transcriptSocket, setTranscriptSocket] = useState<Socket | null>(null)
 	const socketConnectingRef = useRef(false)
-	
+
 	// Auth token for socket connection
 	const [authToken, setAuthToken] = useState<string | null>(null)
-	
+
 	// Loading state when ending meeting
 	const [endingMeeting, setEndingMeeting] = useState(false)
-	
+
 	// Confirmation dialog for ending meeting
 	const [showEndConfirmation, setShowEndConfirmation] = useState(false)
 
@@ -218,7 +218,7 @@ export function EnhancedVideoRoom({
 			clearTimeout(timeoutId)
 		}
 	}, [])
-	
+
 	// Get auth token on mount
 	useEffect(() => {
 		async function fetchToken() {
@@ -365,18 +365,18 @@ export function EnhancedVideoRoom({
 	// Calculate session start time and duration (only if sessionData exists)
 	const sessionStartTime = sessionData?.date ? new Date(sessionData.date) : null
 	const sessionDuration = sessionData?.duration || 0 // in minutes
-	
+
 	// Convert to stable timestamp (use 0 as fallback to avoid hydration issues)
 	const sessionStartTimestamp = sessionStartTime ? sessionStartTime.getTime() : 0
 
 	// Session timer with warnings (only if we have start time and duration)
 	const timerEnabled = !!sessionStartTime && sessionDuration > 0 && !!sessionData
-	
+
 	// For peer sessions, show moderator controls even if timer isn't configured
 	const showModeratorControls = !!sessionData && (sessionData.sessionType === 'peerSession' || timerEnabled)
-	
+
 	// Timer debug logging removed
-	
+
 	// Session extension hook
 	const {
 		hasExtended,
@@ -464,48 +464,48 @@ export function EnhancedVideoRoom({
 		const redirectUrl = `/session-feedback/${sessionData?.id}?type=${sessionData?.sessionType}&isHost=${isHost}`
 		router.push(redirectUrl)
 	}, [meetingEnded, sessionData?.id, sessionData?.sessionType, isHost, router])
-	
+
 	// Wrapper functions for request actions with toast notifications
 	const handleRequestAudioOn = useCallback((targetUserId: string) => {
 		requestAudioOn(targetUserId)
 		showSuccess('Request sent', 'Asked participant to unmute microphone')
 	}, [requestAudioOn, showSuccess])
-	
+
 	const handleRequestVideoOn = useCallback((targetUserId: string) => {
 		requestVideoOn(targetUserId)
 		showSuccess('Request sent', 'Asked participant to enable camera')
 	}, [requestVideoOn, showSuccess])
-	
+
 	const handleParticipantRequestAudio = useCallback(() => {
 		participantRequestAudio()
 		showSuccess('Request sent', 'Asked host for permission to unmute')
 	}, [participantRequestAudio, showSuccess])
-	
+
 	const handleParticipantRequestVideo = useCallback(() => {
 		participantRequestVideo()
 		showSuccess('Request sent', 'Asked host for permission to enable camera')
 	}, [participantRequestVideo, showSuccess])
-	
+
 	const handleRequestExtension = useCallback(() => {
 		requestExtension()
 		showSuccess('Extension request sent', 'Your request to extend the session has been sent to the host')
 	}, [requestExtension, showSuccess])
-	
+
 	// Show confirmation dialog before ending meeting
 	const handleEndMeetingClick = useCallback(() => {
 		setShowEndConfirmation(true)
 	}, [])
-	
+
 	// Actually end the meeting after confirmation
 	const confirmEndMeeting = useCallback(async () => {
 		setShowEndConfirmation(false)
 		setEndingMeeting(true)
-		
+
 		// Call backend to complete the session
 		if (sessionData?.id && sessionData?.sessionType) {
 			try {
 				const authTokenValue = await getToken()
-				
+
 				if (sessionData.sessionType === 'studyRoom') {
 					await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/study-rooms/${sessionData.id}/complete`, {
 						method: 'POST',
@@ -523,7 +523,7 @@ export function EnhancedVideoRoom({
 						},
 					})
 				}
-				
+
 				// Invalidate queries
 				await queryClient.invalidateQueries({ queryKey: streakKeys.current() })
 				await queryClient.invalidateQueries({ queryKey: dashboardKeys.all })
@@ -532,26 +532,26 @@ export function EnhancedVideoRoom({
 				// Error completing session
 			}
 		}
-		
+
 		// End meeting for all participants via socket
 		endMeetingForAll()
-		
+
 		// Fallback: If socket event doesn't trigger redirect within 3 seconds, redirect manually (host only)
 		setTimeout(() => {
 			const redirectUrl = `/session-feedback/${sessionData?.id}?type=${sessionData?.sessionType}&isHost=${isHost}`
 			router.push(redirectUrl)
 		}, 3000)
 	}, [sessionData?.id, sessionData?.sessionType, getToken, queryClient, endMeetingForAll, isHost, router])
-	
+
 	const handleTimeUp = useCallback(async () => {
 		// Set loading state
 		setEndingMeeting(true)
-		
+
 		// Timer expired - auto-complete the session (payment processed, redirect to review)
 		if (sessionData?.id && sessionData?.sessionType && isHost) {
 			try {
 				const authToken = await getToken()
-				
+
 				if (sessionData.sessionType === 'studyRoom') {
 					// For study rooms, mark as completed
 					const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/study-rooms/${sessionData.id}/complete`, {
@@ -561,7 +561,7 @@ export function EnhancedVideoRoom({
 							'Authorization': `Bearer ${authToken}`,
 						},
 					})
-					
+
 					if (!response.ok) {
 						// Failed to complete study room
 					}
@@ -574,12 +574,12 @@ export function EnhancedVideoRoom({
 							'Authorization': `Bearer ${authToken}`,
 						},
 					})
-					
+
 					if (!response.ok) {
 						// Failed to complete peer session
 					}
 				}
-				
+
 				// Invalidate queries
 				await queryClient.invalidateQueries({ queryKey: streakKeys.current() })
 				await queryClient.invalidateQueries({ queryKey: dashboardKeys.all })
@@ -588,7 +588,7 @@ export function EnhancedVideoRoom({
 				// Error completing session
 			}
 		}
-		
+
 		// Redirect to session feedback page for review
 		const redirectUrl = `/session-feedback/${sessionData?.id}?type=${sessionData?.sessionType}&isHost=${isHost}`
 		router.push(redirectUrl)
@@ -598,7 +598,7 @@ export function EnhancedVideoRoom({
 		setShowWarning(true)
 		showSuccessRef.current('⏰ Session Ending Soon', `Your session will end in ${minutes} minutes.`)
 	}, [])
-	
+
 	const { formattedTime, minutesLeft, currentEndTime } = useSessionTimer({
 		startTime: sessionStartTimestamp,
 		duration: sessionDuration || 60,
@@ -607,12 +607,12 @@ export function EnhancedVideoRoom({
 		onWarning: handleWarning,
 		extendedEndTime,
 	})
-	
+
 	// Handle approving extension request from the dialog
 	const handleApproveExtension = useCallback(() => {
 		approveExtension(currentEndTime)
 	}, [approveExtension, currentEndTime])
-	
+
 	// Show toast when session is extended
 	useEffect(() => {
 		if (hasExtended && extendedEndTime && extensionMinutes) {
@@ -637,21 +637,21 @@ export function EnhancedVideoRoom({
 		mediaQuery.addEventListener('change', handleChange)
 		return () => mediaQuery.removeEventListener('change', handleChange)
 	}, [])
-	
+
 	// Setup Socket.io for transcripts
 	useEffect(() => {
 		if (!sessionData?.id || !user || socketConnectingRef.current) return
-		
+
 		let socket: Socket | null = null
 		socketConnectingRef.current = true
-		
+
 		async function connectTranscriptSocket() {
 			try {
 				const authToken = await getToken()
 				if (!authToken) return
-				
+
 				const url = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:3001'
-				
+
 				socket = io(url, {
 					transports: ['websocket'],
 					auth: { token: authToken },
@@ -659,24 +659,24 @@ export function EnhancedVideoRoom({
 					reconnectionAttempts: 5,
 					reconnectionDelay: 1000,
 				})
-				
+
 				socket.on('connect', () => {
 					setTranscriptSocket(socket) // Set socket only after successful connection
 				})
-				
+
 				socket.on('connect_error', (err: Error) => {
 					setTranscriptSocket(null) // Clear socket on connection error
 				})
-				
+
 				socket.on('disconnect', (reason) => {
 					setTranscriptSocket(null) // Clear socket on disconnect
 				})
-				
+
 				// Add transcript-specific event handlers
 				socket.on('transcript-received', (data) => {
 					// Server acknowledged transcript
 				})
-				
+
 				socket.on('transcript-error', (error) => {
 					// Server error
 				})
@@ -684,9 +684,9 @@ export function EnhancedVideoRoom({
 				// Failed to connect socket
 			}
 		}
-		
+
 		connectTranscriptSocket()
-		
+
 		return () => {
 			socketConnectingRef.current = false
 			if (socket) {
@@ -695,7 +695,7 @@ export function EnhancedVideoRoom({
 			setTranscriptSocket(null)
 		}
 	}, [sessionData?.id, user, getToken])
-	
+
 	// Enable speech recognition
 	const { isListening, error: speechError } = useSpeechRecognition({
 		callId: sessionData?.id || null,
@@ -703,7 +703,7 @@ export function EnhancedVideoRoom({
 		socket: transcriptSocket,
 		enabled: !!sessionData?.id && !!user && !!transcriptSocket && !isMobileDevice,
 	})
-	
+
 	// Speech recognition status logging removed
 
 	const handleLeave = useCallback(() => {
@@ -816,7 +816,7 @@ export function EnhancedVideoRoom({
 					onFlashDismissForAll={flashDismiss}
 					onFlashGetList={flashGetList}
 					onDismissFlashMessage={dismissFlashMessage}
-					
+
 					onPromoteToCohost={async (participantIdentity, role) => {
 						if (sessionData?.sessionType !== 'studyRoom' || !sessionData?.id) return
 						const authTokenValue = await getToken()
@@ -837,95 +837,95 @@ export function EnhancedVideoRoom({
 						)
 					}}
 				/>
-		</LiveKitRoom>
+			</LiveKitRoom>
 
-		{/* Extension Request Dialog - Shows when a participant requests extension (Host only) */}
-		{isHost && pendingRequest && (
-			<ExtensionRequestDialog
-				open={!!pendingRequest}
-				requesterName={pendingRequest.name}
-				onApprove={handleApproveExtension}
-				onDismiss={dismissRequest}
-			/>
-		)}
+			{/* Extension Request Dialog - Shows when a participant requests extension (Host only) */}
+			{isHost && pendingRequest && (
+				<ExtensionRequestDialog
+					open={!!pendingRequest}
+					requesterName={pendingRequest.name}
+					onApprove={handleApproveExtension}
+					onDismiss={dismissRequest}
+				/>
+			)}
 
-		{/* Warning Dialog - Shows at 5 minutes (Only for host) */}
-		{timerEnabled && isHost && (
-			<SessionEndWarningDialog
+			{/* Warning Dialog - Shows at 5 minutes (Only for host) */}
+			{timerEnabled && isHost && (
+				<SessionEndWarningDialog
 					open={showWarning}
 					minutesRemaining={minutesLeft}
 					onClose={() => setShowWarning(false)}
 				/>
 			)}
-			
-		{/* End Meeting Confirmation Dialog */}
-		{isHost && (
-			<EndMeetingDialog
-				open={showEndConfirmation}
-				onConfirm={confirmEndMeeting}
-				onCancel={() => setShowEndConfirmation(false)}
-			/>
-		)}
 
-		{isHost && activeExternalJoinRequest && (
-			<div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/40 backdrop-blur-[2px] px-4">
-				<div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#141414] p-5 text-white shadow-2xl">
-					<p className="text-xs uppercase tracking-wide text-[#00DC6E] font-semibold">Join Request</p>
-					<h3 className="mt-1 text-lg font-semibold">Someone wants to join this session</h3>
-					<div className="mt-4 rounded-xl bg-white/5 border border-white/10 p-3 space-y-1">
-						<p className="text-sm">
-							<span className="text-white/60">Name:</span> {activeExternalJoinRequest.name}
-						</p>
-						<p className="text-sm break-all">
-							<span className="text-white/60">Email:</span> {activeExternalJoinRequest.email}
-						</p>
-					</div>
-					{externalJoinRequests.length > 1 && (
-						<p className="mt-3 text-xs text-white/60">
-							{externalJoinRequests.length - 1} more request(s) waiting.
-						</p>
-					)}
-					<div className="mt-5 flex items-center justify-end gap-2">
-						<Button
-							variant="outline"
-							className="border-red-400/50 text-red-300 hover:bg-red-500/10 hover:text-red-200"
-							onClick={() => handleResolveExternalJoinRequest(false)}
-							disabled={resolvingExternalJoinRequest}
-						>
-							Reject
-						</Button>
-						<Button
-							className="bg-[#00DC6E] text-black hover:bg-[#00c562]"
-							onClick={() => handleResolveExternalJoinRequest(true)}
-							disabled={resolvingExternalJoinRequest}
-						>
-							Approve & Let In
-						</Button>
-					</div>
-				</div>
-			</div>
-		)}
-		{isHost && externalJoinRequests.length > 0 && (
-			<div className="fixed top-4 right-4 z-[94]">
-				<div className="rounded-full bg-[#00DC6E] text-black text-xs font-semibold px-3 py-1 shadow-lg">
-					{externalJoinRequests.length} join request{externalJoinRequests.length > 1 ? 's' : ''}
-				</div>
-			</div>
-		)}
-		
-		{/* Loading Overlay when ending meeting */}
-		{endingMeeting && (
-			<div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/90 backdrop-blur-sm">
-				<div className="relative">
-					<div className="h-16 w-16 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-					<div className="absolute inset-0 flex items-center justify-center">
-						<PhoneOff className="h-6 w-6 text-primary animate-pulse" />
+			{/* End Meeting Confirmation Dialog */}
+			{isHost && (
+				<EndMeetingDialog
+					open={showEndConfirmation}
+					onConfirm={confirmEndMeeting}
+					onCancel={() => setShowEndConfirmation(false)}
+				/>
+			)}
+
+			{isHost && activeExternalJoinRequest && (
+				<div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/40 backdrop-blur-[2px] px-4">
+					<div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#141414] p-5 text-white shadow-2xl">
+						<p className="text-xs uppercase tracking-wide text-[#00DC6E] font-semibold">Join Request</p>
+						<h3 className="mt-1 text-lg font-semibold">Someone wants to join this session</h3>
+						<div className="mt-4 rounded-xl bg-white/5 border border-white/10 p-3 space-y-1">
+							<p className="text-sm">
+								<span className="text-white/60">Name:</span> {activeExternalJoinRequest.name}
+							</p>
+							<p className="text-sm break-all">
+								<span className="text-white/60">Email:</span> {activeExternalJoinRequest.email}
+							</p>
+						</div>
+						{externalJoinRequests.length > 1 && (
+							<p className="mt-3 text-xs text-white/60">
+								{externalJoinRequests.length - 1} more request(s) waiting.
+							</p>
+						)}
+						<div className="mt-5 flex items-center justify-end gap-2">
+							<Button
+								variant="outline"
+								className="border-red-400/50 text-red-300 hover:bg-red-500/10 hover:text-red-200"
+								onClick={() => handleResolveExternalJoinRequest(false)}
+								disabled={resolvingExternalJoinRequest}
+							>
+								Reject
+							</Button>
+							<Button
+								className="bg-[#00DC6E] text-black hover:bg-[#00c562]"
+								onClick={() => handleResolveExternalJoinRequest(true)}
+								disabled={resolvingExternalJoinRequest}
+							>
+								Approve & Let In
+							</Button>
+						</div>
 					</div>
 				</div>
-				<p className="mt-6 text-lg font-medium text-white">Ending Session...</p>
-				<p className="mt-2 text-sm text-gray-400">Please wait while we wrap things up</p>
-			</div>
-		)}
+			)}
+			{isHost && externalJoinRequests.length > 0 && (
+				<div className="fixed top-4 right-4 z-[94]">
+					<div className="rounded-full bg-[#00DC6E] text-black text-xs font-semibold px-3 py-1 shadow-lg">
+						{externalJoinRequests.length} join request{externalJoinRequests.length > 1 ? 's' : ''}
+					</div>
+				</div>
+			)}
+
+			{/* Loading Overlay when ending meeting */}
+			{endingMeeting && (
+				<div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/90 backdrop-blur-sm">
+					<div className="relative">
+						<div className="h-16 w-16 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+						<div className="absolute inset-0 flex items-center justify-center">
+							<PhoneOff className="h-6 w-6 text-primary animate-pulse" />
+						</div>
+					</div>
+					<p className="mt-6 text-lg font-medium text-white">Ending Session...</p>
+					<p className="mt-2 text-sm text-gray-400">Please wait while we wrap things up</p>
+				</div>
+			)}
 		</div>
 	)
 }
@@ -1094,7 +1094,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	// Room context removed to avoid race conditions, using localParticipant hook instead
 	const params = useParams<{ room: string }>()
 	const { showWarning, showSuccess, showInfo, showError } = useToast()
-	
+
 	// Remote Control Hook
 	const {
 		isControlling,
@@ -1109,7 +1109,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		denyControl,
 		revokeControl
 	} = useRemoteControl()
-	
+
 	// Flash panel state (host only)
 	const [showFlashPanel, setShowFlashPanel] = useState(false)
 
@@ -1134,10 +1134,10 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			setShowParticipants(false)
 		}
 	}, [canViewParticipantList, showParticipants, setShowParticipants])
-	
+
 	// Get local participant state directly - most reliable source of truth
 	const { localParticipant, isCameraEnabled, isMicrophoneEnabled, isScreenShareEnabled } = useLocalParticipant()
-	
+
 	// Track pending requests to show toast when new requests arrive
 	const prevRequestCountRef = useRef(0)
 	const lastToastAtRef = useRef<Record<string, number>>({})
@@ -1150,7 +1150,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	}, [])
 	useEffect(() => {
 		if (!isHost || !pendingParticipantRequests) return
-		
+
 		// Check if a new request was added
 		if (pendingParticipantRequests.length > prevRequestCountRef.current) {
 			// Find the newest request
@@ -1159,7 +1159,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			const participant = allParticipants.find(p => p.identity === newest.userId)
 			const displayName = participant?.name || newest.userId
 			const toastKey = `permission-request-${newest.type}-${newest.userId}`
-			
+
 			if (newest.type === 'audio' && shouldShowToast(toastKey, 6000)) {
 				showWarning('Permission Request', `${displayName} is requesting to unmute`)
 			} else if (newest.type === 'video' && shouldShowToast(toastKey, 6000)) {
@@ -1168,7 +1168,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		}
 		prevRequestCountRef.current = pendingParticipantRequests.length
 	}, [pendingParticipantRequests, isHost, showWarning, allParticipants, shouldShowToast])
-	
+
 	// Layout mode: 'focus' shows speaker large with others small, 'grid' shows equal tiles
 	const [layoutMode, setLayoutMode] = useState<'focus' | 'grid'>('grid')
 	const [isViewMenuOpen, setIsViewMenuOpen] = useState(false)
@@ -1180,7 +1180,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	const [screenShareZoom, setScreenShareZoom] = useState(1)
 	const [screenShareMinimized, setScreenShareMinimized] = useState(false)
 	const [screenShareMaximized, setScreenShareMaximized] = useState(false)
-	
+
 	// Automatically switch to Focus Mode and maximize screen share when controlling
 	useEffect(() => {
 		if (isControlling) {
@@ -1192,7 +1192,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			setShowParticipants(false)
 		}
 	}, [isControlling, setLayoutMode, setIsExpandedView, setScreenShareMaximized, setShowChat, setShowParticipants])
-	
+
 	// Close extend menu on outside click
 	useEffect(() => {
 		if (!showExtendMenu) return
@@ -1200,12 +1200,12 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		document.addEventListener('click', handleClick)
 		return () => document.removeEventListener('click', handleClick)
 	}, [showExtendMenu])
-	
+
 	// Pinned participant - manually pinned by user
 	const [pinnedParticipantId, setPinnedParticipantId] = useState<string | null>(null)
-	
+
 	const [isAudioEnabled, setIsAudioEnabled] = useState(true)
-	
+
 	// Background effects state - use refs for values that don't need to trigger re-renders
 	const [backgroundMode, setBackgroundMode] = useState<'none' | 'blur' | 'virtual'>('none')
 	const [showBackgroundMenu, setShowBackgroundMenu] = useState(false)
@@ -1223,7 +1223,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	const isApplyingEffectRef = useRef(false)
 	// Krisp noise filter ref for cleanup
 	const krispFilterRef = useRef<unknown | null>(null)
-	
+
 	// Helper function to get avatar URL from participant metadata
 	const getParticipantAvatar = useCallback((participant: { metadata?: string | null }): string | null => {
 		if (!participant.metadata) return null
@@ -1234,7 +1234,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			return null
 		}
 	}, [])
-	
+
 	// Keep refs in sync with state
 	useEffect(() => { blurAmountRef.current = blurAmount }, [blurAmount])
 	useEffect(() => { selectedVirtualBgRef.current = selectedVirtualBg }, [selectedVirtualBg])
@@ -1255,14 +1255,14 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				if (!data.targetUserId && data.hostClerkId && data.hostClerkId === currentUserId) return
 				if (!localParticipant) return
 				const enable = data.action === 'unmute'
-				localParticipant.setMicrophoneEnabled(enable).catch(() => {})
-				
+				localParticipant.setMicrophoneEnabled(enable).catch(() => { })
+
 				// Show toast notification when host mutes this participant
 				if (data.action === 'mute' && data.targetUserId === currentUserId) {
 					if (shouldShowToast('moderation-muted', 6000)) {
 						showWarning(
 							'Microphone muted',
-							data.isLocked 
+							data.isLocked
 								? 'The host has muted your microphone and locked it. You cannot unmute until the host allows it.'
 								: 'The host has muted your microphone.'
 						)
@@ -1282,14 +1282,14 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				if (!data.targetUserId && data.hostClerkId && data.hostClerkId === currentUserId) return
 				if (!localParticipant) return
 				const enable = data.action === 'enable'
-				localParticipant.setCameraEnabled(enable).catch(() => {})
-				
+				localParticipant.setCameraEnabled(enable).catch(() => { })
+
 				// Show toast notification when host disables video for this participant
 				if (data.action === 'disable' && data.targetUserId === currentUserId) {
 					if (shouldShowToast('moderation-video-disabled', 6000)) {
 						showWarning(
 							'Camera disabled',
-							data.isLocked 
+							data.isLocked
 								? 'The host has disabled your camera and locked it. You cannot enable it until the host allows it.'
 								: 'The host has disabled your camera.'
 						)
@@ -1314,19 +1314,19 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	const prevPermissionsRef = useRef(permissions)
 	useEffect(() => {
 		if (!localParticipant || isHost) return
-		
+
 		const prevPermissions = prevPermissionsRef.current
-		
+
 		// If audio is locked and mic is on, force disable it
 		if (permissions && !permissions.allowAudio && localParticipant.isMicrophoneEnabled) {
-			localParticipant.setMicrophoneEnabled(false).catch(() => {})
+			localParticipant.setMicrophoneEnabled(false).catch(() => { })
 		}
-		
+
 		// If video is locked and camera is on, force disable it
 		if (permissions && !permissions.allowVideo && localParticipant.isCameraEnabled) {
-			localParticipant.setCameraEnabled(false).catch(() => {})
+			localParticipant.setCameraEnabled(false).catch(() => { })
 		}
-		
+
 		// Show notifications to participants when permissions change
 		if (permissions && prevPermissions) {
 			// Audio lock changed
@@ -1341,7 +1341,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 					}
 				}
 			}
-			
+
 			// Video lock changed
 			if (prevPermissions.allowVideo !== permissions.allowVideo) {
 				if (!permissions.allowVideo) {
@@ -1354,7 +1354,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 					}
 				}
 			}
-			
+
 			// Chat lock changed
 			if (prevPermissions.allowChat !== permissions.allowChat) {
 				if (!permissions.allowChat) {
@@ -1368,11 +1368,11 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				}
 			}
 		}
-		
+
 		// Update ref for next comparison
 		prevPermissionsRef.current = permissions
 	}, [permissions, localParticipant, isHost, showWarning, showSuccess, shouldShowToast])
-	
+
 	// Use memoized virtual backgrounds (moved outside with stable ref below)
 	// Access via `VIRTUAL_BACKGROUNDS` constant defined below to avoid re-creating this array each render
 
@@ -1381,25 +1381,25 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		[{ source: Track.Source.Camera, withPlaceholder: true }],
 		{ onlySubscribed: false }
 	)
-	
+
 	// Get screen share tracks
 	const screenShareTracks = useTracks(
 		[{ source: Track.Source.ScreenShare, withPlaceholder: false }]
 	)
-	
-	
+
+
 	// Debounced speaking detection - only switch focus after sustained speaking (1.5 seconds)
 	const [debouncedSpeakerId, setDebouncedSpeakerId] = useState<string | null>(null)
 	const speakingTimerRef = useRef<NodeJS.Timeout | null>(null)
 	const lastSpeakerRef = useRef<string | null>(null)
-	
+
 	// Find the focused participant (screenShare > pinned > speaking > host)
 	const speakingParticipants = useSpeakingParticipants()
-	
+
 	// Debounce the speaking detection - require 1.5 seconds of continuous speaking
 	useEffect(() => {
 		const currentSpeaker = speakingParticipants.length > 0 ? speakingParticipants[0]?.identity : null
-		
+
 		// If no one is speaking, clear timer but keep last speaker for a bit
 		if (!currentSpeaker) {
 			if (speakingTimerRef.current) {
@@ -1408,17 +1408,17 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			}
 			return
 		}
-		
+
 		// If same person keeps speaking, don't reset
 		if (currentSpeaker === lastSpeakerRef.current) {
 			return
 		}
-		
+
 		// New speaker detected - start debounce timer
 		if (speakingTimerRef.current) {
 			clearTimeout(speakingTimerRef.current)
 		}
-		
+
 		speakingTimerRef.current = setTimeout(() => {
 			// Only update if still speaking after 1.5 seconds
 			if (speakingParticipants.some(p => p.identity === currentSpeaker)) {
@@ -1426,14 +1426,14 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				setDebouncedSpeakerId(currentSpeaker)
 			}
 		}, 1500) // 1.5 second debounce
-		
+
 		return () => {
 			if (speakingTimerRef.current) {
 				clearTimeout(speakingTimerRef.current)
 			}
 		}
 	}, [speakingParticipants])
-	
+
 	// Auto-switch to presenter view when someone shares screen (only once)
 	const hasAutoSwitchedRef = useRef(false)
 	useEffect(() => {
@@ -1448,26 +1448,26 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			hasAutoSwitchedRef.current = false
 		}
 	}, [screenShareTracks.length, layoutMode])
-	
+
 	// Check if anyone is screen sharing (highest priority)
 	const activeScreenShare = screenShareTracks.length > 0 ? screenShareTracks[0] : null
-	
+
 	const focusedParticipant = useMemo(() => {
 		// Priority 1: Screen sharing participant (handled separately via activeScreenShare)
 		// We still need a focused participant for the thumbnail strip
-		
+
 		// Priority 2: Pinned participant
-		if (pinnedParticipantId && !activeScreenShare) {
+		if (pinnedParticipantId) {
 			const pinned = allParticipants.find(p => p.identity === pinnedParticipantId)
 			if (pinned) return pinned
 		}
-		
+
 		// Priority 3: Debounced speaking participant (requires sustained speaking)
-		if (debouncedSpeakerId && !activeScreenShare) {
+		if (debouncedSpeakerId) {
 			const speaker = allParticipants.find(p => p.identity === debouncedSpeakerId)
 			if (speaker) return speaker
 		}
-		
+
 		// Priority 4: Host or first remote
 		if (localParticipant) {
 			if (isHost) {
@@ -1478,7 +1478,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		}
 		return null
 	}, [debouncedSpeakerId, localParticipant, allParticipants, isHost, pinnedParticipantId, activeScreenShare])
-	
+
 	// Handle clicking on a thumbnail to focus/pin that participant
 	const handleThumbnailClick = useCallback((participantId: string) => {
 		if (pinnedParticipantId === participantId) {
@@ -1488,7 +1488,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			setPinnedParticipantId(participantId)
 		}
 	}, [pinnedParticipantId])
-	
+
 	// Toggle pin on the focused video
 	const togglePinFocused = useCallback(() => {
 		if (focusedParticipant) {
@@ -1505,7 +1505,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		setPinnedParticipantId(participantId)
 		setLayoutMode('focus')
 	}, [])
-	
+
 	// Apply background effect to local video track using the newer BackgroundProcessor API
 	// This provides smoother transitions and better segmentation quality
 	// CRITICAL FIX: Empty dependency array - all values accessed via refs to prevent flickering
@@ -1519,34 +1519,34 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		if (isApplyingEffectRef.current) {
 			return
 		}
-		
+
 		isApplyingEffectRef.current = true
-		
+
 		try {
 			// CRITICAL: Access localParticipant from ref, not from closure
 			const participant = localParticipantRef.current
-			
-		// Check if camera is enabled
-		if (!participant?.isCameraEnabled) {
-			alert('Please turn on your camera first to use background effects')
+
+			// Check if camera is enabled
+			if (!participant?.isCameraEnabled) {
+				alert('Please turn on your camera first to use background effects')
 				return
 			}
-			
+
 			// Get local video track
 			const videoPublication = Array.from(participant.videoTrackPublications.values()).find(
 				pub => pub.source === Track.Source.Camera
 			)
 			const localVideoTrack = videoPublication?.track as LocalVideoTrack | undefined
-			
+
 			if (!localVideoTrack) {
 				alert('Could not find video track. Please ensure your camera is working.')
 				return
 			}
-			
+
 			// Use refs for current values to avoid stale closures
 			const blurRadius = intensity ?? blurAmountRef.current
 			const currentSelectedBg = selectedVirtualBgRef.current
-			
+
 			// OPTIMIZATION: If processor already exists, use switchTo for smooth transitions
 			// This avoids destroying and recreating the processor which causes flickering
 			if (processorRef.current) {
@@ -1555,8 +1555,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 					if (intensity !== undefined) setBlurAmount(intensity)
 				} else if (mode === 'virtual') {
 					const selectedBg = VIRTUAL_BACKGROUNDS[currentSelectedBg]
-					await processorRef.current.switchTo({ 
-						mode: 'virtual-background', 
+					await processorRef.current.switchTo({
+						mode: 'virtual-background',
 						imagePath: selectedBg.url
 					})
 				} else {
@@ -1566,9 +1566,9 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				}
 			} else if (mode !== 'none') {
 				// Only create new processor if one doesn't exist
-				
+
 				let processor: ReturnType<typeof BackgroundProcessor>
-				
+
 				if (mode === 'blur') {
 					processor = BackgroundProcessor({
 						mode: 'background-blur',
@@ -1583,15 +1583,15 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						segmenterOptions: { delegate: 'GPU' }
 					})
 				}
-				
+
 				await localVideoTrack.setProcessor(processor)
 				processorRef.current = processor
-				
+
 				if (mode === 'blur' && intensity !== undefined) {
 					setBlurAmount(intensity)
 				}
 			}
-			
+
 			setBackgroundMode(mode)
 		} catch (err) {
 			const error = err as Error
@@ -1609,12 +1609,12 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			void applyBackgroundEffect('none')
 		}
 	}, [isMobileViewport, applyBackgroundEffect])
-	
+
 	// Debounced blur radius update - only updates the blur radius without recreating processor
 	// STABILIZED: Uses ref for backgroundMode check
 	const updateBlurRadius = useCallback(async (newRadius: number) => {
 		if (!processorRef.current || backgroundModeRef.current !== 'blur') return
-		
+
 		try {
 			// Use switchTo for smooth radius update without recreating the processor
 			await processorRef.current.switchTo({ mode: 'background-blur', blurRadius: newRadius })
@@ -1622,24 +1622,24 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			// Failed to update blur radius
 		}
 	}, [])
-	
+
 	// Debounced handler for slider changes - updates UI immediately, processor after delay
 	// STABILIZED: No dependencies since updateBlurRadius is now stable
 	const handleBlurSliderChange = useCallback((newValue: number) => {
 		// Update UI immediately for smooth slider feel
 		setBlurAmount(newValue)
-		
+
 		// Clear any pending debounce timer
 		if (blurDebounceRef.current) {
 			clearTimeout(blurDebounceRef.current)
 		}
-		
+
 		// Debounce the heavy processor update (150ms delay for smoother experience)
 		blurDebounceRef.current = setTimeout(() => {
 			updateBlurRadius(newValue)
 		}, 150)
 	}, [updateBlurRadius])
-	
+
 	// Cleanup debounce timer on unmount
 	useEffect(() => {
 		return () => {
@@ -1648,14 +1648,14 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			}
 		}
 	}, [])
-	
+
 	// Cleanup processor on unmount
 	useEffect(() => {
 		return () => {
 			if (processorRef.current) {
 				const localVideoTrack = localParticipant?.videoTrackPublications.values().next().value?.track as LocalVideoTrack | undefined
 				if (localVideoTrack) {
-					localVideoTrack.stopProcessor().catch(() => {})
+					localVideoTrack.stopProcessor().catch(() => { })
 				}
 			}
 		}
@@ -1682,7 +1682,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				krispFilterRef.current = filter
 				await micTrack.setProcessor(filter)
 				cleanup = () => {
-					micTrack.stopProcessor().catch(() => {})
+					micTrack.stopProcessor().catch(() => { })
 					krispFilterRef.current = null
 				}
 			} catch {
@@ -1697,7 +1697,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			cleanup?.()
 		}
 	}, [localParticipant, isMicrophoneEnabled])
-	
+
 	// Stable ordering system: Maintain positions for visible participants
 	// Only reorder when participants join/leave, not when speaking status changes
 	const stableOrderRef = useRef<string[]>([])
@@ -1719,7 +1719,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			}
 			const context = joinAlertAudioContextRef.current
 			if (context.state === 'suspended') {
-				void context.resume().catch(() => {})
+				void context.resume().catch(() => { })
 			}
 
 			const startAt = context.currentTime
@@ -1739,26 +1739,26 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			// Best-effort join tone; ignore browsers that block audio context.
 		}
 	}, [])
-	
+
 	// Update stable order when participants join/leave (not on speaking status changes)
 	useEffect(() => {
 		const currentParticipantIds = new Set(
 			allParticipants.map((participant) => participant.identity)
 		)
-		
+
 		// Check if participants have actually joined or left (not just speaking status changed)
-		const participantIdsChanged = 
+		const participantIdsChanged =
 			currentParticipantIds.size !== previousParticipantIdsRef.current.size ||
 			[...currentParticipantIds].some(id => !previousParticipantIdsRef.current.has(id)) ||
 			[...previousParticipantIdsRef.current].some(id => !currentParticipantIds.has(id))
-		
+
 		if (participantIdsChanged) {
 			// Find local participant identity
 			const localParticipantId = allParticipants.find((participant) => participant.isLocal)?.identity
-			
+
 			// Get current stable order
 			const currentStableOrder = [...stableOrderRef.current]
-			
+
 			// Identify new participants (not in stable order)
 			const newParticipantIds = [...currentParticipantIds].filter(
 				id => !currentStableOrder.includes(id) && id !== localParticipantId
@@ -1766,10 +1766,10 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			if (hasInitializedParticipantListRef.current && newParticipantIds.length > 0) {
 				playParticipantJoinedSound()
 			}
-			
+
 			// Remove participants who left
 			const updatedOrder = currentStableOrder.filter(id => currentParticipantIds.has(id))
-			
+
 			// If this is the first time (empty stable order), initialize with all current participants
 			if (currentStableOrder.length === 0 && currentParticipantIds.size > 0) {
 				// Initialize: local first, then others
@@ -1791,7 +1791,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 					// No local participant, just append new ones
 					updatedOrder.push(...newParticipantIds)
 				}
-				
+
 				// Ensure local participant is always first if it exists
 				if (localParticipantId && updatedOrder[0] !== localParticipantId) {
 					const localIndex = updatedOrder.indexOf(localParticipantId)
@@ -1800,11 +1800,11 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						updatedOrder.unshift(localParticipantId)
 					}
 				}
-				
+
 				// Update stable order
 				stableOrderRef.current = updatedOrder
 			}
-			
+
 			// Update previous participant IDs for next comparison
 			previousParticipantIdsRef.current = new Set(currentParticipantIds)
 			hasInitializedParticipantListRef.current = true
@@ -1813,37 +1813,37 @@ const VideoRoomContent = memo(function VideoRoomContent({
 
 	useEffect(() => {
 		return () => {
-			joinAlertAudioContextRef.current?.close().catch(() => {})
+			joinAlertAudioContextRef.current?.close().catch(() => { })
 		}
 	}, [])
-	
+
 	// Sort participants using stable order: local participant first, then stable order of others
 	const sortedParticipants = useMemo(() => {
 		if (allParticipants.length === 0) return []
-		
+
 		// Find local participant
 		const localEntry = allParticipants.find((participant) => participant.isLocal)
 		const otherParticipants = allParticipants.filter((participant) => !participant.isLocal)
-		
+
 		// Sort other participants according to stable order
 		const sortedOthers = [...otherParticipants].sort((a, b) => {
 			const stableOrder = stableOrderRef.current
 			const aIndex = stableOrder.indexOf(a.identity)
 			const bIndex = stableOrder.indexOf(b.identity)
-			
+
 			// If both are in stable order, maintain their relative positions
 			if (aIndex !== -1 && bIndex !== -1) {
 				return aIndex - bIndex
 			}
-			
+
 			// If only one is in stable order, prioritize it
 			if (aIndex !== -1) return -1
 			if (bIndex !== -1) return 1
-			
+
 			// If neither is in stable order, use identity as fallback for consistent ordering
 			return a.identity.localeCompare(b.identity)
 		})
-		
+
 		// Return local first, then sorted others
 		return localEntry ? [localEntry, ...sortedOthers] : sortedOthers
 	}, [allParticipants])
@@ -1855,28 +1855,61 @@ const VideoRoomContent = memo(function VideoRoomContent({
 
 	// Separate focused track from other tracks
 	// Screen share gets highest priority in focus view
-	const { focusedTrack, isScreenShareFocused } = useMemo(() => {
+	const { focusedTrack, isScreenShareFocused, isSplitMode, pinnedTrack } = useMemo(() => {
 		if (layoutMode === 'grid') {
-			return { focusedTrack: null, isScreenShareFocused: false }
+			return { focusedTrack: null, isScreenShareFocused: false, isSplitMode: false, pinnedTrack: null }
 		}
-		
-		// Priority 1: If someone is screen sharing, show that as the main view
-		if (activeScreenShare) {
-			return { 
-				focusedTrack: activeScreenShare, 
-				isScreenShareFocused: true 
+
+		// Detection for Split Mode - Both screen share and a pinned participant
+		if (pinnedParticipantId && activeScreenShare) {
+			const pinned = cameraTrackByParticipantId.get(pinnedParticipantId) || { 
+				participant: allParticipants.find(p => p.identity === pinnedParticipantId) || activeScreenShare.participant,
+				source: Track.Source.Camera 
+			}
+			return {
+				focusedTrack: activeScreenShare,
+				isScreenShareFocused: true,
+				isSplitMode: true,
+				pinnedTrack: pinned
 			}
 		}
-		
-		// Priority 2: Show focused participant's camera if they have one.
-		if (!focusedParticipant) {
-			return { focusedTrack: null, isScreenShareFocused: false }
+
+		// Priority 1: Pinned participant (single focus)
+		if (pinnedParticipantId) {
+			const pinned = cameraTrackByParticipantId.get(pinnedParticipantId) || { 
+				participant: allParticipants.find(p => p.identity === pinnedParticipantId),
+				source: Track.Source.Camera 
+			}
+			if (pinned.participant) return { focusedTrack: pinned, isScreenShareFocused: false, isSplitMode: false, pinnedTrack: pinned }
 		}
-		
+
+		// Priority 2: Screen share (single focus)
+		if (activeScreenShare) {
+			return {
+				focusedTrack: activeScreenShare,
+				isScreenShareFocused: true,
+				isSplitMode: false,
+				pinnedTrack: null
+			}
+		}
+
+		// Priority 3: Show speaker if they have a camera
+		if (!focusedParticipant) {
+			return { focusedTrack: null, isScreenShareFocused: false, isSplitMode: false, pinnedTrack: null }
+		}
+
 		const focused = cameraTrackByParticipantId.get(focusedParticipant.identity) || null
-		
-		return { focusedTrack: focused, isScreenShareFocused: false }
-	}, [focusedParticipant, layoutMode, activeScreenShare, cameraTrackByParticipantId])
+
+		return { focusedTrack: focused, isScreenShareFocused: false, isSplitMode: false, pinnedTrack: null }
+	}, [focusedParticipant, layoutMode, activeScreenShare, cameraTrackByParticipantId, pinnedParticipantId, allParticipants])
+
+	// Automatically un-minimize/un-maximize screen share when entering split mode
+	useEffect(() => {
+		if (isSplitMode) {
+			setScreenShareMinimized(false)
+			setScreenShareMaximized(false)
+		}
+	}, [isSplitMode])
 
 	useEffect(() => {
 		if (!isScreenShareFocused) {
@@ -1905,18 +1938,18 @@ const VideoRoomContent = memo(function VideoRoomContent({
 
 	const toggleAudio = () => {
 		// Toggle audio output (mute/unmute all remote audio)
-		
-			const enabled = !isAudioEnabled
-			setIsAudioEnabled(enabled)
-			// Mute/unmute all remote audio tracks by setting volume
-			allParticipants.forEach((participant) => {
-				if (participant.isLocal) return
-				participant.audioTrackPublications.forEach((publication) => {
-					if (publication.track && 'setVolume' in publication.track) {
-						(publication.track as unknown as { setVolume: (volume: number) => void }).setVolume(enabled ? 1 : 0)
-					}
-				})
+
+		const enabled = !isAudioEnabled
+		setIsAudioEnabled(enabled)
+		// Mute/unmute all remote audio tracks by setting volume
+		allParticipants.forEach((participant) => {
+			if (participant.isLocal) return
+			participant.audioTrackPublications.forEach((publication) => {
+				if (publication.track && 'setVolume' in publication.track) {
+					(publication.track as unknown as { setVolume: (volume: number) => void }).setVolume(enabled ? 1 : 0)
+				}
 			})
+		})
 	}
 
 	const toggleFullscreen = () => {
@@ -1928,10 +1961,10 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			setIsFullscreen(false)
 		}
 	}
-	
+
 	// Native Picture-in-Picture state and refs
 	const [isPiPActive, setIsPiPActive] = useState(false)
-	
+
 	// Thumbnails scroll logic
 	const thumbnailsRef = useRef<HTMLDivElement>(null)
 	const [canScrollLeft, setCanScrollLeft] = useState(false)
@@ -1970,17 +2003,17 @@ const VideoRoomContent = memo(function VideoRoomContent({
 
 	const pipVideoRef = useRef<HTMLVideoElement | null>(null)
 	const pipAnimationFrameRef = useRef<number | null>(null)
-	
+
 	// Toggle native PiP mode
 	const togglePiP = useCallback(async () => {
 		try {
 			if (isMobileViewport || !document.pictureInPictureEnabled) return
-			
+
 			if (document.pictureInPictureElement) {
 				await document.exitPictureInPicture()
 				return
 			}
-			
+
 			const videoElement = document.querySelector('.focus-main-video video, .custom-grid-tile video, .lk-participant-tile video, video:not([data-remote-ignore])') as HTMLVideoElement
 			if (videoElement) {
 				// Handle mirroring manually to avoid React re-renders (which close PiP)
@@ -1989,7 +2022,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				}
 
 				// Prevent track pausing during transitions
-				await videoElement.play().catch(() => {})
+				await videoElement.play().catch(() => { })
 				await videoElement.requestPictureInPicture()
 				setIsPiPActive(true)
 				pipVideoRef.current = videoElement
@@ -1998,7 +2031,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			console.error('PiP error:', error)
 		}
 	}, [isMobileViewport])
-	
+
 	// Auto-trigger PiP on visibility change (like Google Meet)
 	useEffect(() => {
 		if (isMobileViewport) return
@@ -2014,19 +2047,19 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				// Search for candidate video
 				const videos = Array.from(document.querySelectorAll('.focus-main-video video, .custom-grid-tile video, .lk-participant-tile video, video:not([data-remote-ignore])')) as HTMLVideoElement[];
 				const videoElement = videos.find(v => v.readyState >= 2 && v.srcObject) || videos.find(v => v.readyState >= 2) || videos[0];
-				
+
 				if (videoElement && videoElement.readyState >= 2) {
 					try {
 						// A tiny delay helps some browsers (like Chrome) process state changes before requesting PiP again
 						await new Promise(resolve => setTimeout(resolve, 150));
-						
+
 						// Ensure video is active
-						await videoElement.play().catch(() => {});
-						
+						await videoElement.play().catch(() => { });
+
 						if (videoElement.classList.contains('scale-x-[-1]') || videoElement.style.transform.includes('scaleX(-1)')) {
 							videoElement.style.transform = 'none';
 						}
-						
+
 						console.log('[PiP] Requesting PiP window...');
 						await videoElement.requestPictureInPicture();
 						setIsPiPActive(true);
@@ -2046,7 +2079,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				}
 			}
 		}
-		
+
 		// Listen for PiP exit
 		const handlePiPExit = () => {
 			console.log('[PiP] leavepictureinpicture event received');
@@ -2054,15 +2087,15 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			const videoElement = pipVideoRef.current
 			if (videoElement) {
 				if (videoElement.classList.contains('scale-x-[-1]')) {
-					videoElement.style.transform = '' 
+					videoElement.style.transform = ''
 				}
 			}
 			pipVideoRef.current = null
 		}
-		
+
 		document.addEventListener('visibilitychange', handleVisibilityChange)
 		document.addEventListener('leavepictureinpicture', handlePiPExit)
-		
+
 		return () => {
 			document.removeEventListener('visibilitychange', handleVisibilityChange)
 			document.removeEventListener('leavepictureinpicture', handlePiPExit)
@@ -2116,106 +2149,107 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	return (
 		<>
 			<div className="flex-1 flex relative bg-[#09090b] overflow-hidden h-full w-full">
-			{/* Main Video Area - Centered and full width always (overlays used for sidebars) */}
-			<div className={`flex-1 flex flex-col transition-all duration-300 ease-in-out overflow-hidden relative ${(showChat || showParticipants) ? 'md:mr-96' : ''}`}>
-				{/* Zoom-Style Top Info Bar - Centered */}
-				<div className={`absolute left-2 right-2 md:left-0 md:right-0 h-auto flex items-center justify-center pointer-events-none z-30 select-none transition-all duration-300 ${isUserActive ? 'top-2 md:top-4 opacity-100' : 'top-[-60px] opacity-0'}`}>
-					<div className="bg-[#1a1a1a]/90 backdrop-blur-md px-2 md:px-4 py-1.5 rounded-full flex items-center gap-2 md:gap-4 border border-white/10 pointer-events-auto shadow-lg hover:bg-[#252525]/95 transition-all">
-						{/* Meeting Info */}
-						<div className="flex items-center gap-1.5 md:gap-2">
-							<div className="text-[#00DC6E]">
-								<ShieldCheck className="h-3 w-3 md:h-4 md:w-4" />
-							</div>
+				{/* Main Video Area - Centered and full width always (overlays used for sidebars) */}
+				<div className={`flex-1 flex flex-col transition-all duration-300 ease-in-out overflow-hidden relative ${(showChat || showParticipants) ? 'md:mr-96' : ''}`}>
+					{/* Zoom-Style Top Info Bar - Centered */}
+					<div className={`absolute left-2 right-2 md:left-0 md:right-0 h-auto flex items-center justify-center pointer-events-none z-30 select-none transition-all duration-300 ${isUserActive ? 'top-2 md:top-4 opacity-100' : 'top-[-60px] opacity-0'}`}>
+						<div className="bg-[#1a1a1a]/90 backdrop-blur-md px-2 md:px-4 py-1.5 rounded-full flex items-center gap-2 md:gap-4 border border-white/10 pointer-events-auto shadow-lg hover:bg-[#252525]/95 transition-all">
+							{/* Meeting Info */}
 							<div className="flex items-center gap-1.5 md:gap-2">
-								<span className="text-white text-[10px] md:text-xs font-semibold tracking-wide truncate max-w-[120px] md:max-w-none">
-									{sessionTitle || 'Webyalaya Meeting'}
-								</span>
-								<div className="w-px h-3 bg-white/10" />
-								<span className="text-white/50 text-[9px] md:text-xs font-mono whitespace-nowrap">
-									{formattedTime}
-								</span>
+								<div className="text-[#00DC6E]">
+									<ShieldCheck className="h-3 w-3 md:h-4 md:w-4" />
+								</div>
+								<div className="flex items-center gap-1.5 md:gap-2">
+									<span className="text-white text-[10px] md:text-xs font-semibold tracking-wide truncate max-w-[120px] md:max-w-none">
+										{sessionTitle || 'Webyalaya Meeting'}
+									</span>
+									<div className="w-px h-3 bg-white/10" />
+									<span className="text-white/50 text-[9px] md:text-xs font-mono whitespace-nowrap">
+										{formattedTime}
+									</span>
+								</div>
 							</div>
-						</div>
 
-						{/* View Switcher Button */}
-						<div className="relative">
-							<button
-								onClick={() => setIsViewMenuOpen(!isViewMenuOpen)}
-								className="h-5 w-5 md:h-6 md:w-6 flex items-center justify-center rounded-full hover:bg-white/10 text-white/70 hover:text-white transition-colors"
-								title="Change View"
-							>
-								<LayoutGrid className="h-3 w-3 md:h-3.5 md:w-3.5" />
-							</button>
+							{/* View Switcher Button */}
+							<div className="relative">
+								<button
+									onClick={() => setIsViewMenuOpen(!isViewMenuOpen)}
+									className="h-5 w-5 md:h-6 md:w-6 flex items-center justify-center rounded-full hover:bg-white/10 text-white/70 hover:text-white transition-colors"
+									title="Change View"
+								>
+									<LayoutGrid className="h-3 w-3 md:h-3.5 md:w-3.5" />
+								</button>
 
-							{/* View Menu Dropdown */}
-							{isViewMenuOpen && (
-								<>
-									<div className="fixed inset-0 z-[100]" onClick={() => setIsViewMenuOpen(false)} />
-									<div className="absolute right-0 top-full mt-2 w-48 bg-[#252525] border border-white/10 rounded-lg shadow-xl z-[101] py-1 animate-in fade-in zoom-in-95 duration-100">
-										<div className="px-3 py-2 text-xs font-semibold text-white/50 uppercase tracking-wider">
-											Layout
+								{/* View Menu Dropdown */}
+								{isViewMenuOpen && (
+									<>
+										<div className="fixed inset-0 z-[100]" onClick={() => setIsViewMenuOpen(false)} />
+										<div className="absolute right-0 top-full mt-2 w-48 bg-[#252525] border border-white/10 rounded-lg shadow-xl z-[101] py-1 animate-in fade-in zoom-in-95 duration-100">
+											<div className="px-3 py-2 text-xs font-semibold text-white/50 uppercase tracking-wider">
+												Layout
+											</div>
+											<button
+												onClick={() => {
+													setLayoutMode('focus')
+													setIsViewMenuOpen(false)
+												}}
+												className="w-full px-3 py-2 text-left text-sm text-white hover:bg-white/10 flex items-center justify-between group"
+											>
+												<div className="flex items-center gap-2">
+													<Presentation className="h-4 w-4 text-white/70 group-hover:text-white" />
+													<span>Speaker</span>
+												</div>
+												{layoutMode === 'focus' && <Check className="h-4 w-4 text-[#00DC6E]" />}
+											</button>
+											<button
+												onClick={() => {
+													setLayoutMode('grid')
+													setIsViewMenuOpen(false)
+												}}
+												className="w-full px-3 py-2 text-left text-sm text-white hover:bg-white/10 flex items-center justify-between group"
+											>
+												<div className="flex items-center gap-2">
+													<Grid2X2 className="h-4 w-4 text-white/70 group-hover:text-white" />
+													<span>Gallery</span>
+												</div>
+												{layoutMode === 'grid' && <Check className="h-4 w-4 text-[#00DC6E]" />}
+											</button>
+
+											<div className="my-1 border-t border-white/10" />
+
+											<button
+												onClick={() => {
+													if (document.fullscreenElement) {
+														document.exitFullscreen()
+														setIsFullscreen(false)
+													} else {
+														document.documentElement.requestFullscreen()
+														setIsFullscreen(true)
+													}
+													setIsViewMenuOpen(false)
+												}}
+												className="w-full px-3 py-2 text-left text-sm text-white hover:bg-white/10 flex items-center justify-between group"
+											>
+												<div className="flex items-center gap-2">
+													{isFullscreen ? (
+														<Minimize2 className="h-4 w-4 text-white/70 group-hover:text-white" />
+													) : (
+														<Maximize2 className="h-4 w-4 text-white/70 group-hover:text-white" />
+													)}
+													<span>{isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}</span>
+												</div>
+											</button>
 										</div>
-										<button
-											onClick={() => {
-												setLayoutMode('focus')
-												setIsViewMenuOpen(false)
-											}}
-											className="w-full px-3 py-2 text-left text-sm text-white hover:bg-white/10 flex items-center justify-between group"
-										>
-											<div className="flex items-center gap-2">
-												<Presentation className="h-4 w-4 text-white/70 group-hover:text-white" />
-												<span>Speaker</span>
-											</div>
-											{layoutMode === 'focus' && <Check className="h-4 w-4 text-[#00DC6E]" />}
-										</button>
-										<button
-											onClick={() => {
-												setLayoutMode('grid')
-												setIsViewMenuOpen(false)
-											}}
-											className="w-full px-3 py-2 text-left text-sm text-white hover:bg-white/10 flex items-center justify-between group"
-										>
-											<div className="flex items-center gap-2">
-												<Grid2X2 className="h-4 w-4 text-white/70 group-hover:text-white" />
-												<span>Gallery</span>
-											</div>
-											{layoutMode === 'grid' && <Check className="h-4 w-4 text-[#00DC6E]" />}
-										</button>
-										
-										<div className="my-1 border-t border-white/10" />
-										
-										<button
-											onClick={() => {
-												if (document.fullscreenElement) {
-													document.exitFullscreen()
-													setIsFullscreen(false)
-												} else {
-													document.documentElement.requestFullscreen()
-													setIsFullscreen(true)
-												}
-												setIsViewMenuOpen(false)
-											}}
-											className="w-full px-3 py-2 text-left text-sm text-white hover:bg-white/10 flex items-center justify-between group"
-										>
-											<div className="flex items-center gap-2">
-												{isFullscreen ? (
-													<Minimize2 className="h-4 w-4 text-white/70 group-hover:text-white" />
-												) : (
-													<Maximize2 className="h-4 w-4 text-white/70 group-hover:text-white" />
-												)}
-												<span>{isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}</span>
-											</div>
-										</button>
-									</div>
-								</>
-							)}
+									</>
+								)}
+							</div>
 						</div>
 					</div>
-				</div>
 
-				{/* Video Grid - No padding needed since bars are floating overlays */}
-				<div className="flex-1 overflow-hidden bg-black relative min-h-0 video-grid-container pt-2 pb-2">
-					<style dangerouslySetInnerHTML={{__html: `
+					{/* Video Grid - No padding needed since bars are floating overlays */}
+					<div className="flex-1 overflow-hidden bg-black relative min-h-0 video-grid-container pt-2 pb-2">
+						<style dangerouslySetInnerHTML={{
+							__html: `
 					/* CRITICAL: Remove ALL green overlays and speaking indicators */
 					.video-grid-container .lk-participant-tile[data-lk-speaking="true"]::before,
 					.video-grid-container .lk-participant-tile[data-lk-speaking="true"]::after,
@@ -2834,7 +2868,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						scrollbar-color: rgba(255, 255, 255, 0.2) rgba(255, 255, 255, 0.05);
 					}
 					`}} />
-					{/* Layout rendering */}
+						{/* Layout rendering */}
 					{layoutMode === 'focus' ? (
 						<div className="focus-layout-container">
 							{/* Thumbnail strip at TOP with Scroll Buttons */}
@@ -2987,23 +3021,36 @@ const VideoRoomContent = memo(function VideoRoomContent({
 											{/* Video layer — screen share (zoom / min / max) vs camera */}
 											{isTrackReference(focusedTrack) && (
 												<>
-													{isScreenShareFocused && showScreenShareInMain && (
-														<div className="absolute inset-0 z-[2] overflow-auto bg-black/40">
-															<div
-																className="relative flex min-h-full min-w-full items-center justify-center p-4 box-border"
-																style={{
-																	transform: `scale(${screenShareZoom})`,
-																	transformOrigin: 'center center',
-																	transition: 'transform 0.12s ease-out',
-																}}
-															>
-																<div className="relative inline-block w-full">
-																	<VideoTrack
-																		trackRef={focusedTrack}
-																		className="h-auto w-full max-w-full max-h-[70vh] object-contain"
-																	/>
+													{isSplitMode && pinnedTrack && (
+														<div className="absolute inset-0 z-[2] flex flex-col md:flex-row gap-2 p-2 bg-[#0f0f0f]">
+															{/* Left/Top: Screen Share */}
+															<div className="flex-1 relative bg-black/40 rounded-xl overflow-hidden group border border-white/5">
+																{isTrackReference(focusedTrack) ? (
+																	<div
+																		className="relative flex h-full w-full items-center justify-center p-2"
+																		style={{
+																			transform: `scale(${screenShareZoom})`,
+																			transformOrigin: 'center center',
+																			transition: 'transform 0.12s ease-out',
+																		}}
+																	>
+																		<VideoTrack
+																			trackRef={focusedTrack}
+																			className="h-full w-full object-contain"
+																		/>
+																	</div>
+																) : (
+																	<div className="absolute inset-0 flex items-center justify-center bg-[#1a1a1a]">
+																		<MonitorUp className="h-12 w-12 text-white/20" />
+																	</div>
+																)}
+																{/* Label for Screen share */}
+																<div className="absolute top-3 left-3 bg-blue-600/90 backdrop-blur-md text-[10px] font-bold text-white px-2 py-1 rounded flex items-center gap-1.5 z-10 shadow-lg border border-white/10">
+																	<MonitorUp className="h-3 w-3" />
+																	<span>SCREEN SHARE</span>
 																</div>
 																
+																{/* Remote Control Actions - Overlay on the screen share half */}
 																<RemoteControlOverlay
 																	isControlling={isControlling && targetScreenShareId === focusedParticipantForDisplay.identity}
 																	isSharing={focusedParticipantForDisplay.isLocal}
@@ -3012,27 +3059,89 @@ const VideoRoomContent = memo(function VideoRoomContent({
 																	onStopControl={stopControl}
 																	onRevokeControl={revokeControl}
 																/>
+															</div>
 
-																{/* Remote Control Actions */}
-																{!focusedParticipantForDisplay.isLocal && !isControlling && (
-																	<div className="absolute top-4 left-4 z-30">
-																		<Button
-																			variant="secondary"
-																			size="sm"
-																			onClick={(e) => {
-																				e.stopPropagation();
-																				requestControl(focusedParticipantForDisplay.identity);
-																			}}
-																			disabled={isRequestPending && targetScreenShareId === focusedParticipantForDisplay.identity}
-																			className="bg-black/60 hover:bg-black/80 text-white border border-white/20 backdrop-blur"
-																		>
-																			{isRequestPending && targetScreenShareId === focusedParticipantForDisplay.identity 
-																				? 'Requesting Control...' 
-																				: 'Request Control'}
-																		</Button>
+															{/* Right/Bottom: Pinned Participant */}
+															<div className="flex-1 relative bg-[#1a1a1a] rounded-xl overflow-hidden group border border-blue-500/30">
+																{isTrackReference(pinnedTrack) && pinnedTrack.publication?.track ? (
+																	<VideoTrack
+																		trackRef={pinnedTrack}
+																		className={`h-full w-full object-contain ${pinnedTrack.participant.isLocal ? 'scale-x-[-1]' : ''}`}
+																	/>
+																) : (
+																	<div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-[#252525] to-[#1a1a1a]">
+																		{pinnedTrack.participant ? (
+																			(() => {
+																				const avatarUrl = getParticipantAvatar(pinnedTrack.participant)
+																				return avatarUrl ? (
+																					<Image
+																						src={avatarUrl}
+																						alt={pinnedTrack.participant.name || 'Participant'}
+																						width={80}
+																						height={80}
+																						className="w-20 h-20 rounded-full object-cover shadow-xl border-2 border-white/10"
+																					/>
+																				) : (
+																					<div className="w-20 h-20 rounded-full bg-gradient-to-b from-[#3a3a3a] to-[#2a2a2a] flex items-center justify-center shadow-xl border-2 border-white/10">
+																						<User className="w-10 h-10 text-[#555]" />
+																					</div>
+																				)
+																			})()
+																		) : null}
+																		<p className="mt-4 text-white/50 text-[10px] font-bold tracking-[0.2em] uppercase bg-black/20 px-3 py-1 rounded-full backdrop-blur-sm">Camera Off</p>
 																	</div>
 																)}
+																{/* Label for Pinned Participant */}
+																<div className="absolute bottom-3 left-3 bg-blue-600/90 backdrop-blur-md text-[10px] font-bold text-white px-2 py-1 rounded flex items-center gap-1.5 z-10 shadow-lg border border-white/10">
+																	<Pin className="h-3 w-3 fill-current" />
+																	<span>{pinnedTrack.participant?.name || pinnedTrack.participant?.identity || 'Participant'}</span>
+																</div>
+																{/* Unpin button overlay */}
+																<button 
+																	onClick={() => setPinnedParticipantId(null)}
+																	className="absolute top-3 right-3 w-8 h-8 bg-black/60 hover:bg-black/80 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20 border border-white/10 text-white"
+																	title="Exit split view (unpin)"
+																>
+																	<PinOff className="h-4 w-4" />
+																</button>
 															</div>
+														</div>
+													)}
+													{!isSplitMode && isScreenShareFocused && showScreenShareInMain && (
+														<div className="absolute inset-0 z-[2] overflow-hidden bg-black/40">
+															<VideoTrack
+																trackRef={focusedTrack}
+																className="w-full h-full object-contain"
+															/>
+															
+															<RemoteControlOverlay
+																isControlling={isControlling && targetScreenShareId === focusedParticipantForDisplay.identity}
+																isSharing={focusedParticipantForDisplay.isLocal}
+																controllerId={controllerId}
+																onSendInput={sendInputEvent}
+																onStopControl={stopControl}
+																onRevokeControl={revokeControl}
+															/>
+
+															{/* Remote Control Actions */}
+															{!focusedParticipantForDisplay.isLocal && !isControlling && (
+																<div className="absolute top-4 left-4 z-30">
+																	<Button
+																		variant="secondary"
+																		size="sm"
+																		onClick={(e) => {
+																			e.stopPropagation();
+																			requestControl(focusedParticipantForDisplay.identity);
+																		}}
+																		disabled={isRequestPending && targetScreenShareId === focusedParticipantForDisplay.identity}
+																		className="bg-black/60 hover:bg-black/80 text-white border border-white/20 backdrop-blur"
+																	>
+																		{isRequestPending && targetScreenShareId === focusedParticipantForDisplay.identity 
+																			? 'Requesting Control...' 
+																			: 'Request Control'}
+																	</Button>
+																</div>
+															)}
 														</div>
 													)}
 													{isScreenShareFocused && !showScreenShareInMain && (
@@ -3063,7 +3172,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 															</Button>
 														</div>
 													)}
-													{!isScreenShareFocused && focusedTrack.publication?.track && (
+													{!isSplitMode && !isScreenShareFocused && focusedTrack.publication?.track && (
 														<div className="absolute inset-0 z-[2]">
 															<VideoTrack
 																trackRef={focusedTrack}
@@ -3074,7 +3183,6 @@ const VideoRoomContent = memo(function VideoRoomContent({
 												</>
 											)}
 
-											{/* Audio/Video status icons in top-right corner */}
 											<div className="absolute top-4 right-4 flex items-center gap-2 z-20">
 												<div
 													className={`w-8 h-8 rounded-full flex items-center justify-center ${
@@ -3369,405 +3477,404 @@ const VideoRoomContent = memo(function VideoRoomContent({
 							</div>
 						)}
 
-					{/* Screen share: full workspace overlay (maximized) */}
-					{isScreenShareFocused &&
-						screenShareMaximized &&
-						isTrackReference(focusedTrack) && (
-							<div className="fixed inset-0 z-[290] flex flex-col bg-black">
-								<div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 bg-[#141414] px-3 py-2 sm:px-4">
-									<span className="flex items-center gap-2 text-sm font-medium text-white">
-										<MonitorUp className="h-4 w-4 shrink-0 text-sky-400" />
-										Screen share
-									</span>
-									<div className="flex flex-wrap items-center justify-end gap-1">
-										<div className="flex items-center gap-0.5 rounded-lg border border-white/10 bg-black/40 p-1">
-											<button
-												type="button"
-												onClick={() => adjustScreenShareZoom(-0.25)}
-												disabled={screenShareZoom <= 0.5}
-												className="rounded p-2 text-white/90 hover:bg-white/10 disabled:opacity-30"
-												title="Zoom out"
+
+						{/* Screen share: full workspace overlay (maximized) */}
+						{isScreenShareFocused &&
+							screenShareMaximized &&
+							isTrackReference(focusedTrack) && (
+								<div className="fixed inset-0 z-[290] flex flex-col bg-black">
+									<div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 bg-[#141414] px-3 py-2 sm:px-4">
+										<span className="flex items-center gap-2 text-sm font-medium text-white">
+											<MonitorUp className="h-4 w-4 shrink-0 text-sky-400" />
+											Screen share
+										</span>
+										<div className="flex flex-wrap items-center justify-end gap-1">
+											<div className="flex items-center gap-0.5 rounded-lg border border-white/10 bg-black/40 p-1">
+												<button
+													type="button"
+													onClick={() => adjustScreenShareZoom(-0.25)}
+													disabled={screenShareZoom <= 0.5}
+													className="rounded p-2 text-white/90 hover:bg-white/10 disabled:opacity-30"
+													title="Zoom out"
+												>
+													<ZoomOut className="h-4 w-4" />
+												</button>
+												<span className="min-w-[2.5rem] text-center text-xs tabular-nums text-white/80">
+													{Math.round(screenShareZoom * 100)}%
+												</span>
+												<button
+													type="button"
+													onClick={() => adjustScreenShareZoom(0.25)}
+													disabled={screenShareZoom >= 2}
+													className="rounded p-2 text-white/90 hover:bg-white/10 disabled:opacity-30"
+													title="Zoom in"
+												>
+													<ZoomIn className="h-4 w-4" />
+												</button>
+											</div>
+											<Button
+												variant="secondary"
+												size="sm"
+												className="h-8 text-xs"
+												onClick={() => {
+													setScreenShareMaximized(false)
+													setScreenShareMinimized(true)
+												}}
 											>
-												<ZoomOut className="h-4 w-4" />
-											</button>
-											<span className="min-w-[2.5rem] text-center text-xs tabular-nums text-white/80">
-												{Math.round(screenShareZoom * 100)}%
-											</span>
-											<button
-												type="button"
-												onClick={() => adjustScreenShareZoom(0.25)}
-												disabled={screenShareZoom >= 2}
-												className="rounded p-2 text-white/90 hover:bg-white/10 disabled:opacity-30"
-												title="Zoom in"
+												Minimize
+											</Button>
+											<Button
+												size="sm"
+												className="h-8 bg-sky-600 text-xs hover:bg-sky-500"
+												onClick={() => setScreenShareMaximized(false)}
 											>
-												<ZoomIn className="h-4 w-4" />
-											</button>
+												Exit
+											</Button>
 										</div>
-										<Button
-											variant="secondary"
-											size="sm"
-											className="h-8 text-xs"
-											onClick={() => {
-												setScreenShareMaximized(false)
-												setScreenShareMinimized(true)
+									</div>
+									<div className="relative flex flex-1 items-center justify-center overflow-auto p-4">
+										<div
+											style={{
+												transform: `scale(${screenShareZoom})`,
+												transformOrigin: 'center center',
+												transition: 'transform 0.12s ease-out',
 											}}
 										>
-											Minimize
-										</Button>
-										<Button
-											size="sm"
-											className="h-8 bg-sky-600 text-xs hover:bg-sky-500"
-											onClick={() => setScreenShareMaximized(false)}
-										>
-											Exit
-										</Button>
-									</div>
-								</div>
-								<div className="relative flex flex-1 items-center justify-center overflow-auto p-4">
-									<div
-										style={{
-											transform: `scale(${screenShareZoom})`,
-											transformOrigin: 'center center',
-											transition: 'transform 0.12s ease-out',
-										}}
-									>
-										<div className="relative inline-block w-full">
-											<VideoTrack
-												trackRef={focusedTrack}
-												className="max-h-[min(82vh,calc(100vw-4rem))] w-auto max-w-full object-contain"
+											<div className="relative inline-block w-full">
+												<VideoTrack
+													trackRef={focusedTrack}
+													className="max-h-[min(82vh,calc(100vw-4rem))] w-auto max-w-full object-contain"
+												/>
+											</div>
+
+											<RemoteControlOverlay
+												isControlling={isControlling && targetScreenShareId === focusedTrack.participant.identity}
+												isSharing={focusedTrack.participant.isLocal}
+												controllerId={controllerId}
+												onSendInput={sendInputEvent}
+												onStopControl={stopControl}
+												onRevokeControl={revokeControl}
 											/>
 										</div>
-										
-										<RemoteControlOverlay
-											isControlling={isControlling && targetScreenShareId === focusedTrack.participant.identity}
-											isSharing={focusedTrack.participant.isLocal}
-											controllerId={controllerId}
-											onSendInput={sendInputEvent}
-											onStopControl={stopControl}
-											onRevokeControl={revokeControl}
-										/>
 									</div>
+								</div>
+							)}
+
+						<RoomAudioRenderer />
+					</div>
+				</div>
+
+				{/* Zoom-Style Bottom Control Bar - Floating Island */}
+				<div
+					className={`fixed left-2 right-2 md:left-1/2 md:-translate-x-1/2 md:w-fit md:min-w-[500px] flex items-center justify-between px-2 md:px-4 py-2 md:py-3 bg-[#141414]/90 backdrop-blur-xl border border-white/10 shadow-2xl z-[50] transition-all duration-300 rounded-xl md:rounded-2xl gap-1 md:gap-8 ${isUserActive ? 'bottom-3 md:bottom-6 opacity-100' : 'bottom-[-100px] opacity-0'}`}
+				>
+					{/* LEFT: Audio/Video Controls - Horizontal Group */}
+					<div className="flex items-center gap-1 md:gap-3">
+						{/* Audio Button Stack */}
+						{!isGuest && (
+							<div className="flex flex-col items-center justify-center group relative">
+								<div className="flex items-center bg-white/5 rounded-lg md:rounded-xl p-0.5 md:p-1 border border-white/5">
+									<button
+										onClick={async () => {
+											try {
+												if (!localParticipant) return
+
+												const newState = !localParticipant.isMicrophoneEnabled
+												if (newState && !isHost && permissions && !permissions.allowAudio) {
+													participantRequestAudio?.()
+													return
+												}
+												await localParticipant.setMicrophoneEnabled(newState)
+											} catch { }
+										}}
+										className={`h-11 w-11 md:h-10 md:w-10 flex items-center justify-center rounded-lg hover:bg-sky-500/20 active:scale-95 transition-all ${(isMicrophoneEnabled) ? 'text-white hover:text-sky-400' : 'bg-sky-500/10 text-sky-500 hover:text-sky-400'}`}
+										title="Toggle Microphone"
+									>
+										{(isMicrophoneEnabled) ? <Mic className="h-5 w-5 md:h-5 md:w-5" /> : <MicOff className="h-5 w-5 md:h-5 md:w-5" />}
+									</button>
 								</div>
 							</div>
 						)}
 
-					<RoomAudioRenderer />
-				</div>
-			</div>
+						{/* Video Button Stack */}
+						{!isGuest && (
+							<div className="flex flex-col items-center justify-center group relative">
+								<div className="flex items-center bg-white/5 rounded-lg md:rounded-xl p-0.5 md:p-1 border border-white/5">
+									<button
+										onClick={async () => {
+											try {
+												if (!localParticipant) return
 
-			{/* Zoom-Style Bottom Control Bar - Floating Island */}
-			<div 
-				className={`fixed left-2 right-2 md:left-1/2 md:-translate-x-1/2 md:w-fit md:min-w-[500px] flex items-center justify-between px-2 md:px-4 py-2 md:py-3 bg-[#141414]/90 backdrop-blur-xl border border-white/10 shadow-2xl z-[50] transition-all duration-300 rounded-xl md:rounded-2xl gap-1 md:gap-8 ${isUserActive ? 'bottom-3 md:bottom-6 opacity-100' : 'bottom-[-100px] opacity-0'}`} 
-			>
-				{/* LEFT: Audio/Video Controls - Horizontal Group */}
-				<div className="flex items-center gap-1 md:gap-3">
-					{/* Audio Button Stack */}
-					{!isGuest && (
-					<div className="flex flex-col items-center justify-center group relative">
-						<div className="flex items-center bg-white/5 rounded-lg md:rounded-xl p-0.5 md:p-1 border border-white/5">
-							<button
-								onClick={async () => {
-									try {
-										if (!localParticipant) return
-										
-										const newState = !localParticipant.isMicrophoneEnabled
-											if (newState && !isHost && permissions && !permissions.allowAudio) {
-											participantRequestAudio?.()
-											return
-										}
-										await localParticipant.setMicrophoneEnabled(newState)
-									} catch {}
-								}}
-								className={`h-11 w-11 md:h-10 md:w-10 flex items-center justify-center rounded-lg hover:bg-sky-500/20 active:scale-95 transition-all ${(isMicrophoneEnabled) ? 'text-white hover:text-sky-400' : 'bg-sky-500/10 text-sky-500 hover:text-sky-400'}`}
-								title="Toggle Microphone"
-							>
-								{(isMicrophoneEnabled) ? <Mic className="h-5 w-5 md:h-5 md:w-5" /> : <MicOff className="h-5 w-5 md:h-5 md:w-5" />}
-							</button>
-						</div>
-					</div>
-					)}
-
-			{/* Video Button Stack */}
-					{!isGuest && (
-					<div className="flex flex-col items-center justify-center group relative">
-						<div className="flex items-center bg-white/5 rounded-lg md:rounded-xl p-0.5 md:p-1 border border-white/5">
-							<button
-								onClick={async () => {
-									try {
-										if (!localParticipant) return
-										
-										const newState = !localParticipant.isCameraEnabled
-										if (newState && !isHost && permissions && !permissions.allowVideo) {
-											participantRequestVideo?.()
-											return
-										}
-										await localParticipant.setCameraEnabled(newState)
-									} catch (_err) {}
-								}}
-								className={`h-11 w-11 md:h-10 md:w-10 flex items-center justify-center rounded-lg hover:bg-sky-500/20 active:scale-95 transition-all ${(isCameraEnabled) ? 'text-white hover:text-sky-400' : 'bg-sky-500/10 text-sky-500 hover:text-sky-400'}`}
-								title="Toggle Camera"
-							>
-								{(isCameraEnabled) ? <Video className="h-5 w-5 md:h-5 md:w-5" /> : <VideoOff className="h-5 w-5 md:h-5 md:w-5" />}
-							</button>
-							<div className="hidden md:block w-px h-6 bg-white/10 mx-1" />
-							<button 
-								onClick={() => {
-									if (isMobileViewport) return
-									setShowBackgroundMenu(!showBackgroundMenu)
-								}}
-								className="hidden md:flex h-10 w-6 items-center justify-center rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
-								title="Video Settings"
-							>
-								<ChevronUp className="h-3 w-3 text-white/70" />
-							</button>
-						</div>
-					</div>
-					)}
-				</div>
-
-				{/* CENTER: Main Controls */}
-				<div className="flex items-center gap-1 md:gap-3 flex-1 justify-center">
-					
-					{/* Share Screen - hidden on mobile/guests (getDisplayMedia not supported) */}
-					{!isGuest && !isMobileViewport && (
-						<div className="flex flex-col items-center justify-center group">
-							<button
-								onClick={async () => {
-									if (!navigator.mediaDevices?.getDisplayMedia) {
-										showError('Not Supported', 'Screen sharing is not supported on this device or browser.')
-										return
-									}
-									try {
-										const newState = !isScreenShareEnabled
-										if (newState) {
-											// Enable screen share with audio capture
-											const optionsWithAudio = {
-												audio: {
-													echoCancellation: true,
-													noiseSuppression: true,
-													autoGainControl: true,
+												const newState = !localParticipant.isCameraEnabled
+												if (newState && !isHost && permissions && !permissions.allowVideo) {
+													participantRequestVideo?.()
+													return
 												}
-											}
-											await localParticipant?.setScreenShareEnabled(newState, optionsWithAudio)
-										} else {
-											await localParticipant?.setScreenShareEnabled(newState)
-										}
-									} catch (err) {
-										const error = err as DOMException
-										if (error?.name === 'NotAllowedError') {
-											showError('Permission Denied', 'Screen sharing permission was denied.')
-										} else if (error?.name === 'NotSupportedError') {
-											showError('Not Supported', 'Screen sharing is not supported on this device or browser.')
-										} else {
-											showError('Screen Share Failed', 'Could not start screen sharing. Please try again.')
-										}
-									}
-								}}
-								className={`h-9 w-9 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl hover:bg-sky-500/20 transition-all ${isScreenShareEnabled ? 'bg-sky-500/20 text-sky-400' : 'text-white/80 hover:text-sky-400'}`}
-								title="Share Screen"
-							>
-								{isScreenShareEnabled ? <MonitorOff className="h-4 w-4 md:h-5 md:w-5 font-bold" /> : <MonitorUp className="h-4 w-4 md:h-5 md:w-5" />}
-							</button>
-						</div>
-					)}
-
-					{/* Chat */}
-					<div className={`flex flex-col items-center justify-center group ${(!canViewParticipantList && !isGuest) ? 'hidden' : ''}`}>
-						<button
-							onClick={() => {
-								if (!showChat) { setShowParticipants(false); setShowFlashPanel(false) }
-								setShowChat(!showChat)
-							}}
-							className={`h-11 w-11 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl hover:bg-sky-500/20 active:scale-95 transition-all relative ${showChat ? 'bg-sky-500/20 text-sky-400' : 'text-white/80 hover:text-sky-400'}`}
-							title="Chat"
-						>
-							<MessageSquare className="h-5 w-5 md:h-5 md:w-5" />
-						</button>
-					</div>
-
-					{/* Flash Messages (host only) */}
-					{isHost && (
-						<div className="flex flex-col items-center justify-center group">
-							<button
-								onClick={() => {
-									if (!showFlashPanel) { setShowChat(false); setShowParticipants(false) }
-									setShowFlashPanel((p) => !p)
-								}}
-								className={`h-11 w-11 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl hover:bg-yellow-500/20 active:scale-95 transition-all relative ${showFlashPanel ? 'bg-yellow-500/20 text-yellow-400' : 'text-white/80 hover:text-yellow-400'}`}
-								title="Flash Messages"
-							>
-								<Zap className="h-5 w-5 md:h-5 md:w-5" />
-								{activeFlashMessage && (
-									<span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-yellow-400 border-2 border-[#141414] animate-pulse" />
-								)}
-							</button>
-						</div>
-					)}
-
-				{!isGuest && (
-					<div className="flex flex-col items-center justify-center group">
-						{/* Participants */}
-						<button
-							onClick={() => {
-								if (!canViewParticipantList) return
-								if (!showParticipants) { setShowChat(false); setShowFlashPanel(false) }
-								setShowParticipants(!showParticipants)
-							}}
-							disabled={!canViewParticipantList}
-							className={`h-11 w-11 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl hover:bg-sky-500/20 active:scale-95 transition-all relative ${showParticipants ? 'bg-sky-500/20 text-sky-400' : 'text-white/80 hover:text-sky-400'}`}
-							title={canViewParticipantList ? 'Participants' : 'Participant list is hidden by host'}
-						>
-							<Users className="h-5 w-5 md:h-5 md:w-5" />
-							{allParticipants && allParticipants.length > 0 && (
-								<span className="absolute -top-1 -right-1 bg-sky-500 text-white text-[8px] md:text-[9px] font-bold px-1 md:px-1.5 rounded-full min-w-[14px] md:min-w-[16px] h-[14px] md:h-[16px] flex items-center justify-center border-2 border-[#141414]">
-									{allParticipants.length}
-								</span>
-							)}
-						</button>
-					</div>
-					)}
-					
-					{/* PiP */}
-					<div className="hidden md:flex flex-col items-center justify-center group">
-						<button
-							onClick={togglePiP}
-							className={`h-9 w-9 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl hover:bg-sky-500/20 transition-all ${isPiPActive ? 'bg-sky-500/20 text-sky-400' : 'text-white/80 hover:text-sky-400'}`}
-							title="Picture in Picture"
-						>
-							<PictureInPicture2 className="h-4 w-4 md:h-5 md:w-5" />
-						</button>
-					</div>
-
-					{/* Extend Session - Only show if timer is enabled AND user is host */}
-					{timerEnabled && isHost && (
-					<div className="hidden md:flex relative flex-col items-center justify-center group">
-						<button
-						onClick={(e) => {
-							e.stopPropagation();
-							setShowExtendMenu(!showExtendMenu);
-						}}
-						className="h-9 w-9 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl hover:bg-white/10 transition-all text-white/80 hover:text-white"
-						title="Extend Session"
-					>
-						<Timer className="h-4 w-4 md:h-5 md:w-5" />
-					</button>
-					
-							{showExtendMenu && (
-						<div 
-							className="absolute bottom-full mb-4 left-1/2 -translate-x-1/2 bg-[#1a1a1a] rounded-xl shadow-2xl border border-white/10 py-1 min-w-[140px] z-50 overflow-hidden"
-							onClick={(e) => e.stopPropagation()}
-						>
-						{[5, 10, 30].map((mins) => (
-							<button
-								key={mins}
-								onClick={() => {
-									if (hasExtended) {
-										showError('Already Extended', 'Session can only be extended once');
-										setShowExtendMenu(false);
-										return;
-									}
-									// Host directly extends the session
-									onExtendSession(mins);
-									showSuccess('⏱️ Session Extended!', `Session extended by ${mins} minutes`);
-									setShowExtendMenu(false);
-								}}
-								disabled={hasExtended}
-								className={`w-full px-4 py-2.5 text-left text-sm transition-colors flex items-center gap-2 ${
-									hasExtended 
-										? 'text-white/30 cursor-not-allowed' 
-										: 'text-white hover:bg-white/10'
-								}`}
-							>
-								<Clock className={`w-4 h-4 ${hasExtended ? 'text-white/20' : 'text-white/50'}`} />
-								<span>{mins} minutes</span>
-							</button>
-						))}
-					</div>
-				)}
-				</div>
-					)}
-				</div>
-			{/* RIGHT: End call */}
-			<div className="flex min-w-0 shrink-0 items-center justify-end gap-1.5 sm:gap-2">
-				<div className="relative shrink-0">
-					<Button
-						onClick={() => setShowEndMenu(!showEndMenu)}
-						className={`
-							h-11 md:h-11 px-4 md:px-6 rounded-lg md:rounded-xl font-semibold text-xs md:text-sm transition-all duration-200
-							flex items-center gap-1.5 md:gap-2 shadow-lg active:scale-95
-							${showEndMenu 
-								? 'bg-red-600 text-white shadow-red-600/20 scale-105' 
-								: 'bg-[#252525] text-red-500 hover:bg-red-600 hover:text-white hover:shadow-red-600/20 hover:scale-105 border border-white/5 hover:border-transparent'
-							}
-						`}
-					>
-						<PhoneOff className="h-4 w-4 md:h-4 md:w-4" />
-						<span className="hidden sm:inline">End</span>
-					</Button>
-
-					{showEndMenu && (
-						<>
-							<div className="fixed inset-0 z-[100]" onClick={() => setShowEndMenu(false)} />
-							<div className="absolute right-0 bottom-full mb-3 w-[240px] bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl z-[101] p-1.5 animate-in fade-in zoom-in-95 duration-200 slide-in-from-bottom-2">
-								{isHost && (
+												await localParticipant.setCameraEnabled(newState)
+											} catch (_err) { }
+										}}
+										className={`h-11 w-11 md:h-10 md:w-10 flex items-center justify-center rounded-lg hover:bg-sky-500/20 active:scale-95 transition-all ${(isCameraEnabled) ? 'text-white hover:text-sky-400' : 'bg-sky-500/10 text-sky-500 hover:text-sky-400'}`}
+										title="Toggle Camera"
+									>
+										{(isCameraEnabled) ? <Video className="h-5 w-5 md:h-5 md:w-5" /> : <VideoOff className="h-5 w-5 md:h-5 md:w-5" />}
+									</button>
+									<div className="hidden md:block w-px h-6 bg-white/10 mx-1" />
 									<button
 										onClick={() => {
-											onEndMeeting?.()
-											setShowEndMenu(false)
+											if (isMobileViewport) return
+											setShowBackgroundMenu(!showBackgroundMenu)
 										}}
-										className="w-full px-3 py-3 text-left text-sm rounded-xl flex items-center gap-3 transition-colors text-red-400 hover:bg-red-500/10 hover:text-red-300 group"
+										className="hidden md:flex h-10 w-6 items-center justify-center rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+										title="Video Settings"
 									>
-										<div className="h-8 w-8 rounded-full bg-red-500/10 flex items-center justify-center group-hover:bg-red-500/20 transition-colors">
-											<Power className="h-4 w-4" />
-										</div>
-										<div className="flex flex-col">
-											<span className="font-semibold">End for Everyone</span>
-										</div>
+										<ChevronUp className="h-3 w-3 text-white/70" />
 									</button>
-								)}
-								
-								{isHost && <div className="h-px bg-white/5 mx-2 my-1" />}
-								
+								</div>
+							</div>
+						)}
+					</div>
+
+					{/* CENTER: Main Controls */}
+					<div className="flex items-center gap-1 md:gap-3 flex-1 justify-center">
+
+						{/* Share Screen - hidden on mobile/guests (getDisplayMedia not supported) */}
+						{!isGuest && !isMobileViewport && (
+							<div className="flex flex-col items-center justify-center group">
 								<button
-									onClick={() => {
-										onLeave()
-										setShowEndMenu(false)
+									onClick={async () => {
+										if (!navigator.mediaDevices?.getDisplayMedia) {
+											showError('Not Supported', 'Screen sharing is not supported on this device or browser.')
+											return
+										}
+										try {
+											const newState = !isScreenShareEnabled
+											if (newState) {
+												// Enable screen share with audio capture
+												const optionsWithAudio = {
+													audio: {
+														echoCancellation: true,
+														noiseSuppression: true,
+														autoGainControl: true,
+													}
+												}
+												await localParticipant?.setScreenShareEnabled(newState, optionsWithAudio)
+											} else {
+												await localParticipant?.setScreenShareEnabled(newState)
+											}
+										} catch (err) {
+											const error = err as DOMException
+											if (error?.name === 'NotAllowedError') {
+												showError('Permission Denied', 'Screen sharing permission was denied.')
+											} else if (error?.name === 'NotSupportedError') {
+												showError('Not Supported', 'Screen sharing is not supported on this device or browser.')
+											} else {
+												showError('Screen Share Failed', 'Could not start screen sharing. Please try again.')
+											}
+										}
 									}}
-									className="w-full px-3 py-3 text-left text-sm rounded-xl flex items-center gap-3 transition-colors text-white/70 hover:bg-white/10 hover:text-white group"
+									className={`h-9 w-9 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl hover:bg-sky-500/20 transition-all ${isScreenShareEnabled ? 'bg-sky-500/20 text-sky-400' : 'text-white/80 hover:text-sky-400'}`}
+									title="Share Screen"
 								>
-									<div className="h-8 w-8 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-white/10 transition-colors">
-										<LogOut className="h-4 w-4" />
-									</div>
-									<div className="flex flex-col">
-										<span className="font-semibold">Leave Room</span>
-									</div>
+									{isScreenShareEnabled ? <MonitorOff className="h-4 w-4 md:h-5 md:w-5 font-bold" /> : <MonitorUp className="h-4 w-4 md:h-5 md:w-5" />}
 								</button>
 							</div>
-						</>
-					)}
-				</div>
-			</div>
-			</div>
+						)}
 
-			{/* Unified Sidebar - Tabbed Interface */}
-			<>
-				{/* Mobile Overlay Backdrop */}
-				{(showChat || showParticipants) && (
-					<div
-						className="fixed inset-0 bg-black/60 z-40 md:hidden"
-						onClick={() => {
-							setShowChat(false)
-							setShowParticipants(false)
-						}}
-					/>
-				)}
-				
-				{/* Sidebar Container */}
-				<div className={`fixed md:absolute right-0 top-0 bottom-0 w-full sm:w-[85%] md:w-96 bg-[#1a1a1a]/95 md:bg-[#1a1a1a]/95 backdrop-blur-md border-l border-white/10 z-[60] shadow-2xl flex flex-col transition-all duration-300 ${
-					(showChat || showParticipants)
+						{/* Chat */}
+						<div className={`flex flex-col items-center justify-center group ${(!canViewParticipantList && !isGuest) ? 'hidden' : ''}`}>
+							<button
+								onClick={() => {
+									if (!showChat) { setShowParticipants(false); setShowFlashPanel(false) }
+									setShowChat(!showChat)
+								}}
+								className={`h-11 w-11 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl hover:bg-sky-500/20 active:scale-95 transition-all relative ${showChat ? 'bg-sky-500/20 text-sky-400' : 'text-white/80 hover:text-sky-400'}`}
+								title="Chat"
+							>
+								<MessageSquare className="h-5 w-5 md:h-5 md:w-5" />
+							</button>
+						</div>
+
+						{/* Flash Messages (host only) */}
+						{isHost && (
+							<div className="flex flex-col items-center justify-center group">
+								<button
+									onClick={() => {
+										if (!showFlashPanel) { setShowChat(false); setShowParticipants(false) }
+										setShowFlashPanel((p) => !p)
+									}}
+									className={`h-11 w-11 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl hover:bg-yellow-500/20 active:scale-95 transition-all relative ${showFlashPanel ? 'bg-yellow-500/20 text-yellow-400' : 'text-white/80 hover:text-yellow-400'}`}
+									title="Flash Messages"
+								>
+									<Zap className="h-5 w-5 md:h-5 md:w-5" />
+									{activeFlashMessage && (
+										<span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-yellow-400 border-2 border-[#141414] animate-pulse" />
+									)}
+								</button>
+							</div>
+						)}
+
+						{!isGuest && (
+							<div className="flex flex-col items-center justify-center group">
+								{/* Participants */}
+								<button
+									onClick={() => {
+										if (!canViewParticipantList) return
+										if (!showParticipants) { setShowChat(false); setShowFlashPanel(false) }
+										setShowParticipants(!showParticipants)
+									}}
+									disabled={!canViewParticipantList}
+									className={`h-11 w-11 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl hover:bg-sky-500/20 active:scale-95 transition-all relative ${showParticipants ? 'bg-sky-500/20 text-sky-400' : 'text-white/80 hover:text-sky-400'}`}
+									title={canViewParticipantList ? 'Participants' : 'Participant list is hidden by host'}
+								>
+									<Users className="h-5 w-5 md:h-5 md:w-5" />
+									{allParticipants && allParticipants.length > 0 && (
+										<span className="absolute -top-1 -right-1 bg-sky-500 text-white text-[8px] md:text-[9px] font-bold px-1 md:px-1.5 rounded-full min-w-[14px] md:min-w-[16px] h-[14px] md:h-[16px] flex items-center justify-center border-2 border-[#141414]">
+											{allParticipants.length}
+										</span>
+									)}
+								</button>
+							</div>
+						)}
+
+						{/* PiP */}
+						<div className="hidden md:flex flex-col items-center justify-center group">
+							<button
+								onClick={togglePiP}
+								className={`h-9 w-9 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl hover:bg-sky-500/20 transition-all ${isPiPActive ? 'bg-sky-500/20 text-sky-400' : 'text-white/80 hover:text-sky-400'}`}
+								title="Picture in Picture"
+							>
+								<PictureInPicture2 className="h-4 w-4 md:h-5 md:w-5" />
+							</button>
+						</div>
+
+						{/* Extend Session - Only show if timer is enabled AND user is host */}
+						{timerEnabled && isHost && (
+							<div className="hidden md:flex relative flex-col items-center justify-center group">
+								<button
+									onClick={(e) => {
+										e.stopPropagation();
+										setShowExtendMenu(!showExtendMenu);
+									}}
+									className="h-9 w-9 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl hover:bg-white/10 transition-all text-white/80 hover:text-white"
+									title="Extend Session"
+								>
+									<Timer className="h-4 w-4 md:h-5 md:w-5" />
+								</button>
+
+								{showExtendMenu && (
+									<div
+										className="absolute bottom-full mb-4 left-1/2 -translate-x-1/2 bg-[#1a1a1a] rounded-xl shadow-2xl border border-white/10 py-1 min-w-[140px] z-50 overflow-hidden"
+										onClick={(e) => e.stopPropagation()}
+									>
+										{[5, 10, 30].map((mins) => (
+											<button
+												key={mins}
+												onClick={() => {
+													if (hasExtended) {
+														showError('Already Extended', 'Session can only be extended once');
+														setShowExtendMenu(false);
+														return;
+													}
+													// Host directly extends the session
+													onExtendSession(mins);
+													showSuccess('⏱️ Session Extended!', `Session extended by ${mins} minutes`);
+													setShowExtendMenu(false);
+												}}
+												disabled={hasExtended}
+												className={`w-full px-4 py-2.5 text-left text-sm transition-colors flex items-center gap-2 ${hasExtended
+													? 'text-white/30 cursor-not-allowed'
+													: 'text-white hover:bg-white/10'
+													}`}
+											>
+												<Clock className={`w-4 h-4 ${hasExtended ? 'text-white/20' : 'text-white/50'}`} />
+												<span>{mins} minutes</span>
+											</button>
+										))}
+									</div>
+								)}
+							</div>
+						)}
+					</div>
+					{/* RIGHT: End call */}
+					<div className="flex min-w-0 shrink-0 items-center justify-end gap-1.5 sm:gap-2">
+						<div className="relative shrink-0">
+							<Button
+								onClick={() => setShowEndMenu(!showEndMenu)}
+								className={`
+							h-11 md:h-11 px-4 md:px-6 rounded-lg md:rounded-xl font-semibold text-xs md:text-sm transition-all duration-200
+							flex items-center gap-1.5 md:gap-2 shadow-lg active:scale-95
+							${showEndMenu
+										? 'bg-red-600 text-white shadow-red-600/20 scale-105'
+										: 'bg-[#252525] text-red-500 hover:bg-red-600 hover:text-white hover:shadow-red-600/20 hover:scale-105 border border-white/5 hover:border-transparent'
+									}
+						`}
+							>
+								<PhoneOff className="h-4 w-4 md:h-4 md:w-4" />
+								<span className="hidden sm:inline">End</span>
+							</Button>
+
+							{showEndMenu && (
+								<>
+									<div className="fixed inset-0 z-[100]" onClick={() => setShowEndMenu(false)} />
+									<div className="absolute right-0 bottom-full mb-3 w-[240px] bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl z-[101] p-1.5 animate-in fade-in zoom-in-95 duration-200 slide-in-from-bottom-2">
+										{isHost && (
+											<button
+												onClick={() => {
+													onEndMeeting?.()
+													setShowEndMenu(false)
+												}}
+												className="w-full px-3 py-3 text-left text-sm rounded-xl flex items-center gap-3 transition-colors text-red-400 hover:bg-red-500/10 hover:text-red-300 group"
+											>
+												<div className="h-8 w-8 rounded-full bg-red-500/10 flex items-center justify-center group-hover:bg-red-500/20 transition-colors">
+													<Power className="h-4 w-4" />
+												</div>
+												<div className="flex flex-col">
+													<span className="font-semibold">End for Everyone</span>
+												</div>
+											</button>
+										)}
+
+										{isHost && <div className="h-px bg-white/5 mx-2 my-1" />}
+
+										<button
+											onClick={() => {
+												onLeave()
+												setShowEndMenu(false)
+											}}
+											className="w-full px-3 py-3 text-left text-sm rounded-xl flex items-center gap-3 transition-colors text-white/70 hover:bg-white/10 hover:text-white group"
+										>
+											<div className="h-8 w-8 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-white/10 transition-colors">
+												<LogOut className="h-4 w-4" />
+											</div>
+											<div className="flex flex-col">
+												<span className="font-semibold">Leave Room</span>
+											</div>
+										</button>
+									</div>
+								</>
+							)}
+						</div>
+					</div>
+				</div>
+
+				{/* Unified Sidebar - Tabbed Interface */}
+				<>
+					{/* Mobile Overlay Backdrop */}
+					{(showChat || showParticipants) && (
+						<div
+							className="fixed inset-0 bg-black/60 z-40 md:hidden"
+							onClick={() => {
+								setShowChat(false)
+								setShowParticipants(false)
+							}}
+						/>
+					)}
+
+					{/* Sidebar Container */}
+					<div className={`fixed md:absolute right-0 top-0 bottom-0 w-full sm:w-[85%] md:w-96 bg-[#1a1a1a]/95 md:bg-[#1a1a1a]/95 backdrop-blur-md border-l border-white/10 z-[60] shadow-2xl flex flex-col transition-all duration-300 ${(showChat || showParticipants)
 						? 'translate-x-0 opacity-100 pointer-events-auto'
 						: 'translate-x-full opacity-0 pointer-events-none'
-				}`}>
+						}`}>
 						{/* Drag handle for mobile */}
 						<div className="md:hidden flex justify-center py-2 relative z-10">
 							<div className="w-10 h-1 bg-white/30 rounded-full" />
@@ -3811,8 +3918,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 							{/* Chat View */}
 							<div className={`absolute inset-0 flex flex-col bg-gradient-to-b from-[#0a0a0a] to-[#0f0f0f] ${showChat ? '' : 'hidden'}`}>
 								{channelId ? (
-									<ChatWidget 
-										channelId={channelId} 
+									<ChatWidget
+										channelId={channelId}
 										chatDisabled={chatDisabled}
 										recipients={chatRecipients}
 										hostUserId={hostUser?.id}
@@ -3826,7 +3933,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 											}}
 										guestToken={guestToken}
 										guestEmail={isGuest ? (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('guestEmail') : null) : null}
-										className="flex-1 min-h-0 overflow-hidden" 
+										className="flex-1 min-h-0 overflow-hidden"
 									/>
 								) : (
 									<div className="flex-1 flex items-center justify-center p-6">
@@ -3844,429 +3951,419 @@ const VideoRoomContent = memo(function VideoRoomContent({
 
 							{/* Participants View */}
 							<div className={`absolute inset-0 flex flex-col bg-gradient-to-b from-[#0a0a0a] to-[#0f0f0f] ${showChat ? 'hidden' : ''}`}>
-									{/* Host Controls Section - Only visible to hosts */}
-									{isHost && (
-										<div className="px-4 py-3 border-b border-white/10 bg-gradient-to-br from-[#1f1f1f] to-[#1a1a1a] flex-shrink-0">
-											<div className="flex items-center gap-2 mb-3">
-												<div className="h-5 w-5 rounded bg-white/10 flex items-center justify-center">
-													<Settings2 className="h-3 w-3 text-white/70" />
-												</div>
-												<h3 className="text-xs font-bold text-white/90 uppercase tracking-wider">Restrict Participants</h3>
+								{/* Host Controls Section - Only visible to hosts */}
+								{isHost && (
+									<div className="px-4 py-3 border-b border-white/10 bg-gradient-to-br from-[#1f1f1f] to-[#1a1a1a] flex-shrink-0">
+										<div className="flex items-center gap-2 mb-3">
+											<div className="h-5 w-5 rounded bg-white/10 flex items-center justify-center">
+												<Settings2 className="h-3 w-3 text-white/70" />
 											</div>
-											
-											<div className="grid grid-cols-4 gap-2">
-												{/* Mute All / Unmute All Toggle */}
-												<Button
-													onClick={() => {
-														const isCurrentlyLocked = permissions?.allowAudio === false
-														if (isCurrentlyLocked) {
-															onUnmuteAll?.()
-															onLockAudio?.(false)
-															showSuccess('Audio Unlocked', 'Participants can now unmute their microphones')
-														} else {
-															onMuteAll?.()
-															onLockAudio?.(true)
-															showSuccess('Audio Locked', 'All participants have been muted')
-														}
-													}}
-													variant="ghost"
-													className={`flex flex-col items-center justify-center h-auto py-2 gap-1 rounded-lg border transition-all ${
-														permissions?.allowAudio === false
-															? 'bg-sky-500/10 text-sky-500 border-sky-500/20 hover:bg-sky-500/20' 
-															: 'bg-white/5 text-white/70 border-white/5 hover:bg-white/10 hover:text-white'
-													}`}
-													title={permissions?.allowAudio === false ? 'Unlock audio for all participants' : 'Mute all and lock audio'}
-												>
-													{permissions?.allowAudio === false ? <Lock className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
-													<span className="text-[10px] font-medium">{permissions?.allowAudio === false ? 'Unlock Audio' : 'Mute All'}</span>
-												</Button>
-
-												{/* Stop Video / Enable Video Toggle */}
-												<Button
-													onClick={() => {
-														const isCurrentlyLocked = permissions?.allowVideo === false
-														if (isCurrentlyLocked) {
-															onEnableVideoAll?.()
-															onLockVideo?.(false)
-															showSuccess('Video Unlocked', 'Participants can now enable their cameras')
-														} else {
-															onDisableVideoAll?.()
-															onLockVideo?.(true)
-															showSuccess('Video Locked', 'All participant cameras have been disabled')
-														}
-													}}
-													variant="ghost"
-													className={`flex flex-col items-center justify-center h-auto py-2 gap-1 rounded-lg border transition-all ${
-														permissions?.allowVideo === false
-															? 'bg-sky-500/10 text-sky-500 border-sky-500/20 hover:bg-sky-500/20' 
-															: 'bg-white/5 text-white/70 border-white/5 hover:bg-white/10 hover:text-white'
-													}`}
-													title={permissions?.allowVideo === false ? 'Unlock video for all participants' : 'Disable all video and lock'}
-												>
-													{permissions?.allowVideo === false ? <Lock className="h-4 w-4" /> : <CameraOff className="h-4 w-4" />}
-													<span className="text-[10px] font-medium">{permissions?.allowVideo === false ? 'Unlock Video' : 'Stop Video'}</span>
-												</Button>
-
-												{/* Lock Chat */}
-												<Button
-													onClick={() => {
-														const isCurrentlyDisabled = chatDisabled || permissions?.allowChat === false
-														if (isCurrentlyDisabled) {
-															onToggleChat?.(false)
-															onLockChat?.(false)
-															showSuccess('Chat Unlocked', 'Participants can now send messages')
-														} else {
-															onToggleChat?.(true)
-															onLockChat?.(true)
-															showSuccess('Chat Locked', 'Participants can no longer send messages')
-														}
-													}}
-													variant="ghost"
-													className={`flex flex-col items-center justify-center h-auto py-2 gap-1 rounded-lg border transition-all ${
-														(chatDisabled || permissions?.allowChat === false)
-															? 'bg-sky-500/10 text-sky-500 border-sky-500/20 hover:bg-sky-500/20' 
-															: 'bg-white/5 text-white/70 border-white/5 hover:bg-white/10 hover:text-white'
-													}`}
-													title={chatDisabled ? 'Enable chat' : 'Disable chat'}
-												>
-													{(chatDisabled || permissions?.allowChat === false) ? (
-														<Lock className="h-4 w-4" />
-													) : (
-														<MessageSquare className="h-4 w-4" />
-													)}
-													<span className="text-[10px] font-medium">
-														{(chatDisabled || permissions?.allowChat === false) ? 'Unlock Chat' : 'Lock Chat'}
-													</span>
-												</Button>
-
-												{/* Restrict Chat to Host Only */}
-												<Button
-													onClick={() => {
-														const isCurrentlyRestricted = roomSettings?.chatRestrictToHostOnly === true
-														onRestrictChatToHostOnly?.(!isCurrentlyRestricted)
-														showSuccess(
-															isCurrentlyRestricted ? 'Chat Unrestricted' : 'Chat Restricted to Host Only',
-															isCurrentlyRestricted
-																? 'Participants can now send messages to everyone'
-																: 'Participants can only send messages to the host',
-														)
-													}}
-													variant="ghost"
-													className={`flex flex-col items-center justify-center h-auto py-2 gap-1 rounded-lg border transition-all ${
-														roomSettings?.chatRestrictToHostOnly
-															? 'bg-sky-500/10 text-sky-500 border-sky-500/20 hover:bg-sky-500/20' 
-															: 'bg-white/5 text-white/70 border-white/5 hover:bg-white/10 hover:text-white'
-													}`}
-													title={roomSettings?.chatRestrictToHostOnly ? 'Allow participants to send to everyone' : 'Restrict participants to send to host only'}
-												>
-													{roomSettings?.chatRestrictToHostOnly ? (
-														<Lock className="h-4 w-4" />
-													) : (
-														<MessageSquare className="h-4 w-4" />
-													)}
-													<span className="text-[10px] font-medium">
-														{roomSettings?.chatRestrictToHostOnly ? 'Unrestrict Chat' : 'Host Only'}
-													</span>
-												</Button>
-
-												<Button
-													onClick={() => {
-														const isCurrentlyHidden = roomSettings?.hideParticipantList === true
-														onHideParticipantList?.(!isCurrentlyHidden)
-														showSuccess(
-															isCurrentlyHidden ? 'Participant List Visible' : 'Participant List Hidden',
-															isCurrentlyHidden
-																? 'Participants can now open the participant list'
-																: 'Participants can no longer open the participant list',
-														)
-													}}
-													variant="ghost"
-													className={`flex flex-col items-center justify-center h-auto py-2 gap-1 rounded-lg border transition-all ${
-														roomSettings?.hideParticipantList
-															? 'bg-sky-500/10 text-sky-500 border-sky-500/20 hover:bg-sky-500/20'
-															: 'bg-white/5 text-white/70 border-white/5 hover:bg-white/10 hover:text-white'
-													}`}
-													title={
-														roomSettings?.hideParticipantList
-															? 'Show participant list to participants'
-															: 'Hide participant list from participants'
-													}
-												>
-													{roomSettings?.hideParticipantList ? <Lock className="h-4 w-4" /> : <Users className="h-4 w-4" />}
-													<span className="text-[10px] font-medium">
-														{roomSettings?.hideParticipantList ? 'Show List' : 'Hide List'}
-													</span>
-												</Button>
-											</div>
+											<h3 className="text-xs font-bold text-white/90 uppercase tracking-wider">Restrict Participants</h3>
 										</div>
-									)}
-									
-									<div className="flex-1 overflow-y-auto px-3 py-4 custom-scrollbar">
-										<ParticipantList
-											isHost={isHost}
-											onMuteParticipant={onMuteParticipant}
-											onUnmuteParticipant={onUnmuteParticipant}
-											onDisableVideoParticipant={onDisableVideoParticipant}
-											onEnableVideoParticipant={onEnableVideoParticipant}
-											onLockUserAudio={onLockUserAudio}
-											onLockUserVideo={onLockUserVideo}
-											onLockUserChatAudience={onLockUserChatAudience}
-											onRequestAudioOn={onRequestAudioOn}
-											onRequestVideoOn={onRequestVideoOn}
-											participantChatLocks={participantChatLocks}
-											pendingParticipantRequests={pendingParticipantRequests}
-											onApproveAudioRequest={hostRespondParticipantAudio}
-											onApproveVideoRequest={hostRespondParticipantVideo}
-											onPromoteToCohost={onPromoteToCohost}
-										/>
+
+										<div className="grid grid-cols-4 gap-2">
+											{/* Mute All / Unmute All Toggle */}
+											<Button
+												onClick={() => {
+													const isCurrentlyLocked = permissions?.allowAudio === false
+													if (isCurrentlyLocked) {
+														onUnmuteAll?.()
+														onLockAudio?.(false)
+														showSuccess('Audio Unlocked', 'Participants can now unmute their microphones')
+													} else {
+														onMuteAll?.()
+														onLockAudio?.(true)
+														showSuccess('Audio Locked', 'All participants have been muted')
+													}
+												}}
+												variant="ghost"
+												className={`flex flex-col items-center justify-center h-auto py-2 gap-1 rounded-lg border transition-all ${permissions?.allowAudio === false
+													? 'bg-sky-500/10 text-sky-500 border-sky-500/20 hover:bg-sky-500/20'
+													: 'bg-white/5 text-white/70 border-white/5 hover:bg-white/10 hover:text-white'
+													}`}
+												title={permissions?.allowAudio === false ? 'Unlock audio for all participants' : 'Mute all and lock audio'}
+											>
+												{permissions?.allowAudio === false ? <Lock className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
+												<span className="text-[10px] font-medium">{permissions?.allowAudio === false ? 'Unlock Audio' : 'Mute All'}</span>
+											</Button>
+
+											{/* Stop Video / Enable Video Toggle */}
+											<Button
+												onClick={() => {
+													const isCurrentlyLocked = permissions?.allowVideo === false
+													if (isCurrentlyLocked) {
+														onEnableVideoAll?.()
+														onLockVideo?.(false)
+														showSuccess('Video Unlocked', 'Participants can now enable their cameras')
+													} else {
+														onDisableVideoAll?.()
+														onLockVideo?.(true)
+														showSuccess('Video Locked', 'All participant cameras have been disabled')
+													}
+												}}
+												variant="ghost"
+												className={`flex flex-col items-center justify-center h-auto py-2 gap-1 rounded-lg border transition-all ${permissions?.allowVideo === false
+													? 'bg-sky-500/10 text-sky-500 border-sky-500/20 hover:bg-sky-500/20'
+													: 'bg-white/5 text-white/70 border-white/5 hover:bg-white/10 hover:text-white'
+													}`}
+												title={permissions?.allowVideo === false ? 'Unlock video for all participants' : 'Disable all video and lock'}
+											>
+												{permissions?.allowVideo === false ? <Lock className="h-4 w-4" /> : <CameraOff className="h-4 w-4" />}
+												<span className="text-[10px] font-medium">{permissions?.allowVideo === false ? 'Unlock Video' : 'Stop Video'}</span>
+											</Button>
+
+											{/* Lock Chat */}
+											<Button
+												onClick={() => {
+													const isCurrentlyDisabled = chatDisabled || permissions?.allowChat === false
+													if (isCurrentlyDisabled) {
+														onToggleChat?.(false)
+														onLockChat?.(false)
+														showSuccess('Chat Unlocked', 'Participants can now send messages')
+													} else {
+														onToggleChat?.(true)
+														onLockChat?.(true)
+														showSuccess('Chat Locked', 'Participants can no longer send messages')
+													}
+												}}
+												variant="ghost"
+												className={`flex flex-col items-center justify-center h-auto py-2 gap-1 rounded-lg border transition-all ${(chatDisabled || permissions?.allowChat === false)
+													? 'bg-sky-500/10 text-sky-500 border-sky-500/20 hover:bg-sky-500/20'
+													: 'bg-white/5 text-white/70 border-white/5 hover:bg-white/10 hover:text-white'
+													}`}
+												title={chatDisabled ? 'Enable chat' : 'Disable chat'}
+											>
+												{(chatDisabled || permissions?.allowChat === false) ? (
+													<Lock className="h-4 w-4" />
+												) : (
+													<MessageSquare className="h-4 w-4" />
+												)}
+												<span className="text-[10px] font-medium">
+													{(chatDisabled || permissions?.allowChat === false) ? 'Unlock Chat' : 'Lock Chat'}
+												</span>
+											</Button>
+
+											{/* Restrict Chat to Host Only */}
+											<Button
+												onClick={() => {
+													const isCurrentlyRestricted = roomSettings?.chatRestrictToHostOnly === true
+													onRestrictChatToHostOnly?.(!isCurrentlyRestricted)
+													showSuccess(
+														isCurrentlyRestricted ? 'Chat Unrestricted' : 'Chat Restricted to Host Only',
+														isCurrentlyRestricted
+															? 'Participants can now send messages to everyone'
+															: 'Participants can only send messages to the host',
+													)
+												}}
+												variant="ghost"
+												className={`flex flex-col items-center justify-center h-auto py-2 gap-1 rounded-lg border transition-all ${roomSettings?.chatRestrictToHostOnly
+													? 'bg-sky-500/10 text-sky-500 border-sky-500/20 hover:bg-sky-500/20'
+													: 'bg-white/5 text-white/70 border-white/5 hover:bg-white/10 hover:text-white'
+													}`}
+												title={roomSettings?.chatRestrictToHostOnly ? 'Allow participants to send to everyone' : 'Restrict participants to send to host only'}
+											>
+												{roomSettings?.chatRestrictToHostOnly ? (
+													<Lock className="h-4 w-4" />
+												) : (
+													<MessageSquare className="h-4 w-4" />
+												)}
+												<span className="text-[10px] font-medium">
+													{roomSettings?.chatRestrictToHostOnly ? 'Unrestrict Chat' : 'Host Only'}
+												</span>
+											</Button>
+
+											<Button
+												onClick={() => {
+													const isCurrentlyHidden = roomSettings?.hideParticipantList === true
+													onHideParticipantList?.(!isCurrentlyHidden)
+													showSuccess(
+														isCurrentlyHidden ? 'Participant List Visible' : 'Participant List Hidden',
+														isCurrentlyHidden
+															? 'Participants can now open the participant list'
+															: 'Participants can no longer open the participant list',
+													)
+												}}
+												variant="ghost"
+												className={`flex flex-col items-center justify-center h-auto py-2 gap-1 rounded-lg border transition-all ${roomSettings?.hideParticipantList
+													? 'bg-sky-500/10 text-sky-500 border-sky-500/20 hover:bg-sky-500/20'
+													: 'bg-white/5 text-white/70 border-white/5 hover:bg-white/10 hover:text-white'
+													}`}
+												title={
+													roomSettings?.hideParticipantList
+														? 'Show participant list to participants'
+														: 'Hide participant list from participants'
+												}
+											>
+												{roomSettings?.hideParticipantList ? <Lock className="h-4 w-4" /> : <Users className="h-4 w-4" />}
+												<span className="text-[10px] font-medium">
+													{roomSettings?.hideParticipantList ? 'Show List' : 'Hide List'}
+												</span>
+											</Button>
+										</div>
 									</div>
+								)}
+
+								<div className="flex-1 overflow-y-auto px-3 py-4 custom-scrollbar">
+									<ParticipantList
+										isHost={isHost}
+										onMuteParticipant={onMuteParticipant}
+										onUnmuteParticipant={onUnmuteParticipant}
+										onDisableVideoParticipant={onDisableVideoParticipant}
+										onEnableVideoParticipant={onEnableVideoParticipant}
+										onLockUserAudio={onLockUserAudio}
+										onLockUserVideo={onLockUserVideo}
+										onLockUserChatAudience={onLockUserChatAudience}
+										onRequestAudioOn={onRequestAudioOn}
+										onRequestVideoOn={onRequestVideoOn}
+										participantChatLocks={participantChatLocks}
+										pendingParticipantRequests={pendingParticipantRequests}
+										onApproveAudioRequest={hostRespondParticipantAudio}
+										onApproveVideoRequest={hostRespondParticipantVideo}
+										onPromoteToCohost={onPromoteToCohost}
+									/>
 								</div>
+							</div>
 						</div>
 					</div>
-				{/* Flash Panel sidebar (host only) */}
-				{isHost && (
-					<>
-						{/* Mobile backdrop */}
-						{showFlashPanel && (
-							<div
-								className="fixed inset-0 bg-black/60 z-40 md:hidden"
-								onClick={() => setShowFlashPanel(false)}
-							/>
-						)}
-						{/* Flash sidebar panel */}
-						<div className={`fixed md:absolute right-0 top-0 bottom-0 w-full sm:w-[85%] md:w-96 bg-[#1a1a1a]/95 backdrop-blur-md border-l border-white/10 z-[60] shadow-2xl flex flex-col transition-all duration-300 ${
-							showFlashPanel
+					{/* Flash Panel sidebar (host only) */}
+					{isHost && (
+						<>
+							{/* Mobile backdrop */}
+							{showFlashPanel && (
+								<div
+									className="fixed inset-0 bg-black/60 z-40 md:hidden"
+									onClick={() => setShowFlashPanel(false)}
+								/>
+							)}
+							{/* Flash sidebar panel */}
+							<div className={`fixed md:absolute right-0 top-0 bottom-0 w-full sm:w-[85%] md:w-96 bg-[#1a1a1a]/95 backdrop-blur-md border-l border-white/10 z-[60] shadow-2xl flex flex-col transition-all duration-300 ${showFlashPanel
 								? 'translate-x-0 opacity-100 pointer-events-auto'
 								: 'translate-x-full opacity-0 pointer-events-none'
-						}`}>
-							{/* Header */}
-							<div className="h-14 md:h-16 bg-gradient-to-b from-[#1a1a1a] to-[#1a1a1a]/95 border-b border-white/10 flex items-center justify-between px-4 md:px-6 flex-shrink-0">
-								<div className="flex items-center gap-2 md:gap-3">
-									<Zap className="h-4 w-4 md:h-5 md:w-5 text-yellow-400" />
-									<span className="text-white font-semibold text-base md:text-lg">Flash Messages</span>
+								}`}>
+								{/* Header */}
+								<div className="h-14 md:h-16 bg-gradient-to-b from-[#1a1a1a] to-[#1a1a1a]/95 border-b border-white/10 flex items-center justify-between px-4 md:px-6 flex-shrink-0">
+									<div className="flex items-center gap-2 md:gap-3">
+										<Zap className="h-4 w-4 md:h-5 md:w-5 text-yellow-400" />
+										<span className="text-white font-semibold text-base md:text-lg">Flash Messages</span>
+									</div>
+									<button
+										onClick={() => setShowFlashPanel(false)}
+										className="h-7 w-7 md:h-8 md:w-8 p-0 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 rounded-full transition-colors"
+									>
+										<X className="h-3.5 w-3.5 md:h-4 md:w-4" />
+									</button>
 								</div>
+								{/* Body */}
+								<div className="flex-1 overflow-y-auto p-3 md:p-4">
+									<QuestionManager
+										questions={flashQuestions ?? []}
+										onUploadList={onFlashUploadList ?? (() => { })}
+										onUpdateQuestion={onFlashUpdateQuestion ?? (() => { })}
+										onReorder={onFlashReorder ?? (() => { })}
+										onDeleteQuestion={onFlashDeleteQuestion ?? (() => { })}
+										onFlashQuestion={onFlashShowQuestion ?? (() => { })}
+										onFlashAdHoc={onFlashShowAdHoc ?? (() => { })}
+										onDismissForAll={onFlashDismissForAll ?? (() => { })}
+										isFlashActive={!!activeFlashMessage}
+									/>
+								</div>
+							</div>
+						</>
+					)}
+				</>
+			</div>
+
+			{/* Background Effects Popup - Floating Panel */}
+			{showBackgroundMenu && !isMobileViewport && (
+				<div className="fixed bottom-20 left-1/2 -translate-x-1/2 md:left-[140px] md:translate-x-0 z-[50] animate-in slide-in-from-bottom-5 zoom-in-95 fade-in duration-200">
+					{/* Popup card */}
+					<div className="bg-[#1a1a1a]/95 backdrop-blur-2xl rounded-xl md:rounded-2xl shadow-2xl border border-white/10 w-[280px] md:w-[300px] overflow-hidden">
+						{/* Header */}
+						<div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-white/5">
+							<div className="flex items-center gap-2">
+								<Sparkles className="w-4 h-4 text-[#00DC6E]" />
+								<span className="text-sm font-semibold text-white">Background Effects</span>
+							</div>
+							<button
+								onClick={() => setShowBackgroundMenu(false)}
+								className="h-6 w-6 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-colors"
+							>
+								<X className="w-3.5 h-3.5" />
+							</button>
+						</div>
+
+						<div className="p-4 space-y-4">
+							{/* Type Selector (Segmented Control) */}
+							<div className="flex p-1 bg-black/40 rounded-lg">
 								<button
-									onClick={() => setShowFlashPanel(false)}
-									className="h-7 w-7 md:h-8 md:w-8 p-0 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 rounded-full transition-colors"
+									onClick={() => applyBackgroundEffect('none')}
+									className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium rounded-md transition-all ${backgroundMode === 'none'
+										? 'bg-[#3d3d3d] text-white shadow-sm ring-1 ring-white/10'
+										: 'text-white/60 hover:text-white hover:bg-white/5'
+										}`}
 								>
-									<X className="h-3.5 w-3.5 md:h-4 md:w-4" />
+									<Ban className="w-3 h-3" />
+									None
+								</button>
+								<button
+									onClick={() => applyBackgroundEffect('blur')}
+									className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium rounded-md transition-all ${backgroundMode === 'blur'
+										? 'bg-[#3d3d3d] text-white shadow-sm ring-1 ring-white/10'
+										: 'text-white/60 hover:text-white hover:bg-white/5'
+										}`}
+								>
+									<Aperture className="w-3 h-3" />
+									Blur
+								</button>
+								<button
+									onClick={() => applyBackgroundEffect('virtual')}
+									className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium rounded-md transition-all ${backgroundMode === 'virtual'
+										? 'bg-[#3d3d3d] text-white shadow-sm ring-1 ring-white/10'
+										: 'text-white/60 hover:text-white hover:bg-white/5'
+										}`}
+								>
+									<ImageIcon className="w-3 h-3" />
+									Image
 								</button>
 							</div>
-							{/* Body */}
-							<div className="flex-1 overflow-y-auto p-3 md:p-4">
-								<QuestionManager
-									questions={flashQuestions ?? []}
-									onUploadList={onFlashUploadList ?? (() => {})}
-									onUpdateQuestion={onFlashUpdateQuestion ?? (() => {})}
-									onReorder={onFlashReorder ?? (() => {})}
-									onDeleteQuestion={onFlashDeleteQuestion ?? (() => {})}
-									onFlashQuestion={onFlashShowQuestion ?? (() => {})}
-									onFlashAdHoc={onFlashShowAdHoc ?? (() => {})}
-									onDismissForAll={onFlashDismissForAll ?? (() => {})}
-									isFlashActive={!!activeFlashMessage}
-								/>
-							</div>
-						</div>
-					</>
-				)}
-			</>
-		</div>
 
-		{/* Background Effects Popup - Floating Panel */}
-		{showBackgroundMenu && !isMobileViewport && (
-			<div className="fixed bottom-20 left-1/2 -translate-x-1/2 md:left-[140px] md:translate-x-0 z-[50] animate-in slide-in-from-bottom-5 zoom-in-95 fade-in duration-200">
-				{/* Popup card */}
-				<div className="bg-[#1a1a1a]/95 backdrop-blur-2xl rounded-xl md:rounded-2xl shadow-2xl border border-white/10 w-[280px] md:w-[300px] overflow-hidden">
-					{/* Header */}
-					<div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-white/5">
-						<div className="flex items-center gap-2">
-							<Sparkles className="w-4 h-4 text-[#00DC6E]" />
-							<span className="text-sm font-semibold text-white">Background Effects</span>
-						</div>
-						<button
-							onClick={() => setShowBackgroundMenu(false)}
-							className="h-6 w-6 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-colors"
-						>
-							<X className="w-3.5 h-3.5" />
-						</button>
-					</div>
-					
-					<div className="p-4 space-y-4">
-						{/* Type Selector (Segmented Control) */}
-						<div className="flex p-1 bg-black/40 rounded-lg">
-							<button
-								onClick={() => applyBackgroundEffect('none')}
-								className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium rounded-md transition-all ${
-									backgroundMode === 'none' 
-										? 'bg-[#3d3d3d] text-white shadow-sm ring-1 ring-white/10' 
-										: 'text-white/60 hover:text-white hover:bg-white/5'
-								}`}
-							>
-								<Ban className="w-3 h-3" />
-								None
-							</button>
-							<button
-								onClick={() => applyBackgroundEffect('blur')}
-								className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium rounded-md transition-all ${
-									backgroundMode === 'blur' 
-										? 'bg-[#3d3d3d] text-white shadow-sm ring-1 ring-white/10' 
-										: 'text-white/60 hover:text-white hover:bg-white/5'
-								}`}
-							>
-								<Aperture className="w-3 h-3" />
-								Blur
-							</button>
-							<button
-								onClick={() => applyBackgroundEffect('virtual')}
-								className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium rounded-md transition-all ${
-									backgroundMode === 'virtual' 
-										? 'bg-[#3d3d3d] text-white shadow-sm ring-1 ring-white/10' 
-										: 'text-white/60 hover:text-white hover:bg-white/5'
-								}`}
-							>
-								<ImageIcon className="w-3 h-3" />
-								Image
-							</button>
-						</div>
-
-						{/* Dynamic Controls */}
-						<div className="min-h-[100px]">
-							{backgroundMode === 'none' && (
-								<div className="h-[100px] flex flex-col items-center justify-center text-center text-white/40 border-2 border-dashed border-white/5 rounded-xl">
-									<p className="text-xs">No effect applied</p>
-								</div>
-							)}
-
-							{backgroundMode === 'blur' && (
-								<div className="space-y-3 animate-in fade-in duration-200">
-									<div className="flex items-center justify-between">
-										<label className="text-xs font-medium text-white/80">Blur Intensity</label>
-										<span className="text-[10px] font-mono bg-white/10 px-1.5 py-0.5 rounded text-[#00DC6E]">{blurAmount}</span>
+							{/* Dynamic Controls */}
+							<div className="min-h-[100px]">
+								{backgroundMode === 'none' && (
+									<div className="h-[100px] flex flex-col items-center justify-center text-center text-white/40 border-2 border-dashed border-white/5 rounded-xl">
+										<p className="text-xs">No effect applied</p>
 									</div>
-									<input
-										type="range"
-										min="1"
-										max="20"
-										step="1"
-										value={blurAmount}
-										onChange={(e) => handleBlurSliderChange(parseInt(e.target.value))}
-										className="w-full h-1.5 bg-white/20 rounded-lg appearance-none cursor-pointer slider-green blur-slider"
-									/>
-									<div className="flex justify-between text-[10px] text-white/40">
-										<span>Soft</span>
-										<span>Strong</span>
-									</div>
-								</div>
-							)}
+								)}
 
-							{backgroundMode === 'virtual' && (
-								<div className="animate-in fade-in duration-200">
-									<p className="text-xs font-medium text-white/50 mb-2">Select Image</p>
-									<div className="grid grid-cols-3 gap-2 max-h-[180px] overflow-y-auto pr-1 custom-scrollbar">
-										{VIRTUAL_BACKGROUNDS.map((bg) => (
-											<button
-												key={bg.id}
-												onClick={() => {
-													setSelectedVirtualBg(bg.id)
-													applyBackgroundEffect('virtual')
-												}}
-												className={`relative aspect-video rounded-lg overflow-hidden transition-all group ${
-													selectedVirtualBg === bg.id
+								{backgroundMode === 'blur' && (
+									<div className="space-y-3 animate-in fade-in duration-200">
+										<div className="flex items-center justify-between">
+											<label className="text-xs font-medium text-white/80">Blur Intensity</label>
+											<span className="text-[10px] font-mono bg-white/10 px-1.5 py-0.5 rounded text-[#00DC6E]">{blurAmount}</span>
+										</div>
+										<input
+											type="range"
+											min="1"
+											max="20"
+											step="1"
+											value={blurAmount}
+											onChange={(e) => handleBlurSliderChange(parseInt(e.target.value))}
+											className="w-full h-1.5 bg-white/20 rounded-lg appearance-none cursor-pointer slider-green blur-slider"
+										/>
+										<div className="flex justify-between text-[10px] text-white/40">
+											<span>Soft</span>
+											<span>Strong</span>
+										</div>
+									</div>
+								)}
+
+								{backgroundMode === 'virtual' && (
+									<div className="animate-in fade-in duration-200">
+										<p className="text-xs font-medium text-white/50 mb-2">Select Image</p>
+										<div className="grid grid-cols-3 gap-2 max-h-[180px] overflow-y-auto pr-1 custom-scrollbar">
+											{VIRTUAL_BACKGROUNDS.map((bg) => (
+												<button
+													key={bg.id}
+													onClick={() => {
+														setSelectedVirtualBg(bg.id)
+														applyBackgroundEffect('virtual')
+													}}
+													className={`relative aspect-video rounded-lg overflow-hidden transition-all group ${selectedVirtualBg === bg.id
 														? 'ring-2 ring-[#00DC6E] ring-offset-1 ring-offset-[#2d2d2d]'
 														: 'opacity-70 hover:opacity-100 hover:ring-1 hover:ring-white/20'
-												}`}
-											>
-												<img
-													src={bg.thumbnail}
-													alt={bg.name}
-													className="w-full h-full object-cover"
-												/>
-												{selectedVirtualBg === bg.id && (
-													<div className="absolute inset-0 bg-[#00DC6E]/20 flex items-center justify-center">
-														<div className="bg-[#00DC6E] rounded-full p-0.5">
-															<ShieldCheck className="w-2.5 h-2.5 text-white" />
+														}`}
+												>
+													<img
+														src={bg.thumbnail}
+														alt={bg.name}
+														className="w-full h-full object-cover"
+													/>
+													{selectedVirtualBg === bg.id && (
+														<div className="absolute inset-0 bg-[#00DC6E]/20 flex items-center justify-center">
+															<div className="bg-[#00DC6E] rounded-full p-0.5">
+																<ShieldCheck className="w-2.5 h-2.5 text-white" />
+															</div>
 														</div>
-													</div>
-												)}
-											</button>
-										))}
+													)}
+												</button>
+											))}
+										</div>
 									</div>
-								</div>
-							)}
+								)}
+							</div>
 						</div>
 					</div>
 				</div>
-			</div>
-		)}
-		
-		{/* Permission Request Modal - Shows when host asks participant to enable audio/video */}
-		{/* Guests don't need microphone/camera permissions as they won't be using them */}
-		{!isHost && !isGuest && pendingPermissionRequest && (
-			<PermissionRequestModal
-				type={pendingPermissionRequest.type}
-				onAccept={() => {
-					if (pendingPermissionRequest.type === 'audio') {
-						respondToAudioRequest?.(true)
-					} else {
-						respondToVideoRequest?.(true)
-					}
-				}}
-				onDeny={() => {
-					if (pendingPermissionRequest.type === 'audio') {
-						respondToAudioRequest?.(false)
-					} else {
-						respondToVideoRequest?.(false)
-					}
-				}}
-				onDismiss={dismissPermissionRequest}
-			/>
-		)}
+			)}
 
-		{/* Flash Message Overlay - shown to all participants when host broadcasts a flash */}
-		{activeFlashMessage && (
-			<FlashMessageOverlay
-				message={activeFlashMessage}
-				onDismiss={onDismissFlashMessage ?? (() => {})}
-				isHost={isHost}
-				onDismissForAll={onFlashDismissForAll}
-			/>
-		)}
+			{/* Permission Request Modal - Shows when host asks participant to enable audio/video */}
+			{/* Guests don't need microphone/camera permissions as they won't be using them */}
+			{!isHost && !isGuest && pendingPermissionRequest && (
+				<PermissionRequestModal
+					type={pendingPermissionRequest.type}
+					onAccept={() => {
+						if (pendingPermissionRequest.type === 'audio') {
+							respondToAudioRequest?.(true)
+						} else {
+							respondToVideoRequest?.(true)
+						}
+					}}
+					onDeny={() => {
+						if (pendingPermissionRequest.type === 'audio') {
+							respondToAudioRequest?.(false)
+						} else {
+							respondToVideoRequest?.(false)
+						}
+					}}
+					onDismiss={dismissPermissionRequest}
+				/>
+			)}
 
-		{/* Remote Control Consent UI (Screen Sharer Side) */}
-		{pendingRequestFrom && (
-			<div className="fixed top-20 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-top-4 fade-in duration-300">
-				<div className="bg-[#1a1a1a]/95 backdrop-blur-xl border border-sky-500/30 shadow-2xl rounded-2xl p-5 w-80 max-w-[calc(100vw-32px)] text-center relative overflow-hidden">
-					<div className="absolute inset-0 bg-gradient-to-b from-sky-500/10 to-transparent pointer-events-none" />
-					
-					<div className="h-12 w-12 rounded-full bg-sky-500/20 flex items-center justify-center mx-auto mb-3">
-						<MousePointer2 className="h-6 w-6 text-sky-400" />
-					</div>
-					
-					<h3 className="text-white font-bold text-lg">Remote Control Request</h3>
-					<p className="text-white/70 text-sm mt-1 mb-4 leading-relaxed">
-						<span className="text-white font-semibold">{pendingRequestFrom.name}</span> would like to control your shared screen.
-					</p>
-					
-					<div className="flex gap-2 w-full">
-						<Button
-							variant="outline"
-							className="flex-1 bg-white/5 border-white/10 text-white/70 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30"
-							onClick={denyControl}
-						>
-							Deny
-						</Button>
-						<Button
-							className="flex-1 bg-sky-500 text-white hover:bg-sky-400"
-							onClick={grantControl}
-						>
-							Grant Control
-						</Button>
+			{/* Flash Message Overlay - shown to all participants when host broadcasts a flash */}
+			{activeFlashMessage && (
+				<FlashMessageOverlay
+					message={activeFlashMessage}
+					onDismiss={onDismissFlashMessage ?? (() => { })}
+					isHost={isHost}
+					onDismissForAll={onFlashDismissForAll}
+				/>
+			)}
+
+			{/* Remote Control Consent UI (Screen Sharer Side) */}
+			{pendingRequestFrom && (
+				<div className="fixed top-20 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-top-4 fade-in duration-300">
+					<div className="bg-[#1a1a1a]/95 backdrop-blur-xl border border-sky-500/30 shadow-2xl rounded-2xl p-5 w-80 max-w-[calc(100vw-32px)] text-center relative overflow-hidden">
+						<div className="absolute inset-0 bg-gradient-to-b from-sky-500/10 to-transparent pointer-events-none" />
+
+						<div className="h-12 w-12 rounded-full bg-sky-500/20 flex items-center justify-center mx-auto mb-3">
+							<MousePointer2 className="h-6 w-6 text-sky-400" />
+						</div>
+
+						<h3 className="text-white font-bold text-lg">Remote Control Request</h3>
+						<p className="text-white/70 text-sm mt-1 mb-4 leading-relaxed">
+							<span className="text-white font-semibold">{pendingRequestFrom.name}</span> would like to control your shared screen.
+						</p>
+
+						<div className="flex gap-2 w-full">
+							<Button
+								variant="outline"
+								className="flex-1 bg-white/5 border-white/10 text-white/70 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30"
+								onClick={denyControl}
+							>
+								Deny
+							</Button>
+							<Button
+								className="flex-1 bg-sky-500 text-white hover:bg-sky-400"
+								onClick={grantControl}
+							>
+								Grant Control
+							</Button>
+						</div>
 					</div>
 				</div>
-			</div>
-		)}
-	</>
-)
+			)}
+		</>
+	)
 })
 
 function ParticipantList({
@@ -4313,11 +4410,11 @@ function ParticipantList({
 	const { localParticipant } = useLocalParticipant()
 
 	// Check if a participant has a pending audio request
-	const hasAudioRequest = (identity: string) => 
+	const hasAudioRequest = (identity: string) =>
 		pendingParticipantRequests?.some(r => r.userId === identity && r.type === 'audio')
-	
+
 	// Check if a participant has a pending video request
-	const hasVideoRequest = (identity: string) => 
+	const hasVideoRequest = (identity: string) =>
 		pendingParticipantRequests?.some(r => r.userId === identity && r.type === 'video')
 
 	// Deterministic gradient color for avatars
@@ -4356,7 +4453,7 @@ function ParticipantList({
 					{participants.length}
 				</span>
 			</div>
-			
+
 			{sortedParticipants.map((participant) => {
 				const isLocal = participant.identity === localParticipant?.identity
 				const isMicOn = participant.isMicrophoneEnabled
@@ -4370,7 +4467,7 @@ function ParticipantList({
 					user: false,
 				}
 				const gradient = getAvatarColor(participant.identity)
-				
+
 				// Helper to get avatar
 				const getAvatar = () => {
 					if (!participant.metadata) return null
@@ -4389,22 +4486,22 @@ function ParticipantList({
 						<div className="flex items-center gap-3 min-w-0 flex-1 mr-3">
 							<div className={`relative h-10 w-10 rounded-full bg-gradient-to-br ${gradient} flex items-center justify-center text-sm font-semibold text-white shadow-lg flex-shrink-0 ring-2 ring-white/10 overflow-hidden`}>
 								{avatarUrl ? (
-									<Image 
-										src={avatarUrl} 
-										alt={participant.name || 'User'} 
-										width={40} 
-										height={40} 
-										className="w-full h-full object-cover" 
+									<Image
+										src={avatarUrl}
+										alt={participant.name || 'User'}
+										width={40}
+										height={40}
+										className="w-full h-full object-cover"
 									/>
 								) : (
 									participant.name?.charAt(0).toUpperCase() || participant.identity.charAt(0).toUpperCase()
 								)}
-								
+
 								{/* Speaking ring */}
 								{participant.isSpeaking && (
 									<div className="absolute -inset-1 rounded-full border-2 border-[#00DC6E] opacity-100 animate-pulse" />
 								)}
-								
+
 								{/* Minimized status indicators on avatar */}
 								{!isMicOn && (
 									<div className="absolute -bottom-1 -right-1 bg-[#1a1a1a] rounded-full p-0.5 border border-[#1a1a1a]">
@@ -4414,7 +4511,7 @@ function ParticipantList({
 									</div>
 								)}
 							</div>
-							
+
 							<div className="min-w-0 flex-1">
 								<div className="flex items-center gap-1.5">
 									<span className={`text-sm font-medium truncate ${isLocal ? 'text-white' : 'text-white/90'}`}>
@@ -4424,12 +4521,12 @@ function ParticipantList({
 										<span className="text-[10px] bg-white/10 text-white/60 px-1.5 py-0.5 rounded-full font-medium">You</span>
 									)}
 								</div>
-								
+
 								{/* Status Text Line */}
 								<div className="flex items-center gap-2 mt-0.5 min-h-[16px]">
 									{participant.isSpeaking ? (
 										<span className="text-[10px] text-[#00DC6E] flex items-center gap-1">
-											<span className="w-1 h-1 bg-[#00DC6E] rounded-full animate-bounce"/>
+											<span className="w-1 h-1 bg-[#00DC6E] rounded-full animate-bounce" />
 											Speaking
 										</span>
 									) : (hasAReq || hasVReq) ? (
@@ -4487,11 +4584,10 @@ function ParticipantList({
 											}
 										}}
 										disabled={!canControl}
-										className={`p-2 rounded-lg transition-all ${
-											isCamOn 
-												? 'text-white/60 hover:text-white hover:bg-white/10' 
-												: 'text-sky-500/70 hover:text-sky-500 hover:bg-sky-500/10'
-										} ${!canControl && 'cursor-default'}`}
+										className={`p-2 rounded-lg transition-all ${isCamOn
+											? 'text-white/60 hover:text-white hover:bg-white/10'
+											: 'text-sky-500/70 hover:text-sky-500 hover:bg-sky-500/10'
+											} ${!canControl && 'cursor-default'}`}
 										title={canControl ? (isCamOn ? 'Disable Video' : 'Request Video') : (isCamOn ? 'Camera On' : 'Camera Off')}
 									>
 										{isCamOn ? <Video className="h-4 w-4" /> : <VideoOff className="h-4 w-4" />}
@@ -4508,11 +4604,10 @@ function ParticipantList({
 											}
 										}}
 										disabled={!canControl}
-										className={`p-2 rounded-lg transition-all ${
-											isMicOn 
-												? 'text-white/60 hover:text-white hover:bg-white/10' 
-												: 'text-sky-500/70 hover:text-sky-500 hover:bg-sky-500/10'
-										} ${!canControl && 'cursor-default'}`}
+										className={`p-2 rounded-lg transition-all ${isMicOn
+											? 'text-white/60 hover:text-white hover:bg-white/10'
+											: 'text-sky-500/70 hover:text-sky-500 hover:bg-sky-500/10'
+											} ${!canControl && 'cursor-default'}`}
 										title={canControl ? (isMicOn ? 'Mute' : 'Request to Unmute') : (isMicOn ? 'Mic On' : 'Mic Off')}
 									>
 										{isMicOn ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
@@ -4536,11 +4631,10 @@ function ParticipantList({
 														!chatLocks.everyone,
 													)
 												}
-												className={`px-1.5 py-1 rounded text-[9px] font-semibold ${
-													chatLocks.everyone
-														? 'bg-red-500/20 text-red-300'
-														: 'bg-white/10 text-white/60 hover:text-white'
-												}`}
+												className={`px-1.5 py-1 rounded text-[9px] font-semibold ${chatLocks.everyone
+													? 'bg-red-500/20 text-red-300'
+													: 'bg-white/10 text-white/60 hover:text-white'
+													}`}
 												title="Restrict messages to Everyone"
 											>
 												E
@@ -4553,11 +4647,10 @@ function ParticipantList({
 														!chatLocks.host,
 													)
 												}
-												className={`px-1.5 py-1 rounded text-[9px] font-semibold ${
-													chatLocks.host
-														? 'bg-red-500/20 text-red-300'
-														: 'bg-white/10 text-white/60 hover:text-white'
-												}`}
+												className={`px-1.5 py-1 rounded text-[9px] font-semibold ${chatLocks.host
+													? 'bg-red-500/20 text-red-300'
+													: 'bg-white/10 text-white/60 hover:text-white'
+													}`}
 												title="Restrict messages to Host"
 											>
 												H
@@ -4570,11 +4663,10 @@ function ParticipantList({
 														!chatLocks.user,
 													)
 												}
-												className={`px-1.5 py-1 rounded text-[9px] font-semibold ${
-													chatLocks.user
-														? 'bg-red-500/20 text-red-300'
-														: 'bg-white/10 text-white/60 hover:text-white'
-												}`}
+												className={`px-1.5 py-1 rounded text-[9px] font-semibold ${chatLocks.user
+													? 'bg-red-500/20 text-red-300'
+													: 'bg-white/10 text-white/60 hover:text-white'
+													}`}
 												title="Restrict messages to specific users"
 											>
 												U
@@ -4604,7 +4696,7 @@ function PermissionRequestModal({
 	onDismiss?: () => void
 }) {
 	const { localParticipant } = useLocalParticipant()
-	
+
 	const handleAccept = async () => {
 		try {
 			if (type === 'audio') {
@@ -4621,11 +4713,11 @@ function PermissionRequestModal({
 	return (
 		<div className="fixed inset-0 flex items-center justify-center p-4 z-[9999999]">
 			{/* Dark backdrop overlay */}
-			<div 
+			<div
 				className="absolute inset-0 bg-black/70 backdrop-blur-sm"
 				onClick={onDismiss}
 			/>
-			
+
 			{/* Modal card */}
 			<div className="relative bg-[#2d2d2d] rounded-2xl shadow-2xl border border-white/20 w-full max-w-sm animate-in zoom-in-95 duration-200">
 				{/* Header */}
@@ -4647,16 +4739,16 @@ function PermissionRequestModal({
 						<X className="h-5 w-5" />
 					</button>
 				</div>
-				
+
 				{/* Content */}
 				<div className="p-6">
 					<p className="text-white/80 text-sm mb-6">
-						{type === 'audio' 
+						{type === 'audio'
 							? 'The host has asked you to unmute your microphone. Would you like to turn it on?'
 							: 'The host has asked you to turn on your camera. Would you like to enable it?'
 						}
 					</p>
-					
+
 					<div className="flex gap-3">
 						<Button
 							onClick={onDeny}
