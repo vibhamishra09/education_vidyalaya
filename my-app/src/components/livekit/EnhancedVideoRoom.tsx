@@ -1855,34 +1855,57 @@ const VideoRoomContent = memo(function VideoRoomContent({
 
 	// Separate focused track from other tracks
 	// Screen share gets highest priority in focus view
-	const { focusedTrack, isScreenShareFocused } = useMemo(() => {
+	const { focusedTrack, isScreenShareFocused, isSplitMode, pinnedTrack } = useMemo(() => {
 		if (layoutMode === 'grid') {
-			return { focusedTrack: null, isScreenShareFocused: false }
+			return { focusedTrack: null, isScreenShareFocused: false, isSplitMode: false, pinnedTrack: null }
 		}
 
-		// Priority 1: Pinned participant gets highest precedence
-		if (pinnedParticipantId) {
+		// Detection for Split Mode - Both screen share and a pinned participant
+		if (pinnedParticipantId && activeScreenShare) {
 			const pinned = cameraTrackByParticipantId.get(pinnedParticipantId) || null
-			if (pinned) return { focusedTrack: pinned, isScreenShareFocused: false }
-		}
-
-		// Priority 2: If someone is screen sharing, show that as the main view
-		if (activeScreenShare) {
-			return {
-				focusedTrack: activeScreenShare,
-				isScreenShareFocused: true
+			if (pinned) {
+				return {
+					focusedTrack: activeScreenShare,
+					isScreenShareFocused: true,
+					isSplitMode: true,
+					pinnedTrack: pinned
+				}
 			}
 		}
 
-		// Priority 2: Show focused participant's camera if they have one.
+		// Priority 1: Pinned participant (single focus)
+		if (pinnedParticipantId) {
+			const pinned = cameraTrackByParticipantId.get(pinnedParticipantId) || null
+			if (pinned) return { focusedTrack: pinned, isScreenShareFocused: false, isSplitMode: false, pinnedTrack: pinned }
+		}
+
+		// Priority 2: Screen share (single focus)
+		if (activeScreenShare) {
+			return {
+				focusedTrack: activeScreenShare,
+				isScreenShareFocused: true,
+				isSplitMode: false,
+				pinnedTrack: null
+			}
+		}
+
+		// Priority 3: Show speaker if they have a camera
 		if (!focusedParticipant) {
-			return { focusedTrack: null, isScreenShareFocused: false }
+			return { focusedTrack: null, isScreenShareFocused: false, isSplitMode: false, pinnedTrack: null }
 		}
 
 		const focused = cameraTrackByParticipantId.get(focusedParticipant.identity) || null
 
-		return { focusedTrack: focused, isScreenShareFocused: false }
-	}, [focusedParticipant, layoutMode, activeScreenShare, cameraTrackByParticipantId])
+		return { focusedTrack: focused, isScreenShareFocused: false, isSplitMode: false, pinnedTrack: null }
+	}, [focusedParticipant, layoutMode, activeScreenShare, cameraTrackByParticipantId, pinnedParticipantId])
+
+	// Automatically un-minimize/un-maximize screen share when entering split mode
+	useEffect(() => {
+		if (isSplitMode) {
+			setScreenShareMinimized(false)
+			setScreenShareMaximized(false)
+		}
+	}, [isSplitMode])
 
 	useEffect(() => {
 		if (!isScreenShareFocused) {
@@ -2870,8 +2893,6 @@ const VideoRoomContent = memo(function VideoRoomContent({
 															<VideoTrack
 																trackRef={activeScreenShare}
 																className="w-full h-full object-contain z-[2]"
-																key={activeScreenShare.publication?.trackSid || 'screen-share'}
-																manageSubscription={true}
 															/>
 														)}
 														{/* Badge */}
@@ -3023,7 +3044,95 @@ const VideoRoomContent = memo(function VideoRoomContent({
 												{/* Video layer — screen share (zoom / min / max) vs camera */}
 												{isTrackReference(focusedTrack) && (
 													<>
-														{isScreenShareFocused && showScreenShareInMain && (
+														{isSplitMode && pinnedTrack && (
+															<div className="absolute inset-0 z-[2] flex flex-col md:flex-row gap-2 p-2 bg-[#0f0f0f]">
+																{/* Left/Top: Screen Share */}
+																<div className="flex-1 relative bg-black/40 rounded-xl overflow-hidden group border border-white/5">
+																	{isTrackReference(focusedTrack) ? (
+																		<div
+																			className="relative flex h-full w-full items-center justify-center p-2"
+																			style={{
+																				transform: `scale(${screenShareZoom})`,
+																				transformOrigin: 'center center',
+																				transition: 'transform 0.12s ease-out',
+																			}}
+																		>
+																			<VideoTrack
+																				trackRef={focusedTrack}
+																				className="h-full w-full object-contain"
+																				key={focusedTrack.publication?.trackSid || `${focusedTrack.participant.identity}-screen`}
+																				manageSubscription={true}
+																			/>
+																		</div>
+																	) : (
+																		<div className="absolute inset-0 flex items-center justify-center bg-[#1a1a1a]">
+																			<MonitorUp className="h-12 w-12 text-white/20" />
+																		</div>
+																	)}
+																	{/* Label for Screen share */}
+																	<div className="absolute top-3 left-3 bg-blue-600/90 backdrop-blur-md text-[10px] font-bold text-white px-2 py-1 rounded flex items-center gap-1.5 z-10 shadow-lg border border-white/10">
+																		<MonitorUp className="h-3 w-3" />
+																		<span>SCREEN SHARE</span>
+																	</div>
+																	
+																	{/* Remote Control Actions - Overlay on the screen share half */}
+																	<RemoteControlOverlay
+																		isControlling={isControlling && targetScreenShareId === focusedParticipantForDisplay.identity}
+																		isSharing={focusedParticipantForDisplay.isLocal}
+																		controllerId={controllerId}
+																		onSendInput={sendInputEvent}
+																		onStopControl={stopControl}
+																		onRevokeControl={revokeControl}
+																	/>
+																</div>
+
+																{/* Right/Bottom: Pinned Participant */}
+																<div className="flex-1 relative bg-[#1a1a1a] rounded-xl overflow-hidden group border border-blue-500/30">
+																	{isTrackReference(pinnedTrack) && pinnedTrack.publication?.track ? (
+																		<VideoTrack
+																			trackRef={pinnedTrack}
+																			className={`h-full w-full object-contain ${pinnedTrack.participant.isLocal ? 'scale-x-[-1]' : ''}`}
+																			key={pinnedTrack.publication?.trackSid || `${pinnedTrack.participant.identity}-camera`}
+																			manageSubscription={true}
+																		/>
+																	) : (
+																		<div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-[#252525] to-[#1a1a1a]">
+																			{(() => {
+																				const avatarUrl = getParticipantAvatar(pinnedTrack.participant)
+																				return avatarUrl ? (
+																					<Image
+																						src={avatarUrl}
+																						alt={pinnedTrack.participant.name || 'Participant'}
+																						width={80}
+																						height={80}
+																						className="w-20 h-20 rounded-full object-cover shadow-xl border-2 border-white/10"
+																					/>
+																				) : (
+																					<div className="w-20 h-20 rounded-full bg-gradient-to-b from-[#3a3a3a] to-[#2a2a2a] flex items-center justify-center shadow-xl border-2 border-white/10">
+																						<User className="w-10 h-10 text-[#555]" />
+																					</div>
+																				)
+																			})()}
+																			<p className="mt-4 text-white/50 text-[10px] font-bold tracking-[0.2em] uppercase bg-black/20 px-3 py-1 rounded-full backdrop-blur-sm">Camera Off</p>
+																		</div>
+																	)}
+																	{/* Label for Pinned Participant */}
+																	<div className="absolute bottom-3 left-3 bg-blue-600/90 backdrop-blur-md text-[10px] font-bold text-white px-2 py-1 rounded flex items-center gap-1.5 z-10 shadow-lg border border-white/10">
+																		<Pin className="h-3 w-3 fill-current" />
+																		<span>{pinnedTrack.participant.name || pinnedTrack.participant.identity}</span>
+																	</div>
+																	{/* Unpin button overlay */}
+																	<button 
+																		onClick={() => setPinnedParticipantId(null)}
+																		className="absolute top-3 right-3 w-8 h-8 bg-black/60 hover:bg-black/80 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20 border border-white/10 text-white"
+																		title="Exit split view (unpin)"
+																	>
+																		<PinOff className="h-4 w-4" />
+																	</button>
+																</div>
+															</div>
+														)}
+														{!isSplitMode && isScreenShareFocused && showScreenShareInMain && (
 															<div className="absolute inset-0 z-[2] overflow-auto bg-black/40">
 																<div
 																	className="relative flex min-h-full min-w-full items-center justify-center p-4 box-border"
@@ -3037,6 +3146,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 																		<VideoTrack
 																			trackRef={focusedTrack}
 																			className="h-auto w-full max-w-full max-h-[70vh] object-contain"
+																			key={focusedTrack.publication?.trackSid || `${focusedTrack.participant.identity}-screen`}
+																			manageSubscription={true}
 																		/>
 																	</div>
 
@@ -3071,7 +3182,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 																</div>
 															</div>
 														)}
-														{isScreenShareFocused && !showScreenShareInMain && (
+														{!isSplitMode && isScreenShareFocused && !showScreenShareInMain && (
 															<div className="absolute inset-0 z-[2] flex flex-col items-center justify-center gap-3 bg-gradient-to-b from-[#252525] to-[#1a1a1a] px-6 text-center">
 																{screenShareMaximized ? (
 																	<Maximize2 className="h-10 w-10 text-sky-400" />
@@ -3099,11 +3210,13 @@ const VideoRoomContent = memo(function VideoRoomContent({
 																</Button>
 															</div>
 														)}
-														{!isScreenShareFocused && focusedTrack.publication?.track && (
+														{!isSplitMode && !isScreenShareFocused && focusedTrack.publication?.track && (
 															<div className="absolute inset-0 z-[2]">
 																<VideoTrack
 																	trackRef={focusedTrack}
 																	className={`h-full w-full object-contain ${focusedParticipantForDisplay.isLocal ? 'scale-x-[-1]' : ''}`}
+																	key={focusedTrack.publication?.trackSid || `${focusedTrack.participant.identity}-camera`}
+																	manageSubscription={true}
 																/>
 															</div>
 														)}
@@ -3114,8 +3227,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 												<div className="absolute top-4 right-4 flex items-center gap-2 z-20">
 													<div
 														className={`w-8 h-8 rounded-full flex items-center justify-center ${focusedParticipantForDisplay.isMicrophoneEnabled
-																? 'bg-black/60 border border-white/20'
-																: 'bg-sky-500'
+															? 'bg-black/60 border border-white/20'
+															: 'bg-sky-500'
 															}`}
 														title={focusedParticipantForDisplay.isMicrophoneEnabled ? 'Unmuted' : 'Muted'}
 													>
@@ -3140,8 +3253,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 															size="sm"
 															onClick={togglePinFocused}
 															className={`h-9 px-4 rounded-lg border ${pinnedParticipantId === focusedParticipantForDisplay.identity
-																	? 'bg-[#3b82f6] text-white hover:bg-[#2563eb] border-[#3b82f6]'
-																	: 'bg-black/60 text-white hover:bg-black/80 border-white/10 backdrop-blur-sm'
+																? 'bg-[#3b82f6] text-white hover:bg-[#2563eb] border-[#3b82f6]'
+																: 'bg-black/60 text-white hover:bg-black/80 border-white/10 backdrop-blur-sm'
 																}`}
 															title={pinnedParticipantId === focusedParticipantForDisplay.identity ? 'Unpin' : 'Pin this video'}
 														>
@@ -3707,8 +3820,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 												}}
 												disabled={hasExtended}
 												className={`w-full px-4 py-2.5 text-left text-sm transition-colors flex items-center gap-2 ${hasExtended
-														? 'text-white/30 cursor-not-allowed'
-														: 'text-white hover:bg-white/10'
+													? 'text-white/30 cursor-not-allowed'
+													: 'text-white hover:bg-white/10'
 													}`}
 											>
 												<Clock className={`w-4 h-4 ${hasExtended ? 'text-white/20' : 'text-white/50'}`} />
@@ -3797,8 +3910,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 
 					{/* Sidebar Container */}
 					<div className={`fixed md:absolute right-0 top-0 bottom-0 w-full sm:w-[85%] md:w-96 bg-[#1a1a1a]/95 md:bg-[#1a1a1a]/95 backdrop-blur-md border-l border-white/10 z-[60] shadow-2xl flex flex-col transition-all duration-300 ${(showChat || showParticipants)
-							? 'translate-x-0 opacity-100 pointer-events-auto'
-							: 'translate-x-full opacity-0 pointer-events-none'
+						? 'translate-x-0 opacity-100 pointer-events-auto'
+						: 'translate-x-full opacity-0 pointer-events-none'
 						}`}>
 						{/* Drag handle for mobile */}
 						<div className="md:hidden flex justify-center py-2 relative z-10">
@@ -3903,8 +4016,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 												}}
 												variant="ghost"
 												className={`flex flex-col items-center justify-center h-auto py-2 gap-1 rounded-lg border transition-all ${permissions?.allowAudio === false
-														? 'bg-sky-500/10 text-sky-500 border-sky-500/20 hover:bg-sky-500/20'
-														: 'bg-white/5 text-white/70 border-white/5 hover:bg-white/10 hover:text-white'
+													? 'bg-sky-500/10 text-sky-500 border-sky-500/20 hover:bg-sky-500/20'
+													: 'bg-white/5 text-white/70 border-white/5 hover:bg-white/10 hover:text-white'
 													}`}
 												title={permissions?.allowAudio === false ? 'Unlock audio for all participants' : 'Mute all and lock audio'}
 											>
@@ -3928,8 +4041,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 												}}
 												variant="ghost"
 												className={`flex flex-col items-center justify-center h-auto py-2 gap-1 rounded-lg border transition-all ${permissions?.allowVideo === false
-														? 'bg-sky-500/10 text-sky-500 border-sky-500/20 hover:bg-sky-500/20'
-														: 'bg-white/5 text-white/70 border-white/5 hover:bg-white/10 hover:text-white'
+													? 'bg-sky-500/10 text-sky-500 border-sky-500/20 hover:bg-sky-500/20'
+													: 'bg-white/5 text-white/70 border-white/5 hover:bg-white/10 hover:text-white'
 													}`}
 												title={permissions?.allowVideo === false ? 'Unlock video for all participants' : 'Disable all video and lock'}
 											>
@@ -3953,8 +4066,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 												}}
 												variant="ghost"
 												className={`flex flex-col items-center justify-center h-auto py-2 gap-1 rounded-lg border transition-all ${(chatDisabled || permissions?.allowChat === false)
-														? 'bg-sky-500/10 text-sky-500 border-sky-500/20 hover:bg-sky-500/20'
-														: 'bg-white/5 text-white/70 border-white/5 hover:bg-white/10 hover:text-white'
+													? 'bg-sky-500/10 text-sky-500 border-sky-500/20 hover:bg-sky-500/20'
+													: 'bg-white/5 text-white/70 border-white/5 hover:bg-white/10 hover:text-white'
 													}`}
 												title={chatDisabled ? 'Enable chat' : 'Disable chat'}
 											>
@@ -3982,8 +4095,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 												}}
 												variant="ghost"
 												className={`flex flex-col items-center justify-center h-auto py-2 gap-1 rounded-lg border transition-all ${roomSettings?.chatRestrictToHostOnly
-														? 'bg-sky-500/10 text-sky-500 border-sky-500/20 hover:bg-sky-500/20'
-														: 'bg-white/5 text-white/70 border-white/5 hover:bg-white/10 hover:text-white'
+													? 'bg-sky-500/10 text-sky-500 border-sky-500/20 hover:bg-sky-500/20'
+													: 'bg-white/5 text-white/70 border-white/5 hover:bg-white/10 hover:text-white'
 													}`}
 												title={roomSettings?.chatRestrictToHostOnly ? 'Allow participants to send to everyone' : 'Restrict participants to send to host only'}
 											>
@@ -4010,8 +4123,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 												}}
 												variant="ghost"
 												className={`flex flex-col items-center justify-center h-auto py-2 gap-1 rounded-lg border transition-all ${roomSettings?.hideParticipantList
-														? 'bg-sky-500/10 text-sky-500 border-sky-500/20 hover:bg-sky-500/20'
-														: 'bg-white/5 text-white/70 border-white/5 hover:bg-white/10 hover:text-white'
+													? 'bg-sky-500/10 text-sky-500 border-sky-500/20 hover:bg-sky-500/20'
+													: 'bg-white/5 text-white/70 border-white/5 hover:bg-white/10 hover:text-white'
 													}`}
 												title={
 													roomSettings?.hideParticipantList
@@ -4062,8 +4175,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 							)}
 							{/* Flash sidebar panel */}
 							<div className={`fixed md:absolute right-0 top-0 bottom-0 w-full sm:w-[85%] md:w-96 bg-[#1a1a1a]/95 backdrop-blur-md border-l border-white/10 z-[60] shadow-2xl flex flex-col transition-all duration-300 ${showFlashPanel
-									? 'translate-x-0 opacity-100 pointer-events-auto'
-									: 'translate-x-full opacity-0 pointer-events-none'
+								? 'translate-x-0 opacity-100 pointer-events-auto'
+								: 'translate-x-full opacity-0 pointer-events-none'
 								}`}>
 								{/* Header */}
 								<div className="h-14 md:h-16 bg-gradient-to-b from-[#1a1a1a] to-[#1a1a1a]/95 border-b border-white/10 flex items-center justify-between px-4 md:px-6 flex-shrink-0">
@@ -4123,8 +4236,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 								<button
 									onClick={() => applyBackgroundEffect('none')}
 									className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium rounded-md transition-all ${backgroundMode === 'none'
-											? 'bg-[#3d3d3d] text-white shadow-sm ring-1 ring-white/10'
-											: 'text-white/60 hover:text-white hover:bg-white/5'
+										? 'bg-[#3d3d3d] text-white shadow-sm ring-1 ring-white/10'
+										: 'text-white/60 hover:text-white hover:bg-white/5'
 										}`}
 								>
 									<Ban className="w-3 h-3" />
@@ -4133,8 +4246,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 								<button
 									onClick={() => applyBackgroundEffect('blur')}
 									className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium rounded-md transition-all ${backgroundMode === 'blur'
-											? 'bg-[#3d3d3d] text-white shadow-sm ring-1 ring-white/10'
-											: 'text-white/60 hover:text-white hover:bg-white/5'
+										? 'bg-[#3d3d3d] text-white shadow-sm ring-1 ring-white/10'
+										: 'text-white/60 hover:text-white hover:bg-white/5'
 										}`}
 								>
 									<Aperture className="w-3 h-3" />
@@ -4143,8 +4256,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 								<button
 									onClick={() => applyBackgroundEffect('virtual')}
 									className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium rounded-md transition-all ${backgroundMode === 'virtual'
-											? 'bg-[#3d3d3d] text-white shadow-sm ring-1 ring-white/10'
-											: 'text-white/60 hover:text-white hover:bg-white/5'
+										? 'bg-[#3d3d3d] text-white shadow-sm ring-1 ring-white/10'
+										: 'text-white/60 hover:text-white hover:bg-white/5'
 										}`}
 								>
 									<ImageIcon className="w-3 h-3" />
@@ -4194,8 +4307,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 														applyBackgroundEffect('virtual')
 													}}
 													className={`relative aspect-video rounded-lg overflow-hidden transition-all group ${selectedVirtualBg === bg.id
-															? 'ring-2 ring-[#00DC6E] ring-offset-1 ring-offset-[#2d2d2d]'
-															: 'opacity-70 hover:opacity-100 hover:ring-1 hover:ring-white/20'
+														? 'ring-2 ring-[#00DC6E] ring-offset-1 ring-offset-[#2d2d2d]'
+														: 'opacity-70 hover:opacity-100 hover:ring-1 hover:ring-white/20'
 														}`}
 												>
 													<img
@@ -4510,8 +4623,8 @@ function ParticipantList({
 										}}
 										disabled={!canControl}
 										className={`p-2 rounded-lg transition-all ${isCamOn
-												? 'text-white/60 hover:text-white hover:bg-white/10'
-												: 'text-sky-500/70 hover:text-sky-500 hover:bg-sky-500/10'
+											? 'text-white/60 hover:text-white hover:bg-white/10'
+											: 'text-sky-500/70 hover:text-sky-500 hover:bg-sky-500/10'
 											} ${!canControl && 'cursor-default'}`}
 										title={canControl ? (isCamOn ? 'Disable Video' : 'Request Video') : (isCamOn ? 'Camera On' : 'Camera Off')}
 									>
@@ -4530,8 +4643,8 @@ function ParticipantList({
 										}}
 										disabled={!canControl}
 										className={`p-2 rounded-lg transition-all ${isMicOn
-												? 'text-white/60 hover:text-white hover:bg-white/10'
-												: 'text-sky-500/70 hover:text-sky-500 hover:bg-sky-500/10'
+											? 'text-white/60 hover:text-white hover:bg-white/10'
+											: 'text-sky-500/70 hover:text-sky-500 hover:bg-sky-500/10'
 											} ${!canControl && 'cursor-default'}`}
 										title={canControl ? (isMicOn ? 'Mute' : 'Request to Unmute') : (isMicOn ? 'Mic On' : 'Mic Off')}
 									>
@@ -4557,8 +4670,8 @@ function ParticipantList({
 													)
 												}
 												className={`px-1.5 py-1 rounded text-[9px] font-semibold ${chatLocks.everyone
-														? 'bg-red-500/20 text-red-300'
-														: 'bg-white/10 text-white/60 hover:text-white'
+													? 'bg-red-500/20 text-red-300'
+													: 'bg-white/10 text-white/60 hover:text-white'
 													}`}
 												title="Restrict messages to Everyone"
 											>
@@ -4573,8 +4686,8 @@ function ParticipantList({
 													)
 												}
 												className={`px-1.5 py-1 rounded text-[9px] font-semibold ${chatLocks.host
-														? 'bg-red-500/20 text-red-300'
-														: 'bg-white/10 text-white/60 hover:text-white'
+													? 'bg-red-500/20 text-red-300'
+													: 'bg-white/10 text-white/60 hover:text-white'
 													}`}
 												title="Restrict messages to Host"
 											>
@@ -4589,8 +4702,8 @@ function ParticipantList({
 													)
 												}
 												className={`px-1.5 py-1 rounded text-[9px] font-semibold ${chatLocks.user
-														? 'bg-red-500/20 text-red-300'
-														: 'bg-white/10 text-white/60 hover:text-white'
+													? 'bg-red-500/20 text-red-300'
+													: 'bg-white/10 text-white/60 hover:text-white'
 													}`}
 												title="Restrict messages to specific users"
 											>
