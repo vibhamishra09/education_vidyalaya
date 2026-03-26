@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import { useAuth } from "@clerk/nextjs";
 import {
   Dialog,
@@ -262,10 +263,12 @@ export function StudyRoomHostEditDialog({
             {imagePreview || imageUrl ? (
               <div className="space-y-2">
                 <div className="relative w-full h-40 rounded-lg overflow-hidden border bg-muted/50">
-                  <img
-                    src={imagePreview || imageUrl}
+                  <Image
+                    src={imagePreview || imageUrl!}
                     alt="Cover preview"
-                    className="w-full h-full object-cover"
+                    fill
+                    className="object-cover"
+                    unoptimized
                   />
                   <Button
                     type="button"

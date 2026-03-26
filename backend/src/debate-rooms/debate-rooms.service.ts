@@ -77,10 +77,8 @@ export class DebateRoomsService {
     userId: string,
     dto: CreateDebateRoomDto,
   ): Promise<DebateRoomResponse> {
-    // Get user's internal ID from Clerk ID
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-    });
+    // Resolve user by id or clerkId
+    const user = await this.resolveUser(userId);
 
     if (!user) {
       throw new NotFoundException('User not found');
@@ -140,12 +138,10 @@ export class DebateRoomsService {
    */
   async updateDebateRoom(
     roomId: string,
-    clerkUserId: string,
+    userIdOrClerkId: string,
     dto: UpdateDebateRoomDto,
   ): Promise<DebateRoomResponse> {
-    const user = await this.prisma.user.findUnique({
-      where: { clerkId: clerkUserId },
-    });
+    const user = await this.resolveUser(userIdOrClerkId);
     if (!user) {
       throw new NotFoundException('User not found');
     }
@@ -498,12 +494,10 @@ export class DebateRoomsService {
    */
   async joinDebateRoom(
     roomId: string,
-    userId: string,
+    userIdOrClerkId: string,
     dto?: JoinDebateRoomDto,
   ): Promise<{ team: DebateSide; participantId: string }> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-    });
+    const user = await this.resolveUser(userIdOrClerkId);
 
     if (!user) {
       throw new NotFoundException('User not found');
@@ -624,10 +618,8 @@ export class DebateRoomsService {
   /**
    * Leave a debate room
    */
-  async leaveDebateRoom(roomId: string, userId: string): Promise<void> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-    });
+  async leaveDebateRoom(roomId: string, userIdOrClerkId: string): Promise<void> {
+    const user = await this.resolveUser(userIdOrClerkId);
 
     if (!user) {
       throw new NotFoundException('User not found');
@@ -673,12 +665,10 @@ export class DebateRoomsService {
    */
   async promoteModerator(
     roomId: string,
-    hostUserId: string,
+    hostUserIdOrClerkId: string,
     targetUserId: string,
   ): Promise<void> {
-    const host = await this.prisma.user.findUnique({
-      where: { id: hostUserId },
-    });
+    const host = await this.resolveUser(hostUserIdOrClerkId);
 
     if (!host) {
       throw new NotFoundException('User not found');
@@ -740,13 +730,11 @@ export class DebateRoomsService {
    */
   async banParticipant(
     roomId: string,
-    moderatorUserId: string,
+    moderatorUserIdOrClerkId: string,
     targetUserId: string,
     reason?: string,
   ): Promise<void> {
-    const moderator = await this.prisma.user.findUnique({
-      where: { id: moderatorUserId },
-    });
+    const moderator = await this.resolveUser(moderatorUserIdOrClerkId);
 
     if (!moderator) {
       throw new NotFoundException('User not found');
@@ -909,14 +897,11 @@ export class DebateRoomsService {
    */
   async getModeratorEvaluations(
     roomId: string,
-    moderatorClerkId: string,
+    userIdOrClerkId: string,
     query?: ModeratorEvaluationsQueryDto,
   ) {
     try {
-      const { user } = await this.assertModeratorInRoom(
-        roomId,
-        moderatorClerkId,
-      );
+      const { user } = await this.assertModeratorInRoom(roomId, userIdOrClerkId);
 
       return await this.prisma.debateModeratorEvaluation.findMany({
         where: {
@@ -970,15 +955,12 @@ export class DebateRoomsService {
    */
   async getParticipantEvaluations(
     roomId: string,
-    moderatorClerkId: string,
+    userIdOrClerkId: string,
     participantId: string,
     turnNumber?: number,
   ) {
     try {
-      const { user } = await this.assertModeratorInRoom(
-        roomId,
-        moderatorClerkId,
-      );
+      const { user } = await this.assertModeratorInRoom(roomId, userIdOrClerkId);
 
       return await this.prisma.debateModeratorEvaluation.findMany({
         where: {
@@ -1028,11 +1010,9 @@ export class DebateRoomsService {
    */
   async startPrepPhase(
     roomId: string,
-    userId: string,
+    userIdOrClerkId: string,
   ): Promise<{ prepEndTime: number }> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-    });
+    const user = await this.resolveUser(userIdOrClerkId);
 
     if (!user) {
       throw new NotFoundException('User not found');
@@ -1637,11 +1617,9 @@ export class DebateRoomsService {
    */
   async generateResults(
     roomId: string,
-    userId: string,
+    userIdOrClerkId: string,
   ): Promise<DebateResultsResponse> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-    });
+    const user = await this.resolveUser(userIdOrClerkId);
 
     if (!user) {
       throw new NotFoundException('User not found');
@@ -1831,7 +1809,7 @@ export class DebateRoomsService {
       `Debate ${roomId} results generated from judge evaluations`,
     );
 
-    return this.getResults(roomId, userId);
+    return this.getResults(roomId, userIdOrClerkId);
   }
 
   /**
@@ -1839,12 +1817,10 @@ export class DebateRoomsService {
    */
   async getResults(
     roomId: string,
-    userId: string,
+    userIdOrClerkId: string,
   ): Promise<DebateResultsResponse> {
     try {
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-      });
+      const user = await this.resolveUser(userIdOrClerkId);
 
       if (!user) {
         throw new NotFoundException('User not found');
@@ -2111,11 +2087,9 @@ export class DebateRoomsService {
   /**
    * Get LiveKit token for debate room
    */
-  async getLivekitToken(roomId: string, userId: string): Promise<string> {
+  async getLivekitToken(roomId: string, userIdOrClerkId: string): Promise<string> {
     try {
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-      });
+      const user = await this.resolveUser(userIdOrClerkId);
 
       if (!user) {
         throw new NotFoundException('User not found');
@@ -2163,7 +2137,7 @@ export class DebateRoomsService {
       // Handle database connection errors
       if (isConnectionError(error)) {
         this.logger.error(
-          `Database connection error in getLivekitToken for room ${roomId}, user ${userId}:`,
+          `Database connection error in getLivekitToken for room ${roomId}, user ${userIdOrClerkId}:`,
           error instanceof Error ? error.message : String(error),
         );
 
@@ -2250,10 +2224,8 @@ export class DebateRoomsService {
   /**
    * Cancel a debate (host only)
    */
-  async cancelDebate(roomId: string, userId: string): Promise<void> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-    });
+  async cancelDebate(roomId: string, userIdOrClerkId: string): Promise<void> {
+    const user = await this.resolveUser(userIdOrClerkId);
 
     if (!user) {
       throw new NotFoundException('User not found');
@@ -2292,12 +2264,10 @@ export class DebateRoomsService {
    */
   async endDebate(
     roomId: string,
-    userId: string,
+    userIdOrClerkId: string,
     reason?: string,
   ): Promise<void> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-    });
+    const user = await this.resolveUser(userIdOrClerkId);
 
     if (!user) {
       throw new NotFoundException('User not found');
@@ -2454,11 +2424,9 @@ export class DebateRoomsService {
 
   private async assertModeratorInRoom(
     roomId: string,
-    moderatorClerkId: string,
+    userIdOrClerkId: string,
   ) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: moderatorClerkId },
-    });
+    const user = await this.resolveUser(userIdOrClerkId);
 
     if (!user) {
       throw new NotFoundException('User not found');
@@ -2517,5 +2485,17 @@ export class DebateRoomsService {
     }
 
     return normalized;
+  }
+
+  /**
+   * Resolve a user by either database internal id or clerkId.
+   */
+  private async resolveUser(userIdOrClerkId: string) {
+    if (!userIdOrClerkId) return null;
+    return this.prisma.user.findFirst({
+      where: {
+        OR: [{ id: userIdOrClerkId }, { clerkId: userIdOrClerkId }],
+      },
+    });
   }
 }

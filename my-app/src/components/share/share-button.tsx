@@ -99,7 +99,7 @@ export function ShareButton({
     window.open(whatsappUrl, "_blank");
   };
 
-  const isMobile = typeof window !== "undefined" && navigator.share;
+  const isMobile = typeof navigator !== "undefined" && !!navigator.share;
 
   return (
     <Popover>

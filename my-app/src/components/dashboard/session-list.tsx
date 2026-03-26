@@ -38,6 +38,7 @@ interface Session {
   detailsEditedForViewer?: boolean;
   /** Peer session: show Edit on the card (both requester and receiver when session is still editable). */
   peerSessionEditable?: boolean;
+  slug?: string;
 }
 
 interface SessionListProps {
