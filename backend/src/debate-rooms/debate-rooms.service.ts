@@ -41,6 +41,10 @@ const REDIS_KEYS = {
     `debate:${roomId}:chat:${side}`,
 };
 
+function addMinutesToDate(date: Date, minutes: number): Date {
+  return new Date(date.getTime() + minutes * 60_000);
+}
+
 // Coin reward for winning team
 const WINNER_COIN_REWARD = 50;
 const MAX_MODERATORS = 3;
@@ -87,6 +91,13 @@ export class DebateRoomsService {
     // Generate LiveKit room name
     const livekitRoomName = `debate-${Date.now()}-${Math.random().toString(36).substring(7)}`;
 
+    const debateDurationMinutes = dto.debateDurationMinutes ?? 60;
+    const scheduledAt = dto.scheduledAt ? new Date(dto.scheduledAt) : null;
+    const debateSlotEndsAt =
+      scheduledAt && debateDurationMinutes
+        ? addMinutesToDate(scheduledAt, debateDurationMinutes)
+        : null;
+
     // Create debate room with teams
     const debateRoom = await this.prisma.debateRoom.create({
       data: {
@@ -96,7 +107,9 @@ export class DebateRoomsService {
         turnDurationSeconds: dto.turnDurationSeconds || 120,
         prepTimeSeconds: dto.prepTimeSeconds || 30,
         turnOrder: (dto.turnOrder as TurnOrderType) || TurnOrderType.FIFO,
-        scheduledAt: dto.scheduledAt ? new Date(dto.scheduledAt) : null,
+        debateDurationMinutes,
+        debateSlotEndsAt,
+        scheduledAt,
         hostId: user.id,
         livekitRoomName,
         teams: {
@@ -183,10 +196,13 @@ export class DebateRoomsService {
         dto.maxParticipants !== undefined ||
         dto.turnDurationSeconds !== undefined ||
         dto.prepTimeSeconds !== undefined ||
-        dto.turnOrder !== undefined
+        dto.turnOrder !== undefined ||
+        dto.scheduledAt !== undefined ||
+        dto.clearScheduledAt === true ||
+        dto.debateDurationMinutes !== undefined
       ) {
         throw new BadRequestException(
-          'Cannot change turn timing, turn order, or max participants while the debate is in progress.',
+          'Cannot change turn timing, turn order, max participants, session duration, or scheduled start while the debate is in progress.',
         );
       }
     }
@@ -221,6 +237,47 @@ export class DebateRoomsService {
     }
     if (dto.turnOrder !== undefined) {
       data.turnOrder = dto.turnOrder as TurnOrderType;
+    }
+    if (dto.debateDurationMinutes !== undefined) {
+      data.debateDurationMinutes = dto.debateDurationMinutes;
+    }
+
+    if (dto.scheduledAt !== undefined || dto.clearScheduledAt === true) {
+      if (debateRoom.status !== DebateStatus.WAITING) {
+        throw new BadRequestException(
+          'You can only change the scheduled start time while the debate is waiting for participants.',
+        );
+      }
+      if (dto.clearScheduledAt === true) {
+        data.scheduledAt = null;
+      } else if (dto.scheduledAt !== undefined) {
+        const parsed = new Date(dto.scheduledAt);
+        if (Number.isNaN(parsed.getTime())) {
+          throw new BadRequestException('Invalid scheduled start time');
+        }
+        data.scheduledAt = parsed;
+      }
+    }
+
+    if (debateRoom.status === DebateStatus.WAITING) {
+      let effectiveScheduled: Date | null = debateRoom.scheduledAt;
+      if (dto.clearScheduledAt === true) {
+        effectiveScheduled = null;
+      } else if (dto.scheduledAt !== undefined) {
+        const parsed = new Date(dto.scheduledAt);
+        if (Number.isNaN(parsed.getTime())) {
+          throw new BadRequestException('Invalid scheduled start time');
+        }
+        effectiveScheduled = parsed;
+      }
+      const effectiveDur =
+        dto.debateDurationMinutes !== undefined
+          ? dto.debateDurationMinutes
+          : debateRoom.debateDurationMinutes;
+      data.debateSlotEndsAt =
+        effectiveScheduled && effectiveDur
+          ? addMinutesToDate(effectiveScheduled, effectiveDur)
+          : null;
     }
 
     if (Object.keys(data).length === 0) {
@@ -338,6 +395,7 @@ export class DebateRoomsService {
     sort: 'hybrid' | 'newest' | 'upcoming' = 'newest',
   ) {
     try {
+      const now = new Date();
       const where: Prisma.DebateRoomWhereInput = {};
 
       if (search) {
@@ -351,11 +409,49 @@ export class DebateRoomsService {
         where.status = status;
       }
 
+      /** Hide stale WAITING lobbies from default / “All” browse — unless client filters by WAITING explicitly. */
+      const applyExpiredWaitingFilter = status !== DebateStatus.WAITING;
+
+      const notExpiredWaitingLobby: Prisma.DebateRoomWhereInput = {
+        OR: [
+          { status: { not: DebateStatus.WAITING } },
+          {
+            AND: [
+              { status: DebateStatus.WAITING },
+              {
+                OR: [
+                  { debateSlotEndsAt: { gte: now } },
+                  {
+                    AND: [
+                      { debateSlotEndsAt: null },
+                      {
+                        OR: [
+                          { scheduledAt: null },
+                          { scheduledAt: { gte: now } },
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+      const existingAnd = where.AND;
+      where.AND = [
+        ...(Array.isArray(existingAnd)
+          ? existingAnd
+          : existingAnd
+            ? [existingAnd]
+            : []),
+        ...(applyExpiredWaitingFilter ? [notExpiredWaitingLobby] : []),
+      ];
+
       const skip = (page - 1) * limit;
       const include = this.getDebateRoomInclude();
 
       if (trending) {
-        const now = new Date();
         const liveWhere: Prisma.DebateRoomWhereInput = {
           ...where,
           status: DebateStatus.LIVE,
@@ -363,9 +459,6 @@ export class DebateRoomsService {
         const waitingWhere: Prisma.DebateRoomWhereInput = {
           ...where,
           status: DebateStatus.WAITING,
-          scheduledAt: {
-            gte: now,
-          },
         };
 
         const [liveTotal, waitingTotal] = await Promise.all([
@@ -489,6 +582,30 @@ export class DebateRoomsService {
   }
 
   /**
+   * WAITING lobbies past their slot (or past scheduled start if no slot row) → ENDED. Called by cron.
+   */
+  async expirePastWaitingLobbies(): Promise<number> {
+    const now = new Date();
+    const result = await this.prisma.debateRoom.updateMany({
+      where: {
+        status: DebateStatus.WAITING,
+        OR: [
+          { debateSlotEndsAt: { lt: now } },
+          {
+            AND: [
+              { debateSlotEndsAt: null },
+              { scheduledAt: { not: null } },
+              { scheduledAt: { lt: now } },
+            ],
+          },
+        ],
+      },
+      data: { status: DebateStatus.ENDED },
+    });
+    return result.count;
+  }
+
+  /**
    * Join a debate room as a participant
    * Auto-balances teams
    */
@@ -526,10 +643,17 @@ export class DebateRoomsService {
       );
     }
 
-    // Check if scheduled time has passed
-    if (debateRoom.scheduledAt && new Date() > debateRoom.scheduledAt) {
+    const nowJoin = new Date();
+    let effectiveJoinDeadline: Date | null = debateRoom.debateSlotEndsAt;
+    if (!effectiveJoinDeadline && debateRoom.scheduledAt) {
+      effectiveJoinDeadline = addMinutesToDate(
+        debateRoom.scheduledAt,
+        debateRoom.debateDurationMinutes ?? 60,
+      );
+    }
+    if (effectiveJoinDeadline && nowJoin > effectiveJoinDeadline) {
       throw new BadRequestException(
-        'Cannot join after the scheduled time has passed',
+        'Cannot join — this debate’s lobby window has ended (scheduled start + debate duration).',
       );
     }
 
@@ -2389,6 +2513,8 @@ export class DebateRoomsService {
       turnDurationSeconds: debateRoom.turnDurationSeconds,
       prepTimeSeconds: debateRoom.prepTimeSeconds,
       turnOrder: debateRoom.turnOrder,
+      debateDurationMinutes: debateRoom.debateDurationMinutes ?? 60,
+      debateSlotEndsAt: debateRoom.debateSlotEndsAt ?? null,
       currentTurnIndex: debateRoom.currentTurnIndex,
       currentSpeakerId: debateRoom.currentSpeakerId,
       turnStartedAt: debateRoom.turnStartedAt,

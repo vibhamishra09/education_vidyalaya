@@ -6,6 +6,7 @@ import { DebateGateway } from './debate.gateway';
 import { DebateAiService } from './debate-ai.service';
 import { DebateMicControlService } from './debate-mic-control.service';
 import { DebateTranscriptSchedulerService } from './debate-transcript-scheduler.service';
+import { DebateExpiredLobbySchedulerService } from './debate-expired-lobby.scheduler';
 import { LivekitModule } from '../livekit/livekit.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { CacheModule } from '../redis/cache.module';
@@ -19,6 +20,7 @@ import { CacheModule } from '../redis/cache.module';
     DebateAiService,
     DebateMicControlService,
     DebateTranscriptSchedulerService,
+    DebateExpiredLobbySchedulerService,
   ],
   exports: [DebateRoomsService],
 })
