@@ -73,6 +73,13 @@ export class CreateDebateRoomDto {
   @IsOptional()
   @IsDateString()
   scheduledAt?: string; // ISO 8601 date string
+
+  @IsOptional()
+  @IsInt()
+  @Min(5)
+  @Max(24 * 60)
+  @Type(() => Number)
+  debateDurationMinutes?: number;
 }
 
 export class UpdateDebateRoomDto {
@@ -108,6 +115,23 @@ export class UpdateDebateRoomDto {
   @IsOptional()
   @IsEnum(TurnOrderTypeDto)
   turnOrder?: TurnOrderTypeDto;
+
+  /** Set or change the lobby’s scheduled start (WAITING only). ISO 8601. */
+  @IsOptional()
+  @IsDateString()
+  scheduledAt?: string;
+
+  /** Clear a previously set scheduled start so the lobby has no fixed time (WAITING only). */
+  @IsOptional()
+  @IsBoolean()
+  clearScheduledAt?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  @Min(5)
+  @Max(24 * 60)
+  @Type(() => Number)
+  debateDurationMinutes?: number;
 }
 
 export class JoinDebateRoomDto {
@@ -232,6 +256,8 @@ export class DebateRoomResponse {
   turnDurationSeconds: number;
   prepTimeSeconds: number;
   turnOrder: TurnOrderTypeDto;
+  debateDurationMinutes: number;
+  debateSlotEndsAt?: Date | null;
   currentTurnIndex: number;
   currentSpeakerId?: string | null;
   turnStartedAt?: Date | null;

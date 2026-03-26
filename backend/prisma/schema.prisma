@@ -555,6 +555,8 @@ model DebateRoom {
   turnDurationSeconds Int                 @default(120) // Default 2 minutes per turn
   prepTimeSeconds     Int                 @default(30) // Prep time before debate starts
   turnOrder           TurnOrderType       @default(FIFO) // FIFO or RANDOM
+  debateDurationMinutes Int               @default(60) // Total planned session length (minutes); with scheduledAt sets lobby expiry
+  debateSlotEndsAt    DateTime?           // scheduledAt + debateDurationMinutes — listing/join window end
   scheduledAt         DateTime?           // Scheduled start time for the debate
   startTime           DateTime?           // When debate actually starts (after prep)
   endTime             DateTime?           // When debate ends

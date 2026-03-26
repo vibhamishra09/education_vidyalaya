@@ -78,9 +78,19 @@ export default function DebateRoomsPage() {
   const [newTurnDuration, setNewTurnDuration] = useState(120);
   const [newPrepTime, setNewPrepTime] = useState(30);
   const [newTurnOrder, setNewTurnOrder] = useState<TurnOrderType>(TurnOrderType.FIFO);
+  const [newDebateDurationMinutes, setNewDebateDurationMinutes] = useState(60);
   const [newDate, setNewDate] = useState('');
   const [newTime, setNewTime] = useState('');
-  const [scheduleForLater, setScheduleForLater] = useState(false);
+  /** "now" = open lobby with no fixed start; "scheduled" = require date + time */
+  const [scheduleMode, setScheduleMode] = useState<'now' | 'scheduled'>('now');
+
+  // Keep date/time inputs in sync when switching modes
+  useEffect(() => {
+    if (scheduleMode === 'now') {
+      setNewDate('');
+      setNewTime('');
+    }
+  }, [scheduleMode]);
 
   const createDebateRoom = useCreateDebateRoom();
 
@@ -90,15 +100,21 @@ export default function DebateRoomsPage() {
       return;
     }
 
-    if (scheduleForLater && (!newDate || !newTime)) {
-      showError('Validation Error', 'Date and time are required when scheduling for later');
+    if (scheduleMode === 'scheduled' && (!newDate || !newTime)) {
+      showError('Validation Error', 'Choose both date and time when scheduling a start, or switch to “Start when ready”.');
       return;
     }
 
-    // Combine date and time into ISO string if scheduling
-    const scheduledAt = scheduleForLater && newDate && newTime 
-      ? `${newDate}T${newTime}:00` 
-      : undefined;
+    const sessionMins = Math.round(Number(newDebateDurationMinutes));
+    if (!Number.isFinite(sessionMins) || sessionMins < 5 || sessionMins > 24 * 60) {
+      showError('Validation Error', 'Debate duration must be between 5 and 1440 minutes.');
+      return;
+    }
+
+    const scheduledAt =
+      scheduleMode === 'scheduled' && newDate && newTime
+        ? `${newDate}T${newTime}:00`
+        : undefined;
 
     try {
       const room = await createDebateRoom.mutateAsync({
@@ -109,6 +125,7 @@ export default function DebateRoomsPage() {
         prepTimeSeconds: newPrepTime,
         turnOrder: newTurnOrder,
         scheduledAt,
+        debateDurationMinutes: sessionMins,
       });
 
       showSuccess('Debate Room Created', 'Your debate room has been created!');
@@ -127,9 +144,10 @@ export default function DebateRoomsPage() {
     setNewTurnDuration(120);
     setNewPrepTime(30);
     setNewTurnOrder(TurnOrderType.FIFO);
+    setNewDebateDurationMinutes(60);
     setNewDate('');
     setNewTime('');
-    setScheduleForLater(false);
+    setScheduleMode('now');
   };
 
   return (
@@ -189,22 +207,29 @@ export default function DebateRoomsPage() {
                   />
                 </div>
 
-                {/* Schedule Toggle */}
-                <div className="space-y-2">
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      id="scheduleForLater"
-                      checked={scheduleForLater}
-                      onChange={(e) => setScheduleForLater(e.target.checked)}
-                      className="h-4 w-4 rounded border-gray-300"
-                    />
-                    <Label htmlFor="scheduleForLater" className="text-sm font-medium cursor-pointer">
-                      Schedule for later
+                {/* When the debate should start (listing expiry uses scheduled time for WAITING rooms) */}
+                <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-3">
+                  <div>
+                    <Label htmlFor="debate-start-mode" className="text-base">
+                      When should the debate start?
                     </Label>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Choose a fixed date and time so participants know when to show up, or open the room with no fixed start.
+                    </p>
                   </div>
-                  {scheduleForLater && (
-                    <div className="grid grid-cols-2 gap-4 mt-2">
+                  <select
+                    id="debate-start-mode"
+                    value={scheduleMode}
+                    onChange={(e) =>
+                      setScheduleMode(e.target.value === 'scheduled' ? 'scheduled' : 'now')
+                    }
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <option value="now">Start when ready — no fixed date/time</option>
+                    <option value="scheduled">Schedule a specific date &amp; time</option>
+                  </select>
+                  {scheduleMode === 'scheduled' && (
+                    <div className="grid grid-cols-2 gap-4 pt-1">
                       <div className="space-y-2">
                         <Label htmlFor="date">Date *</Label>
                         <Input
@@ -213,7 +238,7 @@ export default function DebateRoomsPage() {
                           value={newDate}
                           onChange={(e) => setNewDate(e.target.value)}
                           min={new Date().toISOString().split('T')[0]}
-                          required={scheduleForLater}
+                          required
                         />
                       </div>
 
@@ -224,16 +249,32 @@ export default function DebateRoomsPage() {
                           type="time"
                           value={newTime}
                           onChange={(e) => setNewTime(e.target.value)}
-                          required={scheduleForLater}
+                          required
                         />
                       </div>
                     </div>
                   )}
+                  <div className="space-y-2 pt-1 border-t border-border/60">
+                    <Label htmlFor="debate-session-mins">Debate duration (minutes) *</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Total planned session. With a scheduled start, the lobby expires from listings after start + this duration.
+                    </p>
+                    <Input
+                      id="debate-session-mins"
+                      type="number"
+                      min={5}
+                      max={1440}
+                      step={1}
+                      value={newDebateDurationMinutes}
+                      onChange={(e) => setNewDebateDurationMinutes(Number(e.target.value))}
+                      required
+                    />
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="duration">Duration per participant (minutes) *</Label>
+                    <Label htmlFor="duration">Per-turn speaking time (minutes) *</Label>
                     <Input
                       id="duration"
                       type="number"
@@ -322,7 +363,7 @@ export default function DebateRoomsPage() {
                 </Button>
                 <Button
                   onClick={handleCreate}
-                  disabled={createDebateRoom.isPending || !newTopic.trim() || (scheduleForLater && (!newDate || !newTime))}
+                  disabled={createDebateRoom.isPending || !newTopic.trim() || (scheduleMode === 'scheduled' && (!newDate || !newTime))}
                 >
                   {createDebateRoom.isPending ? (
                     <>
@@ -330,7 +371,7 @@ export default function DebateRoomsPage() {
                       Creating...
                     </>
                   ) : (
-                    scheduleForLater ? 'Schedule Debate' : 'Create Now'
+                    scheduleMode === 'scheduled' ? 'Schedule debate' : 'Create now'
                   )}
                 </Button>
               </DialogFooter>

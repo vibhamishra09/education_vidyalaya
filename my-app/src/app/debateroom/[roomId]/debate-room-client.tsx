@@ -74,6 +74,7 @@ import {
   TurnOrderType,
   getUserDebateRole,
   getUserTeamSide,
+  estimateDebateSessionMinutes,
 } from '@/types/debate.types';
 import {
   DebateTeamsDisplay,
@@ -88,6 +89,21 @@ import { extractHttpErrorMessage } from '@/lib/utils/error-handling';
 
 interface DebateRoomClientProps {
   roomId: string;
+}
+
+/** Last instant users can join: lobby slot end (backend: scheduledAt + debateDurationMinutes). */
+function getDebateJoinDeadline(room: {
+  debateSlotEndsAt?: string | null;
+  scheduledAt?: string | null;
+  debateDurationMinutes?: number;
+}): Date | null {
+  if (room.debateSlotEndsAt) return new Date(room.debateSlotEndsAt);
+  if (room.scheduledAt) {
+    const start = new Date(room.scheduledAt);
+    const mins = room.debateDurationMinutes ?? 60;
+    return new Date(start.getTime() + mins * 60_000);
+  }
+  return null;
 }
 
 // Simple inline timer component for status display
@@ -497,11 +513,11 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
   const againstCount = againstTeam?.participants.length || 0;
   const bothTeamsHaveParticipants = forCount >= 1 && againstCount >= 1;
   
-  // Check if scheduled time has passed
   const scheduledTime = room.scheduledAt ? new Date(room.scheduledAt) : null;
   const now = new Date();
-  const isScheduledTimePassed = scheduledTime ? now > scheduledTime : false;
-  const canJoin = !isScheduledTimePassed && room.status === DebateStatus.WAITING;
+  const joinDeadline = getDebateJoinDeadline(room);
+  const isJoinWindowClosed = joinDeadline ? now > joinDeadline : false;
+  const canJoin = !isJoinWindowClosed && room.status === DebateStatus.WAITING;
   
   // Can start only if both teams have participants
   const canStart = bothTeamsHaveParticipants;
@@ -828,9 +844,9 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
                     {isModerator ? 'Join as Participant' : 'Join this Debate'}
                   </CardTitle>
                   <CardDescription>
-                    {isScheduledTimePassed ? (
+                    {isJoinWindowClosed ? (
                       <span className="text-red-500">
-                        The scheduled time has passed. Joining is no longer available.
+                        The lobby join period has ended (scheduled window + debate duration). Joining is no longer available.
                       </span>
                     ) : isOnlyModerator ? (
                       <span className="text-amber-500">
@@ -915,12 +931,12 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
                   )}
 
                   {/* Show warning when joining is not allowed */}
-                  {(isScheduledTimePassed || isOnlyModerator) && (
+                  {(isJoinWindowClosed || isOnlyModerator) && (
                     <div className="text-center py-4">
                       <AlertCircle className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
                       <p className="text-sm text-muted-foreground">
-                        {isScheduledTimePassed 
-                          ? 'Joining is closed after the scheduled time'
+                        {isJoinWindowClosed
+                          ? 'Joining is closed after the lobby window (start + debate duration)'
                           : 'You cannot join as participant while being the only moderator'}
                       </p>
                     </div>
@@ -1087,23 +1103,35 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
                   </div>
 
                   <div className="pt-1 space-y-2.5">
-                {/* Scheduled time warning */}
-                {scheduledTime && room.status === DebateStatus.WAITING && (
-                  <div className={cn(
-                    "p-2 rounded-md text-xs mb-2",
-                    isScheduledTimePassed 
-                      ? "bg-red-500/10 text-red-600 border border-red-500/20" 
-                      : "bg-blue-500/10 text-blue-600 border border-blue-500/20"
-                  )}>
-                    <div className="flex items-center gap-1 mb-1">
-                      <Calendar className="h-3 w-3" />
+                {/* Scheduled start + join-until (lobby = start + debate duration) */}
+                {joinDeadline && room.status === DebateStatus.WAITING && (
+                  <div
+                    className={cn(
+                      'p-2 rounded-md text-xs mb-2',
+                      isJoinWindowClosed
+                        ? 'bg-red-500/10 text-red-600 border border-red-500/20'
+                        : scheduledTime && now > scheduledTime
+                          ? 'bg-amber-500/10 text-amber-800 dark:text-amber-200 border border-amber-500/20'
+                          : 'bg-blue-500/10 text-blue-600 border border-blue-500/20',
+                    )}
+                  >
+                    {scheduledTime && (
+                      <p className="mb-1 opacity-90">
+                        <span className="font-medium">Scheduled start: </span>
+                        {scheduledTime.toLocaleString()}
+                      </p>
+                    )}
+                    <div className="flex items-center gap-1 mb-0.5">
+                      <Calendar className="h-3 w-3 shrink-0" />
                       <span className="font-medium">
-                        {isScheduledTimePassed ? 'Scheduled time passed' : 'Scheduled for:'}
+                        {isJoinWindowClosed
+                          ? 'Join period ended'
+                          : 'Join open until:'}
                       </span>
                     </div>
-                    <span>{scheduledTime.toLocaleString()}</span>
-                    {isScheduledTimePassed && (
-                      <p className="mt-1 text-red-500">
+                    <span>{joinDeadline.toLocaleString()}</span>
+                    {isJoinWindowClosed && (
+                      <p className="mt-1 text-red-600 dark:text-red-400">
                         <AlertCircle className="h-3 w-3 inline mr-1" />
                         Joining is no longer available
                       </p>
@@ -1229,12 +1257,39 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
                 <CardTitle className="text-sm">Room Settings</CardTitle>
               </CardHeader>
               <CardContent className="text-sm space-y-2 text-muted-foreground">
-                {room.scheduledAt && (
-                  <div className="flex justify-between">
-                    <span>Scheduled</span>
-                    <span>{new Date(room.scheduledAt).toLocaleString()}</span>
-                  </div>
-                )}
+                <div className="flex justify-between gap-3">
+                  <span>Start time</span>
+                  <span className="shrink-0 text-right font-medium text-foreground max-w-[min(100%,14rem)]">
+                    {room.scheduledAt
+                      ? new Date(room.scheduledAt).toLocaleString()
+                      : room.startTime
+                        ? new Date(room.startTime).toLocaleString()
+                        : room.status === DebateStatus.WAITING
+                          ? 'Flexible'
+                          : '—'}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <span>Debate duration</span>
+                  <span className="shrink-0 text-right font-medium text-foreground">
+                    {room.debateDurationMinutes != null ? (
+                      `${room.debateDurationMinutes} min`
+                    ) : (
+                      <span>
+                        ~
+                        {estimateDebateSessionMinutes(
+                          room.turnDurationSeconds,
+                          room.maxParticipants,
+                        )}{' '}
+                        min
+                        <span className="text-[10px] font-normal text-muted-foreground">
+                          {' '}
+                          (est.)
+                        </span>
+                      </span>
+                    )}
+                  </span>
+                </div>
                 <div className="flex justify-between">
                   <span>Turn Duration</span>
                   <span>{room.turnDurationSeconds}s</span>
