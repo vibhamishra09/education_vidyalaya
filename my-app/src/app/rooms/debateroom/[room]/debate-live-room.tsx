@@ -66,6 +66,7 @@ import {
   TeamChatMessage,
   BuzzerPressedEvent,
   DebateUserRole,
+  estimateDebateSessionMinutes,
 } from '@/types/debate.types';
 import {
   SimpleTimer,
@@ -1528,6 +1529,46 @@ function DebateLiveContent({
                         </div>
                       </div>
                     )}
+
+                    {/* Room settings (start + total session length) */}
+                    <div className="rounded-lg border border-white/10 bg-white/5 p-3 space-y-2">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Clock className="h-3.5 w-3.5 text-white/50" />
+                        <span className="text-xs font-semibold text-white/80 uppercase tracking-wide">
+                          Room settings
+                        </span>
+                      </div>
+                      <div className="flex justify-between gap-2 text-xs">
+                        <span className="text-white/50 shrink-0">Start time</span>
+                        <span className="text-white text-right max-w-[min(100%,14rem)]">
+                          {debateRoom.scheduledAt
+                            ? new Date(debateRoom.scheduledAt).toLocaleString()
+                            : debateRoom.startTime
+                              ? new Date(debateRoom.startTime).toLocaleString()
+                              : debateRoom.status === DebateStatus.WAITING
+                                ? 'Flexible'
+                                : '—'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between gap-2 text-xs">
+                        <span className="text-white/50">Debate duration</span>
+                        <span className="text-white font-medium text-right">
+                          {debateRoom.debateDurationMinutes != null ? (
+                            `${debateRoom.debateDurationMinutes} min`
+                          ) : (
+                            <>
+                              ~
+                              {estimateDebateSessionMinutes(
+                                debateRoom.turnDurationSeconds,
+                                debateRoom.maxParticipants,
+                              )}{' '}
+                              min
+                              <span className="text-white/50 font-normal"> (est.)</span>
+                            </>
+                          )}
+                        </span>
+                      </div>
+                    </div>
                     
                     {/* Team FOR Section */}
                     <div>
