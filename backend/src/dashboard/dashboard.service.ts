@@ -387,6 +387,7 @@ export class DashboardService {
                 hostDetailsUpdatedAt: sr.hostDetailsUpdatedAt
                   ? sr.hostDetailsUpdatedAt.toISOString()
                   : null,
+                slug: sr.slug
               })),
               pastStudyRooms: pastStudyRooms.map((sr) => ({
                 id: sr.id,
