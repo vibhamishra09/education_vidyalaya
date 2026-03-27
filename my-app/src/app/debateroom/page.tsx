@@ -363,7 +363,14 @@ export default function DebateRoomsPage() {
                 </Button>
                 <Button
                   onClick={handleCreate}
-                  disabled={createDebateRoom.isPending || !newTopic.trim() || (scheduleMode === 'scheduled' && (!newDate || !newTime))}
+                  disabled={
+                    createDebateRoom.isPending ||
+                    !newTopic.trim() ||
+                    (scheduleMode === 'scheduled' && (!newDate || !newTime)) ||
+                    !Number.isFinite(Number(newDebateDurationMinutes)) ||
+                    Number(newDebateDurationMinutes) < 5 ||
+                    Number(newDebateDurationMinutes) > 24 * 60
+                  }
                 >
                   {createDebateRoom.isPending ? (
                     <>
@@ -410,11 +417,12 @@ export default function DebateRoomsPage() {
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="ALL">All Debates</SelectItem>
+              <SelectItem value="ALL">Active debates</SelectItem>
               <SelectItem value={DebateStatus.WAITING}>Waiting</SelectItem>
               <SelectItem value={DebateStatus.PREP}>In Prep</SelectItem>
               <SelectItem value={DebateStatus.LIVE}>Live</SelectItem>
               <SelectItem value={DebateStatus.ENDED}>Ended</SelectItem>
+              <SelectItem value={DebateStatus.CANCELLED}>Cancelled</SelectItem>
             </SelectContent>
           </Select>
 

@@ -7,6 +7,7 @@ import {
   Param,
   Query,
   UseGuards,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { StudyRoomsService } from './study-rooms.service';
 import { LoggerService } from '../common/logger/logger.service';
@@ -140,12 +141,18 @@ export class StudyRoomsController {
   @UseGuards(ClerkAuthGuard)
   async updateStudyRoom(
     @Param('studyRoomId') studyRoomId: string,
-    @CurrentUser('dbUserId') userId: string,
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
     @Body() updateDto: UpdateStudyRoomDto,
   ) {
+    // Match createStudyRoom: JWT may omit metadata.dbUserId; resolve user by Clerk id in service.
+    const actorKey = dbUserId ?? clerkUserId;
+    if (!actorKey) {
+      throw new UnauthorizedException('User identity missing');
+    }
     return this.studyRoomsService.updateStudyRoom(
       studyRoomId,
-      userId,
+      actorKey,
       updateDto,
     );
   }
