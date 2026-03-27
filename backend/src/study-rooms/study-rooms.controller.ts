@@ -7,6 +7,7 @@ import {
   Param,
   Query,
   UseGuards,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { StudyRoomsService } from './study-rooms.service';
 import { LoggerService } from '../common/logger/logger.service';
@@ -111,33 +112,47 @@ export class StudyRoomsController {
   async getStudyRoomDetails(
     @Param('studyRoomId') studyRoomId: string,
     @CurrentUser('dbUserId') userId?: string,
+    @CurrentUser('clerkId') clerkUserId?: string,
   ) {
-    return this.studyRoomsService.getStudyRoomDetails(studyRoomId, userId);
+    return this.studyRoomsService.getStudyRoomDetails(
+      studyRoomId,
+      userId ?? clerkUserId,
+    );
   }
 
   @Post()
   @UseGuards(ClerkAuthGuard)
   async createStudyRoom(
-    @CurrentUser('dbUserId') userId: string,
+    @CurrentUser('dbUserId') userId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
     @Body() createDto: CreateStudyRoomDto,
   ) {
     this.logger.debug({
       message: 'Creating study room',
       createDto,
     });
-    return this.studyRoomsService.createStudyRoom(userId, createDto);
+    return this.studyRoomsService.createStudyRoom(
+      userId ?? clerkUserId,
+      createDto,
+    );
   }
 
   @Patch(':studyRoomId')
   @UseGuards(ClerkAuthGuard)
   async updateStudyRoom(
     @Param('studyRoomId') studyRoomId: string,
-    @CurrentUser('dbUserId') userId: string,
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
     @Body() updateDto: UpdateStudyRoomDto,
   ) {
+    // Match createStudyRoom: JWT may omit metadata.dbUserId; resolve user by Clerk id in service.
+    const actorKey = dbUserId ?? clerkUserId;
+    if (!actorKey) {
+      throw new UnauthorizedException('User identity missing');
+    }
     return this.studyRoomsService.updateStudyRoom(
       studyRoomId,
-      userId,
+      actorKey,
       updateDto,
     );
   }

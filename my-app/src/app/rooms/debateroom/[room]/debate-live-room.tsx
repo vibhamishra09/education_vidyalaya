@@ -13,7 +13,6 @@ import {
   useSpeakingParticipants,
 } from '@livekit/components-react';
 import { Track, RoomOptions, VideoPresets, RemoteParticipant } from 'livekit-client';
-import { KrispNoiseFilter, isKrispNoiseFilterSupported } from '@livekit/krisp-noise-filter';
 import { io, Socket } from 'socket.io-client';
 import type { TrackReferenceOrPlaceholder } from '@livekit/components-react';
 import '@livekit/components-styles';
@@ -52,6 +51,8 @@ import {
   MousePointer2,
   MousePointerClick,
   MousePointer,
+  Pin,
+  PinOff,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
@@ -64,6 +65,7 @@ import {
   TeamChatMessage,
   BuzzerPressedEvent,
   DebateUserRole,
+  DebateParticipant,
 } from '@/types/debate.types';
 import {
   SimpleTimer,
@@ -342,6 +344,7 @@ function DebateLiveContent({
   const [isAudioOutputEnabled, setIsAudioOutputEnabled] = useState(true);
   const [viewMode, setViewMode] = useState<'speaker' | 'grid'>('speaker');
   const [isRoomConnected, setIsRoomConnected] = useState(false);
+  const [pinnedParticipantId, setPinnedParticipantId] = useState<string | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [isModeratorOnly, setIsModeratorOnly] = useState(false);
@@ -540,6 +543,16 @@ function DebateLiveContent({
   const screenShareTracks = useTracks(
     [{ source: Track.Source.ScreenShare, withPlaceholder: false }]
   );
+
+  // Pinned track
+  const pinnedTrack = useMemo(() => {
+    if (!pinnedParticipantId) return null;
+    return cameraTracks.find(t => t.participant.identity === pinnedParticipantId);
+  }, [cameraTracks, pinnedParticipantId]);
+
+  const togglePin = useCallback((participantId: string) => {
+    setPinnedParticipantId(prev => (prev === participantId ? null : participantId));
+  }, []);
   
 
   // Track room connection state
@@ -570,16 +583,28 @@ function DebateLiveContent({
     };
   }, [room]);
 
-  // Apply Krisp AI noise suppression to microphone track
+  // Apply Krisp AI noise suppression (browser-only; package uses Worker — must not load on SSR)
   useEffect(() => {
-    if (!localParticipant || !isKrispNoiseFilterSupported()) return;
-    const micPublication = localParticipant.getTrackPublication(Track.Source.Microphone);
-    const micTrack = micPublication?.audioTrack;
-    if (!micTrack) return;
-    const filter = KrispNoiseFilter();
-    micTrack.setProcessor(filter).catch(() => {});
+    if (!localParticipant || typeof window === 'undefined') return;
+    let cancelled = false;
+    const trackRef: { current: { stopProcessor: () => Promise<void> } | null } = { current: null };
+
+    void import('@livekit/krisp-noise-filter')
+      .then(({ KrispNoiseFilter, isKrispNoiseFilterSupported }) => {
+        if (cancelled || !localParticipant || !isKrispNoiseFilterSupported()) return;
+        const micPublication = localParticipant.getTrackPublication(Track.Source.Microphone);
+        const micTrack = micPublication?.audioTrack;
+        if (!micTrack) return;
+        trackRef.current = micTrack;
+        const filter = KrispNoiseFilter();
+        micTrack.setProcessor(filter).catch(() => {});
+      })
+      .catch(() => {});
+
     return () => {
-      micTrack.stopProcessor().catch(() => {});
+      cancelled = true;
+      trackRef.current?.stopProcessor().catch(() => {});
+      trackRef.current = null;
     };
   }, [localParticipant]);
 
@@ -600,6 +625,17 @@ function DebateLiveContent({
       chatScrollRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
     }
   }, [chatMessages, sidebarTab]);
+
+  // Get participant avatar from metadata
+  const getParticipantAvatar = useCallback((participant: { metadata?: string | null }): string | null => {
+    if (!participant.metadata) return null;
+    try {
+      const metadata = JSON.parse(participant.metadata);
+      return metadata.avatar || null;
+    } catch (e) {
+      return null;
+    }
+  }, []);
 
   // Send chat message via API
   const sendChatMessage = useCallback(async () => {
@@ -740,6 +776,14 @@ function DebateLiveContent({
       return 'MODERATOR';
     }
 
+    // Host/moderator video is not placed in FOR or AGAINST columns (matches sidebar: team = debaters only)
+    const isModeratorUser = debateRoom.moderators.some(
+      (m) => m.user.id === identity || m.user.clerkId === identity,
+    );
+    if (isModeratorUser) {
+      return 'MODERATOR';
+    }
+
     const forTeam = debateRoom.teams.find(t => t.side === DebateSide.FOR);
     const againstTeam = debateRoom.teams.find(t => t.side === DebateSide.AGAINST);
 
@@ -749,7 +793,7 @@ function DebateLiveContent({
     
     // If no match found, return MODERATOR (includes host and unmatched participants)
     return 'MODERATOR';
-  }, [debateRoom.teams]);
+  }, [debateRoom.teams, debateRoom.moderators]);
 
   // Get moderators from debate room
   const moderators = useMemo(() => {
@@ -761,8 +805,8 @@ function DebateLiveContent({
     }));
   }, [debateRoom.moderators]);
 
-  // Filter tracks by team side - in grid mode, show ALL tracks in both panels
-  const { forTracks, againstTracks, moderatorTracks, allTracks } = useMemo(() => {
+  // Filter tracks by team side (moderator-only feeds stay out of FOR/AGAINST columns)
+  const { forTracks, againstTracks, allTracks } = useMemo(() => {
     const forTracks: TrackReferenceOrPlaceholder[] = [];
     const againstTracks: TrackReferenceOrPlaceholder[] = [];
     const moderatorTracks: TrackReferenceOrPlaceholder[] = [];
@@ -781,12 +825,12 @@ function DebateLiveContent({
 
     console.log('[DebateRoom] Filtered tracks - FOR:', forTracks.length, 'AGAINST:', againstTracks.length, 'MODERATOR:', moderatorTracks.length);
 
-    return { forTracks, againstTracks, moderatorTracks, allTracks: cameraTracks };
+    return { forTracks, againstTracks, allTracks: cameraTracks };
   }, [cameraTracks, getParticipantSide]);
 
   // Get visible tracks based on view mode
   // Presenter view: shows only the person speaking (or first person if none speaking)
-  // Grid view: shows all participants including moderators
+  // Grid view: shows all participants on that team
   const getVisibleTracks = useCallback((tracks: TrackReferenceOrPlaceholder[], mode: 'speaker' | 'grid') => {
     if (mode === 'grid') return tracks;
     
@@ -800,77 +844,50 @@ function DebateLiveContent({
     return tracks.length > 0 ? [tracks[0]] : [];
   }, [speakingParticipants]);
 
-  // For grid view, include moderators with teams
-  // For presenter view, show only active speaker or first participant
-  const getTracksForPanel = useCallback((
-    panelSide: 'FOR' | 'AGAINST',
-    teamTracks: TrackReferenceOrPlaceholder[],
-    moderatorTracks: TrackReferenceOrPlaceholder[],
-    allTracks: TrackReferenceOrPlaceholder[],
-    mode: 'speaker' | 'grid'
-  ): TrackReferenceOrPlaceholder[] => {
-    // In grid view, include moderators with team tracks
-    if (mode === 'grid') {
-      if (teamTracks.length > 0) {
-        // Show team members + half of moderators in each panel
-        const halfMods = Math.ceil(moderatorTracks.length / 2);
-        const modsForThisPanel = panelSide === 'FOR' 
-          ? moderatorTracks.slice(0, halfMods)
-          : moderatorTracks.slice(halfMods);
-        return [...teamTracks, ...modsForThisPanel];
-      }
-    } else {
-      // Presenter mode: show only team tracks
-      if (teamTracks.length > 0) {
-        return getVisibleTracks(teamTracks, mode);
-      }
-    }
-    
-    // No team-specific tracks - fall back to showing all tracks distributed
-    // This handles when participants haven't been assigned to teams yet
-    // or when team assignment doesn't match LiveKit identity
-    
-    if (allTracks.length === 0) return [];
-    
-    // In grid mode with no team assignments, split all tracks between panels
-    if (mode === 'grid') {
-      const halfIndex = Math.ceil(allTracks.length / 2);
-      if (panelSide === 'FOR') {
-        return allTracks.slice(0, halfIndex);
-      } else {
-        return allTracks.slice(halfIndex);
-      }
-    }
-    
-    // In speaker mode with no team assignments, show speaking participant or first
-    const speakingIds = speakingParticipants.map(p => p.identity);
-    const speaking = allTracks.find(t => speakingIds.includes(t.participant.identity) || t.participant.isSpeaking);
-    
-    if (speaking) {
-      const side = getParticipantSide(speaking.participant.identity);
-      // Show the speaker in the appropriate panel
-      if (side === DebateSide.FOR && panelSide === 'FOR') return [speaking];
-      if (side === DebateSide.AGAINST && panelSide === 'AGAINST') return [speaking];
-      // If speaker is moderator or side doesn't match, show in FOR panel only
-      if (panelSide === 'FOR') return [speaking];
-      return [];
-    }
-    
-    // Default: show first participant in FOR panel only (to avoid duplication)
-    if (panelSide === 'FOR') return [allTracks[0]];
-    return [];
-  }, [getVisibleTracks, getParticipantSide, speakingParticipants]);
-
-  // Memoize the tracks to display for each panel
-  const forPanelTracks = useMemo(() => 
-    getTracksForPanel('FOR', forTracks, moderatorTracks, allTracks, viewMode),
-    [getTracksForPanel, forTracks, moderatorTracks, allTracks, viewMode]
+  // FOR / AGAINST columns: only tracks for people assigned to that team (matches sidebar counts).
+  // Moderator-only video is not placed in either team column.
+  const getTeamPanelTracks = useCallback(
+    (teamTracks: TrackReferenceOrPlaceholder[], mode: 'speaker' | 'grid'): TrackReferenceOrPlaceholder[] => {
+      if (teamTracks.length === 0) return [];
+      if (mode === 'grid') return teamTracks;
+      return getVisibleTracks(teamTracks, mode);
+    },
+    [getVisibleTracks],
   );
 
-  const againstPanelTracks = useMemo(() => 
-    getTracksForPanel('AGAINST', againstTracks, moderatorTracks, allTracks, viewMode),
-    [getTracksForPanel, againstTracks, moderatorTracks, allTracks, viewMode]
+  const forPanelTracks = useMemo(
+    () => getTeamPanelTracks(forTracks, viewMode),
+    [getTeamPanelTracks, forTracks, viewMode],
   );
+
+  const againstPanelTracks = useMemo(
+    () => getTeamPanelTracks(againstTracks, viewMode),
+    [getTeamPanelTracks, againstTracks, viewMode],
+  );
+
+  /** Team column counts & sidebar rows = debaters only (moderators are separate; never in FOR/AGAINST columns) */
+  const {
+    forTeamParticipantCount,
+    againstTeamParticipantCount,
+    forTeamDebaters,
+    againstTeamDebaters,
+  } = useMemo(() => {
+    const modIds = new Set(
+      debateRoom.moderators.flatMap((m) => [m.user.id, m.user.clerkId].filter(Boolean) as string[]),
+    );
+    const forTeam = debateRoom.teams.find((t) => t.side === DebateSide.FOR);
+    const againstTeam = debateRoom.teams.find((t) => t.side === DebateSide.AGAINST);
+    const stripMods = (participants: DebateParticipant[] | undefined) =>
+      (participants ?? []).filter((p) => !modIds.has(p.user.id) && !modIds.has(p.user.clerkId));
+    const forTeamDebaters = stripMods(forTeam?.participants);
+    const againstTeamDebaters = stripMods(againstTeam?.participants);
+    return {
+      forTeamParticipantCount: forTeamDebaters.length,
+      againstTeamParticipantCount: againstTeamDebaters.length,
+      forTeamDebaters,
+      againstTeamDebaters,
+    };
+  }, [debateRoom.teams, debateRoom.moderators]);
 
   const isModerator = userRole === 'host' || userRole === 'moderator';
   const isPrepPhase = debateRoom.status === DebateStatus.PREP;
@@ -1008,22 +1025,30 @@ function DebateLiveContent({
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-3 flex-shrink-0">
-          {/* View Mode Toggle */}
+          {/* View Mode Toggle — label shows active layout; click switches to the other */}
           <Button
             variant="ghost"
             size="sm"
+            type="button"
             onClick={() => setViewMode(viewMode === 'speaker' ? 'grid' : 'speaker')}
-            className="text-white/70 hover:text-white hover:bg-white/10 h-8 w-8 sm:h-9 sm:w-auto sm:px-3 p-0"
+            title={viewMode === 'speaker' ? 'Switch to grid view' : 'Switch to presenter view'}
+            aria-label={viewMode === 'speaker' ? 'Presenter view active. Switch to grid view.' : 'Grid view active. Switch to presenter view.'}
+            className={cn(
+              'text-white/80 hover:text-white hover:bg-white/10 h-8 w-8 sm:h-9 sm:w-auto sm:px-3 p-0 border',
+              viewMode === 'speaker'
+                ? 'border-white/25 bg-white/5'
+                : 'border-green-500/35 bg-green-500/10',
+            )}
           >
             {viewMode === 'speaker' ? (
               <>
-                <Grid2X2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 sm:mr-2" />
-                <span className="hidden sm:inline">Grid View</span>
+                <Focus className="h-3.5 w-3.5 sm:h-4 sm:w-4 sm:mr-2 shrink-0" />
+                <span className="hidden sm:inline">Presenter</span>
               </>
             ) : (
               <>
-                <Focus className="h-3.5 w-3.5 sm:h-4 sm:w-4 sm:mr-2" />
-                <span className="hidden sm:inline">Presenter View</span>
+                <Grid2X2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 sm:mr-2 shrink-0" />
+                <span className="hidden sm:inline">Grid</span>
               </>
             )}
           </Button>
@@ -1065,8 +1090,8 @@ function DebateLiveContent({
             </div>
           )}
 
-          {/* Screen Share Overlay */}
-          {activeScreenShare && (
+          {/* Screen Share Overlay - Only shown if no participant is pinned and not in split mode */}
+          {activeScreenShare && !pinnedParticipantId && (
             <div className="absolute inset-0 z-10 bg-black/90 flex flex-col items-center justify-center p-4">
               <div className="w-full h-full max-h-[75vh] flex items-center justify-center relative group">
                 <div className="relative inline-block max-w-full max-h-full">
@@ -1120,6 +1145,125 @@ function DebateLiveContent({
             </div>
           )}
 
+          {/* Split Screen Overlay - Shown when BOTH are active */}
+          {activeScreenShare && pinnedParticipantId && pinnedTrack && (
+            <div className="absolute inset-0 z-10 bg-[#0a0a0a] flex flex-col md:flex-row gap-3 p-3">
+              {/* Screen Share Side */}
+              <div className="flex-1 relative bg-black/40 rounded-xl overflow-hidden group border border-white/5 flex items-center justify-center">
+                {isTrackReference(activeScreenShare) ? (
+                  <VideoTrack
+                    trackRef={activeScreenShare}
+                    className="w-full h-full object-contain rounded-lg"
+                  />
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <MonitorUp className="h-16 w-16 text-white/10" />
+                  </div>
+                )}
+                <div className="absolute bottom-4 left-4 bg-blue-500/90 backdrop-blur-md text-white text-[10px] font-bold px-3 py-1 rounded-full flex items-center gap-2 shadow-lg z-20 border border-white/10">
+                  <MonitorUp className="h-3 w-3" />
+                  <span>{activeScreenShare.participant.name || activeScreenShare.participant.identity} - SCREEN</span>
+                </div>
+                
+                <RemoteControlOverlay
+                  isControlling={isControlling}
+                  isSharing={activeScreenShare.participant.identity === localParticipant?.identity}
+                  controllerId={controllerId}
+                  onSendInput={sendInputEvent}
+                  onStopControl={stopControl}
+                  onRevokeControl={revokeControl}
+                />
+              </div>
+
+              {/* Pinned Participant Side */}
+              <div className="flex-1 relative bg-[#1a1a1a] rounded-xl overflow-hidden group border border-blue-500/30 flex items-center justify-center">
+                {pinnedTrack && isTrackReference(pinnedTrack) && pinnedTrack.publication?.track ? (
+                  <VideoTrack
+                    trackRef={pinnedTrack}
+                    className={`w-full h-full object-contain rounded-lg ${pinnedTrack.participant.isLocal ? 'scale-x-[-1]' : ''}`}
+                  />
+                ) : (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-[#252525] to-[#1a1a1a]">
+                    {(() => {
+                      const avatarUrl = getParticipantAvatar(pinnedTrack.participant);
+                      return avatarUrl ? (
+                        <Image
+                          src={avatarUrl}
+                          alt={pinnedTrack.participant.name || 'Participant'}
+                          width={100}
+                          height={100}
+                          className="w-24 h-24 rounded-full object-cover shadow-2xl border-4 border-white/10"
+                        />
+                      ) : (
+                        <div className="w-24 h-24 rounded-full bg-gradient-to-b from-[#3a3a3a] to-[#2a2a2a] flex items-center justify-center shadow-2xl border-4 border-white/10">
+                          <User className="w-12 h-12 text-white/10" />
+                        </div>
+                      )
+                    })()}
+                    <p className="mt-4 text-white/50 text-[10px] font-bold tracking-[0.2em] uppercase bg-black/30 px-4 py-1.5 rounded-full border border-white/5">Camera Off</p>
+                  </div>
+                )}
+                <div className="absolute bottom-4 left-4 bg-blue-600/90 backdrop-blur-md text-white text-[10px] font-bold px-3 py-1 rounded-full flex items-center gap-2 shadow-lg z-20 border border-white/10">
+                  <Pin className="h-3 w-3 fill-current" />
+                  <span>PINNED: {pinnedTrack?.participant.name || pinnedTrack?.participant.identity}</span>
+                </div>
+                <Button
+                  onClick={() => setPinnedParticipantId(null)}
+                  className="absolute top-4 right-4 bg-black/60 hover:bg-black/80 text-white backdrop-blur-md border border-white/10 rounded-full h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                  title="Unpin"
+                >
+                  <PinOff className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Pinned Participant Overlay - Only shown if NO screen share */}
+          {pinnedTrack && !activeScreenShare && (
+            <div className="absolute inset-0 z-10 bg-black/90 flex flex-col items-center justify-center p-4">
+              <div className="w-full h-full max-h-[85vh] flex items-center justify-center relative group">
+                <div className="relative inline-block max-w-full max-h-full">
+                  {isTrackReference(pinnedTrack) && pinnedTrack.publication?.track ? (
+                    <VideoTrack 
+                      trackRef={pinnedTrack} 
+                      className="w-full h-full object-contain rounded-lg border-2 border-blue-500 shadow-2xl shadow-blue-500/20"
+                    />
+                  ) : (
+                    <div className="bg-gray-800 rounded-lg flex flex-col items-center justify-center w-[600px] aspect-video max-w-full">
+                      {(() => {
+                        const avatarUrl = getParticipantAvatar(pinnedTrack.participant);
+                        return avatarUrl ? (
+                          <Image
+                            src={avatarUrl}
+                            alt={pinnedTrack.participant.name || 'Participant'}
+                            width={160}
+                            height={160}
+                            className="w-40 h-40 rounded-full object-cover shadow-2xl border-4 border-white/10"
+                          />
+                        ) : (
+                          <User className="h-24 w-24 text-white/20 mb-4" />
+                        )
+                      })()}
+                      <p className="text-white font-medium text-xl mt-4">{pinnedTrack.participant.name || pinnedTrack.participant.identity}</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="absolute bottom-4 left-4 bg-blue-600 text-white text-sm px-4 py-2 rounded-full flex items-center gap-2 shadow-xl z-20 font-bold border border-blue-400/30">
+                  <Pin className="h-4 w-4 fill-current text-white" />
+                  <span>Pinned: {pinnedTrack.participant.name || pinnedTrack.participant.identity}</span>
+                </div>
+
+                <Button
+                  onClick={() => setPinnedParticipantId(null)}
+                  className="absolute top-4 right-4 bg-black/60 hover:bg-black/80 text-white backdrop-blur-md border border-white/10 rounded-full h-10 w-10 p-0"
+                  title="Unpin"
+                >
+                  <PinOff className="h-5 w-5" />
+                </Button>
+              </div>
+            </div>
+          )}
           {/* Remote Control Consent UI (Screen Sharer Side) */}
           {pendingRequestFrom && (
             <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-top-4 fade-in duration-300">
@@ -1162,7 +1306,7 @@ function DebateLiveContent({
                 <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-green-500 flex-shrink-0" />
                 <h3 className="text-green-400 font-bold text-sm sm:text-lg truncate">TEAM FOR</h3>
                 <Badge variant="outline" className="bg-green-500/20 border-green-500 text-green-300 text-xs flex-shrink-0">
-                  {forPanelTracks.length}
+                  {forTeamParticipantCount}
                 </Badge>
               </div>
               {userSide === DebateSide.FOR && (
@@ -1183,6 +1327,7 @@ function DebateLiveContent({
                 tracks={forPanelTracks} 
                 teamColor="green"
                 currentSpeakerId={debateState?.currentSpeakerId}
+                layoutMode={viewMode}
               />
             </div>
           </div>
@@ -1223,27 +1368,27 @@ function DebateLiveContent({
 
             {/* Start Debate Button (WAITING status) */}
             {isModerator && debateRoom.status === DebateStatus.WAITING && onStartDebate && (
-              <div className="mt-auto pb-2 sm:pb-4 flex flex-col gap-1.5 sm:gap-2">
+              <div className="mt-auto pb-2 sm:pb-4 flex w-full min-w-0 flex-col items-stretch gap-1.5 sm:gap-2 px-0.5">
                 <Button
                   onClick={onStartDebate}
                   size="sm"
                   disabled={!canStartDebate || isStartingDebate}
-                  className="text-[10px] sm:text-xs bg-green-600 hover:bg-green-700 text-white h-7 sm:h-8 px-2 sm:px-3"
+                  className="w-full min-w-0 max-w-full flex flex-row flex-nowrap items-center justify-center gap-0.5 bg-green-600 hover:bg-green-700 text-white h-auto min-h-0 py-1.5 px-0.5 leading-none tracking-tight whitespace-nowrap shrink"
                 >
                   {isStartingDebate ? (
                     <>
-                      <Loader2 className="h-3 w-3 sm:mr-1 animate-spin" />
-                      <span className="hidden sm:inline">Starting...</span>
+                      <Loader2 className="h-2.5 w-2.5 sm:h-3 sm:w-3 animate-spin shrink-0" />
+                      <span className="text-[6px] sm:text-[7px] md:text-[8px]">Starting…</span>
                     </>
                   ) : (
                     <>
-                      <Play className="h-3 w-3 sm:mr-1" />
-                      <span className="hidden sm:inline">Start Debate</span>
+                      <Play className="h-2.5 w-2.5 sm:h-3 sm:w-3 shrink-0" />
+                      <span className="text-[6px] sm:text-[7px] md:text-[8px]">Start Debate</span>
                     </>
                   )}
                 </Button>
                 {!canStartDebate && (
-                  <p className="text-[8px] sm:text-[10px] text-white/50 text-center px-1">
+                  <p className="text-[8px] sm:text-[10px] text-white/50 text-center px-0.5 leading-tight">
                     Need at least 1 participant per team
                   </p>
                 )}
@@ -1283,7 +1428,7 @@ function DebateLiveContent({
                 <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-red-500 flex-shrink-0" />
                 <h3 className="text-red-400 font-bold text-sm sm:text-lg truncate">TEAM AGAINST</h3>
                 <Badge variant="outline" className="bg-red-500/20 border-red-500 text-red-300 text-xs flex-shrink-0">
-                  {againstPanelTracks.length}
+                  {againstTeamParticipantCount}
                 </Badge>
               </div>
               {userSide === DebateSide.AGAINST && (
@@ -1304,6 +1449,7 @@ function DebateLiveContent({
                 tracks={againstPanelTracks} 
                 teamColor="red"
                 currentSpeakerId={debateState?.currentSpeakerId}
+                layoutMode={viewMode}
               />
             </div>
           </div>
@@ -1381,16 +1527,56 @@ function DebateLiveContent({
                         </div>
                       </div>
                     )}
+
+                    {/* Room settings (start + total session length) */}
+                    <div className="rounded-lg border border-white/10 bg-white/5 p-3 space-y-2">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Clock className="h-3.5 w-3.5 text-white/50" />
+                        <span className="text-xs font-semibold text-white/80 uppercase tracking-wide">
+                          Room settings
+                        </span>
+                      </div>
+                      <div className="flex justify-between gap-2 text-xs">
+                        <span className="text-white/50 shrink-0">Start time</span>
+                        <span className="text-white text-right max-w-[min(100%,14rem)]">
+                          {debateRoom.scheduledAt
+                            ? new Date(debateRoom.scheduledAt).toLocaleString()
+                            : debateRoom.startTime
+                              ? new Date(debateRoom.startTime).toLocaleString()
+                              : debateRoom.status === DebateStatus.WAITING
+                                ? 'Flexible'
+                                : '—'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between gap-2 text-xs">
+                        <span className="text-white/50">Debate duration</span>
+                        <span className="text-white font-medium text-right">
+                          {debateRoom.debateDurationMinutes != null ? (
+                            `${debateRoom.debateDurationMinutes} min`
+                          ) : (
+                            <>
+                              ~
+                              {estimateDebateSessionMinutes(
+                                debateRoom.turnDurationSeconds,
+                                debateRoom.maxParticipants,
+                              )}{' '}
+                              min
+                              <span className="text-white/50 font-normal"> (est.)</span>
+                            </>
+                          )}
+                        </span>
+                      </div>
+                    </div>
                     
                     {/* Team FOR Section */}
                     <div>
                       <div className="flex items-center gap-2 mb-3">
                         <div className="w-2 h-2 rounded-full bg-green-500" />
                         <span className="text-xs font-semibold text-green-400 uppercase tracking-wide">Team For</span>
-                        <span className="text-xs text-white/40">({debateRoom.teams.find(t => t.side === DebateSide.FOR)?.participants.length || 0})</span>
+                        <span className="text-xs text-white/40">({forTeamParticipantCount})</span>
                       </div>
                       <div className="space-y-2">
-                        {debateRoom.teams.find(t => t.side === DebateSide.FOR)?.participants.map((p) => (
+                        {forTeamDebaters.map((p) => (
                           <div 
                             key={p.id} 
                             className={cn(
@@ -1427,10 +1613,10 @@ function DebateLiveContent({
                       <div className="flex items-center gap-2 mb-3">
                         <div className="w-2 h-2 rounded-full bg-red-500" />
                         <span className="text-xs font-semibold text-red-400 uppercase tracking-wide">Team Against</span>
-                        <span className="text-xs text-white/40">({debateRoom.teams.find(t => t.side === DebateSide.AGAINST)?.participants.length || 0})</span>
+                        <span className="text-xs text-white/40">({againstTeamParticipantCount})</span>
                       </div>
                       <div className="space-y-2">
-                        {debateRoom.teams.find(t => t.side === DebateSide.AGAINST)?.participants.map((p) => (
+                        {againstTeamDebaters.map((p) => (
                           <div 
                             key={p.id} 
                             className={cn(
@@ -1830,11 +2016,19 @@ interface TeamVideoGridProps {
   tracks: TrackReferenceOrPlaceholder[];
   teamColor: 'green' | 'red';
   currentSpeakerId?: string | null;
+  /** Presenter = one large tile per panel; grid = multi-tile layout */
+  layoutMode?: 'speaker' | 'grid';
 }
 
-function TeamVideoGrid({ tracks, teamColor, currentSpeakerId }: TeamVideoGridProps) {
+function TeamVideoGrid({
+  tracks,
+  teamColor,
+  currentSpeakerId,
+  layoutMode = 'grid',
+}: TeamVideoGridProps) {
   const borderColor = teamColor === 'green' ? 'border-green-500' : 'border-red-500';
   const shadowColor = teamColor === 'green' ? 'shadow-green-500/30' : 'shadow-red-500/30';
+  const isPresenter = layoutMode === 'speaker';
 
   if (tracks.length === 0) {
     return (
@@ -1848,12 +2042,19 @@ function TeamVideoGrid({ tracks, teamColor, currentSpeakerId }: TeamVideoGridPro
   }
 
   return (
-    <div className={cn(
-      "grid gap-2 sm:gap-3 h-full",
-      tracks.length === 1 && "grid-cols-1",
-      tracks.length === 2 && "grid-cols-1 sm:grid-cols-2",
-      tracks.length >= 3 && "grid-cols-1 sm:grid-cols-2"
-    )}>
+    <div
+      className={cn(
+        'h-full min-h-0',
+        isPresenter
+          ? 'flex flex-col gap-2 sm:gap-3'
+          : cn(
+              'grid gap-2 sm:gap-3',
+              tracks.length === 1 && 'grid-cols-1',
+              tracks.length === 2 && 'grid-cols-1 sm:grid-cols-2',
+              tracks.length >= 3 && 'grid-cols-1 sm:grid-cols-2',
+            ),
+      )}
+    >
       {tracks.map((trackRef) => {
         const isLocal = trackRef.participant.isLocal;
         const hasVideo = isTrackReference(trackRef) && trackRef.publication?.track;
@@ -1875,7 +2076,8 @@ function TeamVideoGrid({ tracks, teamColor, currentSpeakerId }: TeamVideoGridPro
           <div
             key={trackRef.participant.identity}
             className={cn(
-              'relative rounded-xl overflow-hidden bg-gray-800 aspect-video',
+              'relative rounded-xl overflow-hidden bg-gray-800',
+              isPresenter ? 'flex-1 min-h-[180px] sm:min-h-[220px] w-full' : 'aspect-video',
               isSpeaking && `ring-2 ring-offset-2 ring-offset-gray-900 ${teamColor === 'green' ? 'ring-green-500' : 'ring-red-500'}`,
               isCurrentSpeaker && `border-2 ${borderColor} shadow-lg ${shadowColor}`
             )}
@@ -1896,9 +2098,33 @@ function TeamVideoGrid({ tracks, teamColor, currentSpeakerId }: TeamVideoGridPro
             {/* Video layer - on top when available */}
             {hasVideo && (
               <div className="absolute inset-0 z-[2]">
-                <VideoTrack trackRef={trackRef} className="w-full h-full object-cover" />
+                <VideoTrack 
+                  trackRef={trackRef} 
+                  className="w-full h-full object-cover"
+                />
               </div>
             )}
+
+            {/* Pin button overlay */}
+            <div className="absolute top-2 left-2 z-[20] opacity-0 group-hover:opacity-100 transition-opacity">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onTogglePin(trackRef.participant.identity)}
+                className={cn(
+                  "h-7 w-7 p-0 rounded-full border backdrop-blur-md",
+                  pinnedParticipantId === trackRef.participant.identity
+                    ? "bg-blue-600 border-blue-400 text-white"
+                    : "bg-black/40 border-white/10 text-white/70 hover:bg-black/60 hover:text-white"
+                )}
+              >
+                {pinnedParticipantId === trackRef.participant.identity ? (
+                  <PinOff className="h-3.5 w-3.5" />
+                ) : (
+                  <Pin className="h-3.5 w-3.5" />
+                )}
+              </Button>
+            </div>
 
             {/* Name label */}
             <div className="absolute bottom-1 sm:bottom-2 left-1 sm:left-2 right-1 sm:right-2 flex items-center justify-between z-[10]">

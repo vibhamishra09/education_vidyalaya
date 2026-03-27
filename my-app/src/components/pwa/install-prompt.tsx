@@ -140,7 +140,8 @@ export function InstallPrompt() {
   };
 
   // Don't show if user is not signed in, dismissed, or no prompt available
-  if (!isSignedIn || isDismissed || (!deferredPrompt && !/iPad|iPhone|iPod/.test(navigator.userAgent))) {
+  const isIOS = typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent);
+  if (!isSignedIn || isDismissed || (!deferredPrompt && !isIOS)) {
     return null;
   }
 

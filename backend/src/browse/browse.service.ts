@@ -125,7 +125,15 @@ export class BrowseService {
           },
         },
         take: limit,
-        include: {
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          sessionStatus: true,
+          date: true,
+          duration: true,
+          maxParticipants: true,
+          joiningFee: true,
           createdBy: {
             select: {
               id: true,
@@ -146,8 +154,18 @@ export class BrowseService {
               },
             },
           },
-          skills: { include: { skill: { select: { name: true } } } },
-          learners: true,
+          skills: {
+            select: {
+              skill: {
+                select: { name: true },
+              },
+            },
+          },
+          learners: {
+            select: {
+              id: true,
+            },
+          },
         },
         orderBy: { date: 'asc' },
       });
@@ -424,7 +442,15 @@ export class BrowseService {
               where: studyRoomWhere,
               skip,
               take: limit,
-              include: {
+              select: {
+                id: true,
+                title: true,
+                description: true,
+                sessionStatus: true,
+                date: true,
+                duration: true,
+                maxParticipants: true,
+                joiningFee: true,
                 createdBy: {
                   select: {
                     id: true,
@@ -445,8 +471,18 @@ export class BrowseService {
                     },
                   },
                 },
-                skills: { include: { skill: { select: { name: true } } } },
-                learners: true,
+                skills: {
+                  select: {
+                    skill: {
+                      select: { name: true },
+                    },
+                  },
+                },
+                learners: {
+                  select: {
+                    id: true,
+                  },
+                },
               },
               orderBy: { date: 'asc' },
             });
@@ -553,71 +589,99 @@ export class BrowseService {
   }
 
   private async getTrendingStudyRooms(limit: number) {
-    const rooms = await this.prisma.studyRoom.findMany({
-      where: {
-        sessionStatus: {
-          in: [SessionStatus.UPCOMING, SessionStatus.ONGOING],
+    try {
+      const rooms = await this.prisma.studyRoom.findMany({
+        where: {
+          sessionStatus: {
+            in: [SessionStatus.UPCOMING, SessionStatus.ONGOING],
+          },
         },
-      },
-      take: limit,
-      include: {
-        createdBy: {
-          select: {
-            id: true,
-            name: true,
-            avatar: true,
-            reviewsReceived: {
-              select: { rating: true },
-            },
-            _count: {
-              select: {
-                studyRooms: {
-                  where: { sessionStatus: SessionStatus.DONE },
-                },
-                peerSessionsReceived: {
-                  where: { sessionStatus: SessionStatus.DONE },
+        take: limit,
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          sessionStatus: true,
+          date: true,
+          duration: true,
+          maxParticipants: true,
+          joiningFee: true,
+          createdBy: {
+            select: {
+              id: true,
+              name: true,
+              avatar: true,
+              reviewsReceived: {
+                select: { rating: true },
+              },
+              _count: {
+                select: {
+                  studyRooms: {
+                    where: { sessionStatus: SessionStatus.DONE },
+                  },
+                  peerSessionsReceived: {
+                    where: { sessionStatus: SessionStatus.DONE },
+                  },
                 },
               },
             },
           },
+          skills: {
+            select: {
+              skill: {
+                select: { name: true },
+              },
+            },
+          },
+          learners: {
+            select: {
+              id: true,
+            },
+          },
         },
-        skills: { include: { skill: { select: { name: true } } } },
-        learners: true,
-      },
-      orderBy: [{ learners: { _count: 'desc' } }, { date: 'asc' }],
-    });
+        orderBy: [{ learners: { _count: 'desc' } }, { date: 'asc' }],
+      });
 
-    return rooms.map((room) => {
-      const hostReviews = room.createdBy.reviewsReceived;
-      const hostAvgRating =
-        hostReviews.length > 0
-          ? hostReviews.reduce((sum, r) => sum + r.rating, 0) /
-            hostReviews.length
-          : null;
-      const hostTotalSessions =
-        room.createdBy._count.studyRooms +
-        room.createdBy._count.peerSessionsReceived;
+      return rooms.map((room) => {
+        const hostReviews = room.createdBy.reviewsReceived;
+        const hostAvgRating =
+          hostReviews.length > 0
+            ? hostReviews.reduce((sum, r) => sum + r.rating, 0) /
+              hostReviews.length
+            : null;
+        const hostTotalSessions =
+          room.createdBy._count.studyRooms +
+          room.createdBy._count.peerSessionsReceived;
 
-      return {
-        id: room.id,
-        title: room.title,
-        description: room.description,
-        sessionStatus: room.sessionStatus,
-        date: room.date,
-        duration: room.duration,
-        maxParticipants: room.maxParticipants,
-        joiningFee: room.joiningFee,
-        participantCount: room.learners.length,
-        createdBy: {
-          id: room.createdBy.id,
-          name: room.createdBy.name,
-          avatar: room.createdBy.avatar,
-        },
-        skills: room.skills.map((s) => s.skill.name),
-        hostAvgRating,
-        hostReviewCount: hostReviews.length,
-        hostTotalSessions,
-      };
-    });
+        return {
+          id: room.id,
+          title: room.title,
+          description: room.description,
+          sessionStatus: room.sessionStatus,
+          date: room.date,
+          duration: room.duration,
+          maxParticipants: room.maxParticipants,
+          joiningFee: room.joiningFee,
+          participantCount: room.learners.length,
+          createdBy: {
+            id: room.createdBy.id,
+            name: room.createdBy.name,
+            avatar: room.createdBy.avatar,
+          },
+          skills: room.skills.map((s) => s.skill.name),
+          hostAvgRating,
+          hostReviewCount: hostReviews.length,
+          hostTotalSessions,
+        };
+      });
+    } catch (error) {
+      this.logger.warn({
+        message: '[Browse] Trending study rooms query failed; returning empty list',
+        limit,
+        error: error instanceof Error ? error.message : String(error),
+      });
+
+      return [];
+    }
   }
 }

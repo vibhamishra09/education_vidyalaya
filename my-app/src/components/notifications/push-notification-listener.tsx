@@ -129,7 +129,7 @@ export function PushNotificationListener() {
   }, [refetchNotifications, playNotificationSound]);
 
   useEffect(() => {
-    if (!('serviceWorker' in navigator)) {
+    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
       console.warn('Service Worker not supported');
       return;
     }

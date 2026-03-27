@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { Navigation } from "@/components/layout/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -501,10 +502,12 @@ export function CreateStudyRoomClient() {
                         {imagePreview || formData.imageUrl ? (
                           <div className="relative group">
                             <div className="relative w-full h-48 rounded-lg overflow-hidden border-2 border-border bg-muted/50">
-                              <img
-                                src={imagePreview || formData.imageUrl}
+                              <Image
+                                src={imagePreview || formData.imageUrl!}
                                 alt="Study room preview"
-                                className="w-full h-full object-cover"
+                                fill
+                                className="object-cover"
+                                unoptimized
                               />
                               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
                               <Button

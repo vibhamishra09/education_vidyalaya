@@ -284,6 +284,7 @@ export interface StudyRoomCard {
   seriesRootId?: string | null;
   occurrenceIndex?: number | null;
   timezone?: string | null;
+  slug: string;
 }
 
 export interface StudyRoom extends StudyRoomCard {

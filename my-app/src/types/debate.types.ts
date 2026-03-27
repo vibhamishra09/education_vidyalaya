@@ -36,6 +36,8 @@ export interface CreateDebateRoomDto {
   prepTimeSeconds?: number;
   turnOrder?: TurnOrderType;
   scheduledAt?: string; // ISO 8601 date string
+  /** Total planned session (minutes); required when creating a room. */
+  debateDurationMinutes: number;
 }
 
 export interface UpdateDebateRoomDto {
@@ -45,6 +47,11 @@ export interface UpdateDebateRoomDto {
   turnDurationSeconds?: number;
   prepTimeSeconds?: number;
   turnOrder?: TurnOrderType;
+  /** ISO 8601 — only while status is WAITING */
+  scheduledAt?: string;
+  /** Remove fixed start time (WAITING only) */
+  clearScheduledAt?: boolean;
+  debateDurationMinutes?: number;
 }
 
 export interface JoinDebateRoomDto {
@@ -102,6 +109,8 @@ export interface DebateRoom {
   turnDurationSeconds: number;
   prepTimeSeconds: number;
   turnOrder: TurnOrderType;
+  debateDurationMinutes?: number;
+  debateSlotEndsAt?: string | null;
   currentTurnIndex: number;
   currentSpeakerId?: string | null;
   turnStartedAt?: string | null;
@@ -119,6 +128,17 @@ export interface DebateRoom {
   livekitRoomName?: string | null;
   createdAt: string;
   hostDetailsUpdatedAt?: string | null;
+}
+
+/** Rough upper bound if everyone on both teams takes one full turn (for UI hints only). */
+export function estimateDebateSessionMinutes(
+  turnDurationSeconds: number,
+  maxParticipantsPerTeam: number,
+): number {
+  return Math.max(
+    1,
+    Math.round((turnDurationSeconds * maxParticipantsPerTeam * 2) / 60),
+  );
 }
 
 export interface DebateRoomsResponse {
