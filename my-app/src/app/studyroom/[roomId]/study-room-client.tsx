@@ -56,7 +56,7 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
   const cancelStudyRoom = useCancelStudyRoom(roomId);
   const { data: externalRequests } = useExternalJoinRequests(
     roomId,
-    authLoaded && !!isSignedIn,
+    authLoaded && !!isSignedIn && room?.role === "teacher",
   );
   const resolveExternalJoin = useResolveExternalJoinRequest(roomId);
   const toggleAutoAccept = useToggleExternalAutoAccept(roomId);
