@@ -66,6 +66,7 @@ import {
   BuzzerPressedEvent,
   DebateUserRole,
   DebateParticipant,
+  estimateDebateSessionMinutes,
 } from '@/types/debate.types';
 import {
   SimpleTimer,
@@ -1328,6 +1329,8 @@ function DebateLiveContent({
                 teamColor="green"
                 currentSpeakerId={debateState?.currentSpeakerId}
                 layoutMode={viewMode}
+                pinnedParticipantId={pinnedParticipantId}
+                onTogglePin={togglePin}
               />
             </div>
           </div>
@@ -1450,6 +1453,8 @@ function DebateLiveContent({
                 teamColor="red"
                 currentSpeakerId={debateState?.currentSpeakerId}
                 layoutMode={viewMode}
+                pinnedParticipantId={pinnedParticipantId}
+                onTogglePin={togglePin}
               />
             </div>
           </div>
@@ -2018,6 +2023,8 @@ interface TeamVideoGridProps {
   currentSpeakerId?: string | null;
   /** Presenter = one large tile per panel; grid = multi-tile layout */
   layoutMode?: 'speaker' | 'grid';
+  pinnedParticipantId?: string | null;
+  onTogglePin?: (participantId: string) => void;
 }
 
 function TeamVideoGrid({
@@ -2025,6 +2032,8 @@ function TeamVideoGrid({
   teamColor,
   currentSpeakerId,
   layoutMode = 'grid',
+  pinnedParticipantId = null,
+  onTogglePin,
 }: TeamVideoGridProps) {
   const borderColor = teamColor === 'green' ? 'border-green-500' : 'border-red-500';
   const shadowColor = teamColor === 'green' ? 'shadow-green-500/30' : 'shadow-red-500/30';
@@ -2110,7 +2119,7 @@ function TeamVideoGrid({
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => onTogglePin(trackRef.participant.identity)}
+                onClick={() => onTogglePin?.(trackRef.participant.identity)}
                 className={cn(
                   "h-7 w-7 p-0 rounded-full border backdrop-blur-md",
                   pinnedParticipantId === trackRef.participant.identity
