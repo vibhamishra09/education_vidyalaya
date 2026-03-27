@@ -36,8 +36,8 @@ export interface CreateDebateRoomDto {
   prepTimeSeconds?: number;
   turnOrder?: TurnOrderType;
   scheduledAt?: string; // ISO 8601 date string
-  /** Total planned session (minutes); with scheduled start sets lobby expiry. */
-  debateDurationMinutes?: number;
+  /** Total planned session (minutes); required when creating a room. */
+  debateDurationMinutes: number;
 }
 
 export interface UpdateDebateRoomDto {

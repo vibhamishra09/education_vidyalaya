@@ -91,7 +91,7 @@ export class DebateRoomsService {
     // Generate LiveKit room name
     const livekitRoomName = `debate-${Date.now()}-${Math.random().toString(36).substring(7)}`;
 
-    const debateDurationMinutes = dto.debateDurationMinutes ?? 60;
+    const debateDurationMinutes = dto.debateDurationMinutes;
     const scheduledAt = dto.scheduledAt ? new Date(dto.scheduledAt) : null;
     const debateSlotEndsAt =
       scheduledAt && debateDurationMinutes
@@ -405,8 +405,15 @@ export class DebateRoomsService {
         ];
       }
 
-      if (!trending && status) {
-        where.status = status;
+      // "All" (no status): only active/upcoming — not ended or cancelled. Explicit status filter returns that status only.
+      if (!trending) {
+        if (status) {
+          where.status = status;
+        } else {
+          where.status = {
+            notIn: [DebateStatus.ENDED, DebateStatus.CANCELLED],
+          };
+        }
       }
 
       /** Hide stale WAITING lobbies from default / “All” browse — unless client filters by WAITING explicitly. */

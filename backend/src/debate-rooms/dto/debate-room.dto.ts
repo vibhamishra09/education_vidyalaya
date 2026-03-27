@@ -74,12 +74,12 @@ export class CreateDebateRoomDto {
   @IsDateString()
   scheduledAt?: string; // ISO 8601 date string
 
-  @IsOptional()
+  /** Total planned session length (minutes). Required on create. */
   @IsInt()
   @Min(5)
   @Max(24 * 60)
   @Type(() => Number)
-  debateDurationMinutes?: number;
+  debateDurationMinutes: number;
 }
 
 export class UpdateDebateRoomDto {
