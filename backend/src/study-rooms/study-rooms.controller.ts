@@ -26,7 +26,6 @@ import {
 } from './dto/study-room.dto';
 import { StudyRoomQueryDto } from './dto/study-room-query.dto';
 import { SessionFeedbackDto } from '../common/dto/session-feedback.dto';
-import { UnauthorizedException } from '@nestjs/common';
 
 @Controller('api/study-rooms')
 export class StudyRoomsController {
