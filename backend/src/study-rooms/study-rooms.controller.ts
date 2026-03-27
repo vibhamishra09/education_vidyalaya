@@ -161,9 +161,14 @@ export class StudyRoomsController {
   @UseGuards(ClerkAuthGuard)
   async joinStudyRoom(
     @Param('studyRoomId') studyRoomId: string,
-    @CurrentUser('dbUserId') userId: string,
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
   ) {
-    return this.studyRoomsService.joinStudyRoom(studyRoomId, userId);
+    const actorKey = dbUserId ?? clerkUserId;
+    if (!actorKey) {
+      throw new UnauthorizedException('User identity missing');
+    }
+    return this.studyRoomsService.joinStudyRoom(studyRoomId, actorKey);
   }
 
   @Post(':studyRoomId/external/request')

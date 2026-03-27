@@ -1709,8 +1709,10 @@ export class StudyRoomsService {
   }
 
   async joinStudyRoom(studyRoomId: string, userId: string) {
+    const actor = await this.resolveUserIdentity(userId);
+
     const user = await this.prisma.user.findUnique({
-      where: { id: userId },
+      where: { id: actor.id },
       select: { id: true, coins: true },
     });
 
