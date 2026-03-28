@@ -89,7 +89,6 @@ function studyRoomCardHost(room: {
 function BrowsePageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  
   // Persist active tab to localStorage
   const [activeTab, setActiveTab] = useTabPersistence<BrowseTab>(
     "browse_tab",
@@ -187,7 +186,6 @@ function BrowsePageContent() {
   }
   
   const { data: browseData, isLoading: browseLoading, error: browseError } = useBrowse(browseFilters);
-
   const { data: skillsData, isLoading: skillsLoading } = useSkills(undefined, 20);
 
   // Update counts from API response
@@ -227,6 +225,10 @@ function BrowsePageContent() {
   const recommendedRooms = recommendationsData?.studyRooms || [];
   const hasRecommendations = recommendedPeers.length > 0 || recommendedRooms.length > 0;
   const showRecommendations = hasRecommendations && !searchQuery && selectedSkills.length === 0;
+
+  const handleRoomAction = (room: any) => {
+    router.push(`/studyroom/${room.slug || room.id}`);
+  }
 
   return (
     <div className="flex flex-col min-h-screen bg-muted/5 selection:bg-green-500/20">
@@ -292,6 +294,7 @@ function BrowsePageContent() {
                       <StudyRoomCardComponent 
                         key={room.id}
                         roomId={room.id}
+                        slug= {room.slug}
                         status={
                           studyRoomCardDisplayLive(room.sessionStatus, room.date)
                             ? "live"
@@ -504,7 +507,7 @@ function BrowsePageContent() {
           )}
         </div>
 
-          {activeTab === "studyRooms" &&
+          {/* {activeTab === "studyRooms" &&
             trendingStudyRooms.length > 0 &&
             !searchQuery &&
             selectedSkills.length === 0 &&
@@ -548,7 +551,7 @@ function BrowsePageContent() {
                   ))}
                 </div>
               </div>
-            )}
+            )} */}
 
           <div className="mt-6">
             {browseLoading ? (
@@ -635,6 +638,7 @@ function BrowsePageContent() {
                         <StudyRoomCardComponent 
                           key={room.id}
                           roomId={room.id}
+                          slug= {room.slug}
                           status={
                           studyRoomCardDisplayLive(room.sessionStatus, room.date)
                             ? "live"
@@ -658,7 +662,7 @@ function BrowsePageContent() {
                           joiningFee={room.joiningFee}
                           timezone={room.timezone ?? null}
                           actionLabel="Join Room"
-                          onAction={() => router.push(`/studyroom/${room.id}`)}
+                          onAction={() => handleRoomAction(room)}
                         />
                       ))}
                       {studyRooms.length === 0 && !browseLoading && (
