@@ -49,7 +49,7 @@ export const studyRoomsApi = {
     return response.data;
   },
 
-  joinRecurringRooms: async (roomId: string, scope: 'THIS'| "ALL" | 'FOLLOWING'): Promise<any> => {
+  joinRecurringRooms: async (roomId: string, scope: 'THIS'| "ALL" | 'FOLLOWING'): Promise<unknown> => {
       const token = await window.Clerk?.session?.getToken();
       console.log("CLERK TOKEN :: ", token);
       
@@ -66,7 +66,7 @@ export const studyRoomsApi = {
       return response.data;
     },
 
-    unenroll : async(roomId: string , scope: 'THIS'| "ALL" | 'FOLLOWING') : Promise<any> => {
+    unenroll : async(roomId: string , scope: 'THIS'| "ALL" | 'FOLLOWING') : Promise<unknown> => {
       const response = await apiClient.post(`/api/study-rooms/${roomId}/unenroll`, {
         scope
       });
