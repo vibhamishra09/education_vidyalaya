@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
+import RecurringActionModal from "@/components/modals/recurring-action-modal";
 import {
   ArrowLeft,
   Users,
@@ -26,6 +27,7 @@ import {
   useExternalJoinRequests,
   useResolveExternalJoinRequest,
   useToggleExternalAutoAccept,
+  useUnenrollRoom,
 } from "@/hooks/use-study-rooms";
 import { useAuth } from "@clerk/nextjs";
 import { setAuthToken } from "@/lib/api-client";
@@ -40,12 +42,19 @@ import { studyRoomsApi } from "@/lib/api/study-rooms.api";
 import { useCurrentUser } from "@/hooks/use-users";
 import { canStudyRoomHostEditFromCard } from "@/lib/utils/study-room-edit";
 import { StudyRoomHostEditDialog } from "@/components/study-room/study-room-host-edit-dialog";
+import { useJoinRecurringStudyRoom } from "@/hooks/use-study-rooms";
 
 interface StudyRoomClientProps {
   roomId: string;
 }
 
 export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
+  const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
+  const { mutateAsync: unenroll, isPending: isUnenrolling } = useUnenrollRoom();
+  const { mutateAsync: joinRecurring, isPending: _isJoiningRecurring } = useJoinRecurringStudyRoom();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [recurringRoom, setRecurringRoom] = useState<any | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);   
   const { getToken, isSignedIn, isLoaded: authLoaded } = useAuth();
   const { showSuccess, showError } = useToast();
   const [isJoining, setIsJoining] = useState(false);
@@ -140,6 +149,12 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
   // Handle joining study room
   const handleJoinRoom = async () => {
     if (!room) return;
+
+    if (room.seriesId) {
+      setRecurringRoom(room);
+      setIsModalOpen(true);
+      return;
+    }
     
     try {
       setIsJoining(true);
@@ -322,6 +337,67 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
       hostUserId: room.createdBy?.id ?? "",
       sessionStatus: room.sessionStatus,
     });
+
+
+  const handleConfirmRecurring =async (scope: "ALL" | "THIS" | "FOLLOWING") => {
+    setIsModalOpen(false);
+    setIsJoining(true);
+
+    try {
+      await joinRecurring({ roomId: recurringRoom.id, scope });
+      showSuccess("Joined Room successfully!");
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || "Failed to join series";
+      showError(errorMessage);
+    } finally {
+      setIsJoining(false); 
+      setRecurringRoom(null)
+    }
+  };
+
+  const handleUnenroll = async () => {
+    if (room.seriesId) {
+      setIsLeaveModalOpen(true);
+      setRecurringRoom(room)
+    } else {
+      try {
+        await unenroll({ roomId: room.id, scope: "THIS" });
+        showSuccess("Successfully Unenrolled from room")
+      }
+      catch(e){
+        showError("Failed to Unenroll")
+      }
+    }
+  };
+
+  const handleConfirmLeave = async (scope: "ALL" | "THIS") => {
+    setIsLeaveModalOpen(false);
+    
+    if (scope === "ALL") {
+      try {
+        await unenroll({ roomId: room.seriesId!, scope: "ALL" });
+        showSuccess("Successfully Unenrolled from series")
+      }
+      catch(e){
+        showError("Failed to Unenroll")
+      }
+      finally{
+        setRecurringRoom(null)
+      }
+    } else {
+      try {
+        await unenroll({ roomId: room.id, scope: "THIS" });
+        showSuccess("Successfully Unenrolled from room")
+      }
+      catch(e){
+        showError("Failed to Unenroll")
+      }
+      finally {
+        setRecurringRoom(null)
+      }
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-background selection:bg-primary/10 selection:text-primary">
@@ -562,6 +638,19 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
                                     variant="outline"
                                     className="w-full rounded-lg h-9 hover:bg-primary/5 text-xs text-green-600 border-green-200/50 hover:text-green-700"
                                 />
+                                
+                                {(role !== "empty" && role !== 'teacher')  && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="w-full h-9 rounded-lg text-xs border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                                      onClick={handleUnenroll}
+                                      disabled={isUnenrolling}
+                                    >
+                                      {isUnenrolling ? "Unenrolling..." : "Unenroll Session"}
+                                    </Button>
+                                )}
+
                                 {role === "teacher" &&
                                   (room.sessionStatus === SessionStatus.UPCOMING ||
                                     room.sessionStatus === SessionStatus.ONGOING) && (
@@ -738,6 +827,21 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
               targetType="study-room" 
             />
         </div> */}
+
+          <RecurringActionModal 
+                    isOpen={isModalOpen}
+                    onClose={() => setIsModalOpen(false)}
+                    onConfirm={handleConfirmRecurring}
+                    actionType="join"
+                  />
+
+          <RecurringActionModal
+              isOpen={isLeaveModalOpen}
+              actionType="leave"
+              title="Unenrollment Options"
+              onClose={() => setIsLeaveModalOpen(false)}
+              onConfirm={handleConfirmLeave}
+        />
 
       </main>
       <Footer />

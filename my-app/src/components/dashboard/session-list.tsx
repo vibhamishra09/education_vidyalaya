@@ -38,7 +38,7 @@ interface Session {
   detailsEditedForViewer?: boolean;
   /** Peer session: show Edit on the card (both requester and receiver when session is still editable). */
   peerSessionEditable?: boolean;
-  slug?: string;
+  slug?: string | null;
 }
 
 interface SessionListProps {
@@ -229,7 +229,7 @@ export function SessionList({
                       href={
                         isPeerSession
                          ? `/sessions/${session.id}`
-                         : `/studyroom/${session.id}`
+                         : `/studyroom/${session.slug || session.id}`
                       }
                       className="flex-1"
                     >

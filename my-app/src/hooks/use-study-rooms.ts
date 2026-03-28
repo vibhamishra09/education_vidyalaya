@@ -139,6 +139,69 @@ export function useJoinStudyRoom() {
   });
 }
 
+export function useJoinRecurringStudyRoom() {
+  const queryClient = useQueryClient();
+  const { getToken, isLoaded } = useAuth();
+
+  return useMutation({
+    mutationFn: async ({ roomId, scope }: { roomId: string; scope: "ALL" | "THIS" | "FOLLOWING" }) => {
+      if (isLoaded) {
+        const token = await getToken();
+        if (token) setAuthToken(token);
+      }
+      return studyRoomsApi.joinRecurringRooms(roomId, scope);
+    },
+    onSuccess: async (_, { roomId }) => {
+      
+      queryClient.invalidateQueries({ queryKey: studyRoomKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: studyRoomKeys.detail(roomId) });
+      
+      queryClient.invalidateQueries({ queryKey: ['users', 'current'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+
+      await Promise.all([
+        queryClient.refetchQueries({ queryKey: ['users', 'current'], type: 'active' }),
+        queryClient.refetchQueries({ queryKey: ['transactions'], type: 'active' }),
+        queryClient.refetchQueries({ queryKey: studyRoomKeys.detail(roomId), type: 'active' }),
+      ]);
+    },
+  });
+}
+
+//for unenrolling from meets
+export function useUnenrollRoom() {
+  const queryClient = useQueryClient();
+  const { getToken, isLoaded } = useAuth();
+
+  return useMutation({
+    mutationFn: async ({ roomId, scope }: { roomId: string; scope: "ALL" | "THIS" | "FOLLOWING" }) => {
+       if (isLoaded) {
+        const token = await getToken();
+        if (token) setAuthToken(token);
+      }
+      return studyRoomsApi.unenroll(roomId, scope);
+    },
+   onSuccess: async (_, { roomId, scope }) => {
+    queryClient.invalidateQueries({ queryKey: studyRoomKeys.lists() });
+    if (scope === "ALL") {
+      queryClient.invalidateQueries({ 
+        queryKey: ['study-rooms', 'detail'] 
+      });
+    } else {
+        queryClient.invalidateQueries({ 
+            queryKey: studyRoomKeys.detail(roomId) 
+          });
+        }
+        queryClient.invalidateQueries({ queryKey: ['users', 'current'] });
+        
+        await queryClient.refetchQueries({ type: 'active' });
+      },
+    onError: (error: unknown) => {
+      console.error("Unenroll Error:", error);
+    }
+  });
+}
+
 export function useRequestExternalJoin() {
   return useMutation({
     mutationFn: async ({

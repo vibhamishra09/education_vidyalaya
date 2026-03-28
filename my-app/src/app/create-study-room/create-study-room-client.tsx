@@ -1118,14 +1118,14 @@ export function CreateStudyRoomClient() {
                 {/* Copy Link Section */}
                 <div className="w-full relative flex items-center justify-between gap-1.5 p-1 pl-2 sm:p-1.5 sm:pl-3 rounded-lg sm:rounded-xl border border-input bg-muted/40 hover:bg-muted/60 transition-colors">
                   <span className="text-[10px] sm:text-xs text-foreground/70 truncate flex-1 font-mono text-center select-all">
-                    {`${typeof window !== "undefined" ? window.location.origin : ""}/studyroom/${createdRoom.id}`}                  
+                    {`${typeof window !== "undefined" ? window.location.origin : ""}/studyroom/${createdRoom.slug || createdRoom.id}`}                  
                   </span>
                   <Button 
                     size="sm" 
                     variant="outline"
                     className="h-7 px-2 sm:h-8 sm:px-3 text-[9px] sm:text-[10px] uppercase tracking-wider font-bold rounded-md sm:rounded-lg bg-background shadow-sm border-border/60 hover:bg-accent hover:text-accent-foreground shrink-0"
                     onClick={() => {
-                       navigator.clipboard.writeText(`${window.location.origin}/studyroom/${createdRoom.id}`);
+                       navigator.clipboard.writeText(`${window.location.origin}/studyroom/${createdRoom.slug || createdRoom.id}`);
                        setIsCopied(true);
                        setTimeout(() => setIsCopied(false), 2000);
                     }}
@@ -1137,13 +1137,13 @@ export function CreateStudyRoomClient() {
                 {/* Action Buttons */}
                 <div className="flex flex-col gap-2 w-full sm:grid sm:grid-cols-2 sm:gap-3">
                   <ShareButton
-                    url={`${typeof window !== "undefined" ? window.location.origin : ""}/studyroom/${createdRoom.id}`}
+                    url={`${typeof window !== "undefined" ? window.location.origin : ""}/studyroom/${createdRoom.slug || createdRoom.id}`}
                     title={createdRoom.title}
                     description={createdRoom.description || ""}
                     className="w-full h-10 sm:h-11 text-xs sm:text-sm rounded-lg sm:rounded-xl border-dashed border-2 hover:border-primary/50 hover:bg-primary/5 justify-center px-2 sm:px-3"
                   />
                   <Button
-                    onClick={() => router.push(`/studyroom/${createdRoom.id}`)}
+                    onClick={() => router.push(`/studyroom/${createdRoom.slug || createdRoom.id}`)}
                     className="w-full h-10 sm:h-11 text-xs sm:text-sm rounded-lg sm:rounded-xl font-bold shadow-sm hover:shadow-md transition-all bg-green-100 text-green-800 hover:bg-green-200 border border-green-300 dark:bg-green-900/40 dark:text-green-300 dark:border-green-800 dark:hover:bg-green-900/60 px-2 sm:px-3"
                   >
                     Enter Room
