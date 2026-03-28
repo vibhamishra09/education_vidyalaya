@@ -574,6 +574,7 @@ export interface UpcomingStudyRoom {
   description?: string;
   sessionStatus?: SessionStatus;
   hostDetailsUpdatedAt?: string | null;
+  slug: string //guyz plz dont remove this,
 }
 
 export interface PastStudyRoom {
@@ -587,6 +588,7 @@ export interface PastStudyRoom {
   skills?: Array<{ id: string; name: string } | string>;
   description?: string;
   hostDetailsUpdatedAt?: string | null;
+  slug: string
 }
 
 export interface DashboardData {

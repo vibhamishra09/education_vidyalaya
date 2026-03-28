@@ -53,32 +53,34 @@ export function HomeClient() {
   };
 
   const handleJoinRoom = (room: StudyRoomCardType) => {
-    requireAuth(async () => {
-      try {
-        setJoiningRoomId(room.id);
-        await joinStudyRoom.mutateAsync(room.id);
-        showSuccess("You're in!", `You joined "${room.title}".`);
-      } catch (error: unknown) {
-        console.error("Error joining study room from landing:", error);
-        if (error && typeof error === "object" && "response" in error) {
-          const apiError = error as { response: { data?: { code?: string; message?: string } } };
-          const errorCode = apiError.response?.data?.code;
-          const errorMessage = apiError.response?.data?.message;
+    //doing this to allow for the new choice modal in joining a room
+    router.push(`/studyroom/${room.slug || room.id}`)
+    // requireAuth(async () => {
+    //   try {
+    //     setJoiningRoomId(room.id);
+    //     await joinStudyRoom.mutateAsync(room.id);
+    //     showSuccess("You're in!", `You joined "${room.title}".`);
+    //   } catch (error: unknown) {
+    //     console.error("Error joining study room from landing:", error);
+    //     if (error && typeof error === "object" && "response" in error) {
+    //       const apiError = error as { response: { data?: { code?: string; message?: string } } };
+    //       const errorCode = apiError.response?.data?.code;
+    //       const errorMessage = apiError.response?.data?.message;
 
-          if (errorCode === "INSUFFICIENT_COINS") {
-            showError("Not enough Coins", errorMessage ?? "You do not have enough Coins to join this study room.");
-          } else if (errorCode === "ROOM_FULL") {
-            showError("Room is full", errorMessage ?? "This study room has reached maximum capacity.");
-          } else {
-            showError("Failed to join", "Failed to join study room. Please try again.");
-          }
-        } else {
-          showError("Failed to join", "Failed to join study room. Please try again.");
-        }
-      } finally {
-        setJoiningRoomId(null);
-      }
-    });
+    //       if (errorCode === "INSUFFICIENT_COINS") {
+    //         showError("Not enough Coins", errorMessage ?? "You do not have enough Coins to join this study room.");
+    //       } else if (errorCode === "ROOM_FULL") {
+    //         showError("Room is full", errorMessage ?? "This study room has reached maximum capacity.");
+    //       } else {
+    //         showError("Failed to join", "Failed to join study room. Please try again.");
+    //       }
+    //     } else {
+    //       showError("Failed to join", "Failed to join study room. Please try again.");
+    //     }
+    //   } finally {
+    //     setJoiningRoomId(null);
+    //   }
+    // });
   };
 
   // Show loading state while checking authentication
@@ -225,6 +227,7 @@ export function HomeClient() {
                         onAction={
                           isFull ? undefined : () => handleJoinRoom(room)
                         }
+                        slug={room.slug || room.id}
                       />
                     </div>
                   </FadeIn>

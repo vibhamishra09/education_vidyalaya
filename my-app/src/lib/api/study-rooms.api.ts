@@ -158,6 +158,31 @@ export const studyRoomsApi = {
     return response.data;
   },
 
+  joinRecurringRooms: async (roomId: string, scope: 'THIS'| "ALL" | 'FOLLOWING'): Promise<unknown> => {
+      const token = await window.Clerk?.session?.getToken();
+      console.log("CLERK TOKEN :: ", token);
+      
+     const response = await apiClient.post(
+        `/api/study-rooms/${roomId}/join-recurring`, 
+        { scope }, 
+        {         
+          headers: { 
+            Authorization: `Bearer ${token}` 
+          } 
+        }
+      );
+      
+      return response.data;
+    },
+
+    unenroll : async(roomId: string , scope: 'THIS'| "ALL" | 'FOLLOWING') : Promise<unknown> => {
+      const response = await apiClient.post(`/api/study-rooms/${roomId}/unenroll`, {
+        scope
+      });
+
+      return response.data;
+    },
+
   requestExternalJoin: async (
     studyRoomId: string,
     data: { name: string; email: string; passcode: string },

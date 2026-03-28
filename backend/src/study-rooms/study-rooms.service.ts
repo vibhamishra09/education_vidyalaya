@@ -51,6 +51,7 @@ import {
 type StudyRoomWithRelations = {
   id: string;
   title: string;
+  slug?:string | null
   description?: string | null;
   imageUrl?: string | null;
   sessionStatus: SessionStatus;
@@ -721,14 +722,19 @@ export class StudyRoomsService {
             reviewCount: number;
             totalSessions: number;
           }> = [];
-          const seenRoomIds = new Set<string>();
+          const seenSlugs = new Set<string>();
+
+          this.logger.debug({
+            message: roomEntries,
+            limit: normalizedLimit,
+          });
 
           for (const entry of roomEntries) {
-            if (!entry || seenRoomIds.has(entry.room.id)) {
+            if (!entry || seenSlugs.has(entry.room.slug!)) {
               continue;
             }
 
-            seenRoomIds.add(entry.room.id);
+            seenSlugs.add(entry.room.slug!);
             uniqueRooms.push(entry);
 
             if (uniqueRooms.length >= normalizedLimit * 2) {
@@ -837,10 +843,12 @@ export class StudyRoomsService {
           date: { gte: fromDate },
         },
         take: limit,
+        distinct: ["slug"],
         orderBy: { date: 'asc' },
         select: {
           id: true,
           title: true,
+          slug: true,
           description: true,
           imageUrl: true,
           sessionStatus: true,
@@ -967,6 +975,7 @@ export class StudyRoomsService {
       occurrenceIndex: (room as any).occurrenceIndex,
       timezone: (room as any).timezone,
       participantCount: room.learners.length,
+      slug:room.slug,
       createdBy: {
         id: room.createdBy.id,
         name: room.createdBy.name,
@@ -2375,8 +2384,10 @@ export class StudyRoomsService {
   }
 
   async joinStudyRoom(studyRoomId: string, userId: string) {
+    const actor = await this.resolveUserIdentity(userId);
+
     const user = await this.prisma.user.findUnique({
-      where: { id: userId },
+      where: { id: actor.id },
       select: { id: true, coins: true },
     });
 
@@ -2655,6 +2666,81 @@ export class StudyRoomsService {
       participantIdentity: participant.livekitIdentity,
       role,
     };
+  }
+
+  async joinRecurringStudyRoom(
+    studyRoomId: string, 
+    userId: string, 
+    dto: { scope: 'THIS' | 'FOLLOWING' }
+) {
+
+  if (dto.scope === 'THIS') {
+    return this.joinStudyRoom(studyRoomId, userId);
+  }
+
+  const currentRoom = await this.prisma.studyRoom.findUnique({
+    where: { id: studyRoomId },
+    select: { seriesId: true, date: true }
+  });
+
+  if (!currentRoom?.seriesId) {
+    return this.joinStudyRoom(studyRoomId, userId);
+  }
+
+  const futureRooms = await this.prisma.studyRoom.findMany({
+    where: {
+      seriesId: currentRoom.seriesId,
+      date: { gte: currentRoom.date },
+    },
+    orderBy: { date: 'asc' },
+    select: { id: true }
+  });
+
+  const successfulJoins : string[] = [];
+  for (const room of futureRooms) {
+    try {
+      
+      await this.joinStudyRoom(room.id, userId);
+      successfulJoins.push(room.id);
+    } catch (error) {
+      
+      if (error.status === 400 && error.message.includes('INSUFFICIENT_COINS')) {
+        break; 
+      }
+      this.logger.warn(`Skipped room ${room.id} in recurring join: ${error.message}`);
+    }
+  }
+
+  return {
+    success: true,
+    message: `Joined ${successfulJoins.length} sessions in the series`,
+  };
+}
+
+
+  async unenroll(userId: string, targetId: string, scope: "THIS" | "ALL" | "FOLLOWING") {
+    if (scope === "ALL") {
+      const result = await this.prisma.studyRoomParticipant.deleteMany({
+        where: {
+          userId: userId,
+          studyRoom: {
+            seriesId: targetId, 
+          },
+        },
+      });
+      return { message: `Unenrolled from ${result.count} sessions in the series.` };
+    }
+    
+    await this.prisma.studyRoomParticipant.delete({
+      where: {
+        userId_studyRoomId: {
+          userId: userId,
+          studyRoomId: targetId, 
+        },
+      },
+    });
+    
+    return { message: 'Unenrolled from this session.' };
   }
 
   private async assertHostOrCohost(studyRoomId: string, userId: string) {
