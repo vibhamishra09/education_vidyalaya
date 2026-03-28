@@ -42,20 +42,26 @@ interface SessionFeedbackFormProps {
   onBackToDashboard?: () => void;
 }
 
-// Question groups for pagination
+// Question groups for pagination - Optimized from 4 to 3 pages
 const QUESTION_GROUPS = [
-  { id: "intro", title: "Getting Started", icon: "🚀", questions: [1, 2] },
-  { id: "first-impression", title: "First Impressions", icon: "✨", questions: [3, 4] },
-  { id: "problem-solving", title: "Problem Solving", icon: "🎯", questions: [5, 6, 7] },
-  { id: "experience", title: "Your Experience", icon: "💡", questions: [8, 9, 10] },
-  { id: "friction", title: "Points of Friction", icon: "🔧", questions: [11, 12, 13] },
-  { id: "value", title: "Value Assessment", icon: "💎", questions: [14, 15] },
-  { id: "peer-learning", title: "Peer Learning", icon: "🤝", questions: [16, 17] },
-  { id: "comparison", title: "Platform Comparison", icon: "⚖️", questions: [18, 19, 20] },
-  { id: "future-use", title: "Future Use", icon: "🔮", questions: [21, 22, 23] },
-  { id: "pricing", title: "Pricing & Features", icon: "💰", questions: [24, 25, 26] },
-  { id: "improvements", title: "Improvements", icon: "🛠️", questions: [27] },
-  { id: "final", title: "Final Thoughts", icon: "🎁", questions: [28, 29] },
+  { 
+    id: "core", 
+    title: "The Core Experience", 
+    icon: "✨", 
+    questions: ["valueScore", "npsScore", "clarityOfPurpose", "likelihoodToContinue"] 
+  },
+  { 
+    id: "value", 
+    title: "Value & Impact", 
+    icon: "🎯", 
+    questions: ["problemHopingToSolve", "problemSolvedExtent", "whatMakeMustUse", "easeOfStart"] 
+  },
+  { 
+    id: "feedback", 
+    title: "Friction & Thoughts", 
+    icon: "💡", 
+    questions: ["feltStuck", "whereStuck", "removeForFriction", "finalThoughts"] 
+  },
 ];
 
 const FIRST_FEELING_OPTIONS: FirstFeelingOption[] = [
@@ -70,9 +76,6 @@ const PROBLEM_SOLVED_OPTIONS: ProblemSolvedOption[] = [
   "Completely", "Mostly", "Partially", "Not really"
 ];
 
-const PREVIOUS_SOLUTION_OPTIONS: PreviousSolutionOption[] = [
-  "YouTube or online videos", "Paid courses", "Friends or peers", "Self-learning", "Couldn't find a solution"
-];
 
 const EASE_OF_START_OPTIONS: EaseOfStartOption[] = [
   "Extremely easy", "Easy", "Neutral", "Difficult", "Very difficult"
@@ -80,33 +83,12 @@ const EASE_OF_START_OPTIONS: EaseOfStartOption[] = [
 
 const YES_NO_OPTIONS: YesNoOption[] = ["Yes", "No"];
 
-const TRUST_INCREASE_OPTIONS: TrustIncreaseOption[] = [
-  "User profiles & credibility", "Ratings & reviews", "AI Moderation & guidelines", "Verified users"
-];
 
-const PLATFORM_COMPARISON_OPTIONS: PlatformComparisonOption[] = [
-  "Human", "Practical", "Interactive", "Flexible", "Confusing", "Less useful"
-];
 
 const CONTINUE_USING_OPTIONS: ContinueUsingOption[] = [
   "Very likely", "Likely", "Not sure", "Unlikely"
 ];
 
-const WILLING_TO_PAY_OPTIONS: WillingToPayOption[] = [
-  "Yes, definitely", "Maybe, if the value is clear", "No"
-];
-
-const PAID_FEATURE_OPTIONS: PaidFeatureOption[] = [
-  "Unlimited live learning sessions",
-  "Access to high-quality peers / mentors",
-  "Debate Rooms",
-  "Session recordings and notes",
-  "Sessions being moderated and rated by AI",
-  "Verified experts / credibility badges",
-  "AI-powered learning recommendations",
-  "Certificates / proof of learning",
-  "Community-only learning circles",
-];
 
 export function SessionFeedbackForm({
   sessionId: _sessionId,
@@ -168,9 +150,9 @@ export function SessionFeedbackForm({
     const currentHover = hoveredRating?.field === field ? hoveredRating.value : null;
     
     return (
-      <div className="space-y-4">
-        <Label className="text-base font-medium text-white">{label}</Label>
-        <div className="flex flex-wrap gap-2 justify-center">
+      <div className="space-y-6">
+        <Label className="text-base font-bold text-white tracking-tight">{label}</Label>
+        <div className="flex flex-wrap gap-2.5 justify-center py-2">
           {Array.from({ length: max - min + 1 }, (_, i) => min + i).map((num) => (
             <button
               key={num}
@@ -204,9 +186,9 @@ export function SessionFeedbackForm({
     options: T[],
     label: string
   ) => (
-    <div className="space-y-3">
-      <Label className="text-base font-medium text-white">{label}</Label>
-      <div className="grid gap-2">
+    <div className="space-y-5">
+      <Label className="text-base font-bold text-white tracking-tight">{label}</Label>
+      <div className="grid gap-3">
         {options.map((option) => (
           <button
             key={option}
@@ -242,8 +224,8 @@ export function SessionFeedbackForm({
     placeholder: string,
     type: "input" | "textarea" = "textarea"
   ) => (
-    <div className="space-y-2">
-      <Label htmlFor={String(field)} className="text-base font-medium text-white">{label}</Label>
+    <div className="space-y-4">
+      <Label htmlFor={String(field)} className="text-base font-bold text-white tracking-tight">{label}</Label>
       {type === "textarea" ? (
         <Textarea
           id={String(field)}
@@ -265,114 +247,43 @@ export function SessionFeedbackForm({
     </div>
   );
 
-  const renderNumberInput = (
-    field: keyof SessionFeedbackAnswers,
-    label: string,
-    placeholder: string
-  ) => (
-    <div className="space-y-2">
-      <Label htmlFor={String(field)} className="text-base font-medium text-white">{label}</Label>
-      <Input
-        id={String(field)}
-        type="number"
-        min={0}
-        value={(answers[field] as number) || ""}
-        onChange={(e) => updateAnswer(field, parseInt(e.target.value) || undefined as SessionFeedbackAnswers[typeof field])}
-        placeholder={placeholder}
-        className="bg-white/5 border-2 border-white/20 rounded-xl focus:border-[#00DC6E] transition-colors max-w-[200px] text-white placeholder:text-white/40"
-      />
-    </div>
-  );
 
-  const renderMultiSelect = (
-    field: "valuablePaidFeatures",
-    options: PaidFeatureOption[],
-    label: string
-  ) => {
-    const selected = answers[field] || [];
-    
-    return (
-      <div className="space-y-3">
-        <Label className="text-base font-medium text-white">{label}</Label>
-        <div className="grid gap-2">
-          {options.map((option) => {
-            const isSelected = selected.includes(option);
-            return (
-              <button
-                key={option}
-                type="button"
-                onClick={() => {
-                  if (isSelected) {
-                    updateAnswer(field, selected.filter((o) => o !== option));
-                  } else {
-                    updateAnswer(field, [...selected, option]);
-                  }
-                }}
-                className={cn(
-                  "flex items-center gap-3 w-full p-3 rounded-xl border-2 text-left transition-all duration-200",
-                  isSelected
-                    ? "bg-gradient-to-r from-[#00DC6E]/15 to-[#00DC6E]/5 border-[#00DC6E] shadow-sm"
-                    : "bg-white/5 border-white/20 hover:border-[#00DC6E]/50 hover:bg-white/10"
-                )}
-              >
-                <div className={cn(
-                  "w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all",
-                  isSelected
-                    ? "border-[#00DC6E] bg-[#00DC6E]"
-                    : "border-white/40"
-                )}>
-                  {isSelected && (
-                    <Check className="w-3 h-3 text-white" />
-                  )}
-                </div>
-                <span className="text-sm font-medium text-white">{option}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    );
-  };
 
   const renderQuestionGroup = () => {
     const group = QUESTION_GROUPS[currentGroup];
     
     switch (group.id) {
-      case "intro":
+      case "core":
         return (
-          <div className="space-y-6">
-            {renderNumberInput(
-              "timeSpentMinutes",
-              "Q1. Approximately how much total time did you spend on Webyalaya? (in minutes)",
-              "e.g., 30"
+          <div className="space-y-8">
+            {renderScaleInput(
+              "valueScore",
+              1,
+              10,
+              "Q1. On a scale of 1–10, how valuable does Webyalaya feel to you right now?"
             )}
-            {renderTextInput(
-              "oneSentenceDescription",
-              "Q2. In one sentence, how would you describe Webyalaya to a friend?",
-              "Describe Webyalaya in one sentence..."
-            )}
-          </div>
-        );
-
-      case "first-impression":
-        return (
-          <div className="space-y-6">
-            {renderRadioGroup(
-              "firstFeeling",
-              FIRST_FEELING_OPTIONS,
-              "Q3. What was your first feeling when you landed on Webyalaya?"
+            {renderScaleInput(
+              "npsScore",
+              0,
+              10,
+              "Q2. How likely are you to recommend Webyalaya to a friend or colleague?"
             )}
             {renderRadioGroup(
               "clarityOfPurpose",
               CLARITY_OPTIONS,
-              "Q4. How clear was it to understand what Webyalaya does within the first 30 seconds?"
+              "Q3. How clear was it to understand what Webyalaya does within the first 30 seconds?"
+            )}
+            {renderRadioGroup(
+              "likelihoodToContinue",
+              CONTINUE_USING_OPTIONS,
+              "Q4. How likely are you to continue using Webyalaya after beta?"
             )}
           </div>
         );
 
-      case "problem-solving":
+      case "value":
         return (
-          <div className="space-y-6">
+          <div className="space-y-8">
             {renderTextInput(
               "problemHopingToSolve",
               "Q5. What problem were you hoping Webyalaya would solve for you?",
@@ -383,175 +294,40 @@ export function SessionFeedbackForm({
               PROBLEM_SOLVED_OPTIONS,
               "Q6. To what extent does Webyalaya currently solve that problem?"
             )}
-            {renderRadioGroup(
-              "previousSolution",
-              PREVIOUS_SOLUTION_OPTIONS,
-              "Q7. Before Webyalaya, how were you trying to solve this problem?"
+            {renderTextInput(
+              "whatMakeMustUse",
+              "Q7. What would make Webyalaya a must-use platform for you?",
+              "What features or improvements would make it essential..."
             )}
-          </div>
-        );
-
-      case "experience":
-        return (
-          <div className="space-y-6">
             {renderRadioGroup(
               "easeOfStart",
               EASE_OF_START_OPTIONS,
               "Q8. How easy was it to get started without any guidance?"
             )}
-            {renderTextInput(
-              "confidenceInteracting",
-              "Q9. Did you feel confident interacting with other users on the platform? Why or why not?",
-              "Share your experience..."
-            )}
-            {renderTextInput(
-              "enjoyedMost",
-              "Q10. What did you enjoy the most while using Webyalaya?",
-              "What stood out to you..."
-            )}
           </div>
         );
 
-      case "friction":
+      case "feedback":
         return (
-          <div className="space-y-6">
+          <div className="space-y-8">
             {renderRadioGroup(
               "feltStuck",
               YES_NO_OPTIONS,
-              "Q11. At any point, did you feel stuck, confused, or unsure what to do next?"
+              "Q9. At any point, did you feel stuck, confused, or unsure what to do next?"
             )}
             {answers.feltStuck === "Yes" && renderTextInput(
               "whereStuck",
-              "Q12. If yes, where did you feel stuck or confused? Please explain.",
+              "Q10. If yes, where did you feel stuck or confused? Please explain.",
               "Describe where you felt stuck..."
             )}
             {renderTextInput(
               "removeForFriction",
-              "Q13. If you could remove one thing that caused friction, what would it be?",
+              "Q11. If you could remove one thing that caused friction, what would it be?",
               "What would you remove..."
-            )}
-          </div>
-        );
-
-      case "value":
-        return (
-          <div className="space-y-6">
-            {renderScaleInput(
-              "valueScore",
-              1,
-              10,
-              "Q14. On a scale of 1–10, how valuable does Webyalaya feel to you right now?"
-            )}
-            {renderTextInput(
-              "whatMakeMustUse",
-              "Q15. What would make Webyalaya a must-use platform for you?",
-              "What features or improvements would make it essential..."
-            )}
-          </div>
-        );
-
-      case "peer-learning":
-        return (
-          <div className="space-y-6">
-            {renderRadioGroup(
-              "believePeerLearningHelpful",
-              YES_NO_OPTIONS,
-              "Q16. Do you believe learning from peers is helpful?"
-            )}
-            {renderRadioGroup(
-              "trustIncreaseOption",
-              TRUST_INCREASE_OPTIONS,
-              "Q17. What would increase your trust the most?"
-            )}
-          </div>
-        );
-
-      case "comparison":
-        return (
-          <div className="space-y-6">
-            {renderTextInput(
-              "howDifferent",
-              "Q18. How is Webyalaya different from other learning platforms you've used?",
-              "What makes it unique..."
-            )}
-            {renderTextInput(
-              "alternativeIfNotExist",
-              "Q19. If Webyalaya didn't exist, what would you use instead?",
-              "What alternatives would you consider..."
-            )}
-            {renderRadioGroup(
-              "platformComparison",
-              PLATFORM_COMPARISON_OPTIONS,
-              "Q20. Compared to traditional learning platforms, Webyalaya feels more:"
-            )}
-          </div>
-        );
-
-      case "future-use":
-        return (
-          <div className="space-y-6">
-            {renderRadioGroup(
-              "likelihoodToContinue",
-              CONTINUE_USING_OPTIONS,
-              "Q21. How likely are you to continue using Webyalaya after beta?"
-            )}
-            {renderScaleInput(
-              "npsScore",
-              0,
-              10,
-              "Q22. How likely are you to recommend Webyalaya to a friend or colleague?"
-            )}
-            {renderTextInput(
-              "stopRecommending",
-              "Q23. What would stop you from recommending Webyalaya?",
-              "What concerns would prevent you from recommending it..."
-            )}
-          </div>
-        );
-
-      case "pricing":
-        return (
-          <div className="space-y-6">
-            {renderRadioGroup(
-              "willingToPay",
-              WILLING_TO_PAY_OPTIONS,
-              "Q24. Would you be open to paying ₹1 per day for unlimited learning sessions and access to advanced features on Webyalaya?"
-            )}
-            {renderMultiSelect(
-              "valuablePaidFeatures",
-              PAID_FEATURE_OPTIONS,
-              "Q25. Which of these features would you find most valuable as a paid user? (Select all that apply)"
-            )}
-            {renderTextInput(
-              "whatMakesWorthPaying",
-              "Q26. What would make Webyalaya worth paying for every day?",
-              "What value would justify the cost..."
-            )}
-          </div>
-        );
-
-      case "improvements":
-        return (
-          <div className="space-y-6">
-            {renderTextInput(
-              "whatWouldChange",
-              "Q27. If you were building Webyalaya with us, what would you change or improvise?",
-              "Share your ideas for improvement..."
-            )}
-          </div>
-        );
-
-      case "final":
-        return (
-          <div className="space-y-6">
-            {renderRadioGroup(
-              "openToFeedbackCall",
-              YES_NO_OPTIONS,
-              "Q28. Would you be open to a 15-minute feedback call with our team?"
             )}
             {renderTextInput(
               "finalThoughts",
-              "Q29. Any final thoughts or brutally honest feedback?",
+              "Q12. Any final thoughts or brutally honest feedback?",
               "We appreciate your honesty..."
             )}
           </div>
@@ -614,7 +390,7 @@ export function SessionFeedbackForm({
 
       <CardContent className="pt-6">
         {/* Questions - scrollable area */}
-        <div className="max-h-[400px] overflow-y-auto pr-2 -mr-2 scrollbar-thin">
+        <div className="max-h-[500px] overflow-y-auto pr-4 -mr-2 scrollbar-thin scroll-smooth">
           {renderQuestionGroup()}
         </div>
 
