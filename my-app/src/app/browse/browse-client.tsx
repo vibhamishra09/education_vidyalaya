@@ -226,7 +226,7 @@ function BrowsePageContent() {
   const hasRecommendations = recommendedPeers.length > 0 || recommendedRooms.length > 0;
   const showRecommendations = hasRecommendations && !searchQuery && selectedSkills.length === 0;
 
-  const handleRoomAction = (room: any) => {
+  const handleRoomAction = (room: { slug?: string; id: string }) => {
     router.push(`/studyroom/${room.slug || room.id}`);
   }
 

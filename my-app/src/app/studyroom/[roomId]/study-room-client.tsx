@@ -51,7 +51,8 @@ interface StudyRoomClientProps {
 export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
   const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
   const { mutateAsync: unenroll, isPending: isUnenrolling } = useUnenrollRoom();
-  const { mutateAsync: joinRecurring, isPending: isJoiningRecurring } = useJoinRecurringStudyRoom();
+  const { mutateAsync: joinRecurring, isPending: _isJoiningRecurring } = useJoinRecurringStudyRoom();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [recurringRoom, setRecurringRoom] = useState<any | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);   
   const { getToken, isSignedIn, isLoaded: authLoaded } = useAuth();
@@ -343,8 +344,9 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
     setIsJoining(true);
 
     try {
-      const result = await joinRecurring({ roomId: recurringRoom.id, scope });
+      await joinRecurring({ roomId: recurringRoom.id, scope });
       showSuccess("Joined Room successfully!");
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || "Failed to join series";
       showError(errorMessage);

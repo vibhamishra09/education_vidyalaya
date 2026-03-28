@@ -196,7 +196,7 @@ export function useUnenrollRoom() {
         
         await queryClient.refetchQueries({ type: 'active' });
       },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       console.error("Unenroll Error:", error);
     }
   });
