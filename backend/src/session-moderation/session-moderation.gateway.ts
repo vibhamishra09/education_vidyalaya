@@ -93,9 +93,15 @@ export class SessionModerationGateway
             where: { token },
             include: {
               guestParticipant: true,
+              studyRoom: { select: { sessionMode: true } },
             },
           });
-        if (!guestAccess || guestAccess.expiresAt < new Date()) {
+        if (
+          !guestAccess ||
+          guestAccess.expiresAt < new Date() ||
+          (guestAccess.studyRoom.sessionMode === 'WEBINAR' &&
+            !guestAccess.guestParticipant.approvedBy)
+        ) {
           this.logger.error(
             'Token verification failed:',
             verifyError.message || verifyError,
@@ -465,6 +471,7 @@ export class SessionModerationGateway
       if (sessionType === 'studyRoom') {
         const result = await this.studyRoomsService.checkIsHost(
           sessionId,
+          undefined,
           clerkId,
         );
         return result.isHost;

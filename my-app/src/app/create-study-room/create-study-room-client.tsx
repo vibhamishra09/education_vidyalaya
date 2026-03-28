@@ -21,12 +21,13 @@ import {
   ArrowLeft, Users, Loader2, Coins, CheckCircle2, AlertCircle,
   RotateCcw, Sparkles, Calendar, Layers, 
   Banknote, Plus,
-  Clock, Upload, X, Image as ImageIcon
+  Clock, Upload, X, Image as ImageIcon, Trash2,
 } from "lucide-react";
 import {
   CreateStudyRoomDto,
   StudyRoom,
   StudyRoomRecurrenceMode,
+  StudyRoomSessionMode,
 } from "@/types/api.types";
 import { ShareButton } from "@/components/share/share-button";
 import { useFormPersistence } from "@/hooks/use-local-storage";
@@ -35,6 +36,13 @@ import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { uploadFile, validateImageFile } from "@/lib/upload";
 import { setAuthToken } from "@/lib/api-client";
 
@@ -96,6 +104,19 @@ function parseDateOnly(value: string): Date | null {
   const [year, month, day] = value.split("-").map(Number);
   if (!year || !month || !day) return null;
   return new Date(Date.UTC(year, month - 1, day));
+}
+
+/**
+ * Public page where attendees register for a webinar. Prefer API fields; always resolve absolute URL for display/copy.
+ */
+function getWebinarRegistrationAbsUrl(room: StudyRoom): string | null {
+  const slug = room.webinarRegistrationSlug;
+  const raw = room.webinarRegistrationUrl;
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  if (raw?.startsWith("http://") || raw?.startsWith("https://")) return raw;
+  if (raw?.startsWith("/") && origin) return `${origin}${raw}`;
+  if (slug && origin) return `${origin}/webinar/register/${slug}`;
+  return null;
 }
 
 function estimateOccurrences(formData: StudyRoomFormData): number {
@@ -161,6 +182,23 @@ export function CreateStudyRoomClient() {
   );
 
   const [isInstantRoom, setIsInstantRoom] = useState(false);
+  const [sessionMode, setSessionMode] = useState<StudyRoomSessionMode>("STANDARD");
+
+  type WebinarRegField = {
+    id: string;
+    label: string;
+    type: "text" | "textarea" | "email";
+    required: boolean;
+  };
+  const [webinarCustomFields, setWebinarCustomFields] = useState<
+    WebinarRegField[]
+  >([]);
+  const [webinarPerms, setWebinarPerms] = useState({
+    mic: "disabled" as "disabled" | "enabled",
+    video: "disabled" as "disabled" | "enabled",
+    chat: "host_only" as "host_only" | "everyone" | "disabled",
+    screenShare: "host_only" as "host_only" | "everyone",
+  });
   const [error, setError] = useState<string | null>(null);
   const [createdRoom, setCreatedRoom] = useState<StudyRoom | null>(null);
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
@@ -264,19 +302,24 @@ export function CreateStudyRoomClient() {
       return;
     }
 
-    if (!formData.title) {
-        setError('Please enter a room name');
+    if (!formData.title?.trim()) {
+        setError("Please add a room name");
         return;
     }
 
     if (formData.skills.length === 0) {
-        setError('Please add at least one skill');
+        setError("Please add at least one skill");
         return;
     }
 
     if (!isInstantRoom && (!formData.date || !formData.time)) {
         setError('Please select date and time');
         return;
+    }
+
+    if (sessionMode === "WEBINAR" && formData.recurrenceEnabled) {
+      setError("Turn off recurrence for webinar mode, or switch to Standard.");
+      return;
     }
 
     if (!isInstantRoom && formData.recurrenceEnabled) {
@@ -317,8 +360,12 @@ export function CreateStudyRoomClient() {
       date: formData.date,
       time: formData.time,
       duration: parseInt(formData.duration),
-      maxParticipants: parseInt(formData.maxParticipants),
-      joiningFee: parseFloat(formData.joiningFee),
+      maxParticipants: Math.min(
+        100,
+        Math.max(2, parseInt(formData.maxParticipants, 10) || 2),
+      ),
+      joiningFee:
+        sessionMode === "WEBINAR" ? 0 : parseFloat(formData.joiningFee),
       timezone: userTimezone,
       allowExternalUsers: formData.allowExternalUsers,
       externalAutoAccept: formData.allowExternalUsers
@@ -328,6 +375,42 @@ export function CreateStudyRoomClient() {
         formData.allowExternalUsers && formData.externalPasscode.trim()
           ? formData.externalPasscode.trim()
           : undefined,
+      ...(sessionMode === "WEBINAR"
+        ? { sessionMode: "WEBINAR" as const }
+        : { sessionMode: "STANDARD" as const }),
+      ...(sessionMode === "WEBINAR"
+        ? {
+            webinarConfig: {
+              registrationFields: [
+                {
+                  id: "name",
+                  label: "Full name",
+                  required: true,
+                  type: "text",
+                },
+                {
+                  id: "email",
+                  label: "Email",
+                  required: true,
+                  type: "email",
+                },
+                ...webinarCustomFields.map((f) => ({
+                  id: f.id,
+                  label: f.label.trim() || "Field",
+                  required: f.required,
+                  type: f.type,
+                })),
+              ],
+              permissions: {
+                mic: webinarPerms.mic,
+                video: webinarPerms.video,
+                chat: webinarPerms.chat,
+                screenShare: webinarPerms.screenShare,
+              },
+              runtime: { chatEnabled: true },
+            },
+          }
+        : {}),
     };
 
     if (formData.allowExternalUsers && formData.externalInviteList.trim()) {
@@ -347,7 +430,7 @@ export function CreateStudyRoomClient() {
       }
     }
 
-    if (!isInstantRoom && formData.recurrenceEnabled) {
+    if (!isInstantRoom && formData.recurrenceEnabled && sessionMode !== "WEBINAR") {
       createData.recurrence = {
         mode: formData.recurrenceMode,
         interval: Math.max(1, parseInt(formData.recurrenceInterval || "1")),
@@ -395,7 +478,15 @@ export function CreateStudyRoomClient() {
     });
   };
 
-  const potentialEarnings = (parseInt(formData.maxParticipants) || 0) * (parseInt(formData.joiningFee) || 0);
+  const maxParticipantsClamped = Math.min(
+    100,
+    Math.max(2, parseInt(formData.maxParticipants, 10) || 2),
+  );
+
+  const potentialEarnings =
+    sessionMode === "WEBINAR"
+      ? 0
+      : maxParticipantsClamped * (parseInt(formData.joiningFee, 10) || 0);
 
   return (
     <div className="flex flex-col min-h-screen bg-muted/5 selection:bg-primary/10">
@@ -419,6 +510,46 @@ export function CreateStudyRoomClient() {
               <p className="text-muted-foreground text-lg">
                 Share your expertise, host a session, and earn crypto.
               </p>
+              <div className="flex flex-wrap gap-2 pt-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSessionMode("STANDARD");
+                  }}
+                  className={`rounded-full px-4 py-2 text-sm font-medium border transition-colors ${
+                    sessionMode === "STANDARD"
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-muted/50 text-muted-foreground border-transparent hover:bg-muted"
+                  }`}
+                >
+                  Standard study room
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSessionMode("WEBINAR");
+                    setFormData((prev) => ({
+                      ...prev,
+                      maxParticipants: "100",
+                      joiningFee: "0",
+                    }));
+                  }}
+                  className={`rounded-full px-4 py-2 text-sm font-medium border transition-colors ${
+                    sessionMode === "WEBINAR"
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-muted/50 text-muted-foreground border-transparent hover:bg-muted"
+                  }`}
+                >
+                  Webinar mode
+                </button>
+              </div>
+              {sessionMode === "WEBINAR" && (
+                <p className="text-sm text-muted-foreground max-w-xl pt-1">
+                  Host-led session for up to 100 attendees. Configure the
+                  registration form and permissions below. A public registration
+                  link is generated after you publish.
+                </p>
+              )}
             </div>
           </div>
 
@@ -436,40 +567,229 @@ export function CreateStudyRoomClient() {
         </div>
 
         <form onSubmit={handleSubmit} className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
-            
-            {/* LEFT COLUMN: Main Content (7 cols) */}
-            <div className="lg:col-span-7 space-y-8">
-              
-              {/* Section 1: Room Details */}
-              <section className="space-y-6">
-                
-                {/* Modified Title Input with Box/Attraction Driver */}
-                <div className="space-y-2">
-                  <Label htmlFor="title" className="text-xs font-bold text-muted-foreground uppercase tracking-widest ml-1">
-                    Room Name
-                  </Label>
-                  <div className="relative group transition-all duration-200">
-                    <div className="absolute -inset-0.5 bg-gradient-to-r from-primary/20 to-primary/0 rounded-xl blur opacity-0 group-focus-within:opacity-100 transition duration-500" />
-                    <div className="relative bg-card border-2 border-dashed border-muted group-hover:border-primary/30 group-focus-within:border-primary/50 group-focus-within:border-solid rounded-xl transition-all duration-200 flex items-center">
-                       <Input
-                         id="title"
-                         placeholder="Enter a catchy title..."
-                         value={formData.title}
-                         onChange={(e) => updateField("title", e.target.value)}
-                         className="h-auto py-4 px-4 text-2xl md:text-3xl font-bold border-none shadow-none focus-visible:ring-0 bg-transparent text-foreground placeholder:text-muted-foreground/30 w-full"
-                         required
-                         autoFocus
-                       />
-                       {/* Visual hint that disappears on type/focus */}
-                       <div className="absolute right-4 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                          <span className="text-[10px] uppercase font-semibold text-muted-foreground bg-muted/50 px-2 py-1 rounded border">
-                            Edit
-                          </span>
-                       </div>
-                    </div>
+          {/* Stack title above the 2-col grid — avoids grid col-span quirks on small breakpoints */}
+          <div className="flex flex-col gap-8 lg:gap-12">
+            <div className="w-full space-y-2 shrink-0">
+              <Label htmlFor="title" className="text-xs font-bold text-muted-foreground uppercase tracking-widest ml-1">
+                Room Name
+              </Label>
+              <div className="relative group transition-all duration-200">
+                <div className="absolute -inset-0.5 bg-gradient-to-r from-primary/20 to-primary/0 rounded-xl blur opacity-0 group-focus-within:opacity-100 transition duration-500" />
+                <div className="relative bg-card border-2 border-dashed border-muted group-hover:border-primary/30 group-focus-within:border-primary/50 group-focus-within:border-solid rounded-xl transition-all duration-200 flex items-center">
+                  <Input
+                    id="title"
+                    placeholder="Enter a catchy title..."
+                    value={formData.title}
+                    onChange={(e) => updateField("title", e.target.value)}
+                    className="h-auto py-4 px-4 text-2xl md:text-3xl font-bold border-none shadow-none focus-visible:ring-0 bg-transparent text-foreground placeholder:text-muted-foreground/30 w-full"
+                    autoFocus
+                  />
+                  <div className="absolute right-4 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                    <span className="text-[10px] uppercase font-semibold text-muted-foreground bg-muted/50 px-2 py-1 rounded border">
+                      Edit
+                    </span>
                   </div>
                 </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
+            {/* LEFT COLUMN: Main Content (7 cols) */}
+            <div className="lg:col-span-7 space-y-8">
+              {/* Section 1: webinar (webinar mode) then topic */}
+              <section className="space-y-6">
+                {sessionMode === "WEBINAR" && (
+                <Card className="border-primary/20 bg-primary/5">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base">
+                      Webinar registration & permissions
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div className="space-y-3">
+                      <Label className="text-sm font-medium">
+                        Extra registration fields
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        Name and email are always required. Add optional or
+                        required questions below.
+                      </p>
+                      {webinarCustomFields.map((field, idx) => (
+                        <div
+                          key={field.id}
+                          className="flex flex-wrap gap-2 items-end rounded-lg border bg-background p-3"
+                        >
+                          <div className="flex-1 min-w-[140px] space-y-1">
+                            <Label className="text-xs">Label</Label>
+                            <Input
+                              value={field.label}
+                              onChange={(e) =>
+                                setWebinarCustomFields((prev) =>
+                                  prev.map((f, i) =>
+                                    i === idx
+                                      ? { ...f, label: e.target.value }
+                                      : f,
+                                  ),
+                                )
+                              }
+                            />
+                          </div>
+                          <div className="w-[130px] space-y-1">
+                            <Label className="text-xs">Type</Label>
+                            <Select
+                              value={field.type}
+                              onValueChange={(v: "text" | "textarea" | "email") =>
+                                setWebinarCustomFields((prev) =>
+                                  prev.map((f, i) =>
+                                    i === idx ? { ...f, type: v } : f,
+                                  ),
+                                )
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="text">Short text</SelectItem>
+                                <SelectItem value="textarea">Long text</SelectItem>
+                                <SelectItem value="email">Email</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <label className="flex items-center gap-2 text-sm pb-2">
+                            <input
+                              type="checkbox"
+                              checked={field.required}
+                              onChange={(e) =>
+                                setWebinarCustomFields((prev) =>
+                                  prev.map((f, i) =>
+                                    i === idx
+                                      ? { ...f, required: e.target.checked }
+                                      : f,
+                                  ),
+                                )
+                              }
+                            />
+                            Required
+                          </label>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="shrink-0"
+                            onClick={() =>
+                              setWebinarCustomFields((prev) =>
+                                prev.filter((_, i) => i !== idx),
+                              )
+                            }
+                            aria-label="Remove field"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          setWebinarCustomFields((prev) => [
+                            ...prev,
+                            {
+                              id: `f_${Date.now()}`,
+                              label: "Custom question",
+                              type: "text",
+                              required: false,
+                            },
+                          ])
+                        }
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add field
+                      </Button>
+                    </div>
+
+                    <div className="space-y-3 border-t pt-4">
+                      <Label className="text-sm font-medium">
+                        Participant capabilities
+                      </Label>
+                      <div className="grid sm:grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <Label className="text-xs">Microphone</Label>
+                          <Select
+                            value={webinarPerms.mic}
+                            onValueChange={(v: "disabled" | "enabled") =>
+                              setWebinarPerms((p) => ({ ...p, mic: v }))
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="disabled">Disabled</SelectItem>
+                              <SelectItem value="enabled">Enabled</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Camera</Label>
+                          <Select
+                            value={webinarPerms.video}
+                            onValueChange={(v: "disabled" | "enabled") =>
+                              setWebinarPerms((p) => ({ ...p, video: v }))
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="disabled">Disabled</SelectItem>
+                              <SelectItem value="enabled">Enabled</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Chat</Label>
+                          <Select
+                            value={webinarPerms.chat}
+                            onValueChange={(
+                              v: "host_only" | "everyone" | "disabled",
+                            ) =>
+                              setWebinarPerms((p) => ({ ...p, chat: v }))
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="host_only">Host only</SelectItem>
+                              <SelectItem value="everyone">Everyone</SelectItem>
+                              <SelectItem value="disabled">Disabled</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Screen share</Label>
+                          <Select
+                            value={webinarPerms.screenShare}
+                            onValueChange={(v: "host_only" | "everyone") =>
+                              setWebinarPerms((p) => ({ ...p, screenShare: v }))
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="host_only">Host only</SelectItem>
+                              <SelectItem value="everyone">Everyone</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+                )}
 
                 <Card className="border-muted bg-card/50 backdrop-blur-sm shadow-sm hover:shadow-md transition-shadow">
                   <CardHeader className="pb-3">
@@ -482,7 +802,10 @@ export function CreateStudyRoomClient() {
                   </CardHeader>
                   <CardContent className="space-y-5">
                     <div className="space-y-2">
-                      <Label htmlFor="description" className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Description</Label>
+                      <Label htmlFor="description" className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
+                        Description{" "}
+                        <span className="text-[10px] normal-case bg-muted px-1.5 rounded-sm">Optional</span>
+                      </Label>
                       <Textarea
                         id="description"
                         placeholder="Provide a brief agenda or learning outcomes..."
@@ -822,10 +1145,21 @@ export function CreateStudyRoomClient() {
 
                   {/* Participants */}
                   <div className="space-y-4">
-                    <div className="flex justify-between items-center">
-                      <Label className="text-sm font-medium">Max Participants</Label>
-                      <span className="text-sm font-bold bg-muted px-2.5 py-0.5 rounded-md min-w-[2rem] text-center">
-                        {formData.maxParticipants}
+                    <div className="flex justify-between items-center gap-2">
+                      <div>
+                        <Label className="text-sm font-medium">Max participants</Label>
+                        {sessionMode === "WEBINAR" ? (
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            Webinar: 2–100 attendees (required range)
+                          </p>
+                        ) : (
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            Up to 100 per session
+                          </p>
+                        )}
+                      </div>
+                      <span className="text-sm font-bold bg-muted px-2.5 py-0.5 rounded-md min-w-[2rem] text-center shrink-0">
+                        {maxParticipantsClamped}
                       </span>
                     </div>
                     <div className="pt-2 px-1">
@@ -834,8 +1168,10 @@ export function CreateStudyRoomClient() {
                         min="2"
                         max="100"
                         step="1"
-                        value={formData.maxParticipants}
-                        onChange={(e) => updateField("maxParticipants", e.target.value)}
+                        value={maxParticipantsClamped}
+                        onChange={(e) =>
+                          updateField("maxParticipants", e.target.value)
+                        }
                         // Modified: Modern Slider Styling
                         className={cn(
                           "w-full h-2 rounded-lg appearance-none cursor-pointer outline-none",
@@ -875,55 +1211,70 @@ export function CreateStudyRoomClient() {
                     </div>
                   </div>
 
-                  {/* Fee Input */}
+                  {/* Fee Input — webinars are always free */}
                   <div className="space-y-3 pt-2">
                     <Label className="flex items-center justify-between text-sm font-medium">
-                      Entry Fee
+                      Entry fee
                       <span className="text-xs font-normal bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 px-2 py-0.5 rounded-full flex items-center gap-1">
                         <Coins className="h-3 w-3" /> Coins
                       </span>
                     </Label>
-                    <div className="relative group flex items-center gap-2">
-                       <Button
-                          type="button"
-                          variant="outline"
-                          size="icon"
-                          className="h-11 w-11 rounded-lg border-input bg-background hover:bg-muted hover:text-foreground shrink-0"
-                          onClick={() => {
-                            const val = parseInt(formData.joiningFee) || 0;
-                            if (val > 0) updateField("joiningFee", (val - 5).toString());
-                          }}
-                        >
-                          <span className="text-xl font-bold leading-none mb-0.5">−</span>
-                        </Button>
-
-                      <div className="relative flex-1">
-                        <Banknote className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                        <Input
-                          type="number"
-                          min="0"
-                          value={formData.joiningFee}
-                          onChange={(e) => updateField("joiningFee", e.target.value)}
-                          className="pl-9 h-11 text-lg font-medium bg-background transition-all focus:ring-2 ring-primary/20 text-center"
-                        />
+                    {sessionMode === "WEBINAR" ? (
+                      <div className="rounded-lg border border-dashed bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+                        Webinars cannot charge an entry fee. This room will be created
+                        at{" "}
+                        <span className="font-semibold text-foreground">0 coins</span>.
                       </div>
+                    ) : (
+                      <>
+                        <div className="relative group flex items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className="h-11 w-11 rounded-lg border-input bg-background hover:bg-muted hover:text-foreground shrink-0"
+                            onClick={() => {
+                              const val = parseInt(formData.joiningFee) || 0;
+                              if (val > 0)
+                                updateField("joiningFee", (val - 5).toString());
+                            }}
+                          >
+                            <span className="text-xl font-bold leading-none mb-0.5">
+                              −
+                            </span>
+                          </Button>
 
-                       <Button
-                          type="button"
-                          variant="outline"
-                          size="icon"
-                          className="h-11 w-11 rounded-lg border-input bg-background hover:bg-muted hover:text-foreground shrink-0"
-                          onClick={() => {
-                             const val = parseInt(formData.joiningFee) || 0;
-                             updateField("joiningFee", (val + 5).toString());
-                          }}
-                        >
-                          <Plus className="h-4 w-4" />
-                        </Button>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Set to 0 for a free session.
-                    </p>
+                          <div className="relative flex-1">
+                            <Banknote className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                            <Input
+                              type="number"
+                              min="0"
+                              value={formData.joiningFee}
+                              onChange={(e) =>
+                                updateField("joiningFee", e.target.value)
+                              }
+                              className="pl-9 h-11 text-lg font-medium bg-background transition-all focus:ring-2 ring-primary/20 text-center"
+                            />
+                          </div>
+
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className="h-11 w-11 rounded-lg border-input bg-background hover:bg-muted hover:text-foreground shrink-0"
+                            onClick={() => {
+                              const val = parseInt(formData.joiningFee) || 0;
+                              updateField("joiningFee", (val + 5).toString());
+                            }}
+                          >
+                            <Plus className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Set to 0 for a free session.
+                        </p>
+                      </>
+                    )}
                   </div>
 
                   <div className="space-y-4 border-t border-dashed pt-4">
@@ -1009,11 +1360,26 @@ export function CreateStudyRoomClient() {
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                             <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
                           </div>
-                          <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Est. Earnings</span>
+                          <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                            {sessionMode === "WEBINAR"
+                              ? "Entry fee"
+                              : "Est. earnings"}
+                          </span>
                         </div>
-                        <div className="flex items-baseline gap-1">
-                          <span className="text-4xl font-black tracking-tight tabular-nums">{potentialEarnings}</span>
-                          <span className="text-lg font-bold text-amber-500">Coins</span>
+                        <div className="flex flex-col items-end gap-0.5">
+                          <div className="flex items-baseline gap-1">
+                            <span className="text-4xl font-black tracking-tight tabular-nums">
+                              {potentialEarnings}
+                            </span>
+                            <span className="text-lg font-bold text-amber-500">
+                              Coins
+                            </span>
+                          </div>
+                          {sessionMode === "WEBINAR" && (
+                            <span className="text-[11px] text-muted-foreground text-right max-w-[14rem]">
+                              Webinars are free; no coin earnings from entry fees.
+                            </span>
+                          )}
                         </div>
                     </div>
 
@@ -1062,6 +1428,7 @@ export function CreateStudyRoomClient() {
               </div>
 
             </div>
+          </div>
           </div>
         </form>
       </main>
@@ -1115,8 +1482,42 @@ export function CreateStudyRoomClient() {
                     </p>
                   </div>
                 )}
-                {/* Copy Link Section */}
-                <div className="w-full relative flex items-center justify-between gap-1.5 p-1 pl-2 sm:p-1.5 sm:pl-3 rounded-lg sm:rounded-xl border border-input bg-muted/40 hover:bg-muted/60 transition-colors">
+                {(createdRoom.sessionMode === "WEBINAR" ||
+                  !!createdRoom.webinarRegistrationSlug) &&
+                  getWebinarRegistrationAbsUrl(createdRoom) && (
+                  <div className="w-full space-y-1">
+                    <p className="text-xs font-semibold text-left">
+                      Registration link (attendees sign up here)
+                    </p>
+                    <div className="w-full relative flex items-center justify-between gap-1.5 p-1 pl-2 sm:p-1.5 sm:pl-3 rounded-lg sm:rounded-xl border border-primary/30 bg-primary/5">
+                      <span className="text-[10px] sm:text-xs text-foreground/80 truncate flex-1 font-mono text-left select-all break-all">
+                        {getWebinarRegistrationAbsUrl(createdRoom)}
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        type="button"
+                        className="h-7 px-2 shrink-0 text-[10px]"
+                        onClick={() => {
+                          const url = getWebinarRegistrationAbsUrl(createdRoom);
+                          if (url) {
+                            navigator.clipboard.writeText(url);
+                            setIsCopied(true);
+                            setTimeout(() => setIsCopied(false), 2000);
+                          }
+                        }}
+                      >
+                        {isCopied ? "Copied" : "Copy"}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                {/* Study room page (host dashboard / room info) */}
+                <div className="w-full space-y-1">
+                  <p className="text-xs font-semibold text-left text-muted-foreground">
+                    Study room page
+                  </p>
+                  <div className="w-full relative flex items-center justify-between gap-1.5 p-1 pl-2 sm:p-1.5 sm:pl-3 rounded-lg sm:rounded-xl border border-input bg-muted/40 hover:bg-muted/60 transition-colors">
                   <span className="text-[10px] sm:text-xs text-foreground/70 truncate flex-1 font-mono text-center select-all">
                     {`${typeof window !== "undefined" ? window.location.origin : ""}/studyroom/${createdRoom.id}`}                  
                   </span>
@@ -1132,6 +1533,7 @@ export function CreateStudyRoomClient() {
                   >
                     {isCopied ? "Copied" : "Copy"}
                   </Button>
+                </div>
                 </div>
                 
                 {/* Action Buttons */}

@@ -83,6 +83,12 @@ model StudyRoom {
   allowExternalUsers Boolean             @default(false)
   externalPasscode   String?
   externalAutoAccept Boolean             @default(false)
+  /// STANDARD = interactive study room; WEBINAR = host-led, large audience, restricted attendee A/V
+  sessionMode             StudyRoomSessionMode @default(STANDARD)
+  /// Host-defined registration fields, chat/mic/video/screen defaults (JSON)
+  webinarConfig           Json?
+  /// Public URL segment for `/webinar/register/[slug]` (unique per room)
+  webinarRegistrationSlug String?                @unique
   date            DateTime
   duration        Int
   maxParticipants Int
@@ -108,6 +114,7 @@ model StudyRoom {
   guestAccessTokens StudyRoomGuestAccessToken[]
   skills          StudyRoomSkill[]
   feedbacks       SessionFeedback[]
+  webinarRegistrations WebinarRegistration[]
 
   @@index([createdById])
   @@index([sessionStatus, date])
@@ -307,6 +314,22 @@ model StudyRoomGuestAccessToken {
   @@index([guestParticipantId])
 }
 
+/// Attendee registration for webinar-mode study rooms (email + custom answers)
+model WebinarRegistration {
+  id            String   @id @default(cuid())
+  studyRoomId   String
+  studyRoom     StudyRoom @relation(fields: [studyRoomId], references: [id], onDelete: Cascade)
+  email         String
+  name          String
+  responses     Json?
+  /// Human-readable code emailed to the attendee (with join link) for manual entry
+  joinPasscode  String?
+  createdAt     DateTime @default(now())
+
+  @@unique([studyRoomId, email])
+  @@index([studyRoomId])
+}
+
 model Notification {
   id            String    @id @default(cuid())
   notifType     NotifType
@@ -361,6 +384,11 @@ enum StudyRoomRecurrenceMode {
   DAILY
   WEEKLY
   CUSTOM_DATES
+}
+
+enum StudyRoomSessionMode {
+  STANDARD
+  WEBINAR
 }
 
 enum StudyRoomParticipantRole {

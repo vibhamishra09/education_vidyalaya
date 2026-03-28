@@ -10,6 +10,7 @@ export class LivekitService {
     metadata?: string;
     publish?: boolean;
     subscribe?: boolean;
+    /** Data channel (chat); keep true for webinar attendees */
     publishData?: boolean;
     ttl?: string;
   }) {

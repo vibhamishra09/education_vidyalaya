@@ -17,6 +17,16 @@ const isPublicRoute = createRouteMatcher([
 ]);
 const isApiRoute = createRouteMatcher(['/api(.*)']);
 
+/**
+ * Next.js Server Actions POST with this header. Redirecting those requests (e.g. to /onboarding)
+ * breaks the action response and surfaces as fetchServerAction → "Failed to fetch".
+ * Clerk also uses server actions for App Router session flows.
+ */
+function isNextServerActionRequest(req: NextRequest): boolean {
+  if (req.method !== 'POST') return false;
+  return req.headers.has('next-action') || req.headers.has('Next-Action');
+}
+
 export default clerkMiddleware(async (auth, req: NextRequest) => {
   const { isAuthenticated, sessionClaims, redirectToSignIn } = await auth();
 
@@ -46,6 +56,9 @@ export default clerkMiddleware(async (auth, req: NextRequest) => {
   // Redirect them to /onboarding — this applies to ALL routes (public and private)
   // so that new users landing on "/" are also caught.
   if (isAuthenticated && !sessionClaims?.metadata?.onboardingComplete) {
+    if (isNextServerActionRequest(req)) {
+      return NextResponse.next();
+    }
     const onboardingUrl = new URL('/onboarding', req.url);
     onboardingUrl.searchParams.set('redirect_url', req.url);
     return NextResponse.redirect(onboardingUrl);

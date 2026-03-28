@@ -7,11 +7,13 @@ import {
   IsDateString,
   Min,
   Max,
+  MinLength,
   IsEnum,
   ValidateNested,
   ArrayUnique,
   IsBoolean,
   IsEmail,
+  IsObject,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { SessionStatus } from '../../generated/prisma/client';
@@ -147,6 +149,46 @@ export class StudyRoomCardDto {
   skills: string[];
 }
 
+/** Matches Prisma `StudyRoomSessionMode` */
+export enum StudyRoomSessionModeDto {
+  STANDARD = 'STANDARD',
+  WEBINAR = 'WEBINAR',
+}
+
+export class JoinWebinarWithPasscodeDto {
+  @IsString()
+  studyRoomId: string;
+
+  /** Must match the name used at registration (case-insensitive). */
+  @IsString()
+  @MinLength(1)
+  name: string;
+
+  @IsEmail()
+  email: string;
+
+  @IsString()
+  @MinLength(4)
+  passcode: string;
+}
+
+export class WebinarChatEnabledDto {
+  @IsBoolean()
+  enabled: boolean;
+}
+
+export class RegisterWebinarDto {
+  @IsString()
+  name: string;
+
+  @IsEmail()
+  email: string;
+
+  @IsOptional()
+  @IsObject()
+  responses?: Record<string, string>;
+}
+
 export class CreateStudyRoomDto {
   @IsString()
   title: string;
@@ -210,6 +252,13 @@ export class CreateStudyRoomDto {
   @ValidateNested({ each: true })
   @Type(() => ExternalInviteInputDto)
   externalInvites?: ExternalInviteInputDto[];
+
+  @IsOptional()
+  @IsEnum(StudyRoomSessionModeDto)
+  sessionMode?: StudyRoomSessionModeDto;
+
+  @IsOptional()
+  webinarConfig?: Record<string, unknown>;
 }
 
 export class UpdateStudyRoomDto {

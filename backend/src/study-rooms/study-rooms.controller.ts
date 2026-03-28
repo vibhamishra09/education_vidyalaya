@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Body,
   Param,
   Query,
@@ -17,11 +18,14 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import {
   CreateStudyRoomDto,
   ExternalJoinRequestDto,
+  JoinWebinarWithPasscodeDto,
   PromoteParticipantRoleDto,
+  RegisterWebinarDto,
   ResolveExternalJoinRequestDto,
   StudyRoomEditScope,
   ToggleExternalAutoAcceptDto,
   UpdateStudyRoomDto,
+  WebinarChatEnabledDto,
 } from './dto/study-room.dto';
 import { StudyRoomQueryDto } from './dto/study-room-query.dto';
 import { SessionFeedbackDto } from '../common/dto/session-feedback.dto';
@@ -105,6 +109,99 @@ export class StudyRoomsController {
       });
       throw error;
     }
+  }
+
+  /** Public registration page metadata (no auth) */
+  @Get('webinar/public/:slug')
+  @UseGuards(OptionalClerkAuthGuard)
+  async getWebinarPublic(@Param('slug') slug: string) {
+    return this.studyRoomsService.getWebinarPublicBySlug(slug);
+  }
+
+  /** Webinar attendee registration (no auth) */
+  @Post('webinar/register/:slug')
+  @UseGuards(OptionalClerkAuthGuard)
+  async registerWebinar(
+    @Param('slug') slug: string,
+    @Body() body: RegisterWebinarDto,
+  ) {
+    return this.studyRoomsService.registerForWebinar(slug, body);
+  }
+
+  /** Join webinar with email + passcode (no token in URL) */
+  @Post('webinar/join')
+  @UseGuards(OptionalClerkAuthGuard)
+  async joinWebinarWithPasscode(@Body() body: JoinWebinarWithPasscodeDto) {
+    return this.studyRoomsService.joinWebinarWithPasscode(body);
+  }
+
+  @Get('webinar/:studyRoomId/registrations')
+  @UseGuards(ClerkAuthGuard)
+  async listWebinarRegistrations(
+    @Param('studyRoomId') studyRoomId: string,
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
+  ) {
+    const actorKey = dbUserId ?? clerkUserId;
+    if (!actorKey) {
+      throw new UnauthorizedException('User identity missing');
+    }
+    return this.studyRoomsService.listWebinarRegistrations(
+      studyRoomId,
+      actorKey,
+    );
+  }
+
+  @Post('webinar/:studyRoomId/registrations/:registrationId/approve')
+  @UseGuards(ClerkAuthGuard)
+  async approveWebinarRegistration(
+    @Param('studyRoomId') studyRoomId: string,
+    @Param('registrationId') registrationId: string,
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
+  ) {
+    const actorKey = dbUserId ?? clerkUserId;
+    if (!actorKey) {
+      throw new UnauthorizedException('User identity missing');
+    }
+    return this.studyRoomsService.approveWebinarRegistration(
+      studyRoomId,
+      registrationId,
+      actorKey,
+    );
+  }
+
+  @Delete('webinar/:studyRoomId/guests/:guestId')
+  @UseGuards(ClerkAuthGuard)
+  async removeWebinarGuest(
+    @Param('studyRoomId') studyRoomId: string,
+    @Param('guestId') guestId: string,
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
+  ) {
+    const actorKey = dbUserId ?? clerkUserId;
+    if (!actorKey) {
+      throw new UnauthorizedException('User identity missing');
+    }
+    return this.studyRoomsService.removeWebinarGuest(
+      studyRoomId,
+      guestId,
+      actorKey,
+    );
+  }
+
+  @Patch('webinar/:studyRoomId/chat-enabled')
+  @UseGuards(ClerkAuthGuard)
+  async setWebinarChatEnabled(
+    @Param('studyRoomId') studyRoomId: string,
+    @Body() body: WebinarChatEnabledDto,
+    @CurrentUser('clerkId') clerkId: string,
+  ) {
+    return this.studyRoomsService.setWebinarChatEnabled(
+      studyRoomId,
+      clerkId,
+      body.enabled,
+    );
   }
 
   @Get(':studyRoomId')
@@ -284,9 +381,15 @@ export class StudyRoomsController {
   @UseGuards(ClerkAuthGuard)
   async checkIsHost(
     @Param('studyRoomId') studyRoomId: string,
-    @CurrentUser('dbUserId') userId: string,
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    /** Prefer decorator over raw req — matches attachAuthenticatedUser + Clerk session */
+    @CurrentUser('clerkId') clerkUserId: string | undefined,
   ) {
-    return this.studyRoomsService.checkIsHost(studyRoomId, userId);
+    return this.studyRoomsService.checkIsHost(
+      studyRoomId,
+      dbUserId,
+      clerkUserId,
+    );
   }
 
   @Post(':studyRoomId/feedback')

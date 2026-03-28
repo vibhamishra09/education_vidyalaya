@@ -287,6 +287,8 @@ export interface StudyRoomCard {
   slug: string;
 }
 
+export type StudyRoomSessionMode = 'STANDARD' | 'WEBINAR';
+
 export interface StudyRoom extends StudyRoomCard {
   participants: (PublicUser & { role?: 'PARTICIPANT' | 'COHOST'; clerkId?: string })[];
   guestParticipants?: Array<{
@@ -319,6 +321,10 @@ export interface StudyRoom extends StudyRoomCard {
   chatChannelId?: string | null;
   occurrencesCreated?: number;
   hostDetailsUpdatedAt?: string | null;
+  sessionMode?: StudyRoomSessionMode;
+  webinarConfig?: unknown;
+  webinarRegistrationSlug?: string | null;
+  webinarRegistrationUrl?: string | null;
 }
 
 export enum StudyRoomRecurrenceMode {
@@ -357,6 +363,8 @@ export interface CreateStudyRoomDto {
   externalAutoAccept?: boolean;
   externalPasscode?: string;
   externalInvites?: Array<{ email: string; role: 'PARTICIPANT' | 'COHOST' }>;
+  sessionMode?: StudyRoomSessionMode;
+  webinarConfig?: Record<string, unknown>;
 }
 
 export interface UpdateStudyRoomDto {

@@ -583,31 +583,6 @@ function DebateLiveContent({
     };
   }, [room]);
 
-  // Apply Krisp AI noise suppression (browser-only; package uses Worker — must not load on SSR)
-  useEffect(() => {
-    if (!localParticipant || typeof window === 'undefined') return;
-    let cancelled = false;
-    const trackRef: { current: { stopProcessor: () => Promise<void> } | null } = { current: null };
-
-    void import('@livekit/krisp-noise-filter')
-      .then(({ KrispNoiseFilter, isKrispNoiseFilterSupported }) => {
-        if (cancelled || !localParticipant || !isKrispNoiseFilterSupported()) return;
-        const micPublication = localParticipant.getTrackPublication(Track.Source.Microphone);
-        const micTrack = micPublication?.audioTrack;
-        if (!micTrack) return;
-        trackRef.current = micTrack;
-        const filter = KrispNoiseFilter();
-        micTrack.setProcessor(filter).catch(() => {});
-      })
-      .catch(() => {});
-
-    return () => {
-      cancelled = true;
-      trackRef.current?.stopProcessor().catch(() => {});
-      trackRef.current = null;
-    };
-  }, [localParticipant]);
-
   // Log a concise connection snapshot in development only.
   useEffect(() => {
     if (process.env.NODE_ENV !== 'development' || !room || !localParticipant) return;

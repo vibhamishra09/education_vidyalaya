@@ -5,7 +5,10 @@ import {
   NotFoundException,
   Logger,
 } from '@nestjs/common';
-import { MessageAudienceType } from '../generated/prisma/client';
+import {
+  MessageAudienceType,
+  StudyRoomSessionMode,
+} from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { isConnectionError } from '../common/db-error-handler';
 
@@ -456,9 +459,18 @@ export class ChatService {
   } | null> {
     const record = await this.prisma.studyRoomGuestAccessToken.findUnique({
       where: { token },
-      include: { guestParticipant: true },
+      include: {
+        guestParticipant: true,
+        studyRoom: { select: { sessionMode: true } },
+      },
     });
     if (!record || record.expiresAt < new Date()) return null;
+    if (
+      record.studyRoom.sessionMode === StudyRoomSessionMode.WEBINAR &&
+      !record.guestParticipant.approvedBy
+    ) {
+      return null;
+    }
     return {
       studyRoomId: record.studyRoomId,
       guestParticipant: {

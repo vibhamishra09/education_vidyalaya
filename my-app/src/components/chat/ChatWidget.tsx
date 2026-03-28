@@ -147,10 +147,11 @@ export function ChatWidget({
 	guestToken,
 	guestEmail,
 }: ChatWidgetProps) {
-	const isGuestMode = !!guestToken
 	const { user, isLoaded } = useUser()
 	const { getToken } = useAuth()
 	const userId = user?.id
+	/** Guest link chat only when not signed in; stray ?guestAccessToken= would otherwise use an expired token and the server would disconnect the socket. */
+	const isGuestMode = Boolean(guestToken && !userId)
 	const [messages, setMessages] = useState<Message[]>(() => {
 		if (!channelId) return []
 		const cached = channelMessageCache.get(channelId) || []
