@@ -334,7 +334,17 @@ function BrowsePageContent() {
                 type="text"
                 placeholder="Search by name or skill..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  const allowedSpecialKeys = ['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab', 'Enter', 'Escape', 'Home', 'End'];
+                  if (allowedSpecialKeys.includes(e.key)) return;
+                  if (e.key.length === 1 && !/^[a-zA-Z0-9 \-.,/']$/.test(e.key)) {
+                    e.preventDefault();
+                  }
+                }}
+                onChange={(e) => {
+                  const sanitized = e.target.value.replace(/[^a-zA-Z0-9 \-.,/']/g, "");
+                  setSearchQuery(sanitized);
+                }}
                 className="pl-10 h-11 w-full rounded-2xl border-muted bg-muted/20 focus-visible:ring-green-500/20 focus-visible:border-green-500/30 transition-all"
                 />
             </div>
