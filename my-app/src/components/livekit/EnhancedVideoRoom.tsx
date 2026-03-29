@@ -1306,7 +1306,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						)
 					}
 				}
-			} catch (err) {
+			} catch (_err) {
 				// Error applying mute action
 			}
 		}
@@ -1333,7 +1333,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						)
 					}
 				}
-			} catch (err) {
+			} catch (_err) {
 				// Error applying video action
 			}
 		}
@@ -1974,31 +1974,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		return focusedTrack?.participant || focusedParticipant || null
 	}, [focusedTrack, focusedParticipant, isScreenShareFocused])
 
-	const toggleAudio = () => {
-		// Toggle audio output (mute/unmute all remote audio)
-
-		const enabled = !isAudioEnabled
-		setIsAudioEnabled(enabled)
-		// Mute/unmute all remote audio tracks by setting volume
-		allParticipants.forEach((participant) => {
-			if (participant.isLocal) return
-			participant.audioTrackPublications.forEach((publication) => {
-				if (publication.track && 'setVolume' in publication.track) {
-					(publication.track as unknown as { setVolume: (volume: number) => void }).setVolume(enabled ? 1 : 0)
-				}
-			})
-		})
-	}
-
-	const toggleFullscreen = () => {
-		if (!document.fullscreenElement) {
-			document.documentElement.requestFullscreen()
-			setIsFullscreen(true)
-		} else {
-			document.exitFullscreen()
-			setIsFullscreen(false)
-		}
-	}
+	// toggleAudio and toggleFullscreen removed as they were unused
 
 	// Native Picture-in-Picture state and refs
 	const [isPiPActive, setIsPiPActive] = useState(false)
@@ -2040,7 +2016,6 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	}
 
 	const pipVideoRef = useRef<HTMLVideoElement | null>(null)
-	const pipAnimationFrameRef = useRef<number | null>(null)
 
 	// Toggle native PiP mode
 	const togglePiP = useCallback(async () => {
@@ -2065,8 +2040,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				setIsPiPActive(true)
 				pipVideoRef.current = videoElement
 			}
-		} catch (error) {
-			console.error('PiP error:', error)
+		} catch (_error) {
+			console.error('PiP error:', _error)
 		}
 	}, [isMobileViewport])
 
