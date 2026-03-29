@@ -15,7 +15,6 @@ import {
   type WebinarPublicMetadata,
 } from "@/lib/api/study-rooms.api";
 import { extractHttpErrorMessage } from "@/lib/utils/error-handling";
-import { toAbsoluteAppUrl } from "@/lib/utils/public-url";
 import { Loader2, CheckCircle2 } from "lucide-react";
 
 const INVALID_LINK =
@@ -38,7 +37,6 @@ export function WebinarRegisterClient({
   const [done, setDone] = useState<{
     title: string;
     alreadyRegistered?: boolean;
-    joinUrlManual?: string;
     roomId?: string;
     approvalPending?: boolean;
     /** False when AWS SES did not send confirmation (still registered). */
@@ -78,9 +76,6 @@ export function WebinarRegisterClient({
       setDone({
         title: res.title,
         alreadyRegistered: res.alreadyRegistered === true,
-        joinUrlManual: res.joinUrlManual
-          ? toAbsoluteAppUrl(res.joinUrlManual)
-          : undefined,
         roomId: res.roomId,
         approvalPending: res.approvalPending !== false,
         emailSent: res.emailSent !== false,
@@ -121,18 +116,9 @@ export function WebinarRegisterClient({
                 : "You\u2019re registered"}
             </h1>
             {done.alreadyRegistered ? (
-              <>
-                <p className="text-sm text-muted-foreground">
-                  Join link and passcode sent—check your email.
-                </p>
-                {done.joinUrlManual && (
-                  <p className="text-xs text-muted-foreground break-all">
-                    <a className="text-primary underline" href={done.joinUrlManual}>
-                      Open join page
-                    </a>
-                  </p>
-                )}
-              </>
+              <p className="text-sm text-muted-foreground">
+                Join link and passcode sent—check your email.
+              </p>
             ) : done.approvalPending ? (
               <>
                 {done.emailSent === false ? (
@@ -147,16 +133,9 @@ export function WebinarRegisterClient({
                 )}
               </>
             ) : (
-              <>
-                <p className="text-muted-foreground text-sm">
-                  Join link and passcode sent—check your email.
-                </p>
-                {done.joinUrlManual && (
-                  <Button asChild className="w-full">
-                    <a href={done.joinUrlManual}>Open join page</a>
-                  </Button>
-                )}
-              </>
+              <p className="text-muted-foreground text-sm">
+                Join link and passcode sent—check your email.
+              </p>
             )}
           </div>
         </main>
