@@ -50,6 +50,8 @@ interface StudyRoomCardProps {
   skillNames?: string[];
   /** Room timezone from API (improves schedule editing accuracy) */
   timezone?: string | null;
+  /** URL segment for /studyroom/[slug]; defaults to roomId */
+  slug?: string;
 }
 
 export function StudyRoomCard({
@@ -74,7 +76,9 @@ export function StudyRoomCard({
   joiningFee = 0,
   skillNames,
   timezone: roomTimezone,
+  slug,
 }: StudyRoomCardProps) {
+  const pathSegment = slug ?? roomId;
   const router = useRouter();
   const [editOpen, setEditOpen] = useState(false);
   const statusIsLive = status === "live";
@@ -180,7 +184,7 @@ export function StudyRoomCard({
         <div className="flex-1 space-y-1.5 mb-4">
           <h3
             className={cn("text-2xl font-bold leading-tight text-foreground tracking-tight transition-colors line-clamp-2 cursor-pointer", theme.titleHover)}
-            onClick={() => router.push(`/studyroom/${roomId}`)}
+            onClick={() => router.push(`/studyroom/${slug || roomId}`)}
           >
             {title}
           </h3>
@@ -256,7 +260,7 @@ export function StudyRoomCard({
           {/* Actions: Share & CTA Button */}
           <div className="flex items-center gap-2">
              <ShareButton
-                url={getStudyRoomShareUrl(roomId)}
+                url={getStudyRoomShareUrl(pathSegment)}
                 title={title}
                 description={description}
                 image={imageUrl}

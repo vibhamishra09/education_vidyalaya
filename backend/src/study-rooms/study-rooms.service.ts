@@ -46,6 +46,7 @@ import { StudyRoomParticipantRoleDto } from './dto/study-room.dto';
 type StudyRoomWithRelations = {
   id: string;
   title: string;
+  slug?:string | null
   description?: string | null;
   imageUrl?: string | null;
   sessionStatus: SessionStatus;
@@ -674,14 +675,19 @@ export class StudyRoomsService {
             reviewCount: number;
             totalSessions: number;
           }> = [];
-          const seenRoomIds = new Set<string>();
+          const seenSlugs = new Set<string>();
+
+          this.logger.debug({
+            message: roomEntries,
+            limit: normalizedLimit,
+          });
 
           for (const entry of roomEntries) {
-            if (!entry || seenRoomIds.has(entry.room.id)) {
+            if (!entry || seenSlugs.has(entry.room.slug!)) {
               continue;
             }
 
-            seenRoomIds.add(entry.room.id);
+            seenSlugs.add(entry.room.slug!);
             uniqueRooms.push(entry);
 
             if (uniqueRooms.length >= normalizedLimit * 2) {
@@ -790,10 +796,12 @@ export class StudyRoomsService {
           date: { gte: fromDate },
         },
         take: limit,
+        distinct: ["slug"],
         orderBy: { date: 'asc' },
         select: {
           id: true,
           title: true,
+          slug: true,
           description: true,
           imageUrl: true,
           sessionStatus: true,
@@ -920,6 +928,7 @@ export class StudyRoomsService {
       occurrenceIndex: (room as any).occurrenceIndex,
       timezone: (room as any).timezone,
       participantCount: room.learners.length,
+      slug:room.slug,
       createdBy: {
         id: room.createdBy.id,
         name: room.createdBy.name,
@@ -2346,8 +2355,10 @@ export class StudyRoomsService {
   }
 
   async joinStudyRoom(studyRoomId: string, userId: string) {
+    const actor = await this.resolveUserIdentity(userId);
+
     const user = await this.prisma.user.findUnique({
-      where: { id: userId },
+      where: { id: actor.id },
       select: { id: true, coins: true },
     });
 
@@ -2486,6 +2497,221 @@ export class StudyRoomsService {
       success: true,
       message: 'Successfully joined study room',
     };
+  }
+
+  async requestExternalJoin(
+    studyRoomId: string,
+    dto: ExternalJoinRequestDto,
+  ): Promise<
+    | { status: 'PENDING'; message: string }
+    | {
+      status: 'APPROVED';
+      message: string;
+      guestAccessToken: string;
+      participantIdentity: string;
+      role: StudyRoomParticipantRole;
+    }
+  > {
+    const studyRoom = await this.resolveStudyRoomByIdOrSlug(studyRoomId, {
+      include: {
+        externalInvites: true,
+        learners: true,
+        guestParticipants: true,
+      },
+    });
+    if (!studyRoom) throw new NotFoundException('Study room not found');
+    if (!studyRoom.allowExternalUsers) {
+      throw new BadRequestException(
+        'External access is disabled for this room',
+      );
+    }
+    if (
+      !studyRoom.externalPasscode ||
+      studyRoom.externalPasscode !== dto.passcode
+    ) {
+      throw new BadRequestException('Invalid passcode');
+    }
+    const normalizedEmail = this.normalizeEmail(dto.email);
+    const invite = studyRoom.externalInvites.find(
+      (item) => item.email === normalizedEmail,
+    );
+    const existingGuestParticipant = studyRoom.guestParticipants.find(
+      (item) => item.email === normalizedEmail,
+    );
+
+    // If this guest was already approved previously, issue a fresh access token and let them in instantly.
+    if (existingGuestParticipant) {
+      const role = invite
+        ? this.toParticipantRole(invite.role)
+        : existingGuestParticipant.role;
+      const participant = await this.prisma.studyRoomGuestParticipant.update({
+        where: { id: existingGuestParticipant.id },
+        data: {
+          name: dto.name.trim(),
+          role,
+        },
+      });
+      const guestAccessToken = await this.issueGuestAccessToken(
+        studyRoom.id,
+        participant.id,
+      );
+      return {
+        status: 'APPROVED',
+        message: 'Approved. You can join now.',
+        guestAccessToken,
+        participantIdentity: participant.livekitIdentity,
+        role: participant.role,
+      };
+    }
+
+    if (
+      studyRoom.learners.length + studyRoom.guestParticipants.length >=
+      studyRoom.maxParticipants
+    ) {
+      throw new BadRequestException({
+        code: 'ROOM_FULL',
+        message: 'Study room is at capacity',
+      });
+    }
+
+    const shouldApprove = !!invite || studyRoom.externalAutoAccept;
+    if (!shouldApprove) {
+      const existingPendingRequest =
+        await this.prisma.studyRoomExternalJoinRequest.findFirst({
+          where: {
+            studyRoomId: studyRoom.id,
+            email: normalizedEmail,
+            status: ExternalJoinRequestStatus.PENDING,
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+      if (existingPendingRequest) {
+        return {
+          status: 'PENDING',
+          message: 'Join request sent to host for approval',
+        };
+      }
+
+      await this.prisma.studyRoomExternalJoinRequest.create({
+        data: {
+          studyRoomId: studyRoom.id,
+          name: dto.name.trim(),
+          email: normalizedEmail,
+          status: ExternalJoinRequestStatus.PENDING,
+        },
+      });
+      return {
+        status: 'PENDING',
+        message: 'Join request sent to host for approval',
+      };
+    }
+
+    const role = this.toParticipantRole(invite?.role);
+    const participant = await this.prisma.studyRoomGuestParticipant.upsert({
+      where: {
+        studyRoomId_email: {
+          studyRoomId: studyRoom.id,
+          email: normalizedEmail,
+        },
+      },
+      update: {
+        name: dto.name.trim(),
+        role,
+      },
+      create: {
+        studyRoomId: studyRoom.id,
+        name: dto.name.trim(),
+        email: normalizedEmail,
+        role,
+        livekitIdentity: `guest-${randomUUID()}`,
+      },
+    });
+    const guestAccessToken = await this.issueGuestAccessToken(
+      studyRoom.id,
+      participant.id,
+    );
+    return {
+      status: 'APPROVED',
+      message: 'Approved. You can join now.',
+      guestAccessToken,
+      participantIdentity: participant.livekitIdentity,
+      role,
+    };
+  }
+
+  async joinRecurringStudyRoom(
+    studyRoomId: string, 
+    userId: string, 
+    dto: { scope: 'THIS' | 'FOLLOWING' }
+) {
+
+  if (dto.scope === 'THIS') {
+    return this.joinStudyRoom(studyRoomId, userId);
+  }
+
+  const currentRoom = await this.prisma.studyRoom.findUnique({
+    where: { id: studyRoomId },
+    select: { seriesId: true, date: true }
+  });
+
+  if (!currentRoom?.seriesId) {
+    return this.joinStudyRoom(studyRoomId, userId);
+  }
+
+  const futureRooms = await this.prisma.studyRoom.findMany({
+    where: {
+      seriesId: currentRoom.seriesId,
+      date: { gte: currentRoom.date },
+    },
+    orderBy: { date: 'asc' },
+    select: { id: true }
+  });
+
+  const successfulJoins : string[] = [];
+  for (const room of futureRooms) {
+    try {
+      
+      await this.joinStudyRoom(room.id, userId);
+      successfulJoins.push(room.id);
+    } catch (error) {
+      
+      if (error.status === 400 && error.message.includes('INSUFFICIENT_COINS')) {
+        break; 
+      }
+      this.logger.warn(`Skipped room ${room.id} in recurring join: ${error.message}`);
+    }
+  }
+
+  return {
+    success: true,
+    message: `Joined ${successfulJoins.length} sessions in the series`,
+  };
+}
+
+
+  async unenroll(userId: string, targetId: string, scope: "THIS" | "ALL" | "FOLLOWING") {
+    if (scope === "ALL") {
+      const result = await this.prisma.studyRoomParticipant.deleteMany({
+        where: {
+          userId: userId,
+          studyRoom: {
+            seriesId: targetId, 
+          },
+        },
+      });
+      return { message: `Unenrolled from ${result.count} sessions in the series.` };
+    }
+    
+    await this.prisma.studyRoomParticipant.delete({
+      where: {
+        userId_studyRoomId: {
+          userId: userId,
+          studyRoomId: targetId, 
+        },
+      },
+    });
+    
+    return { message: 'Unenrolled from this session.' };
   }
 
   private async assertHostOrCohost(studyRoomId: string, userId: string) {

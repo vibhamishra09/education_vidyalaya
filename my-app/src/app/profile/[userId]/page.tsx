@@ -328,6 +328,7 @@ export default function PublicProfilePage({
                     seriesId={room.seriesId ?? null}
                     joiningFee={room.joiningFee}
                     timezone={room.timezone ?? null}
+                    slug={room.slug ?? room.id}
                   />
                 ))
               )}

@@ -1473,7 +1473,9 @@ export function CreateStudyRoomClient() {
                   />
                   <Button
                     onClick={() =>
-                      router.push(getStudyRoomPagePath(createdRoom.id))
+                      router.push(
+                        `/studyroom/${createdRoom.slug || createdRoom.id}`,
+                      )
                     }
                     className="w-full h-10 sm:h-11 text-xs sm:text-sm rounded-lg sm:rounded-xl font-bold shadow-sm hover:shadow-md transition-all bg-green-100 text-green-800 hover:bg-green-200 border border-green-300 dark:bg-green-900/40 dark:text-green-300 dark:border-green-800 dark:hover:bg-green-900/60 px-2 sm:px-3"
                   >

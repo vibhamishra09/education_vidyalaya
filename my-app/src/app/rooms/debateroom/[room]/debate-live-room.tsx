@@ -1998,8 +1998,8 @@ interface TeamVideoGridProps {
   currentSpeakerId?: string | null;
   /** Presenter = one large tile per panel; grid = multi-tile layout */
   layoutMode?: 'speaker' | 'grid';
-  pinnedParticipantId: string | null;
-  onTogglePin: (participantId: string) => void;
+  pinnedParticipantId?: string | null;
+  onTogglePin?: (participantId: string) => void;
 }
 
 function TeamVideoGrid({
@@ -2007,7 +2007,7 @@ function TeamVideoGrid({
   teamColor,
   currentSpeakerId,
   layoutMode = 'grid',
-  pinnedParticipantId,
+  pinnedParticipantId = null,
   onTogglePin,
 }: TeamVideoGridProps) {
   const borderColor = teamColor === 'green' ? 'border-green-500' : 'border-red-500';
@@ -2094,7 +2094,7 @@ function TeamVideoGrid({
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => onTogglePin(trackRef.participant.identity)}
+                onClick={() => onTogglePin?.(trackRef.participant.identity)}
                 className={cn(
                   "h-7 w-7 p-0 rounded-full border backdrop-blur-md",
                   pinnedParticipantId === trackRef.participant.identity

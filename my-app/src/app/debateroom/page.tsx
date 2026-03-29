@@ -395,7 +395,18 @@ export default function DebateRoomsPage() {
               type="text"
               placeholder="Search debates by topic..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value;
+                const sanitized = val.replace(/[^a-zA-Z0-9 \-.,/']/g, "");
+                setSearch(sanitized);
+              }}
+              onKeyDown={(e) => {
+                const allowedSpecialKeys = ['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab', 'Enter', 'Escape', 'Home', 'End'];
+                if (allowedSpecialKeys.includes(e.key)) return;
+                if (e.key.length === 1 && !/^[a-zA-Z0-9 \-.,/']$/.test(e.key)) {
+                  e.preventDefault();
+                }
+              }}
               className="pl-10 h-11 w-full rounded-2xl border-muted bg-muted/20 focus-visible:ring-green-500/20 focus-visible:border-green-500/30 transition-all"
             />
             {search && (

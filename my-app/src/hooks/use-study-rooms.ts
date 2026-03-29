@@ -139,6 +139,143 @@ export function useJoinStudyRoom() {
   });
 }
 
+export function useJoinRecurringStudyRoom() {
+  const queryClient = useQueryClient();
+  const { getToken, isLoaded } = useAuth();
+
+  return useMutation({
+    mutationFn: async ({
+      roomId,
+      scope,
+    }: {
+      roomId: string;
+      scope: 'THIS' | 'FOLLOWING';
+    }) => {
+      if (isLoaded) {
+        const token = await getToken();
+        if (token) setAuthToken(token);
+      }
+      return studyRoomsApi.joinRecurringRooms(roomId, scope);
+    },
+    onSuccess: async (_, { roomId }) => {
+      
+      queryClient.invalidateQueries({ queryKey: studyRoomKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: studyRoomKeys.detail(roomId) });
+      
+      queryClient.invalidateQueries({ queryKey: ['users', 'current'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+
+      await Promise.all([
+        queryClient.refetchQueries({ queryKey: ['users', 'current'], type: 'active' }),
+        queryClient.refetchQueries({ queryKey: ['transactions'], type: 'active' }),
+        queryClient.refetchQueries({ queryKey: studyRoomKeys.detail(roomId), type: 'active' }),
+      ]);
+    },
+  });
+}
+
+//for unenrolling from meets
+export function useUnenrollRoom() {
+  const queryClient = useQueryClient();
+  const { getToken, isLoaded } = useAuth();
+
+  return useMutation({
+    mutationFn: async ({ roomId, scope }: { roomId: string; scope: "ALL" | "THIS" | "FOLLOWING" }) => {
+       if (isLoaded) {
+        const token = await getToken();
+        if (token) setAuthToken(token);
+      }
+      return studyRoomsApi.unenroll(roomId, scope);
+    },
+   onSuccess: async (_, { roomId, scope }) => {
+    queryClient.invalidateQueries({ queryKey: studyRoomKeys.lists() });
+    if (scope === "ALL") {
+      queryClient.invalidateQueries({ 
+        queryKey: ['study-rooms', 'detail'] 
+      });
+    } else {
+        queryClient.invalidateQueries({ 
+            queryKey: studyRoomKeys.detail(roomId) 
+          });
+        }
+        queryClient.invalidateQueries({ queryKey: ['users', 'current'] });
+        
+        await queryClient.refetchQueries({ type: 'active' });
+      },
+    onError: (error: unknown) => {
+      console.error("Unenroll Error:", error);
+    }
+  });
+}
+
+export function useRequestExternalJoin() {
+  return useMutation({
+    mutationFn: async ({
+      studyRoomId,
+      name,
+      email,
+      passcode,
+    }: {
+      studyRoomId: string;
+      name: string;
+      email: string;
+      passcode: string;
+    }) =>
+      studyRoomsApi.requestExternalJoin(studyRoomId, { name, email, passcode }),
+  });
+}
+
+export function useExternalJoinRequests(studyRoomId: string, enabled = true) {
+  const { getToken, isLoaded } = useAuth();
+  return useQuery({
+    queryKey: [...studyRoomKeys.detail(studyRoomId), 'external-requests'],
+    queryFn: async () => {
+      if (isLoaded) {
+        const token = await getToken();
+        if (token) setAuthToken(token);
+      }
+      return studyRoomsApi.listExternalJoinRequests(studyRoomId);
+    },
+    enabled: !!studyRoomId && enabled,
+    refetchInterval: 5000,
+  });
+}
+
+export function useResolveExternalJoinRequest(studyRoomId: string) {
+  const queryClient = useQueryClient();
+  const { getToken, isLoaded } = useAuth();
+  return useMutation({
+    mutationFn: async ({ requestId, approve }: { requestId: string; approve: boolean }) => {
+      if (isLoaded) {
+        const token = await getToken();
+        if (token) setAuthToken(token);
+      }
+      return studyRoomsApi.resolveExternalJoinRequest(studyRoomId, requestId, approve);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [...studyRoomKeys.detail(studyRoomId), 'external-requests'] });
+      queryClient.invalidateQueries({ queryKey: studyRoomKeys.detail(studyRoomId) });
+    },
+  });
+}
+
+export function useToggleExternalAutoAccept(studyRoomId: string) {
+  const queryClient = useQueryClient();
+  const { getToken, isLoaded } = useAuth();
+  return useMutation({
+    mutationFn: async (enabled: boolean) => {
+      if (isLoaded) {
+        const token = await getToken();
+        if (token) setAuthToken(token);
+      }
+      return studyRoomsApi.toggleExternalAutoAccept(studyRoomId, enabled);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: studyRoomKeys.detail(studyRoomId) });
+    },
+  });
+}
+
 export function useUpdateParticipantRole(studyRoomId: string) {
   const queryClient = useQueryClient();
   const { getToken, isLoaded } = useAuth();

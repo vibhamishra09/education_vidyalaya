@@ -22,6 +22,28 @@ export class ReviewsService {
     private readonly cacheService: CacheService,
   ) {}
 
+  private async resolveUserIdentity(userIdOrClerkId: string) {
+    const byId = await this.prisma.user.findUnique({
+      where: { id: userIdOrClerkId },
+      select: { id: true },
+    });
+
+    if (byId) {
+      return byId;
+    }
+
+    const byClerkId = await this.prisma.user.findUnique({
+      where: { clerkId: userIdOrClerkId },
+      select: { id: true },
+    });
+
+    if (byClerkId) {
+      return byClerkId;
+    }
+
+    throw new NotFoundException('User not found');
+  }
+
   async getReviews(
     userId?: string,
     sessionId?: string,
@@ -130,9 +152,12 @@ export class ReviewsService {
   }
 
   async createReview(userId: string, createDto: CreateReviewDto) {
+    const actor = await this.resolveUserIdentity(userId);
+    const actorUserId = actor.id;
+
     // Check if already reviewed
     const whereClause: any = {
-      reviewerId: userId,
+      reviewerId: actorUserId,
     };
 
     if (createDto.sessionType === 'studyRoom') {
@@ -187,14 +212,14 @@ export class ReviewsService {
         });
       }
 
-      if (studyRoom.createdById === userId) {
+      if (studyRoom.createdById === actorUserId) {
         throw new ForbiddenException(
           'Creators cannot review their own study rooms',
         );
       }
 
       const isLearner = studyRoom.learners.some(
-        (learner) => learner.userId === userId,
+        (learner) => learner.userId === actorUserId,
       );
       if (!isLearner) {
         throw new ForbiddenException(
@@ -236,7 +261,7 @@ export class ReviewsService {
       }
 
       revieweeId =
-        peerSession.requestedById === userId
+        peerSession.requestedById === actorUserId
           ? peerSession.requestedToId
           : peerSession.requestedById;
     }
@@ -244,7 +269,7 @@ export class ReviewsService {
     const reviewData: any = {
       rating: createDto.rating,
       review: createDto.review?.trim() ?? '',
-      reviewerId: userId,
+      reviewerId: actorUserId,
       revieweeId,
     };
 
@@ -284,7 +309,7 @@ export class ReviewsService {
     await this.checkAndReleaseEscrowPayment(
       createDto.sessionId,
       createDto.sessionType,
-      userId,
+      actorUserId,
     );
 
     // Invalidate reviews cache

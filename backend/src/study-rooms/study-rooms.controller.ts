@@ -7,6 +7,7 @@ import {
   Body,
   Param,
   Query,
+  Req,
   UseGuards,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -260,9 +261,40 @@ export class StudyRoomsController {
   @UseGuards(ClerkAuthGuard)
   async joinStudyRoom(
     @Param('studyRoomId') studyRoomId: string,
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
+  ) {
+    const actorKey = dbUserId ?? clerkUserId;
+    if (!actorKey) {
+      throw new UnauthorizedException('User identity missing');
+    }
+    return this.studyRoomsService.joinStudyRoom(studyRoomId, actorKey);
+  }
+
+  @Post(':id/join-recurring')
+  @UseGuards(ClerkAuthGuard)
+  async joinRecurring(
+    @Param('id') id: string,
+    @Body() dto: { scope: 'THIS' | 'FOLLOWING' },
     @CurrentUser('dbUserId') userId: string,
   ) {
-    return this.studyRoomsService.joinStudyRoom(studyRoomId, userId);
+    if (!userId) {
+      throw new UnauthorizedException("User ID could not be resolved from token");
+    }
+
+    return this.studyRoomsService.joinRecurringStudyRoom(id, userId, dto);
+  }
+
+  @Post(':id/unenroll')
+  @UseGuards(ClerkAuthGuard)
+  async unenroll(
+    @Param('id') roomId: string,
+    @CurrentUser('dbUserId') userId: string,
+    @Body() dto: { scope: 'ALL' | 'THIS' | 'FOLLOWING' }
+  ) {
+    console.log( "HITTING IT : ", roomId, userId);
+    
+    return this.studyRoomsService.unenroll(userId, roomId, dto.scope);
   }
 
   @Post(':studyRoomId/participants/role')

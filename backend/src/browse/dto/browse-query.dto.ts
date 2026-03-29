@@ -8,6 +8,8 @@ import {
   Min,
   Max,
   IsInt,
+  Matches,
+  MaxLength,
 } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
@@ -27,6 +29,10 @@ export class BrowseQueryDto extends PaginationQueryDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(100)
+  @Matches(/^[a-zA-Z0-9 '\-.,\/]*$/, {
+    message: 'Search may only contain letters, numbers, spaces, hyphens, apostrophes, dots, commas, and slashes.',
+  })
   search?: string;
 
   @IsOptional()

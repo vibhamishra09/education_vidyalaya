@@ -458,11 +458,14 @@ export class BrowseService {
 
             const studyRooms = await this.prisma.studyRoom.findMany({
               where: listWhere,
+              distinct: ['slug'],
               skip,
               take: limit,
               select: {
                 id: true,
                 title: true,
+                slug: true,
+                seriesId: true,
                 description: true,
                 sessionStatus: true,
                 date: true,
@@ -537,6 +540,8 @@ export class BrowseService {
                 hostAvgRating,
                 hostReviewCount: hostReviews.length,
                 hostTotalSessions,
+                slug: room.slug,
+                seriesId: room.seriesId
               };
             });
 
@@ -619,9 +624,11 @@ export class BrowseService {
             in: [SessionStatus.UPCOMING, SessionStatus.ONGOING],
           },
         },
+        distinct: ["slug"],
         take: limit,
         select: {
           id: true,
+          slug:true,
           title: true,
           description: true,
           sessionStatus: true,
@@ -692,6 +699,7 @@ export class BrowseService {
             avatar: room.createdBy.avatar,
           },
           skills: room.skills.map((s) => s.skill.name),
+          slug: room.slug,
           hostAvgRating,
           hostReviewCount: hostReviews.length,
           hostTotalSessions,
