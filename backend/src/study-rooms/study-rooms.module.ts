@@ -7,6 +7,7 @@ import { StreaksModule } from '../streaks/streaks.module';
 import { AchievementsModule } from '../achievements/achievements.module';
 import { TranscriptsModule } from '../transcripts/transcripts.module';
 import { EmailModule } from '../email/email.module';
+import { UsersModule } from '../users/users.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { EmailModule } from '../email/email.module';
     AchievementsModule,
     TranscriptsModule,
     EmailModule,
+    UsersModule,
   ],
   controllers: [StudyRoomsController],
   providers: [StudyRoomsService],

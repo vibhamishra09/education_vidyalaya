@@ -86,10 +86,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     },
   ) {
     if (message.audienceType === MessageAudienceType.EVERYONE) {
-      const memberUserIds = await this.chatService.getChannelMemberUserIds(channelId);
-      for (const userId of memberUserIds) {
-        this.server.to(`user:${userId}`).emit('message:new', message);
-      }
+      // Single broadcast to the channel room — all sockets (host, participants, guests)
+      // joined via join:channel receive once. Do not also emit per user:${dbId}: senders
+      // are in both rooms and would see every message twice.
       this.server.to(channelId).emit('message:new', message);
       return;
     }

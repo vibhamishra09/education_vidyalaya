@@ -144,7 +144,13 @@ export function useJoinRecurringStudyRoom() {
   const { getToken, isLoaded } = useAuth();
 
   return useMutation({
-    mutationFn: async ({ roomId, scope }: { roomId: string; scope: "ALL" | "THIS" | "FOLLOWING" }) => {
+    mutationFn: async ({
+      roomId,
+      scope,
+    }: {
+      roomId: string;
+      scope: 'THIS' | 'FOLLOWING';
+    }) => {
       if (isLoaded) {
         const token = await getToken();
         if (token) setAuthToken(token);

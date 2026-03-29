@@ -95,6 +95,10 @@ export function useSessionModeration({ sessionId, sessionType, isHost, token, us
   
   // Pending permission request from host (for participants)
   const [pendingPermissionRequest, setPendingPermissionRequest] = useState<PermissionRequest | null>(null);
+  const pendingPermissionRequestRef = useRef<PermissionRequest | null>(null);
+  useEffect(() => {
+    pendingPermissionRequestRef.current = pendingPermissionRequest;
+  }, [pendingPermissionRequest]);
   
   // Notification when host mutes participant
   const [moderationNotification, setModerationNotification] = useState<ModerationNotification | null>(null);
@@ -564,10 +568,18 @@ export function useSessionModeration({ sessionId, sessionType, isHost, token, us
     setModerationNotification(null);
   }, []);
 
-  // Dismiss pending permission request
+  // Dismiss pending permission request (revert host-request unlock so room defaults apply again)
   const dismissPermissionRequest = useCallback(() => {
+    const pending = pendingPermissionRequestRef.current;
+    if (socket && sessionId && sessionType && pending) {
+      if (pending.type === 'audio') {
+        socket.emit('respond-audio-request', { sessionId, sessionType, accepted: false });
+      } else {
+        socket.emit('respond-video-request', { sessionId, sessionType, accepted: false });
+      }
+    }
     setPendingPermissionRequest(null);
-  }, []);
+  }, [socket, sessionId, sessionType]);
 
   // Participant requests permission to unmute audio
   const participantRequestAudio = useCallback(() => {

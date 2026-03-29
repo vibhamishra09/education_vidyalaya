@@ -26,7 +26,10 @@ describe('StudyRoomsService.cancelStudyRoom', () => {
     {} as any,
     {} as any,
     {} as any,
+    {} as any,
     logger,
+    {} as any,
+    {} as any,
   );
 
   beforeEach(() => {
