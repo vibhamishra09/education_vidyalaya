@@ -176,6 +176,7 @@ export function EnhancedVideoRoom({
 		setIsMobileDevice(mobileByUa || mobileByTouch)
 	}, [])
 
+	const isNavigatingRef = useRef(false)
 	useEffect(() => {
 		let timeoutId: NodeJS.Timeout
 		const handleActivity = () => {
@@ -324,9 +325,43 @@ export function EnhancedVideoRoom({
 		enabled: !!sessionData?.id && (!isGuest || !!guestLivekitIdentity),
 	})
 
+	const meetingEndedRef = useRef(meetingEnded)
+	useEffect(() => { meetingEndedRef.current = meetingEnded }, [meetingEnded])
+
+	useEffect(() => {
+		const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+			if (isNavigatingRef.current || meetingEndedRef.current) return
+			e.preventDefault()
+			e.returnValue = ''
+			return ''
+		}
+
+		const handlePopState = (e: PopStateEvent) => {
+			if (isNavigatingRef.current || meetingEndedRef.current) return
+			if (window.confirm('Are you sure you want to leave the room? Your progress might be lost.')) {
+				isNavigatingRef.current = true
+				router.replace('/dashboard')
+			} else {
+				window.history.pushState(null, '', window.location.href)
+			}
+		}
+
+		window.addEventListener('beforeunload', handleBeforeUnload)
+		window.addEventListener('popstate', handlePopState)
+
+		// Push an extra state so the first back button press triggers popstate
+		window.history.pushState(null, '', window.location.href)
+
+		return () => {
+			window.removeEventListener('beforeunload', handleBeforeUnload)
+			window.removeEventListener('popstate', handlePopState)
+		}
+	}, [router])
+
 	// Redirect all clients when server signals meeting ended
 	useEffect(() => {
 		if (!meetingEnded) return
+		isNavigatingRef.current = true
 		const redirectUrl = `/session-feedback/${sessionData?.id}?type=${sessionData?.sessionType}&isHost=${isHost}`
 		router.push(redirectUrl)
 	}, [meetingEnded, sessionData?.id, sessionData?.sessionType, isHost, router])
@@ -404,6 +439,7 @@ export function EnhancedVideoRoom({
 
 		// Fallback: If socket event doesn't trigger redirect within 3 seconds, redirect manually (host only)
 		setTimeout(() => {
+			isNavigatingRef.current = true
 			const redirectUrl = `/session-feedback/${sessionData?.id}?type=${sessionData?.sessionType}&isHost=${isHost}`
 			router.push(redirectUrl)
 		}, 3000)
@@ -456,6 +492,7 @@ export function EnhancedVideoRoom({
 		}
 
 		// Redirect to session feedback page for review
+		isNavigatingRef.current = true
 		const redirectUrl = `/session-feedback/${sessionData?.id}?type=${sessionData?.sessionType}&isHost=${isHost}`
 		router.push(redirectUrl)
 	}, [sessionData?.id, sessionData?.sessionType, isHost, getToken, queryClient, router])
@@ -573,6 +610,7 @@ export function EnhancedVideoRoom({
 	// Speech recognition status logging removed
 
 	const handleLeave = useCallback(() => {
+		isNavigatingRef.current = true
 		router.back()
 	}, [router])
 
@@ -1220,7 +1258,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						)
 					}
 				}
-			} catch (err) {
+			} catch (_err) {
 				// Error applying mute action
 			}
 		}
@@ -1247,7 +1285,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						)
 					}
 				}
-			} catch (err) {
+			} catch (_err) {
 				// Error applying video action
 			}
 		}
@@ -1851,31 +1889,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		return focusedTrack?.participant || focusedParticipant || null
 	}, [focusedTrack, focusedParticipant, isScreenShareFocused])
 
-	const toggleAudio = () => {
-		// Toggle audio output (mute/unmute all remote audio)
-
-		const enabled = !isAudioEnabled
-		setIsAudioEnabled(enabled)
-		// Mute/unmute all remote audio tracks by setting volume
-		allParticipants.forEach((participant) => {
-			if (participant.isLocal) return
-			participant.audioTrackPublications.forEach((publication) => {
-				if (publication.track && 'setVolume' in publication.track) {
-					(publication.track as unknown as { setVolume: (volume: number) => void }).setVolume(enabled ? 1 : 0)
-				}
-			})
-		})
-	}
-
-	const toggleFullscreen = () => {
-		if (!document.fullscreenElement) {
-			document.documentElement.requestFullscreen()
-			setIsFullscreen(true)
-		} else {
-			document.exitFullscreen()
-			setIsFullscreen(false)
-		}
-	}
+	// toggleAudio and toggleFullscreen removed as they were unused
 
 	// Native Picture-in-Picture state and refs
 	const [isPiPActive, setIsPiPActive] = useState(false)
@@ -1917,7 +1931,6 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	}
 
 	const pipVideoRef = useRef<HTMLVideoElement | null>(null)
-	const pipAnimationFrameRef = useRef<number | null>(null)
 
 	// Toggle native PiP mode
 	const togglePiP = useCallback(async () => {
@@ -1942,8 +1955,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				setIsPiPActive(true)
 				pipVideoRef.current = videoElement
 			}
-		} catch (error) {
-			console.error('PiP error:', error)
+		} catch (_error) {
+			console.error('PiP error:', _error)
 		}
 	}, [isMobileViewport])
 
