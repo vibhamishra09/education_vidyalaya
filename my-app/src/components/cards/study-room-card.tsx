@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Users, Loader2, Play, Calendar, Clock, Pencil } from "lucide-react";
 import { motion } from "framer-motion";
 import { ShareButton } from "@/components/share/share-button";
+import { getStudyRoomShareUrl } from "@/lib/utils/study-room-share";
 import { cn } from "@/lib/utils";
 import { formatDate } from "@/lib/utils/date-time";
 import { SessionStatus } from "@/types";
@@ -255,7 +256,7 @@ export function StudyRoomCard({
           {/* Actions: Share & CTA Button */}
           <div className="flex items-center gap-2">
              <ShareButton
-                url={`${typeof window !== "undefined" ? window.location.origin : ""}/studyroom/${roomId}`}
+                url={getStudyRoomShareUrl(roomId)}
                 title={title}
                 description={description}
                 image={imageUrl}

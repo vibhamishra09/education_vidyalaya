@@ -10,6 +10,23 @@ import {
 } from '@/types/api.types';
 import { cleanQueryParams } from '../utils/api-utils';
 
+/** Public webinar registration page metadata (GET /api/study-rooms/webinar/public/:slug). */
+export type WebinarPublicMetadata = {
+  id: string;
+  title: string;
+  description: string | null;
+  startsAt: string;
+  duration: number;
+  sessionStatus: string;
+  hostName: string;
+  registrationFields: Array<{
+    id: string;
+    label: string;
+    required?: boolean;
+    type?: string;
+  }>;
+};
+
 export const studyRoomsApi = {
   // Get study rooms
   getStudyRooms: async (filters?: StudyRoomFilters): Promise<StudyRoomsResponse> => {
@@ -31,26 +48,12 @@ export const studyRoomsApi = {
     return response.data;
   },
 
-  getWebinarPublic: async (slug: string) => {
+  getWebinarPublic: async (slug: string): Promise<WebinarPublicMetadata> => {
     const response = await apiClient.get(
       `/api/study-rooms/webinar/public/${encodeURIComponent(slug)}`,
       { skipClerkAuth: true },
     );
-    return response.data as {
-      id: string;
-      title: string;
-      description: string | null;
-      startsAt: string;
-      duration: number;
-      sessionStatus: string;
-      hostName: string;
-      registrationFields: Array<{
-        id: string;
-        label: string;
-        required?: boolean;
-        type?: string;
-      }>;
-    };
+    return response.data as WebinarPublicMetadata;
   },
 
   registerWebinar: async (
@@ -67,21 +70,22 @@ export const studyRoomsApi = {
       /** True when this email was already registered; no new email is sent. */
       alreadyRegistered?: boolean;
       approvalPending?: boolean;
-      /** False when SES failed; passcode/link still returned for the user to save. */
+      /** False when SES failed to send confirmation. Passcode is only in email—never returned by the API. */
       emailSent?: boolean;
       joinUrlManual?: string;
-      joinPasscode?: string;
       roomId: string;
       title: string;
       message: string;
+      /** Only when backend runs in development or WEBINAR_EXPOSE_EMAIL_PREVIEW_IN_API=true — for DevTools console. */
+      debugEmailPreview?: { to: string; subject: string; html: string };
     };
   },
 
   joinWebinarWithPasscode: async (data: {
     studyRoomId: string;
-    name: string;
-    email: string;
     passcode: string;
+    /** From `?token=` on the emailed join link */
+    joinToken: string;
   }) => {
     const response = await apiClient.post(`/api/study-rooms/webinar/join`, data, {
       skipClerkAuth: true,
@@ -99,6 +103,7 @@ export const studyRoomsApi = {
       `/api/study-rooms/webinar/${encodeURIComponent(studyRoomId)}/registrations`,
     );
     return response.data as {
+      waitingRoomEnabled: boolean;
       registrations: Array<{
         id: string;
         name: string;
@@ -121,7 +126,6 @@ export const studyRoomsApi = {
     return response.data as {
       success: boolean;
       alreadyApproved?: boolean;
-      emailSent?: boolean;
     };
   },
 
@@ -155,71 +159,6 @@ export const studyRoomsApi = {
   // Join study room
   joinStudyRoom: async (studyRoomId: string): Promise<{ success: boolean; message: string }> => {
     const response = await apiClient.post(`/api/study-rooms/${studyRoomId}/join`);
-    return response.data;
-  },
-
-  requestExternalJoin: async (
-    studyRoomId: string,
-    data: { name: string; email: string; passcode: string },
-  ): Promise<
-    | { status: 'PENDING'; message: string }
-    | {
-        status: 'APPROVED';
-        message: string;
-        guestAccessToken: string;
-        participantIdentity: string;
-        role: 'PARTICIPANT' | 'COHOST';
-      }
-  > => {
-    const response = await apiClient.post(
-      `/api/study-rooms/${studyRoomId}/external/request`,
-      data,
-    );
-    return response.data;
-  },
-
-  listExternalJoinRequests: async (
-    studyRoomId: string,
-  ): Promise<{
-    requests: Array<{
-      id: string;
-      name: string;
-      email: string;
-      status: 'PENDING' | 'APPROVED' | 'REJECTED';
-      createdAt: string;
-    }>;
-  }> => {
-    const response = await apiClient.get(
-      `/api/study-rooms/${studyRoomId}/external/requests`,
-    );
-    return response.data;
-  },
-
-  resolveExternalJoinRequest: async (
-    studyRoomId: string,
-    requestId: string,
-    approve: boolean,
-  ): Promise<{
-    success: boolean;
-    status: 'APPROVED' | 'REJECTED';
-    guestAccessToken?: string;
-    participantIdentity?: string;
-  }> => {
-    const response = await apiClient.post(
-      `/api/study-rooms/${studyRoomId}/external/requests/${requestId}/resolve`,
-      { approve },
-    );
-    return response.data;
-  },
-
-  toggleExternalAutoAccept: async (
-    studyRoomId: string,
-    enabled: boolean,
-  ): Promise<{ success: boolean; externalAutoAccept: boolean }> => {
-    const response = await apiClient.post(
-      `/api/study-rooms/${studyRoomId}/external/auto-accept`,
-      { enabled },
-    );
     return response.data;
   },
 

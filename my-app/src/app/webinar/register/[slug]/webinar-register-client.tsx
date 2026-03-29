@@ -1,22 +1,36 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
+import { useAuth } from "@clerk/nextjs";
 import { Navigation } from "@/components/layout/navigation";
 import { Footer } from "@/components/layout/footer";
+import { AuthPromptButtons } from "@/components/auth/auth-prompt-buttons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { studyRoomsApi } from "@/lib/api/study-rooms.api";
+import {
+  studyRoomsApi,
+  type WebinarPublicMetadata,
+} from "@/lib/api/study-rooms.api";
+import { extractHttpErrorMessage } from "@/lib/utils/error-handling";
+import { toAbsoluteAppUrl } from "@/lib/utils/public-url";
 import { Loader2, CheckCircle2 } from "lucide-react";
 
-type WebinarMeta = Awaited<ReturnType<typeof studyRoomsApi.getWebinarPublic>>;
+const INVALID_LINK =
+  "This registration link is invalid or the webinar was removed.";
 
-export function WebinarRegisterClient({ slug }: { slug: string }) {
-  const [loading, setLoading] = useState(true);
+export function WebinarRegisterClient({
+  slug,
+  initialMeta,
+}: {
+  slug: string;
+  /** From server RSC; null = not found or error */
+  initialMeta: WebinarPublicMetadata | null;
+}) {
+  const { isSignedIn, isLoaded: authLoaded } = useAuth();
   const [error, setError] = useState<string | null>(null);
-  const [meta, setMeta] = useState<WebinarMeta | null>(null);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [extra, setExtra] = useState<Record<string, string>>({});
@@ -24,33 +38,20 @@ export function WebinarRegisterClient({ slug }: { slug: string }) {
   const [done, setDone] = useState<{
     title: string;
     alreadyRegistered?: boolean;
-    joinPasscode?: string;
     joinUrlManual?: string;
     roomId?: string;
     approvalPending?: boolean;
+    /** False when AWS SES did not send confirmation (still registered). */
+    emailSent?: boolean;
     message?: string;
   } | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    studyRoomsApi
-      .getWebinarPublic(slug)
-      .then((data) => {
-        if (!cancelled) setMeta(data);
-      })
-      .catch(() => {
-        if (!cancelled) setError("This registration link is invalid or the webinar was removed.");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [slug]);
-
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isSignedIn) {
+      setError("Please sign in first to register.");
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
@@ -59,52 +60,45 @@ export function WebinarRegisterClient({ slug }: { slug: string }) {
         email: email.trim(),
         responses: Object.keys(extra).length ? extra : undefined,
       });
+      if (res.debugEmailPreview) {
+        console.group(
+          "%c[Webyalaya] Webinar registration email (dev / preview API)",
+          "color:#16a34a;font-weight:bold",
+        );
+        console.log("To:", res.debugEmailPreview.to);
+        console.log("Subject:", res.debugEmailPreview.subject);
+        console.log("HTML (open string below or use Elements → copy):");
+        console.log(res.debugEmailPreview.html);
+        console.groupEnd();
+      } else if (process.env.NODE_ENV === "development") {
+        console.info(
+          "[Webyalaya] No email preview in API response. If the Nest API runs with NODE_ENV=production, set WEBINAR_EXPOSE_EMAIL_PREVIEW_IN_API=true (or LOG_WEBINAR_REGISTRATION_EMAIL=true) in backend .env, or use NODE_ENV=development for local API.",
+        );
+      }
       setDone({
         title: res.title,
         alreadyRegistered: res.alreadyRegistered === true,
-        joinPasscode: res.joinPasscode,
-        joinUrlManual: res.joinUrlManual,
+        joinUrlManual: res.joinUrlManual
+          ? toAbsoluteAppUrl(res.joinUrlManual)
+          : undefined,
         roomId: res.roomId,
         approvalPending: res.approvalPending !== false,
+        emailSent: res.emailSent !== false,
         message: res.message,
       });
     } catch (err: unknown) {
-      const msg =
-        err &&
-        typeof err === "object" &&
-        "response" in err &&
-        err.response &&
-        typeof err.response === "object" &&
-        "data" in err.response &&
-        err.response.data &&
-        typeof err.response.data === "object" &&
-        "message" in err.response.data
-          ? String((err.response.data as { message?: unknown }).message)
-          : "Registration failed. Try again.";
-      setError(msg);
+      setError(extractHttpErrorMessage(err, "Registration failed. Try again."));
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex flex-col">
-        <Navigation />
-        <main className="flex-1 flex items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </main>
-        <Footer />
-      </div>
-    );
-  }
-
-  if (error && !meta) {
+  if (!initialMeta) {
     return (
       <div className="min-h-screen flex flex-col">
         <Navigation />
         <main className="flex-1 container mx-auto px-4 py-16 text-center">
-          <p className="text-destructive">{error}</p>
+          <p className="text-destructive">{INVALID_LINK}</p>
           <Link href="/" className="text-primary mt-4 inline-block">
             Home
           </Link>
@@ -123,58 +117,40 @@ export function WebinarRegisterClient({ slug }: { slug: string }) {
             <CheckCircle2 className="h-12 w-12 text-green-600 mx-auto" />
             <h1 className="text-2xl font-semibold">
               {done.alreadyRegistered
-                ? "Registration already complete"
+                ? "Already registered"
                 : "You\u2019re registered"}
             </h1>
             {done.alreadyRegistered ? (
               <>
-                {done.message && (
-                  <p className="text-muted-foreground text-sm">{done.message}</p>
-                )}
-                {done.joinPasscode && (
-                  <p className="text-lg font-mono font-semibold tracking-widest">
-                    Passcode: {done.joinPasscode}
-                  </p>
-                )}
+                <p className="text-sm text-muted-foreground">
+                  Join link and passcode sent—check your email.
+                </p>
                 {done.joinUrlManual && (
                   <p className="text-xs text-muted-foreground break-all">
-                    Join page:{" "}
                     <a className="text-primary underline" href={done.joinUrlManual}>
-                      open link
+                      Open join page
                     </a>
                   </p>
                 )}
               </>
             ) : done.approvalPending ? (
               <>
-                {done.message && (
-                  <p className="text-sm text-foreground/90">{done.message}</p>
-                )}
-                {done.joinPasscode && (
-                  <p className="text-lg font-mono font-semibold tracking-widest">
-                    Passcode: {done.joinPasscode}
+                {done.emailSent === false ? (
+                  <p className="text-sm text-muted-foreground">
+                    {done.message ||
+                      "Registration saved. Confirmation email could not be sent—contact the host if needed."}
                   </p>
-                )}
-                {done.joinUrlManual && (
-                  <p className="text-xs text-muted-foreground break-all">
-                    After the host approves you, open{" "}
-                    <a className="text-primary underline" href={done.joinUrlManual}>
-                      the join page
-                    </a>{" "}
-                    with the same name, email, and this passcode.
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Join link and passcode sent—check your email.
                   </p>
                 )}
               </>
             ) : (
               <>
                 <p className="text-muted-foreground text-sm">
-                  We sent a confirmation email with your join details.
+                  Join link and passcode sent—check your email.
                 </p>
-                {done.joinPasscode && (
-                  <p className="text-lg font-mono font-semibold tracking-widest">
-                    Passcode: {done.joinPasscode}
-                  </p>
-                )}
                 {done.joinUrlManual && (
                   <Button asChild className="w-full">
                     <a href={done.joinUrlManual}>Open join page</a>
@@ -189,9 +165,8 @@ export function WebinarRegisterClient({ slug }: { slug: string }) {
     );
   }
 
-  if (!meta) return null;
-
-  const fields = meta.registrationFields || [];
+  const fields = initialMeta.registrationFields || [];
+  const formLocked = !authLoaded || !isSignedIn;
 
   return (
     <div className="min-h-screen flex flex-col bg-muted/20">
@@ -199,16 +174,32 @@ export function WebinarRegisterClient({ slug }: { slug: string }) {
       <main className="flex-1 container max-w-lg mx-auto px-4 py-10 md:py-16">
         <div className="mb-8">
           <p className="text-xs uppercase tracking-wider text-muted-foreground">Webinar</p>
-          <h1 className="text-2xl md:text-3xl font-bold mt-1">{meta.title}</h1>
-          {meta.description && (
-            <p className="text-muted-foreground mt-2 text-sm">{meta.description}</p>
+          <h1 className="text-2xl md:text-3xl font-bold mt-1">{initialMeta.title}</h1>
+          {initialMeta.description && (
+            <p className="text-muted-foreground mt-2 text-sm">{initialMeta.description}</p>
           )}
           <p className="text-sm mt-3">
-            Hosted by <span className="font-medium">{meta.hostName}</span>
+            Hosted by <span className="font-medium">{initialMeta.hostName}</span>
           </p>
         </div>
 
         <form onSubmit={onSubmit} className="space-y-4 rounded-2xl border bg-background p-6 shadow-sm">
+          {authLoaded && !isSignedIn && (
+            <div
+              className="rounded-xl border border-amber-200 bg-amber-50/90 dark:bg-amber-950/40 dark:border-amber-800 px-4 py-4 space-y-3 text-sm"
+              role="status"
+              aria-live="polite"
+            >
+              <p className="font-semibold text-foreground">Please sign in first</p>
+              <p className="text-muted-foreground text-xs leading-relaxed">
+                Use <strong className="text-foreground font-medium">Sign in</strong> or{" "}
+                <strong className="text-foreground font-medium">Sign up</strong> below. After you
+                return, you can fill out this form and submit your registration.
+              </p>
+              <AuthPromptButtons className="pt-1 w-full justify-center sm:justify-start flex-wrap" />
+            </div>
+          )}
+
           <div className="space-y-2">
             <Label htmlFor="reg-name">Full name *</Label>
             <Input
@@ -217,6 +208,8 @@ export function WebinarRegisterClient({ slug }: { slug: string }) {
               value={name}
               onChange={(e) => setName(e.target.value)}
               autoComplete="name"
+              disabled={formLocked}
+              aria-disabled={formLocked}
             />
           </div>
           <div className="space-y-2">
@@ -228,6 +221,8 @@ export function WebinarRegisterClient({ slug }: { slug: string }) {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               autoComplete="email"
+              disabled={formLocked}
+              aria-disabled={formLocked}
             />
           </div>
           {fields
@@ -247,6 +242,21 @@ export function WebinarRegisterClient({ slug }: { slug: string }) {
                       setExtra((prev) => ({ ...prev, [f.id]: e.target.value }))
                     }
                     rows={3}
+                    disabled={formLocked}
+                    aria-disabled={formLocked}
+                  />
+                ) : f.type === "number" ? (
+                  <Input
+                    id={f.id}
+                    type="number"
+                    inputMode="decimal"
+                    required={!!f.required}
+                    value={extra[f.id] || ""}
+                    onChange={(e) =>
+                      setExtra((prev) => ({ ...prev, [f.id]: e.target.value }))
+                    }
+                    disabled={formLocked}
+                    aria-disabled={formLocked}
                   />
                 ) : (
                   <Input
@@ -257,6 +267,8 @@ export function WebinarRegisterClient({ slug }: { slug: string }) {
                     onChange={(e) =>
                       setExtra((prev) => ({ ...prev, [f.id]: e.target.value }))
                     }
+                    disabled={formLocked}
+                    aria-disabled={formLocked}
                   />
                 )}
               </div>
@@ -266,12 +278,16 @@ export function WebinarRegisterClient({ slug }: { slug: string }) {
             <p className="text-sm text-destructive">{error}</p>
           )}
 
-          <Button type="submit" className="w-full" disabled={submitting}>
+          <Button type="submit" className="w-full" disabled={submitting || formLocked}>
             {submitting ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 Registering…
               </>
+            ) : !authLoaded ? (
+              "Loading…"
+            ) : !isSignedIn ? (
+              "Sign in to register"
             ) : (
               "Register"
             )}

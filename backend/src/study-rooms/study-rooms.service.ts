@@ -9,12 +9,13 @@ import {
   BadRequestException,
   ForbiddenException,
   UnauthorizedException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { randomBytes, randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ChatService } from '../chat/chat.service';
-import { EmailService } from '../email/email.service';
+import { EmailService, EmailDeliveryResult } from '../email/email.service';
 import { StreaksService } from '../streaks/streaks.service';
 import { AchievementsService } from '../achievements/achievements.service';
 import { TranscriptsService } from '../transcripts/transcripts.service';
@@ -36,17 +37,11 @@ import {
   NotifType,
   PaymentStatus,
   StudyRoomParticipantRole,
-  ExternalInviteRole,
-  ExternalJoinRequestStatus,
   StudyRoomSessionMode,
 } from '../generated/prisma/client';
 import { convertLocalToUTC } from '../utils/timezone';
 import { buildStudyRoomOccurrences } from './recurrence.util';
-import {
-  ExternalInviteInputDto,
-  ExternalJoinRequestDto,
-  StudyRoomParticipantRoleDto,
-} from './dto/study-room.dto';
+import { StudyRoomParticipantRoleDto } from './dto/study-room.dto';
 
 type StudyRoomWithRelations = {
   id: string;
@@ -82,18 +77,6 @@ type StudyRoomWithRelations = {
   }>;
 };
 
-type InviteEmailDeliverySummary = {
-  attempted: number;
-  sent: number;
-  failed: number;
-  failures: Array<{
-    email: string;
-    role: StudyRoomParticipantRoleDto;
-    errorCode?: string;
-    errorMessage?: string;
-  }>;
-};
-
 @Injectable()
 export class StudyRoomsService {
   private studyRoomSchemaCapabilities:
@@ -126,6 +109,56 @@ export class StudyRoomsService {
     return Math.floor(100000 + Math.random() * 900000).toString();
   }
 
+  /** Opaque per-registration token embedded in the emailed join URL. */
+  private generateJoinLinkToken(): string {
+    return randomBytes(32).toString('base64url');
+  }
+
+  /**
+   * Public browser origin for links in emails and API responses (must be absolute http(s)).
+   * Never returns empty: path-only links in HTML email resolve as http://webinar/join in Gmail.
+   */
+  private resolveAppPublicBaseUrl(): string {
+    const raw =
+      process.env.FRONTEND_URL?.trim() ||
+      process.env.APP_PUBLIC_URL?.trim() ||
+      process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+      '';
+    if (raw) {
+      const normalized = raw.replace(/\/$/, '');
+      if (/^https?:\/\//i.test(normalized)) {
+        return normalized;
+      }
+      this.logger.warn(
+        `FRONTEND_URL / APP_PUBLIC_URL / NEXT_PUBLIC_APP_URL must be an absolute URL (e.g. http://localhost:3000). Got "${raw}" — ignoring.`,
+      );
+    }
+    const siteFallback =
+      process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
+      process.env.SITE_URL?.trim() ||
+      '';
+    if (siteFallback && /^https?:\/\//i.test(siteFallback)) {
+      return siteFallback.replace(/\/$/, '');
+    }
+    const apiUrl = process.env.API_URL?.trim() || '';
+    if (/^https?:\/\/127\.0\.0\.1:\d+/i.test(apiUrl) || /^https?:\/\/localhost:\d+/i.test(apiUrl)) {
+      return 'http://localhost:3000';
+    }
+    if (process.env.NODE_ENV !== 'production') {
+      return 'http://localhost:3000';
+    }
+    this.logger.warn(
+      'FRONTEND_URL not set — webinar links default to http://localhost:3000. Set FRONTEND_URL to your public site (e.g. https://webyalaya.com) in production.',
+    );
+    return 'http://localhost:3000';
+  }
+
+  private buildWebinarJoinUrl(studyRoomId: string, joinLinkToken: string): string {
+    const base = this.resolveAppPublicBaseUrl().replace(/\/$/, '');
+    const path = `/webinar/join?room=studyroom-${studyRoomId}&token=${encodeURIComponent(joinLinkToken)}`;
+    return `${base}${path}`;
+  }
+
   private mergeWebinarConfig(
     input?: Record<string, unknown>,
   ): Record<string, unknown> {
@@ -143,6 +176,8 @@ export class StudyRoomsService {
       /** Host can toggle chat live without editing full config */
       runtime: {
         chatEnabled: true,
+        /** When false, guests are auto-approved; no Admit step in host panel. */
+        waitingRoomEnabled: true,
       },
     };
     if (!input) return base;
@@ -166,10 +201,7 @@ export class StudyRoomsService {
   }
 
   private toParticipantRole(
-    role?:
-      | StudyRoomParticipantRoleDto
-      | ExternalInviteRole
-      | StudyRoomParticipantRole,
+    role?: StudyRoomParticipantRoleDto | StudyRoomParticipantRole,
   ): StudyRoomParticipantRole {
     if (String(role) === 'COHOST') {
       return StudyRoomParticipantRole.COHOST;
@@ -269,85 +301,6 @@ export class StudyRoomsService {
     };
 
     return this.studyRoomSchemaCapabilities;
-  }
-
-  private async updateExternalInvites(
-    tx: Prisma.TransactionClient,
-    studyRoomId: string,
-    externalInvites?: ExternalInviteInputDto[],
-  ) {
-    await tx.studyRoomExternalInvite.deleteMany({ where: { studyRoomId } });
-    if (!externalInvites || externalInvites.length === 0) return;
-    await tx.studyRoomExternalInvite.createMany({
-      data: externalInvites.map((invite) => ({
-        studyRoomId,
-        email: this.normalizeEmail(invite.email),
-        role:
-          invite.role === StudyRoomParticipantRoleDto.COHOST
-            ? ExternalInviteRole.COHOST
-            : ExternalInviteRole.PARTICIPANT,
-      })),
-      skipDuplicates: true,
-    });
-  }
-
-  private async sendExternalInviteEmails(
-    roomId: string,
-    roomTitle: string,
-    passcode: string,
-    invites: ExternalInviteInputDto[],
-  ): Promise<InviteEmailDeliverySummary> {
-    if (invites.length === 0) {
-      return {
-        attempted: 0,
-        sent: 0,
-        failed: 0,
-        failures: [],
-      };
-    }
-    const roomLink = `https://webyalaya.com/studyroom/${roomId}`;
-    const results = await Promise.all(
-      invites.map(async (invite) => {
-        const normalizedEmail = this.normalizeEmail(invite.email);
-        const result = await this.emailService.sendDirectEmailNotification(
-          normalizedEmail,
-          `Invite to join "${roomTitle}"`,
-          `You are invited as ${invite.role.toLowerCase()} to join "${roomTitle}". Use passcode ${passcode} and open ${roomLink} to join.`,
-        );
-        return {
-          email: normalizedEmail,
-          role: invite.role,
-          ...result,
-        };
-      }),
-    );
-
-    const failures = results
-      .filter((item) => !item.success)
-      .map((item) => ({
-        email: item.email,
-        role: item.role,
-        errorCode: item.errorCode,
-        errorMessage: item.errorMessage,
-      }));
-
-    const summary: InviteEmailDeliverySummary = {
-      attempted: results.length,
-      sent: results.filter((item) => item.success).length,
-      failed: failures.length,
-      failures,
-    };
-
-    this.logger.log({
-      message: '📨 External invite email delivery summary',
-      roomId,
-      roomTitle,
-      attempted: summary.attempted,
-      sent: summary.sent,
-      failed: summary.failed,
-      failedRecipients: summary.failures,
-    });
-    return summary;
   }
 
   async getStudyRooms(
@@ -995,9 +948,6 @@ export class StudyRoomsService {
             joiningFee: true,
             createdById: true,
             summary: true,
-            allowExternalUsers: true,
-            externalAutoAccept: true,
-            externalPasscode: true,
             isRecurring: true,
             recurrenceMode: true,
             seriesId: true,
@@ -1013,6 +963,7 @@ export class StudyRoomsService {
                 id: true,
                 name: true,
                 avatar: true,
+                email: true,
               },
             },
             skills: {
@@ -1049,16 +1000,6 @@ export class StudyRoomsService {
                 role: true,
                 livekitIdentity: true,
               },
-            },
-            externalInvites: {
-              select: {
-                email: true,
-                role: true,
-              },
-            },
-            externalJoinRequests: {
-              where: { status: ExternalJoinRequestStatus.PENDING },
-              select: { id: true },
             },
             reviews: {
               select: {
@@ -1112,19 +1053,6 @@ export class StudyRoomsService {
         duration: studyRoom.duration,
         maxParticipants: studyRoom.maxParticipants,
         joiningFee: studyRoom.joiningFee,
-        allowExternalUsers: (studyRoom as any).allowExternalUsers,
-        externalAutoAccept: (studyRoom as any).externalAutoAccept,
-        externalPasscode:
-          role === 'teacher' ? (studyRoom as any).externalPasscode : null,
-        externalInvites: ((studyRoom as any).externalInvites || []).map((invite: any) => ({
-          email: invite.email,
-          role:
-            invite.role === ExternalInviteRole.COHOST
-              ? StudyRoomParticipantRoleDto.COHOST
-              : StudyRoomParticipantRoleDto.PARTICIPANT,
-        })),
-        pendingExternalJoinRequests: ((studyRoom as any).externalJoinRequests || [])
-          .length,
         isRecurring: (studyRoom as any).isRecurring,
         recurrenceMode: (studyRoom as any).recurrenceMode,
         seriesId: (studyRoom as any).seriesId,
@@ -1207,16 +1135,6 @@ export class StudyRoomsService {
     const uniqueHash = Math.random().toString(36).substring(2, 6);
     const seriesSlug = `${slugBase}-${uniqueHash}`;
     let occurrences;
-    const normalizedExternalInvites = (createDto.externalInvites || []).map(
-      (invite) => ({
-        email: this.normalizeEmail(invite.email),
-        role: invite.role,
-      }),
-    );
-    const allowExternalUsers = !!createDto.allowExternalUsers;
-    const externalPasscode = allowExternalUsers
-      ? createDto.externalPasscode || this.generatePasscode()
-      : null;
     try {
       occurrences = buildStudyRoomOccurrences({
         startDate: createDto.date,
@@ -1305,10 +1223,6 @@ export class StudyRoomsService {
               createDto.timezone,
             ),
             timezone: createDto.timezone,
-            allowExternalUsers,
-            externalPasscode,
-            externalAutoAccept:
-              allowExternalUsers && !!createDto.externalAutoAccept,
             sessionMode: isWebinar
               ? StudyRoomSessionMode.WEBINAR
               : StudyRoomSessionMode.STANDARD,
@@ -1332,14 +1246,6 @@ export class StudyRoomsService {
         });
       }
 
-      if (rows.length > 0 && allowExternalUsers) {
-        await this.updateExternalInvites(
-          tx,
-          rows[0].id,
-          normalizedExternalInvites,
-        );
-      }
-
       return rows;
     });
 
@@ -1347,26 +1253,8 @@ export class StudyRoomsService {
       await this.chatService.getOrCreateChannelForStudyRoom(room.id, [creator.id]);
     }
 
-    let emailDelivery: InviteEmailDeliverySummary | undefined;
-    if (
-      allowExternalUsers &&
-      externalPasscode &&
-      normalizedExternalInvites.length > 0
-    ) {
-      emailDelivery = await this.sendExternalInviteEmails(
-        createdRooms[0].id,
-        createDto.title,
-        externalPasscode,
-        normalizedExternalInvites,
-      );
-    }
-
     const firstRoom = createdRooms[0];
-    const appPublicUrl =
-      process.env.FRONTEND_URL ||
-      process.env.APP_PUBLIC_URL ||
-      process.env.NEXT_PUBLIC_APP_URL ||
-      '';
+    const appPublicUrl = this.resolveAppPublicBaseUrl();
     return {
       id: firstRoom.id,
       title: createDto.title,
@@ -1402,13 +1290,9 @@ export class StudyRoomsService {
       reviews: [],
       chatChannelId: null,
       summary: null,
-      allowExternalUsers,
-      externalAutoAccept: allowExternalUsers && !!createDto.externalAutoAccept,
-      externalPasscode: allowExternalUsers ? externalPasscode : null,
       occurrencesCreated: createdRooms.length,
       slug: seriesSlug,
       isRecurring: !!createDto.recurrence,
-      emailDelivery,
     };
   }
 
@@ -1448,7 +1332,39 @@ export class StudyRoomsService {
     };
   }
 
-  async registerForWebinar(slug: string, dto: RegisterWebinarDto) {
+  /**
+   * Resolve DB user for in-app notification: prefer JWT dbUserId / clerkId when email matches form.
+   */
+  private async resolveWebinarRegistrantDbUserId(
+    emailNorm: string,
+    opts?: { dbUserId?: string; clerkId?: string },
+  ): Promise<string | null> {
+    if (opts?.dbUserId) {
+      const u = await this.prisma.user.findUnique({
+        where: { id: opts.dbUserId },
+        select: { id: true, email: true },
+      });
+      if (u && this.normalizeEmail(u.email) === emailNorm) return u.id;
+    }
+    if (opts?.clerkId) {
+      const u = await this.prisma.user.findUnique({
+        where: { clerkId: opts.clerkId },
+        select: { id: true, email: true },
+      });
+      if (u && this.normalizeEmail(u.email) === emailNorm) return u.id;
+    }
+    const byEmail = await this.prisma.user.findUnique({
+      where: { email: emailNorm },
+      select: { id: true },
+    });
+    return byEmail?.id ?? null;
+  }
+
+  async registerForWebinar(
+    slug: string,
+    dto: RegisterWebinarDto,
+    auth?: { dbUserId?: string; clerkId?: string },
+  ) {
     const room = await this.prisma.studyRoom.findFirst({
       where: { webinarRegistrationSlug: slug },
       include: { createdBy: { select: { name: true } } },
@@ -1469,6 +1385,8 @@ export class StudyRoomsService {
     const cfg = this.mergeWebinarConfig(
       (room.webinarConfig as Record<string, unknown>) || undefined,
     );
+    const runtimeCfg = (cfg.runtime as Record<string, unknown>) || {};
+    const waitingRoomEnabled = runtimeCfg.waitingRoomEnabled !== false;
     const fields =
       (cfg.registrationFields as Array<{
         id: string;
@@ -1490,31 +1408,74 @@ export class StudyRoomsService {
       }
     }
 
-    const existing = await this.prisma.webinarRegistration.findUnique({
-      where: {
-        studyRoomId_email: { studyRoomId: room.id, email: emailNorm },
-      },
-    });
+    let existing: Awaited<
+      ReturnType<typeof this.prisma.webinarRegistration.findUnique>
+    >;
+    try {
+      existing = await this.prisma.webinarRegistration.findUnique({
+        where: {
+          studyRoomId_email: { studyRoomId: room.id, email: emailNorm },
+        },
+      });
+    } catch (e) {
+      if (
+        e instanceof Prisma.PrismaClientKnownRequestError &&
+        e.code === 'P2022'
+      ) {
+        throw new InternalServerErrorException({
+          code: 'DB_SCHEMA_MISMATCH',
+          message:
+            'Database is missing required columns. Run: npx prisma migrate deploy',
+        });
+      }
+      throw e;
+    }
     if (existing) {
-      const appPublicUrlDup =
-        process.env.FRONTEND_URL ||
-        process.env.APP_PUBLIC_URL ||
-        process.env.NEXT_PUBLIC_APP_URL ||
-        '';
-      const joinPathManualDup = `/webinar/join?room=studyroom-${room.id}`;
-      const joinUrlManualDup = appPublicUrlDup
-        ? `${appPublicUrlDup.replace(/\/$/, '')}${joinPathManualDup}`
-        : joinPathManualDup;
+      let linkToken = existing.joinLinkToken;
+      if (!linkToken) {
+        linkToken = this.generateJoinLinkToken();
+        try {
+          await this.prisma.webinarRegistration.update({
+            where: { id: existing.id },
+            data: { joinLinkToken: linkToken },
+          });
+        } catch (e) {
+          if (
+            e instanceof Prisma.PrismaClientKnownRequestError &&
+            e.code === 'P2022'
+          ) {
+            throw new InternalServerErrorException({
+              code: 'DB_SCHEMA_MISMATCH',
+              message:
+                'Database is missing required columns. Run: npx prisma migrate deploy',
+            });
+          }
+          throw e;
+        }
+      }
+      if (!waitingRoomEnabled) {
+        const guestDup = await this.prisma.studyRoomGuestParticipant.findUnique({
+          where: {
+            studyRoomId_email: { studyRoomId: room.id, email: emailNorm },
+          },
+          select: { id: true, approvedBy: true },
+        });
+        if (guestDup && !guestDup.approvedBy) {
+          await this.prisma.studyRoomGuestParticipant.update({
+            where: { id: guestDup.id },
+            data: { approvedBy: room.createdById },
+          });
+        }
+      }
+      const joinUrlManualDup = this.buildWebinarJoinUrl(room.id, linkToken);
       return {
         success: true,
         alreadyRegistered: true,
-        approvalPending: true,
+        approvalPending: waitingRoomEnabled,
         joinUrlManual: joinUrlManualDup,
-        joinPasscode: existing.joinPasscode ?? undefined,
         roomId: room.id,
         title: room.title,
-        message:
-          'Registration is already complete for this email. Please check your inbox for the join link and passcode.',
+        message: 'Join link and passcode sent—check your email.',
       };
     }
 
@@ -1538,7 +1499,7 @@ export class StudyRoomsService {
       },
       update: {
         name: dto.name.trim(),
-        approvedBy: null,
+        approvedBy: waitingRoomEnabled ? null : room.createdById,
       },
       create: {
         studyRoomId: room.id,
@@ -1546,58 +1507,77 @@ export class StudyRoomsService {
         email: emailNorm,
         role: StudyRoomParticipantRole.PARTICIPANT,
         livekitIdentity: `guest-${randomUUID()}`,
-        approvedBy: null,
+        approvedBy: waitingRoomEnabled ? null : room.createdById,
       },
     });
 
     const joinPasscode = this.generatePasscode();
+    const joinLinkToken = this.generateJoinLinkToken();
 
-    await this.prisma.webinarRegistration.create({
-      data: {
-        studyRoomId: room.id,
-        email: emailNorm,
-        name: dto.name.trim(),
-        joinPasscode,
-        ...(dto.responses
-          ? { responses: dto.responses as Prisma.InputJsonValue }
-          : {}),
-      },
-    });
+    try {
+      await this.prisma.webinarRegistration.create({
+        data: {
+          studyRoomId: room.id,
+          email: emailNorm,
+          name: dto.name.trim(),
+          joinPasscode,
+          joinLinkToken,
+          ...(dto.responses
+            ? { responses: dto.responses as Prisma.InputJsonValue }
+            : {}),
+        },
+      });
+    } catch (e) {
+      if (
+        e instanceof Prisma.PrismaClientKnownRequestError &&
+        e.code === 'P2022'
+      ) {
+        throw new InternalServerErrorException({
+          code: 'DB_SCHEMA_MISMATCH',
+          message:
+            'Database is missing required columns. Run: npx prisma migrate deploy',
+        });
+      }
+      throw e;
+    }
 
-    const appPublicUrl =
-      process.env.FRONTEND_URL ||
-      process.env.APP_PUBLIC_URL ||
-      process.env.NEXT_PUBLIC_APP_URL ||
-      '';
-    const joinPathManual = `/webinar/join?room=studyroom-${room.id}`;
-    const joinUrlManual = appPublicUrl
-      ? `${appPublicUrl.replace(/\/$/, '')}${joinPathManual}`
-      : joinPathManual;
-    const waitingPath = `/webinar/waiting?room=studyroom-${room.id}`;
-    const waitingRoomUrl = appPublicUrl
-      ? `${appPublicUrl.replace(/\/$/, '')}${waitingPath}`
-      : waitingPath;
+    const joinUrlManual = this.buildWebinarJoinUrl(room.id, joinLinkToken);
 
     const hostName = room.createdBy?.name?.trim() || 'Host';
     const tz = room.timezone?.trim() || 'UTC';
 
-    const emailResult =
-      await this.emailService.sendWebinarRegistrationConfirmationEmail({
+    let emailResult: EmailDeliveryResult = {
+      success: false,
+      errorMessage: 'Email send did not complete',
+    };
+    try {
+      emailResult =
+        await this.emailService.sendWebinarRegistrationConfirmationEmail({
+          recipientEmail: emailNorm,
+          recipientName: dto.name.trim(),
+          webinarTitle: room.title,
+          webinarDescription: room.description,
+          scheduledAt: room.date,
+          durationMinutes: room.duration,
+          timezone: tz,
+          hostName,
+          joinPageUrl: joinUrlManual,
+          passcode: joinPasscode,
+        });
+    } catch (emailErr) {
+      this.logger.error({
+        message:
+          'Webinar confirmation email threw — registration was saved; user can retry or contact host',
+        studyRoomId: room.id,
         recipientEmail: emailNorm,
-        recipientName: dto.name.trim(),
-        webinarTitle: room.title,
-        webinarDescription: room.description,
-        scheduledAt: room.date,
-        durationMinutes: room.duration,
-        timezone: tz,
-        hostName,
-        joinPageUrl: joinUrlManual,
-        waitingRoomUrl,
-        passcode: joinPasscode,
+        error:
+          emailErr instanceof Error ? emailErr.message : String(emailErr),
       });
+    }
     if (!emailResult.success) {
-      this.logger.warn({
-        message: 'Webinar registration confirmation email failed (check SES identity, sandbox, and IAM)',
+      this.logger.error({
+        message:
+          'Webinar registration confirmation email failed — AWS SES did not accept the send. Fix: verify SES_FROM_EMAIL in SES, use the same region as AWS_SES_REGION, ensure IAM allows ses:SendEmail, and in SES sandbox verify BOTH the sender identity and the recipient email in the SES console.',
         recipientEmail: emailNorm,
         studyRoomId: room.id,
         errorCode: emailResult.errorCode,
@@ -1605,17 +1585,76 @@ export class StudyRoomsService {
       });
     }
 
+    if (waitingRoomEnabled) {
+      try {
+        await this.notificationsService.createAndPushNotification(
+          room.createdById,
+          `${dto.name.trim()} registered for "${room.title}" and is waiting for approval. Open the webinar to admit them from the panel.`,
+          'Webinar: attendee waiting',
+          NotifType.NORMAL,
+          {
+            actionType: 'WEBINAR_REGISTRATION_PENDING',
+            studyRoomId: room.id,
+          },
+        );
+      } catch (hostNotifErr) {
+        this.logger.warn({
+          message: 'Host notification failed (registration still saved)',
+          studyRoomId: room.id,
+          error:
+            hostNotifErr instanceof Error
+              ? hostNotifErr.message
+              : String(hostNotifErr),
+        });
+      }
+    }
+
+    const registrantUserId = await this.resolveWebinarRegistrantDbUserId(
+      emailNorm,
+      auth,
+    );
+    if (registrantUserId) {
+      try {
+        const regMsg = `Join link and passcode sent—check your email. (${room.title})`;
+        await this.notificationsService.createAndPushNotification(
+          registrantUserId,
+          regMsg,
+          'Webinar registration',
+          NotifType.NORMAL,
+          {
+            actionType: 'WEBINAR_REGISTERED',
+            studyRoomId: room.id,
+            actionData: {
+              sessionType: 'webinar',
+              studyRoomId: room.id,
+              joinUrlManual,
+            },
+          },
+        );
+      } catch (notifErr) {
+        this.logger.warn({
+          message: 'Webinar in-app notification failed (registration still saved)',
+          studyRoomId: room.id,
+          userId: registrantUserId,
+          error:
+            notifErr instanceof Error ? notifErr.message : String(notifErr),
+        });
+      }
+    }
+
     return {
       success: true,
-      approvalPending: true,
+      approvalPending: waitingRoomEnabled,
       emailSent: emailResult.success,
       joinUrlManual,
-      joinPasscode,
       roomId: room.id,
       title: room.title,
       message: emailResult.success
-        ? 'Registration received. The host must approve you before you can join. Check your email for your passcode.'
-        : 'Registration received. The host must approve you before you can join. Save your passcode and join link below — we could not send email.',
+        ? 'Join link and passcode sent—check your email.'
+        : 'Registration saved. Confirmation email could not be sent—contact the host if needed.',
+      ...(emailResult.debugEmailPreview
+        ? { debugEmailPreview: emailResult.debugEmailPreview }
+        : {}),
     };
   }
 
@@ -1645,11 +1684,9 @@ export class StudyRoomsService {
     const cfg = this.mergeWebinarConfig(
       (room.webinarConfig as Record<string, unknown>) || undefined,
     );
-    const perms = (cfg.permissions as Record<string, string>) || {};
-    const mic = perms.mic === 'enabled';
-    const video = perms.video === 'enabled';
-    const screenEveryone = perms.screenShare === 'everyone';
-    const publish = mic || video || screenEveryone;
+    // LiveKit canPublish must be true for guests to start camera/mic tracks when the host
+    // unlocks or requests media; webinar defaults are enforced in UI and moderation, not here.
+    const publish = true;
     const { publishData } = this.webinarChatPublishData(
       cfg as Record<string, unknown>,
     );
@@ -1696,11 +1733,9 @@ export class StudyRoomsService {
     const cfg = this.mergeWebinarConfig(
       (room.webinarConfig as Record<string, unknown>) || undefined,
     );
-    const perms = (cfg.permissions as Record<string, string>) || {};
-    const mic = perms.mic === 'enabled';
-    const video = perms.video === 'enabled';
-    const screenEveryone = perms.screenShare === 'everyone';
-    const publish = mic || video || screenEveryone;
+    // Same as getLivekitPublishPolicyForStudyRoom for webinar non-hosts: token must allow
+    // publishing when host requests camera/mic; room rules stay in app layer.
+    const publish = true;
     const { publishData } = this.webinarChatPublishData(
       cfg as Record<string, unknown>,
     );
@@ -1709,13 +1744,17 @@ export class StudyRoomsService {
 
   async joinWebinarWithPasscode(dto: {
     studyRoomId: string;
-    name: string;
-    email: string;
     passcode: string;
+    joinToken: string;
   }) {
     const room = await this.prisma.studyRoom.findUnique({
       where: { id: dto.studyRoomId },
-      select: { id: true, sessionMode: true, sessionStatus: true },
+      select: {
+        id: true,
+        sessionMode: true,
+        sessionStatus: true,
+        webinarConfig: true,
+      },
     });
     if (!room || room.sessionMode !== StudyRoomSessionMode.WEBINAR) {
       throw new NotFoundException('Webinar not found');
@@ -1730,38 +1769,32 @@ export class StudyRoomsService {
         message: 'This webinar is no longer available.',
       });
     }
-    const emailNorm = this.normalizeEmail(dto.email);
+    const joinCfg = this.mergeWebinarConfig(
+      (room.webinarConfig as Record<string, unknown>) || undefined,
+    );
+    const joinRuntime =
+      (joinCfg.runtime as Record<string, unknown>) || {};
+    const joinWaitingRoomEnabled = joinRuntime.waitingRoomEnabled !== false;
     const passTrim = dto.passcode.trim();
-    const nameTrim = dto.name.trim();
-    if (!nameTrim) {
-      throw new BadRequestException({
-        code: 'WEBINAR_JOIN_INVALID',
-        message: 'Name is required.',
-      });
-    }
-    const reg = await this.prisma.webinarRegistration.findFirst({
-      where: {
-        studyRoomId: room.id,
-        email: emailNorm,
-        joinPasscode: passTrim,
-      },
+    const tokenTrim = dto.joinToken.trim();
+    const reg = await this.prisma.webinarRegistration.findUnique({
+      where: { joinLinkToken: tokenTrim },
     });
-    if (!reg) {
-      throw new BadRequestException({
-        code: 'WEBINAR_JOIN_INVALID',
-        message: 'Invalid email or passcode.',
-      });
-    }
-    const registeredName = (reg.name || '').trim();
-    if (
-      registeredName.toLowerCase() !== nameTrim.toLowerCase()
-    ) {
+    if (!reg || reg.studyRoomId !== room.id) {
       throw new BadRequestException({
         code: 'WEBINAR_JOIN_INVALID',
         message:
-          'Name does not match your registration. Use the same full name you registered with.',
+          'Invalid or incomplete join link. Open the full link from your registration email.',
       });
     }
+    if ((reg.joinPasscode || '').trim() !== passTrim) {
+      throw new BadRequestException({
+        code: 'WEBINAR_JOIN_INVALID',
+        message:
+          'Invalid passcode. Use the code from your confirmation email.',
+      });
+    }
+    const emailNorm = this.normalizeEmail(reg.email);
     const guest = await this.prisma.studyRoomGuestParticipant.findUnique({
       where: {
         studyRoomId_email: { studyRoomId: room.id, email: emailNorm },
@@ -1770,10 +1803,11 @@ export class StudyRoomsService {
     if (!guest) {
       throw new BadRequestException({
         code: 'WEBINAR_JOIN_INVALID',
-        message: 'Invalid email or passcode.',
+        message:
+          'Registration could not be found for this webinar. Contact the host if this persists.',
       });
     }
-    if (!guest.approvedBy) {
+    if (!guest.approvedBy && joinWaitingRoomEnabled) {
       throw new BadRequestException({
         code: 'WEBINAR_PENDING_APPROVAL',
         message:
@@ -1784,15 +1818,9 @@ export class StudyRoomsService {
       room.id,
       guest.id,
     );
-    const appPublicUrl =
-      process.env.FRONTEND_URL ||
-      process.env.APP_PUBLIC_URL ||
-      process.env.NEXT_PUBLIC_APP_URL ||
-      '';
+    const appPublicUrl = this.resolveAppPublicBaseUrl().replace(/\/$/, '');
     const joinPath = `/rooms/studyroom/studyroom-${room.id}?guestAccessToken=${guestAccessToken}`;
-    const joinUrl = appPublicUrl
-      ? `${appPublicUrl.replace(/\/$/, '')}${joinPath}`
-      : joinPath;
+    const joinUrl = `${appPublicUrl}${joinPath}`;
     return {
       success: true,
       guestAccessToken,
@@ -1803,7 +1831,12 @@ export class StudyRoomsService {
 
   async listWebinarRegistrations(studyRoomId: string, hostUserId: string) {
     const room = await this.resolveStudyRoomByIdOrSlug(studyRoomId, {
-      select: { id: true, createdById: true, sessionMode: true },
+      select: {
+        id: true,
+        createdById: true,
+        sessionMode: true,
+        webinarConfig: true,
+      },
     });
     if (
       !room ||
@@ -1815,6 +1848,13 @@ export class StudyRoomsService {
     if (room.createdById !== actor.id) {
       throw new ForbiddenException('Only the host can view registrations');
     }
+    const listCfg = this.mergeWebinarConfig(
+      (room.webinarConfig as Record<string, unknown>) || undefined,
+    );
+    const listRuntime =
+      (listCfg.runtime as Record<string, unknown>) || {};
+    const waitingRoomEnabled = listRuntime.waitingRoomEnabled !== false;
+
     const rows = await this.prisma.webinarRegistration.findMany({
       where: { studyRoomId: room.id },
       orderBy: { createdAt: 'desc' },
@@ -1834,6 +1874,7 @@ export class StudyRoomsService {
       guests.map((g) => [this.normalizeEmail(g.email), g]),
     );
     return {
+      waitingRoomEnabled,
       registrations: rows.map((r) => {
         const g = guestByEmail.get(this.normalizeEmail(r.email));
         return {
@@ -1883,37 +1924,12 @@ export class StudyRoomsService {
       data: { approvedBy: room.createdById },
     });
 
-    const appPublicUrl =
-      process.env.FRONTEND_URL ||
-      process.env.APP_PUBLIC_URL ||
-      process.env.NEXT_PUBLIC_APP_URL ||
-      '';
-    const joinPathManual = `/webinar/join?room=studyroom-${room.id}`;
-    const joinUrlManual = appPublicUrl
-      ? `${appPublicUrl.replace(/\/$/, '')}${joinPathManual}`
-      : joinPathManual;
-
-    const approvalEmail = await this.emailService.sendWebinarApprovalEmail({
-      recipientEmail: emailNorm,
-      recipientName: (reg.name || '').trim() || 'Guest',
-      webinarTitle: room.title,
-      joinPageUrl: joinUrlManual,
-      passcode: reg.joinPasscode ?? '',
-    });
-    if (!approvalEmail.success) {
-      this.logger.warn({
-        message: 'Webinar approval email failed',
-        recipientEmail: emailNorm,
-        studyRoomId: room.id,
-        errorCode: approvalEmail.errorCode,
-        errorMessage: approvalEmail.errorMessage,
-      });
-    }
+    // Single-email policy: confirmation at registration includes join link + passcode.
+    // No second email on approval—attendees retry join / waiting room after the host admits them.
 
     return {
       success: true,
       alreadyApproved: false as const,
-      emailSent: approvalEmail.success,
     };
   }
 
@@ -2052,19 +2068,6 @@ export class StudyRoomsService {
     if (updateDto.timezone) {
       updateData.timezone = updateDto.timezone;
     }
-    if (updateDto.allowExternalUsers !== undefined) {
-      updateData.allowExternalUsers = updateDto.allowExternalUsers;
-      if (!updateDto.allowExternalUsers) {
-        updateData.externalPasscode = null;
-        updateData.externalAutoAccept = false;
-      }
-    }
-    if (updateDto.externalAutoAccept !== undefined) {
-      updateData.externalAutoAccept = updateDto.externalAutoAccept;
-    }
-    if (updateDto.externalPasscode !== undefined) {
-      updateData.externalPasscode = updateDto.externalPasscode;
-    }
 
     if (updateDto.date || updateDto.time) {
       const oldDate = studyRoom.date.toISOString().split('T')[0];
@@ -2101,10 +2104,7 @@ export class StudyRoomsService {
       (k) => k !== 'sessionStatus',
     );
     const shouldMarkHostDetailsEdited =
-      hasNonStatusChange ||
-      updateDto.skills !== undefined ||
-      updateDto.externalInvites !== undefined ||
-      updateDto.allowExternalUsers !== undefined;
+      hasNonStatusChange || updateDto.skills !== undefined;
     if (shouldMarkHostDetailsEdited) {
       updateData.hostDetailsUpdatedAt = new Date();
     }
@@ -2333,35 +2333,6 @@ export class StudyRoomsService {
       });
     }
 
-    if (
-      updateDto.externalInvites !== undefined ||
-      updateDto.allowExternalUsers === false
-    ) {
-      await this.prisma.$transaction(async (tx) => {
-        for (const room of targetRooms) {
-          await tx.studyRoomExternalInvite.deleteMany({
-            where: { studyRoomId: room.id },
-          });
-          if (updateDto.allowExternalUsers === false) {
-            continue;
-          }
-          if ((updateDto.externalInvites || []).length > 0) {
-            await tx.studyRoomExternalInvite.createMany({
-              data: (updateDto.externalInvites || []).map((invite) => ({
-                studyRoomId: room.id,
-                email: this.normalizeEmail(invite.email),
-                role:
-                  invite.role === StudyRoomParticipantRoleDto.COHOST
-                    ? ExternalInviteRole.COHOST
-                    : ExternalInviteRole.PARTICIPANT,
-              })),
-              skipDuplicates: true,
-            });
-          }
-        }
-      });
-    }
-
     if (shouldMarkHostDetailsEdited) {
       await this.notifyStudyRoomLearnersDetailsUpdated(
         targetRooms.map((r) => r.id),
@@ -2517,146 +2488,6 @@ export class StudyRoomsService {
     };
   }
 
-  async requestExternalJoin(
-    studyRoomId: string,
-    dto: ExternalJoinRequestDto,
-  ): Promise<
-    | { status: 'PENDING'; message: string }
-    | {
-      status: 'APPROVED';
-      message: string;
-      guestAccessToken: string;
-      participantIdentity: string;
-      role: StudyRoomParticipantRole;
-    }
-  > {
-    const studyRoom = await this.resolveStudyRoomByIdOrSlug(studyRoomId, {
-      include: {
-        externalInvites: true,
-        learners: true,
-        guestParticipants: true,
-      },
-    });
-    if (!studyRoom) throw new NotFoundException('Study room not found');
-    if (!studyRoom.allowExternalUsers) {
-      throw new BadRequestException(
-        'External access is disabled for this room',
-      );
-    }
-    if (
-      !studyRoom.externalPasscode ||
-      studyRoom.externalPasscode !== dto.passcode
-    ) {
-      throw new BadRequestException('Invalid passcode');
-    }
-    const normalizedEmail = this.normalizeEmail(dto.email);
-    const invite = studyRoom.externalInvites.find(
-      (item) => item.email === normalizedEmail,
-    );
-    const existingGuestParticipant = studyRoom.guestParticipants.find(
-      (item) => item.email === normalizedEmail,
-    );
-
-    // If this guest was already approved previously, issue a fresh access token and let them in instantly.
-    if (existingGuestParticipant) {
-      const role = invite
-        ? this.toParticipantRole(invite.role)
-        : existingGuestParticipant.role;
-      const participant = await this.prisma.studyRoomGuestParticipant.update({
-        where: { id: existingGuestParticipant.id },
-        data: {
-          name: dto.name.trim(),
-          role,
-        },
-      });
-      const guestAccessToken = await this.issueGuestAccessToken(
-        studyRoom.id,
-        participant.id,
-      );
-      return {
-        status: 'APPROVED',
-        message: 'Approved. You can join now.',
-        guestAccessToken,
-        participantIdentity: participant.livekitIdentity,
-        role: participant.role,
-      };
-    }
-
-    if (
-      studyRoom.learners.length + studyRoom.guestParticipants.length >=
-      studyRoom.maxParticipants
-    ) {
-      throw new BadRequestException({
-        code: 'ROOM_FULL',
-        message: 'Study room is at capacity',
-      });
-    }
-
-    const shouldApprove = !!invite || studyRoom.externalAutoAccept;
-    if (!shouldApprove) {
-      const existingPendingRequest =
-        await this.prisma.studyRoomExternalJoinRequest.findFirst({
-          where: {
-            studyRoomId: studyRoom.id,
-            email: normalizedEmail,
-            status: ExternalJoinRequestStatus.PENDING,
-          },
-          orderBy: { createdAt: 'desc' },
-        });
-      if (existingPendingRequest) {
-        return {
-          status: 'PENDING',
-          message: 'Join request sent to host for approval',
-        };
-      }
-
-      await this.prisma.studyRoomExternalJoinRequest.create({
-        data: {
-          studyRoomId: studyRoom.id,
-          name: dto.name.trim(),
-          email: normalizedEmail,
-          status: ExternalJoinRequestStatus.PENDING,
-        },
-      });
-      return {
-        status: 'PENDING',
-        message: 'Join request sent to host for approval',
-      };
-    }
-
-    const role = this.toParticipantRole(invite?.role);
-    const participant = await this.prisma.studyRoomGuestParticipant.upsert({
-      where: {
-        studyRoomId_email: {
-          studyRoomId: studyRoom.id,
-          email: normalizedEmail,
-        },
-      },
-      update: {
-        name: dto.name.trim(),
-        role,
-      },
-      create: {
-        studyRoomId: studyRoom.id,
-        name: dto.name.trim(),
-        email: normalizedEmail,
-        role,
-        livekitIdentity: `guest-${randomUUID()}`,
-      },
-    });
-    const guestAccessToken = await this.issueGuestAccessToken(
-      studyRoom.id,
-      participant.id,
-    );
-    return {
-      status: 'APPROVED',
-      message: 'Approved. You can join now.',
-      guestAccessToken,
-      participantIdentity: participant.livekitIdentity,
-      role,
-    };
-  }
-
   private async assertHostOrCohost(studyRoomId: string, userId: string) {
     const room = await this.resolveStudyRoomByIdOrSlug(studyRoomId, {
       include: {
@@ -2675,124 +2506,6 @@ export class StudyRoomsService {
       throw new ForbiddenException('Only host/cohost can perform this action');
     }
     return { room, user: { id: userId } };
-  }
-
-  async listPendingExternalJoinRequests(studyRoomId: string, userId: string) {
-    const { room } = await this.assertHostOrCohost(studyRoomId, userId);
-    const requests = await this.prisma.studyRoomExternalJoinRequest.findMany({
-      where: {
-        studyRoomId: room.id,
-        status: ExternalJoinRequestStatus.PENDING,
-      },
-      orderBy: { createdAt: 'asc' },
-    });
-    return { requests };
-  }
-
-  async resolveExternalJoinRequest(
-    studyRoomId: string,
-    requestId: string,
-    userId: string,
-    approve: boolean,
-  ) {
-    const { room, user } = await this.assertHostOrCohost(studyRoomId, userId);
-    const request = await this.prisma.studyRoomExternalJoinRequest.findUnique({
-      where: { id: requestId },
-    });
-    if (!request || request.studyRoomId !== room.id) {
-      throw new NotFoundException('Join request not found');
-    }
-    if (request.status !== ExternalJoinRequestStatus.PENDING) {
-      throw new BadRequestException('Join request is already resolved');
-    }
-
-    if (!approve) {
-      await this.prisma.studyRoomExternalJoinRequest.update({
-        where: { id: requestId },
-        data: {
-          status: ExternalJoinRequestStatus.REJECTED,
-          decidedAt: new Date(),
-          decidedBy: user.id,
-        },
-      });
-      return { success: true, status: ExternalJoinRequestStatus.REJECTED };
-    }
-
-    const participantCount =
-      (await this.prisma.studyRoomParticipant.count({
-        where: { studyRoomId: room.id },
-      })) +
-      (await this.prisma.studyRoomGuestParticipant.count({
-        where: { studyRoomId: room.id },
-      }));
-    if (participantCount >= room.maxParticipants) {
-      throw new BadRequestException({
-        code: 'ROOM_FULL',
-        message: 'Study room is at capacity',
-      });
-    }
-
-    const invite = await this.prisma.studyRoomExternalInvite.findUnique({
-      where: {
-        studyRoomId_email: {
-          studyRoomId: room.id,
-          email: request.email,
-        },
-      },
-    });
-    const role = this.toParticipantRole(invite?.role);
-    const participant = await this.prisma.studyRoomGuestParticipant.upsert({
-      where: {
-        studyRoomId_email: {
-          studyRoomId: room.id,
-          email: request.email,
-        },
-      },
-      update: {
-        name: request.name,
-        role,
-        approvedBy: user.id,
-      },
-      create: {
-        studyRoomId: room.id,
-        name: request.name,
-        email: request.email,
-        role,
-        livekitIdentity: `guest-${randomUUID()}`,
-        approvedBy: user.id,
-      },
-    });
-    const guestAccessToken = await this.issueGuestAccessToken(
-      room.id,
-      participant.id,
-    );
-    await this.prisma.studyRoomExternalJoinRequest.update({
-      where: { id: requestId },
-      data: {
-        status: ExternalJoinRequestStatus.APPROVED,
-        decidedAt: new Date(),
-        decidedBy: user.id,
-      },
-    });
-    return {
-      success: true,
-      status: ExternalJoinRequestStatus.APPROVED,
-      guestAccessToken,
-      participantIdentity: participant.livekitIdentity,
-    };
-  }
-
-  async setExternalAutoAccept(
-    studyRoomId: string,
-    clerkId: string,
-    enabled: boolean,
-  ) {
-    const { room } = await this.assertHostOrCohost(studyRoomId, clerkId);
-    await this.prisma.studyRoom.update({
-      where: { id: room.id },
-      data: { externalAutoAccept: enabled },
-    });
-    return { success: true, externalAutoAccept: enabled };
   }
 
   async updateParticipantRole(

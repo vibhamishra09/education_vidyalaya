@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Navigation } from "@/components/layout/navigation";
 import { Footer } from "@/components/layout/footer";
@@ -9,8 +9,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { studyRoomsApi } from "@/lib/api/study-rooms.api";
+import {
+  extractHttpErrorMessage,
+  extractNestErrorCode,
+} from "@/lib/utils/error-handling";
+import { toAbsoluteAppUrl } from "@/lib/utils/public-url";
 import { Loader2 } from "lucide-react";
-import type { AxiosError } from "axios";
 
 function parseRoomId(roomParam: string | null): string | null {
   if (!roomParam) return null;
@@ -20,33 +24,55 @@ function parseRoomId(roomParam: string | null): string | null {
   return roomParam;
 }
 
+const joinTokenStorageKey = (studyRoomId: string) =>
+  `webinarJoinToken:${studyRoomId}`;
+
 export function WebinarJoinClient() {
   const searchParams = useSearchParams();
   const roomParam = searchParams.get("room");
+  const tokenParam = searchParams.get("token");
   const studyRoomId = useMemo(() => parseRoomId(roomParam), [roomParam]);
 
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [joinToken, setJoinToken] = useState<string | null>(null);
   const [passcode, setPasscode] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingApproval, setPendingApproval] = useState(false);
 
+  useEffect(() => {
+    if (!studyRoomId) return;
+    const fromUrl = tokenParam?.trim();
+    if (fromUrl) {
+      setJoinToken(fromUrl);
+      try {
+        sessionStorage.setItem(joinTokenStorageKey(studyRoomId), fromUrl);
+      } catch {
+        // ignore
+      }
+      return;
+    }
+    try {
+      const stored = sessionStorage.getItem(joinTokenStorageKey(studyRoomId));
+      if (stored?.trim()) setJoinToken(stored.trim());
+    } catch {
+      // ignore
+    }
+  }, [studyRoomId, tokenParam]);
+
   const waitingRoomHref = studyRoomId
-    ? `/webinar/waiting?room=studyroom-${studyRoomId}`
+    ? toAbsoluteAppUrl(`/webinar/waiting?room=studyroom-${studyRoomId}`)
     : null;
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!studyRoomId) return;
+    if (!studyRoomId || !joinToken) return;
     setSubmitting(true);
     setError(null);
     setPendingApproval(false);
     try {
       const res = await studyRoomsApi.joinWebinarWithPasscode({
         studyRoomId,
-        name: name.trim(),
-        email: email.trim(),
+        joinToken,
         passcode: passcode.trim(),
       });
       const target =
@@ -55,19 +81,11 @@ export function WebinarJoinClient() {
           : `${window.location.origin}${res.joinUrl.startsWith("/") ? "" : "/"}${res.joinUrl}`;
       window.location.href = target;
     } catch (err: unknown) {
-      const ax = err as AxiosError<{
-        message?: string | string[];
-        code?: string;
-      }>;
-      const data = ax.response?.data;
-      const rawMsg = data?.message;
-      const msg =
-        typeof rawMsg === "string"
-          ? rawMsg
-          : Array.isArray(rawMsg)
-            ? rawMsg[0] ?? "Could not join."
-            : "Could not join. Check your email and passcode.";
-      const code = typeof data?.code === "string" ? data.code : undefined;
+      const msg = extractHttpErrorMessage(
+        err,
+        "Could not join. Check your passcode.",
+      );
+      const code = extractNestErrorCode(err);
       const isPending =
         code === "WEBINAR_PENDING_APPROVAL" ||
         /not approved|approve your registration|host has not approved/i.test(
@@ -86,13 +104,45 @@ export function WebinarJoinClient() {
         <Navigation />
         <main className="flex-1 container max-w-lg mx-auto px-4 py-16 text-center">
           <p className="text-muted-foreground">
-            Missing room. Open the join link from your registration email, or
-            use{" "}
+            Missing room. Open the join link from your registration email, or use{" "}
             <code className="text-xs bg-muted px-1 rounded">
               ?room=studyroom-…
             </code>
             .
           </p>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  if (!joinToken) {
+    return (
+      <div className="min-h-screen flex flex-col bg-muted/20">
+        <Navigation />
+        <main className="flex-1 container max-w-md mx-auto px-4 py-10 md:py-16">
+          <div className="mb-8 text-center space-y-2">
+            <p className="text-xs uppercase tracking-wider text-muted-foreground">
+              Webinar
+            </p>
+            <h1 className="text-2xl font-bold mt-1">Personal join link required</h1>
+            <p className="text-sm text-muted-foreground">
+              Open the full link from your confirmation email. It includes a
+              private token so you only need your passcode here—no need to type
+              your name or email again.
+            </p>
+          </div>
+          <div className="rounded-2xl border bg-background p-6 shadow-sm space-y-4 text-sm text-muted-foreground">
+            <p>
+              If you lost the email, ask the host to resend your confirmation or
+              check your spam folder.
+            </p>
+            {waitingRoomHref && (
+              <Button variant="secondary" className="w-full" asChild>
+                <Link href={waitingRoomHref}>Waiting room info</Link>
+              </Button>
+            )}
+          </div>
         </main>
         <Footer />
       </div>
@@ -109,9 +159,7 @@ export function WebinarJoinClient() {
           </p>
           <h1 className="text-2xl font-bold mt-1">Join with passcode</h1>
           <p className="text-sm text-muted-foreground mt-2">
-            Enter the same full name and email you used to register, plus the
-            passcode from your email. The host must admit you first—if you see an
-            error about approval, wait for the host and try again.
+            Enter the passcode from your confirmation email.
           </p>
         </div>
 
@@ -119,28 +167,6 @@ export function WebinarJoinClient() {
           onSubmit={onSubmit}
           className="space-y-4 rounded-2xl border bg-background p-6 shadow-sm"
         >
-          <div className="space-y-2">
-            <Label htmlFor="wj-name">Full name</Label>
-            <Input
-              id="wj-name"
-              required
-              autoComplete="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Same name as on registration"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="wj-email">Email</Label>
-            <Input
-              id="wj-email"
-              type="email"
-              required
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </div>
           <div className="space-y-2">
             <Label htmlFor="wj-pass">Passcode</Label>
             <Input

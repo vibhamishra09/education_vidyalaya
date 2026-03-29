@@ -17,13 +17,10 @@ import { OptionalClerkAuthGuard } from '../common/guards/optional-clerk-auth.gua
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import {
   CreateStudyRoomDto,
-  ExternalJoinRequestDto,
   JoinWebinarWithPasscodeDto,
   PromoteParticipantRoleDto,
   RegisterWebinarDto,
-  ResolveExternalJoinRequestDto,
   StudyRoomEditScope,
-  ToggleExternalAutoAcceptDto,
   UpdateStudyRoomDto,
   WebinarChatEnabledDto,
 } from './dto/study-room.dto';
@@ -118,17 +115,22 @@ export class StudyRoomsController {
     return this.studyRoomsService.getWebinarPublicBySlug(slug);
   }
 
-  /** Webinar attendee registration (no auth) */
+  /** Webinar attendee registration (optional auth — bell notification when signed in) */
   @Post('webinar/register/:slug')
   @UseGuards(OptionalClerkAuthGuard)
   async registerWebinar(
     @Param('slug') slug: string,
     @Body() body: RegisterWebinarDto,
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkId: string | undefined,
   ) {
-    return this.studyRoomsService.registerForWebinar(slug, body);
+    return this.studyRoomsService.registerForWebinar(slug, body, {
+      dbUserId,
+      clerkId,
+    });
   }
 
-  /** Join webinar with email + passcode (no token in URL) */
+  /** Join webinar with passcode + join link token (from registration email) */
   @Post('webinar/join')
   @UseGuards(OptionalClerkAuthGuard)
   async joinWebinarWithPasscode(@Body() body: JoinWebinarWithPasscodeDto) {
@@ -261,56 +263,6 @@ export class StudyRoomsController {
     @CurrentUser('dbUserId') userId: string,
   ) {
     return this.studyRoomsService.joinStudyRoom(studyRoomId, userId);
-  }
-
-  @Post(':studyRoomId/external/request')
-  async requestExternalJoin(
-    @Param('studyRoomId') studyRoomId: string,
-    @Body() dto: ExternalJoinRequestDto,
-  ) {
-    return this.studyRoomsService.requestExternalJoin(studyRoomId, dto);
-  }
-
-  @Get(':studyRoomId/external/requests')
-  @UseGuards(ClerkAuthGuard)
-  async listExternalJoinRequests(
-    @Param('studyRoomId') studyRoomId: string,
-    @CurrentUser('dbUserId') userId: string,
-  ) {
-    return this.studyRoomsService.listPendingExternalJoinRequests(
-      studyRoomId,
-      userId,
-    );
-  }
-
-  @Post(':studyRoomId/external/requests/:requestId/resolve')
-  @UseGuards(ClerkAuthGuard)
-  async resolveExternalJoinRequest(
-    @Param('studyRoomId') studyRoomId: string,
-    @Param('requestId') requestId: string,
-    @CurrentUser('dbUserId') userId: string,
-    @Body() dto: ResolveExternalJoinRequestDto,
-  ) {
-    return this.studyRoomsService.resolveExternalJoinRequest(
-      studyRoomId,
-      requestId,
-      userId,
-      dto.approve,
-    );
-  }
-
-  @Post(':studyRoomId/external/auto-accept')
-  @UseGuards(ClerkAuthGuard)
-  async toggleExternalAutoAccept(
-    @Param('studyRoomId') studyRoomId: string,
-    @CurrentUser('dbUserId') userId: string,
-    @Body() dto: ToggleExternalAutoAcceptDto,
-  ) {
-    return this.studyRoomsService.setExternalAutoAccept(
-      studyRoomId,
-      userId,
-      dto.enabled,
-    );
   }
 
   @Post(':studyRoomId/participants/role')

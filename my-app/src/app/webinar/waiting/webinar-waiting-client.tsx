@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Navigation } from "@/components/layout/navigation";
 import { Footer } from "@/components/layout/footer";
 import { Button } from "@/components/ui/button";
-import { Clock, Mail } from "lucide-react";
+import { Clock } from "lucide-react";
 
 function parseRoomId(roomParam: string | null): string | null {
   if (!roomParam) return null;
@@ -16,15 +16,30 @@ function parseRoomId(roomParam: string | null): string | null {
   return roomParam;
 }
 
+const joinTokenStorageKey = (studyRoomId: string) =>
+  `webinarJoinToken:${studyRoomId}`;
+
 export function WebinarWaitingClient() {
   const searchParams = useSearchParams();
   const roomParam = searchParams.get("room");
   const studyRoomId = useMemo(() => parseRoomId(roomParam), [roomParam]);
 
-  const joinHref =
-    studyRoomId !== null
-      ? `/webinar/join?room=studyroom-${studyRoomId}`
-      : null;
+  const [joinHrefFromStorage, setJoinHrefFromStorage] = useState<string | null>(
+    null,
+  );
+  useEffect(() => {
+    if (!studyRoomId) return;
+    try {
+      const token = sessionStorage.getItem(joinTokenStorageKey(studyRoomId));
+      if (token?.trim()) {
+        setJoinHrefFromStorage(
+          `/webinar/join?room=studyroom-${studyRoomId}&token=${encodeURIComponent(token.trim())}`,
+        );
+      }
+    } catch {
+      // ignore
+    }
+  }, [studyRoomId]);
 
   return (
     <div className="min-h-screen flex flex-col bg-muted/20">
@@ -42,44 +57,33 @@ export function WebinarWaitingClient() {
             </p>
             <h1 className="text-2xl font-semibold">Waiting for the host</h1>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              You&apos;ve registered. The host must approve you before you can join
-              the live session. Check your email for your{" "}
-              <strong>unique passcode</strong> and the <strong>join link</strong>.
+              You&apos;ve registered. Check your email for your{" "}
+              <strong>personal join link</strong> and <strong>unique passcode</strong>.
             </p>
           </div>
 
           <ol className="text-sm text-foreground/90 space-y-3 list-decimal pl-5 border-l-2 border-muted ml-1">
-            <li>Open the join link from your confirmation email (or below).</li>
+            <li>Open the <strong>join link</strong> from your confirmation email (it&apos;s unique to you).</li>
             <li>
-              Enter the same <strong>full name</strong> and <strong>email</strong>{" "}
-              you used to register, plus your <strong>passcode</strong>.
-            </li>
-            <li>
-              After the host admits you, you&apos;ll enter the webinar. If you see
-              an error, wait a moment and try again.
+              Enter your <strong>passcode</strong> on the join page—no need to type
+              your name or email again.
             </li>
           </ol>
 
-          {joinHref ? (
+          {joinHrefFromStorage ? (
             <Button asChild className="w-full" size="lg">
-              <Link href={joinHref}>Go to join page</Link>
+              <Link href={joinHrefFromStorage}>Go to join page</Link>
             </Button>
           ) : (
             <p className="text-sm text-muted-foreground text-center">
-              Open the join link from your registration email. It looks like{" "}
+              Use the personalized link from your registration email. It looks like{" "}
               <code className="text-xs bg-muted px-1 rounded">
-                …/webinar/join?room=studyroom-…
+                …/webinar/join?room=studyroom-…&amp;token=…
               </code>
+              . If you already opened it once on this device, the button may appear
+              here.
             </p>
           )}
-
-          <div className="flex items-start gap-3 rounded-lg bg-muted/50 p-4 text-sm text-muted-foreground">
-            <Mail className="h-5 w-5 shrink-0 mt-0.5" />
-            <p>
-              When you&apos;re approved, you may get a second email. You can also
-              bookmark this page and return to the join link anytime.
-            </p>
-          </div>
         </div>
       </main>
       <Footer />

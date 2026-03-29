@@ -35,25 +35,6 @@ export enum StudyRoomParticipantRoleDto {
   COHOST = 'COHOST',
 }
 
-export class ExternalInviteInputDto {
-  @IsEmail()
-  email: string;
-
-  @IsEnum(StudyRoomParticipantRoleDto)
-  role: StudyRoomParticipantRoleDto;
-}
-
-export class ExternalJoinRequestDto {
-  @IsString()
-  name: string;
-
-  @IsEmail()
-  email: string;
-
-  @IsString()
-  passcode: string;
-}
-
 export class StudyRoomRecurrenceDto {
   @IsEnum(StudyRoomRecurrenceMode)
   mode: StudyRoomRecurrenceMode;
@@ -92,14 +73,6 @@ export class StudyRoomDto {
   duration: number;
   maxParticipants: number;
   joiningFee: number;
-  allowExternalUsers?: boolean;
-  externalAutoAccept?: boolean;
-  externalPasscode?: string | null;
-  externalInvites?: Array<{
-    email: string;
-    role: StudyRoomParticipantRoleDto;
-  }>;
-  pendingExternalJoinRequests?: number;
   cohostCount?: number;
   isRecurring?: boolean;
   recurrenceMode?: StudyRoomRecurrenceMode;
@@ -159,17 +132,14 @@ export class JoinWebinarWithPasscodeDto {
   @IsString()
   studyRoomId: string;
 
-  /** Must match the name used at registration (case-insensitive). */
-  @IsString()
-  @MinLength(1)
-  name: string;
-
-  @IsEmail()
-  email: string;
-
   @IsString()
   @MinLength(4)
   passcode: string;
+
+  /** Opaque token from the join link emailed to the registrant (`?token=…`). */
+  @IsString()
+  @MinLength(10)
+  joinToken: string;
 }
 
 export class WebinarChatEnabledDto {
@@ -234,24 +204,6 @@ export class CreateStudyRoomDto {
   @ValidateNested()
   @Type(() => StudyRoomRecurrenceDto)
   recurrence?: StudyRoomRecurrenceDto;
-
-  @IsOptional()
-  @IsBoolean()
-  allowExternalUsers?: boolean;
-
-  @IsOptional()
-  @IsBoolean()
-  externalAutoAccept?: boolean;
-
-  @IsOptional()
-  @IsString()
-  externalPasscode?: string;
-
-  @IsOptional()
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => ExternalInviteInputDto)
-  externalInvites?: ExternalInviteInputDto[];
 
   @IsOptional()
   @IsEnum(StudyRoomSessionModeDto)
@@ -320,34 +272,6 @@ export class UpdateStudyRoomDto {
   @ValidateNested()
   @Type(() => StudyRoomRecurrenceDto)
   recurrence?: StudyRoomRecurrenceDto;
-
-  @IsOptional()
-  @IsBoolean()
-  allowExternalUsers?: boolean;
-
-  @IsOptional()
-  @IsBoolean()
-  externalAutoAccept?: boolean;
-
-  @IsOptional()
-  @IsString()
-  externalPasscode?: string;
-
-  @IsOptional()
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => ExternalInviteInputDto)
-  externalInvites?: ExternalInviteInputDto[];
-}
-
-export class ToggleExternalAutoAcceptDto {
-  @IsBoolean()
-  enabled: boolean;
-}
-
-export class ResolveExternalJoinRequestDto {
-  @IsBoolean()
-  approve: boolean;
 }
 
 export class PromoteParticipantRoleDto {

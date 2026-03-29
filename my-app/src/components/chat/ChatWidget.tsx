@@ -124,6 +124,36 @@ function mergeMessages(existing: Message[], incoming: Message[]): Message[] {
 	})
 }
 
+function isOptimisticMessageId(id: string): boolean {
+	return id.startsWith('optimistic-')
+}
+
+/** Same send as server echo — drop local placeholder when real message arrives. */
+function optimisticMatchesIncoming(
+	local: Message,
+	server: Message,
+	viewerDbUserId?: string | null,
+): boolean {
+	if (!isOptimisticMessageId(local.id)) return false
+	if (local.content !== server.content) return false
+	if (local.audienceType !== server.audienceType) return false
+	if ((local.targetUserId ?? null) !== (server.targetUserId ?? null)) return false
+
+	if (local.guestEmail || server.guestEmail) {
+		const a = (local.guestEmail || '').trim().toLowerCase()
+		const b = (server.guestEmail || '').trim().toLowerCase()
+		return a.length > 0 && a === b
+	}
+	if (local.senderId && server.senderId) {
+		return local.senderId === server.senderId
+	}
+	// Optimistic row before DB user id is ready — still the same outgoing message
+	if (viewerDbUserId && server.senderId && viewerDbUserId === server.senderId) {
+		return true
+	}
+	return false
+}
+
 interface ChatWidgetProps {
 	channelId: string | null | undefined
 	className?: string
@@ -152,6 +182,13 @@ export function ChatWidget({
 	const userId = user?.id
 	/** Guest link chat only when not signed in; stray ?guestAccessToken= would otherwise use an expired token and the server would disconnect the socket. */
 	const isGuestMode = Boolean(guestToken && !userId)
+	const channelIdRef = useRef<string | null | undefined>(channelId)
+	channelIdRef.current = channelId
+	const viewerDbUserIdRef = useRef(currentUserDbId)
+	useEffect(() => {
+		viewerDbUserIdRef.current = currentUserDbId
+	}, [currentUserDbId])
+
 	const [messages, setMessages] = useState<Message[]>(() => {
 		if (!channelId) return []
 		const cached = channelMessageCache.get(channelId) || []
@@ -181,10 +218,13 @@ export function ChatWidget({
 		}
 		const activeChannelId = channelId
 
+		// Never show another room’s messages while switching or loading.
 		const cachedMessages = channelMessageCache.get(activeChannelId)
-		if (cachedMessages) {
-			setMessages(cachedMessages.map(normalizeChatMessage))
-		}
+		setMessages(
+			cachedMessages?.length
+				? cachedMessages.map(normalizeChatMessage)
+				: [],
+		)
 
 		let mounted = true
 		async function loadHistory() {
@@ -203,7 +243,7 @@ export function ChatWidget({
 					params,
 					skipClerkAuth: isGuestMode,
 				})
-				if (!mounted) return
+				if (!mounted || channelIdRef.current !== activeChannelId) return
 
 				let rawList: unknown[] = []
 				if (
@@ -226,13 +266,12 @@ export function ChatWidget({
 
 				const historyMessages = rawList.map(normalizeChatMessage)
 				console.log('Loaded messages:', historyMessages.length, 'messages')
-				setMessages((prev) => {
-					const merged = mergeMessages(prev, historyMessages)
-					channelMessageCache.set(activeChannelId, merged)
-					return merged
-				})
+				// Replace server history for this channel only — do not merge with prior room’s list.
+				if (channelIdRef.current !== activeChannelId) return
+				setMessages(historyMessages)
+				channelMessageCache.set(activeChannelId, historyMessages)
 			} catch (e: unknown) {
-				if (!mounted) return
+				if (!mounted || channelIdRef.current !== activeChannelId) return
 				const errorMessage = e instanceof Error ? e.message : 'Failed to load messages'
 				console.error('Failed to load chat history:', errorMessage)
 				setError(errorMessage)
@@ -262,7 +301,11 @@ export function ChatWidget({
 				setIsConnecting(true)
 				setError(null)
 
-				const token = isGuestMode ? guestToken : await getToken()
+				let token = isGuestMode ? guestToken : await getToken()
+				if (!token && !isGuestMode) {
+					await new Promise((r) => setTimeout(r, 400))
+					token = (await getToken()) ?? null
+				}
 				if (!token) {
 					if (isMounted) {
 						setError('Authentication required')
@@ -289,9 +332,11 @@ export function ChatWidget({
 					transports: ['websocket', 'polling'],
 					auth: { token },
 					reconnection: true,
-					reconnectionAttempts: 5,
-					reconnectionDelay: 1000,
-					timeout: 10000,
+					reconnectionAttempts: 12,
+					reconnectionDelay: 800,
+					reconnectionDelayMax: 15000,
+					randomizationFactor: 0.5,
+					timeout: 20000,
 					autoConnect: false,
 				})
 
@@ -299,7 +344,8 @@ export function ChatWidget({
 				socketRef.current = s
 
 				let joinedForCurrentSocket = false
-				let reconnectAttempts = 0
+				/** Only for UI: avoid flashing errors on the first flaky attempts */
+				let connectErrorCount = 0
 
 				const joinChannel = () => {
 					if (joinedForCurrentSocket) return
@@ -308,9 +354,28 @@ export function ChatWidget({
 					s.emit('join:channel', { channelId: activeChannelId })
 				}
 
+				// Clerk JWTs expire; reconnect must send a fresh token or the server disconnects.
+				s.io.on('reconnect_attempt', async () => {
+					if (!isMounted || channelIdRef.current !== activeChannelId) return
+					setIsConnecting(true)
+					setError(null)
+					try {
+						const fresh = isGuestMode ? guestToken : await getToken({ skipCache: true })
+						if (fresh) {
+							s.auth = { token: fresh }
+						}
+					} catch {
+						// keep previous auth; next attempt may succeed
+					}
+				})
+
 				s.on('connect', () => {
 					console.log('[Chat] Socket connected:', activeChannelId)
+					connectErrorCount = 0
 					joinedForCurrentSocket = false
+					if (isMounted && channelIdRef.current === activeChannelId) {
+						setError(null)
+					}
 				})
 
 				s.on('chat:authenticated', () => {
@@ -331,14 +396,24 @@ export function ChatWidget({
 				})
 
 				s.on('message:new', (msg: unknown) => {
+					if (channelIdRef.current !== activeChannelId) return
 					const normalized = normalizeChatMessage(msg)
 					console.log('[Chat] Received new message:', normalized.id)
 					setMessages((prev) => {
+						if (channelIdRef.current !== activeChannelId) return prev
 						if (prev.some((m) => m.id === normalized.id)) {
 							console.warn('[Chat] Duplicate message detected, ignoring:', normalized.id)
 							return prev
 						}
-						const next = mergeMessages(prev, [normalized])
+						const withoutMatchingOptimistic = prev.filter((m) => {
+							if (!isOptimisticMessageId(m.id)) return true
+							return !optimisticMatchesIncoming(
+								m,
+								normalized,
+								viewerDbUserIdRef.current,
+							)
+						})
+						const next = mergeMessages(withoutMatchingOptimistic, [normalized])
 						channelMessageCache.set(activeChannelId, next)
 						return next
 					})
@@ -349,31 +424,36 @@ export function ChatWidget({
 				})
 
 				s.on('connect_error', (err: Error) => {
-					reconnectAttempts++
-					console.warn(
-						`[Chat] Connection attempt ${reconnectAttempts} failed:`,
-						err.message,
-					)
+					connectErrorCount++
+					console.warn(`[Chat] Connection attempt ${connectErrorCount} failed:`, err.message)
 
-					if (isMounted && reconnectAttempts >= 3) {
-						const isAuthError =
-							err.message.includes('auth') ||
-							err.message.includes('401') ||
-							err.message.includes('unauthorized')
+					const looksLikeAuthFailure =
+						/401|403|unauthorized|forbidden/i.test(err.message) ||
+						/\bauth\b|token|session/i.test(err.message.toLowerCase())
 
-						if (isAuthError) {
-							if (isGuestMode) {
-								setError(
-									'Chat connection failed. Try refreshing the page or reopening your guest link.',
-								)
-							} else {
-								setError('Authentication failed')
+					// Push a fresh Clerk JWT before the next reconnect attempt (common after expiry).
+					if (isMounted && channelIdRef.current === activeChannelId && looksLikeAuthFailure && !isGuestMode) {
+						void (async () => {
+							try {
+								const fresh = await getToken({ skipCache: true })
+								if (fresh && isMounted && channelIdRef.current === activeChannelId) {
+									s.auth = { token: fresh }
+								}
+							} catch {
+								// ignore
 							}
-						} else {
-							setError('Unable to connect to chat')
-						}
-						setIsConnecting(false)
+						})()
 					}
+				})
+
+				s.io.on('reconnect_failed', () => {
+					if (!isMounted || channelIdRef.current !== activeChannelId) return
+					setIsConnecting(false)
+					setError(
+						isGuestMode
+							? 'Chat connection failed. Try refreshing the page or reopening your guest link.'
+							: 'Unable to reach chat. Check your connection and try again.',
+					)
 				})
 
 				s.on('chat:error', (data: unknown) => {
@@ -396,6 +476,12 @@ export function ChatWidget({
 						} else if (errorData.code === 'RECONNECTING') {
 							console.log('[Chat] Reconnecting...')
 						} else if (hasErrorInfo && (errorData.message || errorData.error)) {
+							const msg = (errorData.message || errorData.error || '').toLowerCase()
+							if (
+								/\breconnect|disconnect|transport|ping\s*time|network/i.test(msg)
+							) {
+								return
+							}
 							setError(errorData.message || errorData.error || 'Connection error')
 							setIsConnecting(false)
 						}
@@ -404,20 +490,38 @@ export function ChatWidget({
 
 				s.on('disconnect', (reason) => {
 					console.log('[Chat] Socket disconnected:', reason)
-					if (isMounted && reason === 'io server disconnect') {
-						setError('Disconnected from chat server')
-						setIsConnecting(false)
+					if (
+						isMounted &&
+						reason !== 'io client disconnect' &&
+						channelIdRef.current === activeChannelId
+					) {
+						// Transient network / server restarts: show reconnecting, not a red error banner.
+						setIsConnecting(true)
+						setError(null)
+					}
+					// Server forced disconnect often means bad/expired token; client will reconnect with fresh auth.
+					if (isMounted && reason === 'io server disconnect' && channelIdRef.current === activeChannelId) {
+						void (async () => {
+							try {
+								const fresh = isGuestMode ? guestToken : await getToken({ skipCache: true })
+								if (fresh && isMounted && channelIdRef.current === activeChannelId) {
+									s.auth = { token: fresh }
+								}
+							} catch {
+								// ignore
+							}
+						})()
 					}
 					if (reason === 'io client disconnect') {
-						reconnectAttempts = 0
+						connectErrorCount = 0
 					}
 					joinedForCurrentSocket = false
 				})
 
 				s.io.on('reconnect', () => {
 					console.log('[Chat] Reconnected successfully')
-					reconnectAttempts = 0
-					if (isMounted) {
+					connectErrorCount = 0
+					if (isMounted && channelIdRef.current === activeChannelId) {
 						setError(null)
 					}
 				})
@@ -479,13 +583,79 @@ export function ChatWidget({
 		audienceType: MessageAudienceType,
 		targetUserId?: string,
 	) => {
-		if (!socketRef.current || !socketRef.current.connected) {
+		const s = socketRef.current
+		if (!s || !s.connected) {
+			// During reconnect, avoid a red “connection error” — user already sees the blue banner.
+			if (isConnecting) return
 			setError('Not connected to chat server')
 			return
 		}
-		socketRef.current.emit('message:send', {
+		const trimmed = text.trim()
+		if (!trimmed) return
+
+		const optimisticId = `optimistic-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`}`
+		const now = new Date().toISOString()
+
+		let optimistic: Message
+		if (isGuestMode) {
+			const email = viewerGuestEmail || guestEmail || ''
+			const localName = email.split('@')[0] || 'Guest'
+			optimistic = {
+				id: optimisticId,
+				senderId: null,
+				audienceType,
+				targetUserId: targetUserId ?? null,
+				content: trimmed,
+				createdAt: now,
+				guestEmail: email || null,
+				guestSenderId: guestToken || null,
+				sender: {
+					id: guestToken || 'guest',
+					name: localName,
+					avatar: null,
+				},
+			}
+		} else {
+			const sid = currentUserDbId || ''
+			const displayName =
+				user?.fullName ||
+				[user?.firstName, user?.lastName].filter(Boolean).join(' ') ||
+				user?.primaryEmailAddress?.emailAddress?.split('@')[0] ||
+				'You'
+			optimistic = {
+				id: optimisticId,
+				senderId: sid,
+				audienceType,
+				targetUserId: targetUserId ?? null,
+				content: trimmed,
+				createdAt: now,
+				sender: {
+					id: sid || 'me',
+					name: displayName,
+					avatar: user?.imageUrl ?? null,
+				},
+			}
+		}
+
+		setMessages((prev) => {
+			const next = mergeMessages(prev, [optimistic])
+			if (channelId) channelMessageCache.set(channelId, next)
+			return next
+		})
+
+		// If the server never echoes (rare), drop the placeholder so the thread doesn’t lie forever.
+		window.setTimeout(() => {
+			setMessages((prev) => {
+				if (!prev.some((m) => m.id === optimisticId)) return prev
+				const next = prev.filter((m) => m.id !== optimisticId)
+				if (channelId) channelMessageCache.set(channelId, next)
+				return next
+			})
+		}, 20_000)
+
+		s.emit('message:send', {
 			channelId,
-			content: text,
+			content: trimmed,
 			audienceType,
 			targetUserId,
 		})
@@ -524,9 +694,9 @@ export function ChatWidget({
 					<p className="text-xs opacity-90">{error}</p>
 				</div>
 			)}
-			{isConnecting && (
+			{isConnecting && messages.length === 0 && (
 				<div className="p-2 md:p-3 bg-blue-900/50 border border-blue-500/40 rounded-lg text-blue-200 text-xs md:text-sm mx-2 md:mx-3 mt-2 md:mt-3">
-					Connecting to chat...
+					Connecting to chat…
 				</div>
 			)}
 			<div className="flex-1 overflow-y-auto min-h-0">

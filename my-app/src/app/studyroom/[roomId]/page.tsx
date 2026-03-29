@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import StudyRoomClient from "./study-room-client";
 
 // Type for skill in API response
@@ -130,5 +131,15 @@ export default async function StudyRoomPage({
   const { roomId } = await params;
   
   const room = await getStudyRoomData(roomId);
-  return <StudyRoomClient roomId={room?.id ?? roomId} />;
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-[40vh] flex items-center justify-center text-muted-foreground text-sm">
+          Loading…
+        </div>
+      }
+    >
+      <StudyRoomClient roomId={room?.id ?? roomId} />
+    </Suspense>
+  );
 }

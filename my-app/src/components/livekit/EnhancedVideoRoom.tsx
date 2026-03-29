@@ -82,6 +82,7 @@ interface SessionData {
 	sessionType: 'studyRoom' | 'peerSession';
 	sessionMode?: string;
 	webinarConfig?: unknown;
+	createdBy?: { id?: string; name?: string; avatar?: string; email?: string };
 	guestParticipants?: Array<{
 		id: string
 		name: string
@@ -95,14 +96,6 @@ interface ChatIdentity {
 	id: string
 	name: string
 	avatar?: string | null
-}
-
-interface ExternalJoinRequestItem {
-	id: string
-	name: string
-	email: string
-	status: 'PENDING' | 'APPROVED' | 'REJECTED'
-	createdAt: string
 }
 
 interface EnhancedVideoRoomProps {
@@ -144,39 +137,11 @@ export function EnhancedVideoRoom({
 	const [isMobileViewport, setIsMobileViewport] = useState(false)
 	const [isMobileDevice, setIsMobileDevice] = useState(false)
 	const router = useRouter()
-	const { showSuccess, showError, showInfo } = useToast()
+	const { showSuccess, showError } = useToast()
 	const { getToken } = useAuth()
 	const { user } = useUser()
 	const moderationUserId = isGuest ? guestLivekitIdentity : user?.id ?? null
 	const queryClient = useQueryClient()
-	const [externalJoinRequests, setExternalJoinRequests] = useState<ExternalJoinRequestItem[]>([])
-	const [activeExternalJoinRequest, setActiveExternalJoinRequest] = useState<ExternalJoinRequestItem | null>(null)
-	const [resolvingExternalJoinRequest, setResolvingExternalJoinRequest] = useState(false)
-	const seenExternalJoinRequestIdsRef = useRef<Set<string>>(new Set())
-	const audioContextRef = useRef<AudioContext | null>(null)
-
-	const playJoinRequestAlertSound = useCallback(() => {
-		if (typeof window === 'undefined') return
-		try {
-			const AudioCtx = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
-			if (!AudioCtx) return
-			if (!audioContextRef.current) {
-				audioContextRef.current = new AudioCtx()
-			}
-			const context = audioContextRef.current
-			const oscillator = context.createOscillator()
-			const gainNode = context.createGain()
-			oscillator.type = 'sine'
-			oscillator.frequency.value = 880
-			gainNode.gain.value = 0.06
-			oscillator.connect(gainNode)
-			gainNode.connect(context.destination)
-			oscillator.start()
-			oscillator.stop(context.currentTime + 0.14)
-		} catch {
-			// Best-effort alert sound; ignore if browser blocks autoplay/audio context.
-		}
-	}, [])
 
 	// Socket.io for transcripts
 	const [transcriptSocket, setTranscriptSocket] = useState<Socket | null>(null)
@@ -248,130 +213,6 @@ export function EnhancedVideoRoom({
 		}
 		fetchToken()
 	}, [getToken, externalAccessToken])
-
-	useEffect(() => {
-		if (!isHost || sessionData?.sessionType !== 'studyRoom' || !sessionData?.id) return
-
-		let cancelled = false
-
-		const fetchPendingExternalJoinRequests = async () => {
-			try {
-				const authTokenValue = await getToken()
-				if (!authTokenValue || cancelled) return
-				const response = await fetch(
-					`${process.env.NEXT_PUBLIC_API_URL}/api/study-rooms/${sessionData.id}/external/requests`,
-					{
-						method: 'GET',
-						headers: {
-							Authorization: `Bearer ${authTokenValue}`,
-						},
-					},
-				)
-				if (!response.ok || cancelled) return
-
-				const data = (await response.json()) as { requests?: ExternalJoinRequestItem[] }
-				const pendingRequests = (data.requests || []).filter(
-					(request) => request.status === 'PENDING',
-				)
-				setExternalJoinRequests(pendingRequests)
-
-				const newPendingRequests = pendingRequests.filter(
-					(request) => !seenExternalJoinRequestIdsRef.current.has(request.id),
-				)
-
-				for (const request of pendingRequests) {
-					seenExternalJoinRequestIdsRef.current.add(request.id)
-				}
-
-				if (newPendingRequests.length > 0) {
-					const latest = newPendingRequests[newPendingRequests.length - 1]
-					showInfo(
-						'New join request',
-						`${latest.name} (${latest.email}) wants to join this session.`,
-					)
-					playJoinRequestAlertSound()
-				}
-
-				if (!activeExternalJoinRequest && pendingRequests.length > 0) {
-					setActiveExternalJoinRequest(pendingRequests[0])
-				}
-			} catch {
-				// Ignore polling errors and retry on next interval.
-			}
-		}
-
-		fetchPendingExternalJoinRequests()
-		const interval = setInterval(fetchPendingExternalJoinRequests, 5000)
-
-		return () => {
-			cancelled = true
-			clearInterval(interval)
-		}
-	}, [
-		isHost,
-		sessionData?.sessionType,
-		sessionData?.id,
-		getToken,
-		activeExternalJoinRequest,
-		showInfo,
-		playJoinRequestAlertSound,
-	])
-
-	const handleResolveExternalJoinRequest = useCallback(
-		async (approve: boolean) => {
-			if (!activeExternalJoinRequest || sessionData?.sessionType !== 'studyRoom' || !sessionData?.id) {
-				return
-			}
-			try {
-				setResolvingExternalJoinRequest(true)
-				const authTokenValue = await getToken()
-				if (!authTokenValue) {
-					showError('Not authenticated', 'Please sign in again to review join requests.')
-					return
-				}
-
-				const response = await fetch(
-					`${process.env.NEXT_PUBLIC_API_URL}/api/study-rooms/${sessionData.id}/external/requests/${activeExternalJoinRequest.id}/resolve`,
-					{
-						method: 'POST',
-						headers: {
-							'Content-Type': 'application/json',
-							Authorization: `Bearer ${authTokenValue}`,
-						},
-						body: JSON.stringify({ approve }),
-					},
-				)
-
-				if (!response.ok) {
-					showError('Action failed', 'Could not update join request. Please try again.')
-					return
-				}
-
-				const resolvedRequest = activeExternalJoinRequest
-				const remaining = externalJoinRequests.filter((request) => request.id !== resolvedRequest.id)
-				setExternalJoinRequests(remaining)
-				setActiveExternalJoinRequest(remaining[0] || null)
-
-				showSuccess(
-					approve ? 'Guest approved' : 'Guest rejected',
-					`${resolvedRequest.name} has been ${approve ? 'allowed to join' : 'rejected'}.`,
-				)
-			} catch {
-				showError('Action failed', 'Could not update join request. Please try again.')
-			} finally {
-				setResolvingExternalJoinRequest(false)
-			}
-		},
-		[
-			activeExternalJoinRequest,
-			externalJoinRequests,
-			getToken,
-			sessionData?.id,
-			sessionData?.sessionType,
-			showError,
-			showSuccess,
-		],
-	)
 
 	// Store showSuccess in ref to avoid recreating handleWarning callback
 	const showSuccessRef = useRef(showSuccess)
@@ -906,52 +747,6 @@ export function EnhancedVideoRoom({
 					onConfirm={confirmEndMeeting}
 					onCancel={() => setShowEndConfirmation(false)}
 				/>
-			)}
-
-			{isHost && activeExternalJoinRequest && (
-				<div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/40 backdrop-blur-[2px] px-4">
-					<div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#141414] p-5 text-white shadow-2xl">
-						<p className="text-xs uppercase tracking-wide text-[#00DC6E] font-semibold">Join Request</p>
-						<h3 className="mt-1 text-lg font-semibold">Someone wants to join this session</h3>
-						<div className="mt-4 rounded-xl bg-white/5 border border-white/10 p-3 space-y-1">
-							<p className="text-sm">
-								<span className="text-white/60">Name:</span> {activeExternalJoinRequest.name}
-							</p>
-							<p className="text-sm break-all">
-								<span className="text-white/60">Email:</span> {activeExternalJoinRequest.email}
-							</p>
-						</div>
-						{externalJoinRequests.length > 1 && (
-							<p className="mt-3 text-xs text-white/60">
-								{externalJoinRequests.length - 1} more request(s) waiting.
-							</p>
-						)}
-						<div className="mt-5 flex items-center justify-end gap-2">
-							<Button
-								variant="outline"
-								className="border-red-400/50 text-red-300 hover:bg-red-500/10 hover:text-red-200"
-								onClick={() => handleResolveExternalJoinRequest(false)}
-								disabled={resolvingExternalJoinRequest}
-							>
-								Reject
-							</Button>
-							<Button
-								className="bg-[#00DC6E] text-black hover:bg-[#00c562]"
-								onClick={() => handleResolveExternalJoinRequest(true)}
-								disabled={resolvingExternalJoinRequest}
-							>
-								Approve & Let In
-							</Button>
-						</div>
-					</div>
-				</div>
-			)}
-			{isHost && externalJoinRequests.length > 0 && (
-				<div className="fixed top-4 right-4 z-[94]">
-					<div className="rounded-full bg-[#00DC6E] text-black text-xs font-semibold px-3 py-1 shadow-lg">
-						{externalJoinRequests.length} join request{externalJoinRequests.length > 1 ? 's' : ''}
-					</div>
-				</div>
 			)}
 
 			{/* Loading Overlay when ending meeting */}
@@ -2259,6 +2054,9 @@ const VideoRoomContent = memo(function VideoRoomContent({
 										}>
 									}
 								).guestParticipants ?? []
+							}
+							hostEmail={
+								(sessionInfo as SessionData).createdBy?.email ?? null
 							}
 							chatEnabled={webinarChatEnabledUi}
 						/>
@@ -4477,6 +4275,9 @@ const VideoRoomContent = memo(function VideoRoomContent({
 							respondToVideoRequest?.(false)
 						}
 					}}
+					onMediaError={(mediaType, err) =>
+						showMediaError(mediaType === 'audio' ? 'mic' : 'cam', err, true)
+					}
 					onDismiss={dismissPermissionRequest}
 				/>
 			)}
@@ -4771,11 +4572,13 @@ function PermissionRequestModal({
 	type,
 	onAccept,
 	onDeny,
+	onMediaError,
 	onDismiss,
 }: {
 	type: 'audio' | 'video'
 	onAccept: () => void
 	onDeny: () => void
+	onMediaError?: (mediaType: 'audio' | 'video', err: unknown) => void
 	onDismiss?: () => void
 }) {
 	const { localParticipant } = useLocalParticipant()
@@ -4789,7 +4592,7 @@ function PermissionRequestModal({
 			}
 			onAccept()
 		} catch (err) {
-			onDeny()
+			onMediaError?.(type, err)
 		}
 	}
 
