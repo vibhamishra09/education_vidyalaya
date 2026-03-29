@@ -28,6 +28,7 @@ import {
   Mic,
   MicOff,
   PhoneOff,
+  X,
   Users,
   MessageSquare,
   Clock,
@@ -54,7 +55,9 @@ import {
   MousePointer,
   Pin,
   PinOff,
+  PencilLine,
 } from 'lucide-react';
+import { ScratchPad } from '@/components/scratch-pad/ScratchPad';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
@@ -343,6 +346,9 @@ function DebateLiveContent({
   const [sidebarTab, setSidebarTab] = useState<'teams' | 'chat' | 'evaluation'>('teams');
   const [isAudioOutputEnabled, setIsAudioOutputEnabled] = useState(true);
   const [viewMode, setViewMode] = useState<'speaker' | 'grid'>('speaker');
+  const isHost = userRole === 'host';
+  const [showScratchPad, setShowScratchPad] = useState(false);
+  const [allowScratchPadEdit, setAllowScratchPadEdit] = useState(isHost);
   const [isRoomConnected, setIsRoomConnected] = useState(false);
   const [pinnedParticipantId, setPinnedParticipantId] = useState<string | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -353,8 +359,6 @@ function DebateLiveContent({
   const socketRef = useRef<Socket | null>(null);
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-
-  const isHost = userRole === 'host';
 
   // Remote Control Hook
   const {
@@ -1098,7 +1102,27 @@ function DebateLiveContent({
                     <VideoTrack trackRef={activeScreenShare} className="w-auto h-auto max-w-full max-h-[75vh] object-contain rounded-lg" />
                   )}
                   
-                  {/* Remote Control Overlay */}
+                  {/* Scratch Pad Overlay */}
+                {showScratchPad && (
+                  <div className="absolute inset-0 z-[100] p-4 bg-[#1a1a1a]">
+                    <ScratchPad 
+                      roomId={debateRoom.id} 
+                      room={room}
+                      isHost={isHost}
+                      canEdit={isHost || allowScratchPadEdit}
+                    />
+                    <Button 
+                      onClick={() => setShowScratchPad(false)}
+                      variant="ghost" 
+                      size="sm"
+                      className="absolute top-8 right-8 z-[101] h-10 w-10 rounded-full bg-black/60 hover:bg-black/80 border border-white/10 text-white"
+                    >
+                      <X className="h-5 w-5" />
+                    </Button>
+                  </div>
+                )}
+
+                {/* Main Content Areas */}
                   <RemoteControlOverlay
                     isControlling={isControlling}
                     isSharing={activeScreenShare.participant.identity === localParticipant?.identity}
@@ -1945,6 +1969,25 @@ function DebateLiveContent({
           {localParticipant?.isScreenShareEnabled 
             ? <MonitorOff className="h-6 w-6" /> 
             : <MonitorUp className="h-6 w-6" />}
+        </Button>
+
+        {/* Scratch Pad Toggle */}
+        <Button
+          onClick={() => {
+            if (!showScratchPad) setShowSidebar(false);
+            setShowScratchPad(!showScratchPad);
+          }}
+          variant="ghost"
+          size="lg"
+          className={cn(
+            'h-10 w-10 sm:h-12 sm:w-12 rounded-full transition-all p-0',
+            showScratchPad 
+              ? 'bg-purple-600 hover:bg-purple-700 text-white' 
+              : 'bg-white/10 hover:bg-white/20 text-white'
+          )}
+          title="Collaborative Scratch Pad"
+        >
+          <PencilLine className="h-5 w-5 sm:h-6 sm:w-6" />
         </Button>
 
         {/* Leave Button */}

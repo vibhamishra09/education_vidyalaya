@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react'
-import { LiveKitRoom, useParticipants, useTracks, RoomAudioRenderer, useSpeakingParticipants, VideoTrack, useLocalParticipant, isTrackReference } from '@livekit/components-react'
+import { LiveKitRoom, useParticipants, useTracks, RoomAudioRenderer, useSpeakingParticipants, VideoTrack, useLocalParticipant, isTrackReference, useRoomContext } from '@livekit/components-react'
 import { Track, RoomOptions, VideoPresets, LocalVideoTrack } from 'livekit-client'
 import '@livekit/components-styles'
 import { BackgroundProcessor, BackgroundBlur, VirtualBackground, BackgroundOptions } from '@livekit/track-processors'
@@ -11,7 +11,8 @@ import {
 	Clock, MonitorUp, MonitorOff, Grid2X2, Presentation, Pin,
 	PinOff, User, PictureInPicture2, Camera, CameraOff, Sparkles, Lock, Settings2,
 	PhoneOff, ChevronUp, ChevronLeft, ChevronRight, ShieldCheck, Ban, Aperture,
-	ImageIcon, LayoutGrid, Check, Timer, Power, LogOut, Zap, ZoomIn, ZoomOut, MousePointer2
+	ImageIcon, LayoutGrid, Check, Timer, Power, Zap, LogOut, ZoomIn, ZoomOut, MousePointer2,
+	PencilLine
 } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
@@ -28,12 +29,11 @@ import { useSpeechRecognition } from '@/hooks/use-speech-recognition'
 import { useSessionExtension } from '@/hooks/use-session-extension'
 import { ExtensionRequestDialog } from '@/components/study-room/extension-request-dialog'
 import { EndMeetingDialog } from '@/components/study-room/end-meeting-dialog'
-import { useSessionModeration, RoomPermissions, PermissionRequest, ParticipantPermissionRequest, ParticipantChatLocks, RoomSettings, FlashQuestion, ActiveFlashMessage } from '@/hooks/use-session-moderation'
-import { FlashMessageOverlay } from '@/components/study-room/FlashMessageOverlay'
-import { QuestionManager } from '@/components/study-room/QuestionManager'
+import { useSessionModeration, RoomPermissions, PermissionRequest, ParticipantPermissionRequest, ParticipantChatLocks, RoomSettings } from '@/hooks/use-session-moderation'
 import { ChatRecipient } from '@/components/chat/MessageInput'
 import { useRemoteControl } from '@/hooks/use-remote-control'
 import { RemoteControlOverlay } from '@/components/livekit/RemoteControlOverlay'
+import { ScratchPad } from '@/components/scratch-pad/ScratchPad'
 // Stable virtual backgrounds constant to avoid re-creating array each render
 const VIRTUAL_BACKGROUNDS = [
 	{
@@ -804,18 +804,7 @@ export function EnhancedVideoRoom({
 					onParticipantListChange={onParticipantListChange}
 					isGuest={isGuest}
 					guestToken={isGuest ? externalAccessToken : undefined}
-					// Flash message props
-					activeFlashMessage={activeFlashMessage}
-					flashQuestions={flashQuestions}
-					onFlashUploadList={flashUploadList}
-					onFlashUpdateQuestion={flashUpdateQuestion}
-					onFlashReorder={flashReorder}
-					onFlashDeleteQuestion={flashDeleteQuestion}
-					onFlashShowQuestion={flashShowQuestion}
-					onFlashShowAdHoc={flashShowAdHoc}
-					onFlashDismissForAll={flashDismiss}
-					onFlashGetList={flashGetList}
-					onDismissFlashMessage={dismissFlashMessage}
+                    sessionData={sessionData}
 
 					onPromoteToCohost={async (participantIdentity, role) => {
 						if (sessionData?.sessionType !== 'studyRoom' || !sessionData?.id) return
@@ -989,24 +978,13 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	isMobileViewport,
 	chatRecipients,
 	hostUser,
-	currentUserDbId,
-	onParticipantListChange,
-	isGuest = false,
-	guestToken,
-	participantChatLocks,
-	onPromoteToCohost,
-	// Flash message
-	activeFlashMessage,
-	flashQuestions = [],
-	onFlashUploadList,
-	onFlashUpdateQuestion,
-	onFlashReorder,
-	onFlashDeleteQuestion,
-	onFlashShowQuestion,
-	onFlashShowAdHoc,
-	onFlashDismissForAll,
-	onFlashGetList,
-	onDismissFlashMessage,
+					currentUserDbId,
+					onParticipantListChange,
+					isGuest = false,
+					guestToken,
+					participantChatLocks,
+					onPromoteToCohost,
+					sessionData,
 }: {
 	isUserActive: boolean
 	showChat: boolean
@@ -1078,23 +1056,12 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		participantIdentity: string,
 		role: 'PARTICIPANT' | 'COHOST',
 	) => void
-	// Flash message props
-	activeFlashMessage?: ActiveFlashMessage | null
-	flashQuestions?: FlashQuestion[]
-	onFlashUploadList?: (questions: FlashQuestion[]) => void
-	onFlashUpdateQuestion?: (questionId: string, updates: Partial<Omit<FlashQuestion, 'id'>>) => void
-	onFlashReorder?: (orderedIds: string[]) => void
-	onFlashDeleteQuestion?: (questionId: string) => void
-	onFlashShowQuestion?: (questionId: string) => void
-	onFlashShowAdHoc?: (text: string, meta?: Omit<FlashQuestion, 'id' | 'text'>) => void
-	onFlashDismissForAll?: () => void
-	onFlashGetList?: () => void
-	onDismissFlashMessage?: () => void
+	sessionData?: SessionData | null
 }) {
 	// Room context removed to avoid race conditions, using localParticipant hook instead
 	const params = useParams<{ room: string }>()
+	const room = useRoomContext()
 	const { showWarning, showSuccess, showInfo, showError } = useToast()
-
 	// Remote Control Hook
 	const {
 		isControlling,
@@ -1110,8 +1077,9 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		revokeControl
 	} = useRemoteControl()
 
-	// Flash panel state (host only)
-	const [showFlashPanel, setShowFlashPanel] = useState(false)
+	// Scratch pad state
+    const [showScratchPad, setShowScratchPad] = useState(false)
+    const [allowScratchPadEdit, setAllowScratchPadEdit] = useState(isHost)
 
 	// Get participants list for name lookup
 	const allParticipants = useParticipants()
@@ -3050,7 +3018,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 																	<span>SCREEN SHARE</span>
 																</div>
 																
-																{/* Remote Control Actions - Overlay on the screen share half */}
+																{/* Remote Control Actions - Overlay */}
 																<RemoteControlOverlay
 																	isControlling={isControlling && targetScreenShareId === focusedParticipantForDisplay.identity}
 																	isSharing={focusedParticipantForDisplay.isLocal}
@@ -3060,6 +3028,22 @@ const VideoRoomContent = memo(function VideoRoomContent({
 																	onRevokeControl={revokeControl}
 																/>
 															</div>
+                                                            {showScratchPad && (
+                                                                <div className="absolute inset-0 z-[20] p-2 bg-[#0f0f0f]">
+                                                                    <ScratchPad 
+                                                                        roomId={sessionData?.id || 'default'} 
+                                                                        room={room}
+                                                                        isHost={isHost}
+                                                                        canEdit={isHost || allowScratchPadEdit}
+                                                                    />
+                                                                    <button 
+                                                                        onClick={() => setShowScratchPad(false)}
+                                                                        className="absolute top-6 right-6 z-[21] w-10 h-10 bg-black/60 hover:bg-black/80 rounded-full flex items-center justify-center border border-white/10 text-white shadow-xl backdrop-blur-md"
+                                                                    >
+                                                                        <X className="h-5 w-5" />
+                                                                    </button>
+                                                                </div>
+                                                            )}
 
 															{/* Right/Bottom: Pinned Participant */}
 															<div className="flex-1 relative bg-[#1a1a1a] rounded-xl overflow-hidden group border border-blue-500/30">
@@ -3684,7 +3668,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						<div className={`flex flex-col items-center justify-center group ${(!canViewParticipantList && !isGuest) ? 'hidden' : ''}`}>
 							<button
 								onClick={() => {
-									if (!showChat) { setShowParticipants(false); setShowFlashPanel(false) }
+									if (!showChat) { setShowParticipants(false); setShowScratchPad(false) }
 									setShowChat(!showChat)
 								}}
 								className={`h-11 w-11 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl hover:bg-sky-500/20 active:scale-95 transition-all relative ${showChat ? 'bg-sky-500/20 text-sky-400' : 'text-white/80 hover:text-sky-400'}`}
@@ -3694,24 +3678,20 @@ const VideoRoomContent = memo(function VideoRoomContent({
 							</button>
 						</div>
 
-						{/* Flash Messages (host only) */}
-						{isHost && (
-							<div className="flex flex-col items-center justify-center group">
-								<button
-									onClick={() => {
-										if (!showFlashPanel) { setShowChat(false); setShowParticipants(false) }
-										setShowFlashPanel((p) => !p)
-									}}
-									className={`h-11 w-11 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl hover:bg-yellow-500/20 active:scale-95 transition-all relative ${showFlashPanel ? 'bg-yellow-500/20 text-yellow-400' : 'text-white/80 hover:text-yellow-400'}`}
-									title="Flash Messages"
-								>
-									<Zap className="h-5 w-5 md:h-5 md:w-5" />
-									{activeFlashMessage && (
-										<span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-yellow-400 border-2 border-[#141414] animate-pulse" />
-									)}
-								</button>
-							</div>
-						)}
+
+						{/* Scratch Pad */}
+						<div className="flex flex-col items-center justify-center group text-center">
+							<button
+								onClick={() => {
+									if (!showScratchPad) { setShowChat(false); setShowParticipants(false) }
+									setShowScratchPad(!showScratchPad)
+								}}
+								className={`h-11 w-11 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl hover:bg-purple-500/20 active:scale-95 transition-all relative ${showScratchPad ? 'bg-purple-500/20 text-purple-400' : 'text-white/80 hover:text-purple-400'}`}
+								title="Scratch Pad"
+							>
+								<PencilLine className="h-5 w-5 md:h-5 md:w-5" />
+							</button>
+						</div>
 
 						{!isGuest && (
 							<div className="flex flex-col items-center justify-center group">
@@ -3719,7 +3699,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 								<button
 									onClick={() => {
 										if (!canViewParticipantList) return
-										if (!showParticipants) { setShowChat(false); setShowFlashPanel(false) }
+										if (!showParticipants) { setShowChat(false); setShowScratchPad(false) }
 										setShowParticipants(!showParticipants)
 									}}
 									disabled={!canViewParticipantList}
@@ -3735,6 +3715,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 								</button>
 							</div>
 						)}
+
 
 						{/* PiP */}
 						<div className="hidden md:flex flex-col items-center justify-center group">
@@ -3856,6 +3837,35 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						</div>
 					</div>
 				</div>
+
+
+				{/* Collaborative Scratch Pad Overlay */}
+				{showScratchPad && (
+					<div className={`fixed md:absolute inset-0 z-[55] bg-black/40 backdrop-blur-sm flex flex-col transition-all duration-300 ${
+						(showChat || showParticipants) ? 'md:right-96' : ''
+					}`}>
+						<div className="absolute top-4 right-4 z-[60] flex items-center gap-2">
+							<Button 
+								variant="ghost" 
+								size="sm" 
+								onClick={() => setShowScratchPad(false)}
+								className="h-9 rounded-lg bg-black/60 text-white hover:bg-black/80 border border-white/10 backdrop-blur-sm"
+							>
+								<X className="h-4 w-4 mr-1.5" /> Close Pad
+							</Button>
+						</div>
+						<div className="flex-1 p-2 md:p-6 pb-20 md:pb-6">
+							<ScratchPad
+								roomId={params.room as string}
+								room={room}
+								isHost={isHost}
+								canEdit={allowScratchPadEdit}
+								roomTitle={(sessionData as any)?.title}
+                                enabled={showScratchPad}
+							/>
+						</div>
+					</div>
+				)}
 
 				{/* Unified Sidebar - Tabbed Interface */}
 				<>
@@ -4125,51 +4135,6 @@ const VideoRoomContent = memo(function VideoRoomContent({
 							</div>
 						</div>
 					</div>
-					{/* Flash Panel sidebar (host only) */}
-					{isHost && (
-						<>
-							{/* Mobile backdrop */}
-							{showFlashPanel && (
-								<div
-									className="fixed inset-0 bg-black/60 z-40 md:hidden"
-									onClick={() => setShowFlashPanel(false)}
-								/>
-							)}
-							{/* Flash sidebar panel */}
-							<div className={`fixed md:absolute right-0 top-0 bottom-0 w-full sm:w-[85%] md:w-96 bg-[#1a1a1a]/95 backdrop-blur-md border-l border-white/10 z-[60] shadow-2xl flex flex-col transition-all duration-300 ${showFlashPanel
-								? 'translate-x-0 opacity-100 pointer-events-auto'
-								: 'translate-x-full opacity-0 pointer-events-none'
-								}`}>
-								{/* Header */}
-								<div className="h-14 md:h-16 bg-gradient-to-b from-[#1a1a1a] to-[#1a1a1a]/95 border-b border-white/10 flex items-center justify-between px-4 md:px-6 flex-shrink-0">
-									<div className="flex items-center gap-2 md:gap-3">
-										<Zap className="h-4 w-4 md:h-5 md:w-5 text-yellow-400" />
-										<span className="text-white font-semibold text-base md:text-lg">Flash Messages</span>
-									</div>
-									<button
-										onClick={() => setShowFlashPanel(false)}
-										className="h-7 w-7 md:h-8 md:w-8 p-0 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 rounded-full transition-colors"
-									>
-										<X className="h-3.5 w-3.5 md:h-4 md:w-4" />
-									</button>
-								</div>
-								{/* Body */}
-								<div className="flex-1 overflow-y-auto p-3 md:p-4">
-									<QuestionManager
-										questions={flashQuestions ?? []}
-										onUploadList={onFlashUploadList ?? (() => { })}
-										onUpdateQuestion={onFlashUpdateQuestion ?? (() => { })}
-										onReorder={onFlashReorder ?? (() => { })}
-										onDeleteQuestion={onFlashDeleteQuestion ?? (() => { })}
-										onFlashQuestion={onFlashShowQuestion ?? (() => { })}
-										onFlashAdHoc={onFlashShowAdHoc ?? (() => { })}
-										onDismissForAll={onFlashDismissForAll ?? (() => { })}
-										isFlashActive={!!activeFlashMessage}
-									/>
-								</div>
-							</div>
-						</>
-					)}
 				</>
 			</div>
 
@@ -4316,16 +4281,6 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						}
 					}}
 					onDismiss={dismissPermissionRequest}
-				/>
-			)}
-
-			{/* Flash Message Overlay - shown to all participants when host broadcasts a flash */}
-			{activeFlashMessage && (
-				<FlashMessageOverlay
-					message={activeFlashMessage}
-					onDismiss={onDismissFlashMessage ?? (() => { })}
-					isHost={isHost}
-					onDismissForAll={onFlashDismissForAll}
 				/>
 			)}
 

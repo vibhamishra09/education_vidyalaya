@@ -27,6 +27,7 @@ import { DebateRoomsModule } from './debate-rooms/debate-rooms.module';
 import { DebateChatModule } from './debate-chat/debate-chat.module';
 import { SessionExtensionModule } from './session-extension/session-extension.module';
 import { SessionModerationModule } from './session-moderation/session-moderation.module';
+import { ScratchPadModule } from './scratch-pad/scratch-pad.module';
 import { LoggingInterceptor } from './logging.interceptor';
 import { SentryModule } from './common/sentry';
 import { LoggerModule } from './common/logger';
@@ -69,6 +70,7 @@ import { CacheModule } from './redis/cache.module';
     DebateChatModule,
     SessionExtensionModule,
     SessionModerationModule,
+    ScratchPadModule,
   ],
   controllers: [AppController],
   providers: [
