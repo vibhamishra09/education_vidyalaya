@@ -142,6 +142,40 @@ export function DebateLiveRoom({
   const router = useRouter();
   const [isMobileViewport, setIsMobileViewport] = useState(false);
 
+  const isNavigatingRef = useRef(false);
+  const debateStatusRef = useRef(debateState?.status);
+  useEffect(() => { debateStatusRef.current = debateState?.status; }, [debateState?.status]);
+
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isNavigatingRef.current || debateStatusRef.current === DebateStatus.ENDED) return;
+      e.preventDefault();
+      e.returnValue = '';
+      return '';
+    };
+
+    const handlePopState = (e: PopStateEvent) => {
+      if (isNavigatingRef.current || debateStatusRef.current === DebateStatus.ENDED) return;
+      if (window.confirm('Are you sure you want to leave the room? Your progress might be lost.')) {
+        isNavigatingRef.current = true;
+        router.replace('/debateroom');
+      } else {
+        window.history.pushState(null, '', window.location.href);
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('popstate', handlePopState);
+
+    // Push an extra state so the first back button press triggers popstate
+    window.history.pushState(null, '', window.location.href);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [router]);
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -153,6 +187,7 @@ export function DebateLiveRoom({
   }, []);
 
   const handleLeave = useCallback(async () => {
+    isNavigatingRef.current = true;
     router.push('/debateroom');
   }, [router]);
 
@@ -1004,7 +1039,7 @@ function DebateLiveContent({
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="h-12 sm:h-14 bg-[#1f1f1f] border-b border-white/10 flex items-center justify-between px-2 sm:px-4 flex-shrink-0">
+      <div className="h-12 sm:h-14 bg-[#1f1f1f] border-b border-white/10 flex items-center justify-between gap-4 sm:gap-6 px-2 sm:px-4 flex-shrink-0">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
           <div className="relative h-6 w-6 sm:h-8 sm:w-8 flex-shrink-0">
             <Image src="/webyalaya-main-logo.svg" alt="Webyalaya" fill className="object-contain" priority />

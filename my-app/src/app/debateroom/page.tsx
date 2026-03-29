@@ -294,21 +294,22 @@ export default function DebateRoomsPage() {
                       type="number"
                       min="1"
                       max="6"
-                      value={newMaxParticipants}
+                      value={newMaxParticipants || ''}
                       onChange={(e) => {
-                        const value = e.target.value;
-                        if (value === "") {
-                          setNewMaxParticipants(1);
-                        } else {
-                          const numValue = parseInt(value, 10);
-                          const clampedValue = Math.min(6, Math.max(1, numValue));
-                          setNewMaxParticipants(clampedValue);
+                        const val = e.target.value;
+                        if (val === '') {
+                          setNewMaxParticipants('' as any);
+                          return;
+                        }
+                        const num = parseInt(val, 10);
+                        if (num >= 1 && num <= 6) {
+                          setNewMaxParticipants(num);
                         }
                       }}
                       required
                     />
-                    <p className="text-sm text-muted-foreground">
-                      Between 1 and 6 participants per team
+                    <p className="text-xs text-muted-foreground">
+                      Only 1 to 6 participants per team allowed
                     </p>
                   </div>
                 </div>
