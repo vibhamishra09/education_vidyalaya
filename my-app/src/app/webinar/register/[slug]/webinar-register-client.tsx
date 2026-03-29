@@ -128,7 +128,8 @@ export function WebinarRegisterClient({
                   </p>
                 ) : (
                   <p className="text-sm text-muted-foreground">
-                    Join link and passcode sent—check your email.
+                    Waiting for host&apos;s approval. We&apos;ll email you when you can
+                    join.
                   </p>
                 )}
               </>

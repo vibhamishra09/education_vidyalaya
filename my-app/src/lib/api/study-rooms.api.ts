@@ -98,6 +98,18 @@ export const studyRoomsApi = {
     };
   },
 
+  /** Poll whether the host has approved this registration (same token as join link). */
+  getWebinarApprovalStatus: async (studyRoomId: string, joinToken: string) => {
+    const response = await apiClient.get(`/api/study-rooms/webinar/approval-status`, {
+      params: { room: studyRoomId, token: joinToken },
+      skipClerkAuth: true,
+    });
+    return response.data as {
+      waitingRoomEnabled: boolean;
+      canJoin: boolean;
+    };
+  },
+
   listWebinarRegistrations: async (studyRoomId: string) => {
     const response = await apiClient.get(
       `/api/study-rooms/webinar/${encodeURIComponent(studyRoomId)}/registrations`,

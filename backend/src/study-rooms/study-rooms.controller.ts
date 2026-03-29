@@ -138,6 +138,19 @@ export class StudyRoomsController {
     return this.studyRoomsService.joinWebinarWithPasscode(body);
   }
 
+  /** Poll for host approval (waiting room). Query: room=id, token=joinLinkToken from registration. */
+  @Get('webinar/approval-status')
+  @UseGuards(OptionalClerkAuthGuard)
+  async getWebinarApprovalStatus(
+    @Query('room') room: string,
+    @Query('token') token: string,
+  ) {
+    return this.studyRoomsService.getWebinarRegistrationApprovalStatus(
+      room,
+      token,
+    );
+  }
+
   @Get('webinar/:studyRoomId/registrations')
   @UseGuards(ClerkAuthGuard)
   async listWebinarRegistrations(

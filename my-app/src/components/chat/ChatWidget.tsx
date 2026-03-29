@@ -128,27 +128,40 @@ function isOptimisticMessageId(id: string): boolean {
 	return id.startsWith('optimistic-')
 }
 
-/** Same send as server echo — drop local placeholder when real message arrives. */
-function optimisticMatchesIncoming(
+/** EVERYONE is often undefined on optimistic vs enum on server — compare consistently. */
+function normalizeAudience(a?: Message['audienceType']): string {
+	return (a ?? 'EVERYONE') as string
+}
+
+/**
+ * Drop the optimistic row when the real `message:new` is the same send.
+ * Host/viewer labels in the UI differ (e.g. “(Host)”) but senderId on the server echo must match.
+ */
+function shouldRemoveOptimisticForEcho(
 	local: Message,
 	server: Message,
 	viewerDbUserId?: string | null,
+	viewerGuestEmail?: string | null,
 ): boolean {
 	if (!isOptimisticMessageId(local.id)) return false
 	if (local.content !== server.content) return false
-	if (local.audienceType !== server.audienceType) return false
+	if (normalizeAudience(local.audienceType) !== normalizeAudience(server.audienceType)) {
+		return false
+	}
 	if ((local.targetUserId ?? null) !== (server.targetUserId ?? null)) return false
 
-	if (local.guestEmail || server.guestEmail) {
-		const a = (local.guestEmail || '').trim().toLowerCase()
-		const b = (server.guestEmail || '').trim().toLowerCase()
-		return a.length > 0 && a === b
+	// Guest: match by email (viewer + server row)
+	const guestLocal = (local.guestEmail || viewerGuestEmail || '').trim().toLowerCase()
+	const guestServer = (server.guestEmail || '').trim().toLowerCase()
+	if (guestLocal.length > 0 && guestServer.length > 0 && guestLocal === guestServer) {
+		return true
 	}
-	if (local.senderId && server.senderId) {
-		return local.senderId === server.senderId
-	}
-	// Optimistic row before DB user id is ready — still the same outgoing message
+
+	// Signed-in: server echo is always from our DB user id (covers empty/wrong optimistic senderId)
 	if (viewerDbUserId && server.senderId && viewerDbUserId === server.senderId) {
+		return true
+	}
+	if (local.senderId && server.senderId && local.senderId === server.senderId) {
 		return true
 	}
 	return false
@@ -184,19 +197,23 @@ export function ChatWidget({
 	const isGuestMode = Boolean(guestToken && !userId)
 	const channelIdRef = useRef<string | null | undefined>(channelId)
 	channelIdRef.current = channelId
+	const [viewerGuestEmail, setViewerGuestEmail] = useState<string | null>(
+		() => guestEmail ?? null,
+	)
 	const viewerDbUserIdRef = useRef(currentUserDbId)
+	const viewerGuestEmailRef = useRef<string | null>(guestEmail ?? null)
 	useEffect(() => {
 		viewerDbUserIdRef.current = currentUserDbId
 	}, [currentUserDbId])
+	useEffect(() => {
+		viewerGuestEmailRef.current = viewerGuestEmail ?? guestEmail ?? null
+	}, [viewerGuestEmail, guestEmail])
 
 	const [messages, setMessages] = useState<Message[]>(() => {
 		if (!channelId) return []
 		const cached = channelMessageCache.get(channelId) || []
 		return cached.map(normalizeChatMessage)
 	})
-	const [viewerGuestEmail, setViewerGuestEmail] = useState<string | null>(
-		() => guestEmail ?? null,
-	)
 	const socketRef = useRef<Socket | null>(null)
 	const [error, setError] = useState<string | null>(null)
 	const [isConnecting, setIsConnecting] = useState(false)
@@ -398,19 +415,18 @@ export function ChatWidget({
 				s.on('message:new', (msg: unknown) => {
 					if (channelIdRef.current !== activeChannelId) return
 					const normalized = normalizeChatMessage(msg)
-					console.log('[Chat] Received new message:', normalized.id)
 					setMessages((prev) => {
 						if (channelIdRef.current !== activeChannelId) return prev
 						if (prev.some((m) => m.id === normalized.id)) {
-							console.warn('[Chat] Duplicate message detected, ignoring:', normalized.id)
 							return prev
 						}
 						const withoutMatchingOptimistic = prev.filter((m) => {
 							if (!isOptimisticMessageId(m.id)) return true
-							return !optimisticMatchesIncoming(
+							return !shouldRemoveOptimisticForEcho(
 								m,
 								normalized,
 								viewerDbUserIdRef.current,
+								viewerGuestEmailRef.current,
 							)
 						})
 						const next = mergeMessages(withoutMatchingOptimistic, [normalized])

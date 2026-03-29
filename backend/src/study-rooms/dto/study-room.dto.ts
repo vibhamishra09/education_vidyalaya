@@ -132,8 +132,8 @@ export class JoinWebinarWithPasscodeDto {
   @IsString()
   studyRoomId: string;
 
+  /** Required unless host has approved (waiting-room flow); then join token alone is enough. */
   @IsString()
-  @MinLength(4)
   passcode: string;
 
   /** Opaque token from the join link emailed to the registrant (`?token=…`). */

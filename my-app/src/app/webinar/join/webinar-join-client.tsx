@@ -13,7 +13,6 @@ import {
   extractHttpErrorMessage,
   extractNestErrorCode,
 } from "@/lib/utils/error-handling";
-import { toAbsoluteAppUrl } from "@/lib/utils/public-url";
 import { Loader2 } from "lucide-react";
 
 function parseRoomId(roomParam: string | null): string | null {
@@ -27,6 +26,16 @@ function parseRoomId(roomParam: string | null): string | null {
 const joinTokenStorageKey = (studyRoomId: string) =>
   `webinarJoinToken:${studyRoomId}`;
 
+function resolveJoinUrl(res: { joinUrl: string }): string {
+  const u = res.joinUrl;
+  if (u.startsWith("http://") || u.startsWith("https://")) return u;
+  return `${window.location.origin}${u.startsWith("/") ? "" : "/"}${u}`;
+}
+
+type JoinGate = "checking" | "auto_joining" | "waiting_host" | "passcode";
+
+const POLL_MS = 5000;
+
 export function WebinarJoinClient() {
   const searchParams = useSearchParams();
   const roomParam = searchParams.get("room");
@@ -38,6 +47,7 @@ export function WebinarJoinClient() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingApproval, setPendingApproval] = useState(false);
+  const [gate, setGate] = useState<JoinGate>("checking");
 
   useEffect(() => {
     if (!studyRoomId) return;
@@ -60,8 +70,84 @@ export function WebinarJoinClient() {
   }, [studyRoomId, tokenParam]);
 
   const waitingRoomHref = studyRoomId
-    ? toAbsoluteAppUrl(`/webinar/waiting?room=studyroom-${studyRoomId}`)
+    ? `/webinar/waiting?room=studyroom-${studyRoomId}`
     : null;
+
+  /** Host approved (waiting-room on): join with token only—no passcode step. */
+  useEffect(() => {
+    if (!studyRoomId || !joinToken) return;
+    let cancelled = false;
+
+    const run = async () => {
+      setGate("checking");
+      try {
+        const status = await studyRoomsApi.getWebinarApprovalStatus(
+          studyRoomId,
+          joinToken,
+        );
+        if (cancelled) return;
+        if (status.waitingRoomEnabled && status.canJoin) {
+          setGate("auto_joining");
+          setSubmitting(true);
+          setError(null);
+          const res = await studyRoomsApi.joinWebinarWithPasscode({
+            studyRoomId,
+            joinToken,
+            passcode: "",
+          });
+          if (cancelled) return;
+          window.location.href = resolveJoinUrl(res);
+          return;
+        }
+        if (status.waitingRoomEnabled && !status.canJoin) {
+          setGate("waiting_host");
+          return;
+        }
+        setGate("passcode");
+      } catch {
+        if (!cancelled) setGate("passcode");
+      }
+    };
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [studyRoomId, joinToken]);
+
+  /** Poll while waiting for host approval; then token-only join. */
+  useEffect(() => {
+    if (gate !== "waiting_host" || !studyRoomId || !joinToken) return;
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const status = await studyRoomsApi.getWebinarApprovalStatus(
+          studyRoomId,
+          joinToken,
+        );
+        if (cancelled) return;
+        if (status.waitingRoomEnabled && status.canJoin) {
+          setGate("auto_joining");
+          setSubmitting(true);
+          const res = await studyRoomsApi.joinWebinarWithPasscode({
+            studyRoomId,
+            joinToken,
+            passcode: "",
+          });
+          if (cancelled) return;
+          window.location.href = resolveJoinUrl(res);
+        }
+      } catch {
+        // keep waiting
+      }
+    };
+    void tick();
+    const id = setInterval(tick, POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [gate, studyRoomId, joinToken]);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,11 +161,7 @@ export function WebinarJoinClient() {
         joinToken,
         passcode: passcode.trim(),
       });
-      const target =
-        res.joinUrl.startsWith("http://") || res.joinUrl.startsWith("https://")
-          ? res.joinUrl
-          : `${window.location.origin}${res.joinUrl.startsWith("/") ? "" : "/"}${res.joinUrl}`;
-      window.location.href = target;
+      window.location.href = resolveJoinUrl(res);
     } catch (err: unknown) {
       const msg = extractHttpErrorMessage(
         err,
@@ -127,9 +209,8 @@ export function WebinarJoinClient() {
             </p>
             <h1 className="text-2xl font-bold mt-1">Personal join link required</h1>
             <p className="text-sm text-muted-foreground">
-              Open the full link from your confirmation email. It includes a
-              private token so you only need your passcode here—no need to type
-              your name or email again.
+              Open the full link from your confirmation email (it includes a private
+              token).
             </p>
           </div>
           <div className="rounded-2xl border bg-background p-6 shadow-sm space-y-4 text-sm text-muted-foreground">
@@ -139,9 +220,48 @@ export function WebinarJoinClient() {
             </p>
             {waitingRoomHref && (
               <Button variant="secondary" className="w-full" asChild>
-                <Link href={waitingRoomHref}>Waiting room info</Link>
+                <Link href={waitingRoomHref}>Waiting room</Link>
               </Button>
             )}
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  if (gate === "checking" || gate === "auto_joining") {
+    return (
+      <div className="min-h-screen flex flex-col bg-muted/20">
+        <Navigation />
+        <main className="flex-1 container max-w-md mx-auto px-4 py-10 md:py-16 flex flex-col items-center justify-center gap-4">
+          <Loader2 className="h-10 w-10 animate-spin text-muted-foreground" />
+          <p className="text-sm text-muted-foreground text-center">
+            {gate === "auto_joining" ? "Joining…" : "Loading…"}
+          </p>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  if (gate === "waiting_host") {
+    return (
+      <div className="min-h-screen flex flex-col bg-muted/20">
+        <Navigation />
+        <main className="flex-1 container max-w-md mx-auto px-4 py-10 md:py-16">
+          <div className="rounded-2xl border bg-card p-8 text-center space-y-4 shadow-sm">
+            <p className="text-xs uppercase tracking-wider text-muted-foreground">
+              Webinar
+            </p>
+            <h1 className="text-2xl font-semibold">Waiting for host&apos;s approval</h1>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Stay on this page. When the host admits you, you&apos;ll join
+              automatically—no passcode needed.
+            </p>
+            <div className="flex justify-center py-2">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
           </div>
         </main>
         <Footer />
@@ -185,11 +305,10 @@ export function WebinarJoinClient() {
               {pendingApproval && waitingRoomHref && (
                 <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-foreground">
                   <p className="font-medium text-amber-900 dark:text-amber-100">
-                    Waiting room
+                    Waiting for host
                   </p>
                   <p className="text-muted-foreground mt-1">
-                    You can open the waiting page for steps and a bookmarkable link
-                    while the host admits you.
+                    Open the waiting page until the host admits you.
                   </p>
                   <Button
                     type="button"
@@ -197,7 +316,7 @@ export function WebinarJoinClient() {
                     className="mt-2 w-full"
                     asChild
                   >
-                    <Link href={waitingRoomHref}>Open waiting room</Link>
+                    <Link href={waitingRoomHref}>Open waiting page</Link>
                   </Button>
                 </div>
               )}
