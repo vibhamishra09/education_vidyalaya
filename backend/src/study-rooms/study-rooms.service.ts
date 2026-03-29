@@ -160,6 +160,12 @@ export class StudyRoomsService {
     return `${base}${path}`;
   }
 
+  private buildWebinarWaitingUrl(studyRoomId: string, joinLinkToken: string): string {
+    const base = this.resolveAppPublicBaseUrl().replace(/\/$/, '');
+    const path = `/webinar/waiting?room=studyroom-${studyRoomId}&token=${encodeURIComponent(joinLinkToken)}`;
+    return `${base}${path}`;
+  }
+
   private mergeWebinarConfig(
     input?: Record<string, unknown>,
   ): Record<string, unknown> {
@@ -1484,7 +1490,8 @@ export class StudyRoomsService {
         joinUrlManual: joinUrlManualDup,
         roomId: room.id,
         title: room.title,
-        message: 'Join link and passcode sent—check your email.',
+        message:
+          'Check your email for the Join webinar link and your passcode.',
       };
     }
 
@@ -1551,6 +1558,7 @@ export class StudyRoomsService {
     }
 
     const joinUrlManual = this.buildWebinarJoinUrl(room.id, joinLinkToken);
+    const waitingUrlManual = this.buildWebinarWaitingUrl(room.id, joinLinkToken);
 
     const hostName = room.createdBy?.name?.trim() || 'Host';
     const tz = room.timezone?.trim() || 'UTC';
@@ -1571,6 +1579,7 @@ export class StudyRoomsService {
           timezone: tz,
           hostName,
           joinPageUrl: joinUrlManual,
+          waitingPageUrl: waitingUrlManual,
           passcode: joinPasscode,
         });
     } catch (emailErr) {
@@ -1624,7 +1633,7 @@ export class StudyRoomsService {
     );
     if (registrantUserId) {
       try {
-        const regMsg = `Join link and passcode sent—check your email. (${room.title})`;
+        const regMsg = `Webinar: check your email for the Join webinar link and passcode. (${room.title})`;
         await this.notificationsService.createAndPushNotification(
           registrantUserId,
           regMsg,
@@ -1659,7 +1668,7 @@ export class StudyRoomsService {
       roomId: room.id,
       title: room.title,
       message: emailResult.success
-        ? 'Join link and passcode sent—check your email.'
+        ? 'Check your email for the Join webinar link and your passcode.'
         : 'Registration saved. Confirmation email could not be sent—contact the host if needed.',
       ...(emailResult.debugEmailPreview
         ? { debugEmailPreview: emailResult.debugEmailPreview }
@@ -1784,7 +1793,6 @@ export class StudyRoomsService {
     const joinRuntime =
       (joinCfg.runtime as Record<string, unknown>) || {};
     const joinWaitingRoomEnabled = joinRuntime.waitingRoomEnabled !== false;
-    const passTrim = dto.passcode.trim();
     const tokenTrim = dto.joinToken.trim();
     const reg = await this.prisma.webinarRegistration.findUnique({
       where: { joinLinkToken: tokenTrim },
@@ -1809,14 +1817,8 @@ export class StudyRoomsService {
           'Registration could not be found for this webinar. Contact the host if this persists.',
       });
     }
-    if (!guest.approvedBy && joinWaitingRoomEnabled) {
-      throw new BadRequestException({
-        code: 'WEBINAR_PENDING_APPROVAL',
-        message:
-          'The host has not approved your registration yet. Try again after the host admits you.',
-      });
-    }
-    /** After host approval, the secret join token is enough—no second passcode entry. */
+    const passTrim = dto.passcode.trim();
+    /** After host approval with waiting room on, join from waiting page with token only (no passcode re-entry). */
     const approvedWaitingRoom =
       joinWaitingRoomEnabled && !!guest.approvedBy;
     if (!approvedWaitingRoom) {
@@ -1827,6 +1829,13 @@ export class StudyRoomsService {
             'Invalid passcode. Use the code from your confirmation email.',
         });
       }
+    }
+    if (!guest.approvedBy && joinWaitingRoomEnabled) {
+      throw new BadRequestException({
+        code: 'WEBINAR_PENDING_APPROVAL',
+        message:
+          'The host has not approved your registration yet. Try again after the host admits you.',
+      });
     }
     const guestAccessToken = await this.issueGuestAccessToken(
       room.id,
@@ -2104,7 +2113,7 @@ export class StudyRoomsService {
     const editScope = updateDto.editScope ?? StudyRoomEditScope.SINGLE;
     const timezone = updateDto.timezone ?? studyRoom.timezone ?? 'UTC';
 
-    const updateData: Prisma.StudyRoomUpdateManyMutationInput = {};
+    const updateData: Record<string, unknown> = {};
     if (updateDto.title !== undefined && updateDto.title.trim() !== "") {
       updateData.title = updateDto.title.trim();
     }
@@ -2169,7 +2178,7 @@ export class StudyRoomsService {
       updateData.hostDetailsUpdatedAt = new Date();
     }
 
-    const whereForScope: Prisma.StudyRoomWhereInput =
+    const whereForScope =
       editScope === StudyRoomEditScope.SINGLE || !studyRoom.seriesId
         ? { id: studyRoom.id }
         : editScope === StudyRoomEditScope.THIS_AND_FUTURE
@@ -2177,7 +2186,7 @@ export class StudyRoomsService {
           : { seriesId: studyRoom.seriesId };
 
     const targetRooms = await this.prisma.studyRoom.findMany({
-      where: whereForScope,
+      where: whereForScope as never,
       select: { id: true, date: true },
       orderBy: { date: 'asc' },
     });
@@ -2245,7 +2254,7 @@ export class StudyRoomsService {
             await tx.studyRoom.update({
               where: { id: target.id },
               data: {
-                ...updateData,
+                ...(updateData as object),
                 date: occurrence.utcDate,
                 occurrenceDateLocal: convertLocalToUTC(
                   occurrence.localDate,
@@ -2282,7 +2291,7 @@ export class StudyRoomsService {
             await tx.studyRoom.update({
               where: { id: target.id },
               data: {
-                ...updateData,
+                ...(updateData as object),
                 sessionStatus: SessionStatus.CANCELLED,
               },
             });
@@ -2363,8 +2372,8 @@ export class StudyRoomsService {
     }
 
     await this.prisma.studyRoom.updateMany({
-      where: whereForScope,
-      data: updateData,
+      where: whereForScope as never,
+      data: updateData as never,
     });
 
     if (updateDto.skills) {
@@ -2694,8 +2703,12 @@ export class StudyRoomsService {
     if (token.expiresAt < new Date()) {
       throw new ForbiddenException('Guest access token expired');
     }
+    const tokenStudyRoom = token.studyRoom as {
+      id: string;
+      sessionMode: StudyRoomSessionMode;
+    };
     if (
-      token.studyRoom.sessionMode === StudyRoomSessionMode.WEBINAR &&
+      tokenStudyRoom.sessionMode === StudyRoomSessionMode.WEBINAR &&
       !token.guestParticipant.approvedBy
     ) {
       throw new ForbiddenException(
@@ -2724,7 +2737,7 @@ export class StudyRoomsService {
       );
     }
 
-    const whereForScope: Prisma.StudyRoomWhereInput =
+    const whereForScope =
       editScope === StudyRoomEditScope.SINGLE || !studyRoom.seriesId
         ? { id: studyRoom.id }
         : editScope === StudyRoomEditScope.THIS_AND_FUTURE
@@ -2733,7 +2746,7 @@ export class StudyRoomsService {
 
     const result = await this.prisma.studyRoom.updateMany({
       where: {
-        ...whereForScope,
+        ...(whereForScope as object),
         sessionStatus: {
           in: [SessionStatus.UPCOMING, SessionStatus.ONGOING],
         },

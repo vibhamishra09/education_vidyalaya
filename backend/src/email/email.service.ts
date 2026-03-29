@@ -397,6 +397,7 @@ export class EmailService implements OnModuleInit {
     webinarTitle: string;
     passcode: string;
     joinPageUrl: string;
+    waitingPageUrl: string;
     innerHtml: string;
     fullHtml: string;
   }): void {
@@ -412,6 +413,7 @@ export class EmailService implements OnModuleInit {
       `Webinar: ${payload.webinarTitle}`,
       `Passcode: ${payload.passcode}`,
       `Join URL: ${payload.joinPageUrl}`,
+      `Waiting room URL: ${payload.waitingPageUrl}`,
       '---------- Inner HTML (body fragment) ----------',
       payload.innerHtml,
       '---------- Full HTML (as sent via SES) ----------',
@@ -423,7 +425,7 @@ export class EmailService implements OnModuleInit {
   }
 
   /**
-   * Webinar: registration confirmation (AWS SES). Details, passcode, single join CTA.
+   * Webinar: confirmation email — Join webinar (passcode), then waiting room if host uses it.
    */
   async sendWebinarRegistrationConfirmationEmail(params: {
     recipientEmail: string;
@@ -435,6 +437,7 @@ export class EmailService implements OnModuleInit {
     timezone: string;
     hostName: string;
     joinPageUrl: string;
+    waitingPageUrl: string;
     passcode: string;
   }): Promise<EmailDeliveryResult> {
     const {
@@ -447,6 +450,7 @@ export class EmailService implements OnModuleInit {
       timezone,
       hostName,
       joinPageUrl,
+      waitingPageUrl,
       passcode,
     } = params;
 
@@ -471,7 +475,9 @@ ${descBlock}
   <p style="margin:0 0 8px;font-size:13px;color:#047857;font-weight:600;">Your passcode</p>
   <p style="margin:0;font-size:22px;letter-spacing:0.2em;font-family:ui-monospace,Menlo,monospace;color:#064e3b;">${this.escapeHtml(passcode)}</p>
 </div>
+<p style="margin:16px 0 0;color:#334155;line-height:1.55;font-size:14px;">Open <strong>Join webinar</strong> below, enter this passcode, then—if the host turned on a waiting room—you&apos;ll wait there until admitted and tap <strong>Join webinar</strong> again. If there is no waiting room, you&apos;ll join right after your passcode.</p>
 <p style="margin:20px 0 0;"><a href="${this.escapeHtml(joinPageUrl)}" style="display:inline-block;padding:12px 22px;background:#16a34a;color:#ffffff !important;text-decoration:none;border-radius:8px;font-weight:600;">Join webinar</a></p>
+<p style="margin:16px 0 0;font-size:13px;color:#64748b;">Returned after entering your passcode? <a href="${this.escapeHtml(waitingPageUrl)}" style="color:#2563eb;">Open waiting room</a></p>
 `;
 
     const fullHtml = this.formatEmailHtml(recipientName, message);
@@ -483,6 +489,7 @@ ${descBlock}
       webinarTitle,
       passcode,
       joinPageUrl,
+      waitingPageUrl,
       innerHtml: message,
       fullHtml,
     });

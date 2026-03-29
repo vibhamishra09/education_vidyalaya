@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Navigation } from "@/components/layout/navigation";
@@ -31,16 +30,12 @@ function resolveJoinUrl(res: { joinUrl: string }): string {
 export function WebinarWaitingClient() {
   const searchParams = useSearchParams();
   const roomParam = searchParams.get("room");
+  const tokenParam = searchParams.get("token");
   const studyRoomId = useMemo(() => parseRoomId(roomParam), [roomParam]);
 
   const [joinToken, setJoinToken] = useState<string | null>(null);
   const [phase, setPhase] = useState<
-    | "loading"
-    | "no_token"
-    | "pending"
-    | "ready"
-    | "use_email_passcode"
-    | "error"
+    "loading" | "no_token" | "pending" | "ready" | "error"
   >("loading");
   const [joining, setJoining] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
@@ -48,6 +43,16 @@ export function WebinarWaitingClient() {
   useEffect(() => {
     if (!studyRoomId) {
       setPhase("no_token");
+      return;
+    }
+    const fromUrl = tokenParam?.trim();
+    if (fromUrl) {
+      setJoinToken(fromUrl);
+      try {
+        sessionStorage.setItem(joinTokenStorageKey(studyRoomId), fromUrl);
+      } catch {
+        // ignore
+      }
       return;
     }
     try {
@@ -60,7 +65,7 @@ export function WebinarWaitingClient() {
     } catch {
       setPhase("no_token");
     }
-  }, [studyRoomId]);
+  }, [studyRoomId, tokenParam]);
 
   useEffect(() => {
     if (!studyRoomId || !joinToken) return;
@@ -74,15 +79,12 @@ export function WebinarWaitingClient() {
           joinToken,
         );
         if (cancelled) return;
-        if (res.waitingRoomEnabled) {
-          if (res.canJoin) {
-            setPhase("ready");
-          } else {
-            setPhase("pending");
-          }
+        if (res.canJoin) {
+          setPhase("ready");
+        } else if (res.waitingRoomEnabled) {
+          setPhase("pending");
         } else {
-          // No waiting room: join still requires passcode on /webinar/join
-          setPhase("use_email_passcode");
+          setPhase("pending");
         }
       } catch {
         if (!cancelled) setPhase("error");
@@ -136,15 +138,15 @@ export function WebinarWaitingClient() {
           {!studyRoomId && (
             <p className="text-sm text-muted-foreground text-center">
               Missing room in the link. Open the waiting page from your
-              registration flow.
+              confirmation email.
             </p>
           )}
 
           {studyRoomId && phase === "no_token" && (
             <p className="text-sm text-muted-foreground text-center leading-relaxed">
-              We couldn&apos;t find your session on this device. Register again
-              from the webinar link, or open this page in the same browser you
-              used after signing up so we can check approval.
+              We couldn&apos;t find your session on this device. Open the link from
+              your confirmation email (same browser), or register again from the
+              webinar page.
             </p>
           )}
 
@@ -157,7 +159,9 @@ export function WebinarWaitingClient() {
 
           {studyRoomId && phase === "pending" && (
             <p className="text-sm text-muted-foreground text-center leading-relaxed">
-              Waiting for host&apos;s approval.
+              Waiting for the host to admit you. We&apos;ll enable{" "}
+              <span className="font-medium text-foreground">Join webinar</span>{" "}
+              when you&apos;re approved.
             </p>
           )}
 
@@ -180,22 +184,6 @@ export function WebinarWaitingClient() {
                 ) : (
                   "Join webinar"
                 )}
-              </Button>
-            </div>
-          )}
-
-          {studyRoomId && phase === "use_email_passcode" && joinToken && (
-            <div className="space-y-3 text-center">
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                Open the join link in your confirmation email and enter your
-                passcode there.
-              </p>
-              <Button asChild className="w-full" size="lg" variant="secondary">
-                <Link
-                  href={`/webinar/join?room=studyroom-${studyRoomId}&token=${encodeURIComponent(joinToken)}`}
-                >
-                  Open join page
-                </Link>
               </Button>
             </div>
           )}

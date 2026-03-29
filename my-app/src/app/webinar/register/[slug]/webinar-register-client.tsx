@@ -108,34 +108,23 @@ export function WebinarRegisterClient({
       <div className="min-h-screen flex flex-col">
         <Navigation />
         <main className="flex-1 container max-w-lg mx-auto px-4 py-16">
-          <div className="rounded-2xl border bg-card p-8 text-center space-y-4">
+          <div className="rounded-2xl border bg-card p-8 text-center space-y-5">
             <CheckCircle2 className="h-12 w-12 text-green-600 mx-auto" />
             <h1 className="text-2xl font-semibold">
               {done.alreadyRegistered
                 ? "Already registered"
                 : "You\u2019re registered"}
             </h1>
-            {done.alreadyRegistered ? (
+            {done.emailSent === false ? (
               <p className="text-sm text-muted-foreground">
-                Join link and passcode sent—check your email.
+                {done.message ||
+                  "Registration saved. Confirmation email could not be sent—contact the host if needed."}
               </p>
-            ) : done.approvalPending ? (
-              <>
-                {done.emailSent === false ? (
-                  <p className="text-sm text-muted-foreground">
-                    {done.message ||
-                      "Registration saved. Confirmation email could not be sent—contact the host if needed."}
-                  </p>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    Waiting for host&apos;s approval. We&apos;ll email you when you can
-                    join.
-                  </p>
-                )}
-              </>
             ) : (
-              <p className="text-muted-foreground text-sm">
-                Join link and passcode sent—check your email.
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Check your email for the{" "}
+                <strong className="text-foreground font-medium">Join webinar</strong> link and your{" "}
+                <strong className="text-foreground font-medium">passcode</strong>.
               </p>
             )}
           </div>
