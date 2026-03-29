@@ -238,6 +238,37 @@ export class PermissionsService {
   }
 
   /**
+   * Remove specific fields from a user's permission hash so they fall back to room defaults.
+   */
+  async removeUserPermissionFields(
+    sessionId: string,
+    userId: string,
+    fields: Array<'canAudio' | 'canVideo' | 'canChat' | 'canChatEveryone' | 'canChatHost' | 'canChatUser'>,
+  ): Promise<void> {
+    if (fields.length === 0) return;
+    try {
+      const key = this.getUserPermissionsKey(sessionId, userId);
+      for (const field of fields) {
+        await redisClient.hDel(key, field);
+      }
+      const remaining = await redisClient.hKeys(key);
+      if (remaining.length === 0) {
+        await redisClient.del(key);
+      }
+      this.logger.debug(
+        `Removed permission fields for ${sessionId}/${userId}:`,
+        fields,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Error removing permission fields for ${sessionId}/${userId}:`,
+        error,
+      );
+      throw error;
+    }
+  }
+
+  /**
    * Clear user-specific permissions (reset to global defaults)
    */
   async clearUserPermissions(sessionId: string, userId: string): Promise<void> {

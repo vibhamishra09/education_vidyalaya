@@ -1,10 +1,11 @@
 'use client'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@clerk/nextjs'
 import axios from 'axios'
 import { EnhancedVideoRoom } from '@/components/livekit/EnhancedVideoRoom'
 import apiClient from '@/lib/api-client'
+import { normalizeLiveKitServerUrl } from '@/lib/livekit-url'
 import { Loader2, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -72,6 +73,10 @@ export default function RoomPage() {
 	const [chatRecipients, setChatRecipients] = useState<ChatIdentity[]>([])
 	const [hostUser, setHostUser] = useState<ChatIdentity | null>(null)
 	const [currentUserDbId, setCurrentUserDbId] = useState<string | null>(null)
+	/** Prefer URL returned with the JWT so guests and hosts always hit the same LiveKit project as the API. */
+	const [livekitServerUrl, setLivekitServerUrl] = useState<string | null>(null)
+	/** Guest-token response includes LiveKit identity; moderation socket must use the same id as Clerk user id for hosts. */
+	const [guestLivekitIdentity, setGuestLivekitIdentity] = useState<string | null>(null)
 	const guestAccessToken = searchParams.get('guestAccessToken')
 	const isMountedRef = useRef(true)
 	const participantKeyRef = useRef<string>('')
@@ -202,8 +207,19 @@ export default function RoomPage() {
 				const results = await Promise.all(promises)
 
 				if (!mounted) return
-				if (results[0]?.data?.token) {
-					setToken(results[0].data.token as string)
+				const livekitPayload = results[0]?.data as
+					| { token?: string; livekitUrl?: string; identity?: string }
+					| undefined
+				if (livekitPayload?.token) {
+					setToken(livekitPayload.token)
+				}
+				if (livekitPayload?.livekitUrl) {
+					setLivekitServerUrl(
+						normalizeLiveKitServerUrl(livekitPayload.livekitUrl),
+					)
+				}
+				if (typeof livekitPayload?.identity === 'string' && livekitPayload.identity) {
+					setGuestLivekitIdentity(livekitPayload.identity)
 				}
 				if (results[1]?.data?.channelId) {
 					setChannelId(results[1].data.channelId as string)
@@ -217,14 +233,6 @@ export default function RoomPage() {
 				if (results[2]?.data) {
 					// Add session type to sessionData
 					const data = results[2].data as { id: string; date: string; duration: number; sessionStatus?: string; [key: string]: unknown };
-					
-					console.log('📊 [RoomPage] Session data loaded:', {
-						id: data.id,
-						date: data.date,
-						duration: data.duration,
-						sessionStatus: data.sessionStatus,
-						type: isStudyRoom ? 'studyRoom' : 'peerSession',
-					})
 					
 					// Check if session is already completed or not completed (expired)
 					if (data.sessionStatus === 'DONE' || data.sessionStatus === 'CANCELLED' || data.sessionStatus === 'NOT_COMPLETED') {
@@ -240,6 +248,8 @@ export default function RoomPage() {
 					setSessionData({
 						...data,
 						sessionType: isStudyRoom ? 'studyRoom' : 'peerSession',
+						sessionMode: (data as { sessionMode?: string }).sessionMode,
+						webinarConfig: (data as { webinarConfig?: unknown }).webinarConfig,
 					})
 
 					const chatTargets = extractChatTargets(
@@ -295,6 +305,32 @@ export default function RoomPage() {
 			mounted = false
 		}
 	}, [roomName, getToken, guestAccessToken, clerkLoaded])
+
+	const serverUrl = useMemo(
+		() =>
+			normalizeLiveKitServerUrl(
+				livekitServerUrl ||
+					(typeof process.env.NEXT_PUBLIC_LIVEKIT_WS_URL === 'string'
+						? process.env.NEXT_PUBLIC_LIVEKIT_WS_URL
+						: ''),
+			),
+		[livekitServerUrl],
+	)
+
+	useEffect(() => {
+		if (process.env.NODE_ENV !== 'development') return
+		const fromEnv = normalizeLiveKitServerUrl(
+			typeof process.env.NEXT_PUBLIC_LIVEKIT_WS_URL === 'string'
+				? process.env.NEXT_PUBLIC_LIVEKIT_WS_URL
+				: '',
+		)
+		if (livekitServerUrl && fromEnv && livekitServerUrl !== fromEnv) {
+			console.warn(
+				'[LiveKit] API livekitUrl and NEXT_PUBLIC_LIVEKIT_WS_URL differ. The page uses the API value first. Point both at the same wss:// cluster as LIVEKIT_API_KEY.',
+				{ fromApi: livekitServerUrl, nextPublic: fromEnv },
+			)
+		}
+	}, [livekitServerUrl])
 
 	if (loading) {
 		return (
@@ -375,7 +411,27 @@ export default function RoomPage() {
 		)
 	}
 
-	const serverUrl = process.env.NEXT_PUBLIC_LIVEKIT_WS_URL as string
+	if (!serverUrl.trim()) {
+		return (
+			<div className="h-screen w-screen flex items-center justify-center bg-black px-6">
+				<div className="text-center text-red-400 max-w-md">
+					<p className="text-xl font-semibold mb-2 text-white">Video unavailable</p>
+					<p className="text-sm text-gray-400">
+						LiveKit URL is not configured. Set LIVEKIT_URL on the API server (it is returned with the join token), or set NEXT_PUBLIC_LIVEKIT_WS_URL for the web app.
+					</p>
+				</div>
+			</div>
+		)
+	}
+
+	const sessionMode = sessionData && 'sessionMode' in sessionData
+		? (sessionData as { sessionMode?: string }).sessionMode
+		: undefined
+	const webinarAttendeeMinimalUi =
+		!!guestAccessToken &&
+		sessionMode === 'WEBINAR' &&
+		!isHost
+
 	return (
 		<EnhancedVideoRoom
 			token={token}
@@ -387,7 +443,9 @@ export default function RoomPage() {
 			hostUser={hostUser}
 			currentUserDbId={currentUserDbId}
 			externalAccessToken={guestAccessToken}
+			guestLivekitIdentity={guestLivekitIdentity}
 			onParticipantListChange={handleParticipantListChange}
+			webinarAttendeeMinimalUi={webinarAttendeeMinimalUi}
 		/>
 	)
 }
