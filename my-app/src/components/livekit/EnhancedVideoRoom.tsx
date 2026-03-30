@@ -37,6 +37,7 @@ import { useRemoteControl } from '@/hooks/use-remote-control'
 import { RemoteControlOverlay } from '@/components/livekit/RemoteControlOverlay'
 // import { ScratchPad } from '@/components/scratch-pad/ScratchPad'
 // Stable virtual backgrounds constant to avoid re-creating array each render
+
 const VIRTUAL_BACKGROUNDS = [
 	{
 		id: 0,
