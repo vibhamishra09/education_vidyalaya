@@ -84,6 +84,8 @@ const VIRTUAL_BACKGROUNDS = [
 ]
 interface SessionData {
 	id: string;
+	title?: string;
+	roomTitle?: string;
 	date: string;
 	duration: number;
 	sessionType: 'studyRoom' | 'peerSession';
@@ -167,7 +169,7 @@ export function EnhancedVideoRoom({
 			gainNode.connect(context.destination)
 			oscillator.start()
 			oscillator.stop(context.currentTime + 0.14)
-		} catch {
+		} catch (err) {
 			// Best-effort alert sound; ignore if browser blocks autoplay/audio context.
 		}
 	}, [])
@@ -289,7 +291,7 @@ export function EnhancedVideoRoom({
 				if (!activeExternalJoinRequest && pendingRequests.length > 0) {
 					setActiveExternalJoinRequest(pendingRequests[0])
 				}
-			} catch {
+			} catch (err) {
 				// Ignore polling errors and retry on next interval.
 			}
 		}
@@ -350,7 +352,7 @@ export function EnhancedVideoRoom({
 					approve ? 'Guest approved' : 'Guest rejected',
 					`${resolvedRequest.name} has been ${approve ? 'allowed to join' : 'rejected'}.`,
 				)
-			} catch {
+			} catch (err) {
 				showError('Action failed', 'Could not update join request. Please try again.')
 			} finally {
 				setResolvingExternalJoinRequest(false)
@@ -539,7 +541,7 @@ export function EnhancedVideoRoom({
 				await queryClient.invalidateQueries({ queryKey: streakKeys.current() })
 				await queryClient.invalidateQueries({ queryKey: dashboardKeys.all })
 				await queryClient.invalidateQueries({ queryKey: achievementKeys.all })
-			} catch (error) {
+			} catch (err) {
 				// Error completing session
 			}
 		}
@@ -595,7 +597,7 @@ export function EnhancedVideoRoom({
 				await queryClient.invalidateQueries({ queryKey: streakKeys.current() })
 				await queryClient.invalidateQueries({ queryKey: dashboardKeys.all })
 				await queryClient.invalidateQueries({ queryKey: achievementKeys.all })
-			} catch (error) {
+			} catch (err) {
 				// Error completing session
 			}
 		}
@@ -1082,7 +1084,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 }) {
 	const params = useParams<{ room: string }>()
 	const room = useRoomContext()
-	const { showWarning, showSuccess, showInfo, showError } = useToast()
+	const { showWarning, showSuccess, showError } = useToast()
 
 	const {
 		isControlling,
@@ -1138,13 +1140,13 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	useEffect(() => {
 		if (!room || isHost) return
 
-		const handleData = (payload: Uint8Array, _participant?: any, _kind?: any, topic?: string) => {
+		const handleData = (payload: Uint8Array, _participant?: unknown, _kind?: unknown, topic?: string) => {
 			if (topic === 'scratch-pad-lock-update') {
 				try {
 					const { enabled } = JSON.parse(new TextDecoder().decode(payload))
 					setAllowScratchPadEdit(enabled)
-				} catch (err) {
-					console.error("Failed to parse scratchpad lock update:", err)
+				} catch {
+					console.error("Failed to parse scratchpad lock update")
 				}
 			}
 		}
@@ -1255,7 +1257,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		try {
 			const metadata = JSON.parse(participant.metadata)
 			return metadata.avatar || null
-		} catch {
+		} catch (err) {
 			return null
 		}
 	}, [])
@@ -1320,7 +1322,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						)
 					}
 				}
-			} catch (err) {
+			} catch {
 				// Error applying video action
 			}
 		}
@@ -1710,7 +1712,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 					micTrack.stopProcessor().catch(() => { })
 					krispFilterRef.current = null
 				}
-			} catch {
+			} catch (err) {
 				// Ignore unsupported/runtime errors and continue without Krisp.
 			}
 		}
@@ -1760,7 +1762,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			gainNode.connect(context.destination)
 			oscillator.start(startAt)
 			oscillator.stop(startAt + 0.2)
-		} catch {
+		} catch (err) {
 			// Best-effort join tone; ignore browsers that block audio context.
 		}
 	}, [])
@@ -2052,8 +2054,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				setIsPiPActive(true)
 				pipVideoRef.current = videoElement
 			}
-		} catch (error) {
-			console.error('PiP error:', error)
+		} catch (err) {
+			console.error('PiP error:', err)
 		}
 	}, [isMobileViewport])
 
@@ -2089,7 +2091,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						await videoElement.requestPictureInPicture();
 						setIsPiPActive(true);
 						pipVideoRef.current = videoElement;
-					} catch (error) {
+					} catch (err) {
 						console.warn('[PiP] Auto-PiP failed:', error);
 					}
 				}
@@ -2099,7 +2101,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 					await document.exitPictureInPicture();
 					// Explicitly cleanup state here too
 					setIsPiPActive(false);
-				} catch (error) {
+				} catch (err) {
 					// Ignore
 				}
 			}
@@ -3626,7 +3628,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 													return
 												}
 												await localParticipant.setMicrophoneEnabled(newState)
-											} catch { }
+											} catch (err) { }
 										}}
 										className={`h-11 w-11 md:h-10 md:w-10 flex items-center justify-center rounded-lg hover:bg-sky-500/20 active:scale-95 transition-all ${(isMicrophoneEnabled) ? 'text-white hover:text-sky-400' : 'bg-sky-500/10 text-sky-500 hover:text-sky-400'}`}
 										title="Toggle Microphone"
@@ -3915,7 +3917,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 								room={room}
 								isHost={isHost}
 								canEdit={allowScratchPadEdit}
-								roomTitle={(sessionData as any)?.title}
+								roomTitle={sessionData?.title}
                                 enabled={showScratchPad}
 							/>
 						</div>
@@ -4547,7 +4549,7 @@ function ParticipantList({
 					if (!participant.metadata) return null
 					try {
 						return JSON.parse(participant.metadata).avatar
-					} catch { return null }
+					} catch (err) { return null }
 				}
 				const avatarUrl = getAvatar()
 

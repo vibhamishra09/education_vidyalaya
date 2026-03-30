@@ -1,9 +1,9 @@
-import { Tldraw, Editor, TldrawProps } from 'tldraw'
+import { Tldraw } from 'tldraw'
 import 'tldraw/tldraw.css'
 import { Room } from 'livekit-client'
-import { useScratchPad, ScratchPadMode } from '@/hooks/use-scratch-pad'
+import { useScratchPad } from '@/hooks/use-scratch-pad'
 import { memo } from 'react'
-import { LayoutGrid, User, Share2 } from 'lucide-react'
+import { User } from 'lucide-react'
 
 interface ScratchPadProps {
 	roomId: string
@@ -15,7 +15,7 @@ interface ScratchPadProps {
 }
 
 export const ScratchPad = memo(function ScratchPad({ roomId, room, isHost, canEdit = true, roomTitle, enabled = true }: ScratchPadProps) {
-	const { store, mode, setMode, loading, error, onEditorMount } = useScratchPad({
+	const { store, loading, error, onEditorMount } = useScratchPad({
 		roomId,
 		room,
 		isHost,
@@ -52,7 +52,6 @@ export const ScratchPad = memo(function ScratchPad({ roomId, room, isHost, canEd
             
             <div className="flex-1 relative">
                 <Tldraw 
-                    key={mode} // Forced re-mount when switching modes to update UI/store cleanly
                     store={store}
                     autoFocus 
                     onMount={onEditorMount}

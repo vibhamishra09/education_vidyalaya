@@ -82,7 +82,7 @@ export function useScratchPad({ roomId, room, isHost, canEdit = true, roomTitle,
 					})
 					skipRemoteUpdateRef.current = false
 				}
-			} catch (err) {
+			} catch {
 				// Silent fail
 			}
 		}
