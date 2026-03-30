@@ -2092,7 +2092,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						setIsPiPActive(true);
 						pipVideoRef.current = videoElement;
 					} catch (err) {
-						console.warn('[PiP] Auto-PiP failed:', error);
+						console.warn('[PiP] Auto-PiP failed:', err);
 					}
 				}
 			} else if (isVisible && document.pictureInPictureElement) {
