@@ -35,7 +35,7 @@ import { QuestionManager } from '@/components/study-room/QuestionManager'
 import { ChatRecipient } from '@/components/chat/MessageInput'
 import { useRemoteControl } from '@/hooks/use-remote-control'
 import { RemoteControlOverlay } from '@/components/livekit/RemoteControlOverlay'
-import { ScratchPad } from '@/components/scratch-pad/ScratchPad'
+// import { ScratchPad } from '@/components/scratch-pad/ScratchPad'
 // Stable virtual backgrounds constant to avoid re-creating array each render
 const VIRTUAL_BACKGROUNDS = [
 	{
@@ -2011,7 +2011,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	// Function to start a "Canvas Bridge" stream (removes the "LIVE" badge and scrubber)
 	const startCanvasBridge = useCallback((sourceVideo: HTMLVideoElement) => {
 		if (!bridgeCanvasRef.current || !bridgeVideoRef.current) return null;
-		
+
 		const canvas = bridgeCanvasRef.current;
 		const ctx = canvas.getContext('2d', { alpha: false });
 		if (!ctx) return null;
@@ -2033,13 +2033,13 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		// Capture stream from canvas and play it in bridge video
 		const stream = canvas.captureStream(30); // 30 fps
 		bridgeVideoRef.current.srcObject = stream;
-		
+
 		// Set a dummy title and disable controls to trick the browser's PiP UI
 		bridgeVideoRef.current.title = ' ';
 		bridgeVideoRef.current.controls = false;
-		
-		bridgeVideoRef.current.play().catch(() => {});
-		
+
+		bridgeVideoRef.current.play().catch(() => { });
+
 		return bridgeVideoRef.current;
 	}, []);
 
@@ -2084,7 +2084,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 					pipWindowRef.current = pipWindow
 					setIsPiPActive(true)
 					pipVideoRef.current = videoElement
-					
+
 					// Set window title
 					pipWindow.document.title = 'Webyalaya PiP'
 
@@ -2179,7 +2179,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 					const videoParent = videoElement.parentElement
 					const videoNextSibling = videoElement.nextSibling
 					pipWindow.document.body.append(videoElement)
-					
+
 					// Add a premium "Return" button
 					const controls = pipWindow.document.createElement('div')
 					controls.className = 'controls'
@@ -2202,7 +2202,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						}
 						// Small timeout to ensure it's removed from PiP doc before playing
 						setTimeout(() => {
-							videoElement.play().catch(() => {});
+							videoElement.play().catch(() => { });
 						}, 50);
 						if (isMirrored) { videoElement.style.transform = '' }
 						pipVideoRef.current = null
@@ -3459,8 +3459,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 												<div className="absolute top-4 right-4 flex items-center gap-2 z-20">
 													<div
 														className={`w-8 h-8 rounded-full flex items-center justify-center ${focusedParticipantForDisplay.isMicrophoneEnabled
-																? 'bg-black/60 border border-white/20'
-																: 'bg-sky-500'
+															? 'bg-black/60 border border-white/20'
+															: 'bg-sky-500'
 															}`}
 														title={focusedParticipantForDisplay.isMicrophoneEnabled ? 'Unmuted' : 'Muted'}
 													>
@@ -3485,8 +3485,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 															size="sm"
 															onClick={togglePinFocused}
 															className={`h-9 px-4 rounded-lg border ${pinnedParticipantId === focusedParticipantForDisplay.identity
-																	? 'bg-[#3b82f6] text-white hover:bg-[#2563eb] border-[#3b82f6]'
-																	: 'bg-black/60 text-white hover:bg-black/80 border-white/10 backdrop-blur-sm'
+																? 'bg-[#3b82f6] text-white hover:bg-[#2563eb] border-[#3b82f6]'
+																: 'bg-black/60 text-white hover:bg-black/80 border-white/10 backdrop-blur-sm'
 																}`}
 															title={pinnedParticipantId === focusedParticipantForDisplay.identity ? 'Unpin' : 'Pin this video'}
 														>
