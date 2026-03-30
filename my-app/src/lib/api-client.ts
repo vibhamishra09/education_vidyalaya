@@ -109,7 +109,7 @@ apiClient.interceptors.request.use(
       // Token already set, use it
       return config;
     }
-    
+      
     // Check if token is set in defaults (set via setAuthToken)
     if (apiClient.defaults.headers && apiClient.defaults.headers.common && apiClient.defaults.headers.common.Authorization) {
       const defaultToken = apiClient.defaults.headers.common.Authorization as string;

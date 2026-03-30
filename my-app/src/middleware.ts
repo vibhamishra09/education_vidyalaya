@@ -2,8 +2,11 @@ import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 
 const isOnboardingRoute = createRouteMatcher(['/onboarding']);
-/** Webinar registration is public: show the form first; auth uses Clerk modal on the page (no full-page sign-in hop). */
-const isWebinarRegisterRoute = createRouteMatcher(['/webinar/register(.*)']);
+const isWebinarAttendeeRoute = createRouteMatcher([
+  '/webinar/register(.*)',
+  '/webinar/join(.*)',
+  '/webinar/waiting(.*)',
+]);
 const isPublicRoute = createRouteMatcher([
   '/',
   '/sign-in(.*)',
@@ -50,7 +53,7 @@ export default clerkMiddleware(async (auth, req: NextRequest) => {
   }
 
   // If the user isn't signed in and the route is private, redirect to sign-in
-  if (!isAuthenticated && !isPublicRoute(req) && !isWebinarRegisterRoute(req)) {
+  if (!isAuthenticated && !isPublicRoute(req) && !isWebinarAttendeeRoute(req)) {
     return redirectToSignIn({ returnBackUrl: req.url });
   }
 
@@ -61,8 +64,7 @@ export default clerkMiddleware(async (auth, req: NextRequest) => {
     if (isNextServerActionRequest(req)) {
       return NextResponse.next();
     }
-    // Let users finish webinar registration (and modal sign-up) before onboarding.
-    if (isWebinarRegisterRoute(req)) {
+    if (isWebinarAttendeeRoute(req)) {
       return NextResponse.next();
     }
     const onboardingUrl = new URL('/onboarding', req.url);
