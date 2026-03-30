@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Search, X, Sparkles, ArrowLeft, Swords } from "lucide-react";
-import { useBrowse, useBrowseRecommendations } from "@/hooks/use-browse";
+import { useBrowse, useBrowseRecommendations, usePeerMatches } from "@/hooks/use-browse";
 import { useSkills } from "@/hooks/use-skills";
 import { useCurrentUser } from "@/hooks/use-users";
 import {
@@ -221,9 +221,17 @@ function BrowsePageContent() {
     { enabled: userWantSkills.length > 0 && !searchQuery && selectedSkills.length === 0 }
   );
   
-  const recommendedPeers = recommendationsData?.peers || [];
+  // New: Fetch ranked peer matches (weighted scoring)
+  const { data: peerMatchesData, isLoading: peerMatchesLoading } = usePeerMatches(
+    1, 4,
+    { enabled: activeTab === "peers" && userWantSkills.length > 0 && !searchQuery && selectedSkills.length === 0 }
+  );
+  
+  const recommendedPeers = peerMatchesData?.matches || recommendationsData?.peers || [];
   const recommendedRooms = recommendationsData?.studyRooms || [];
-  const hasRecommendations = recommendedPeers.length > 0 || recommendedRooms.length > 0;
+  
+  const isRecLoading = activeTab === "peers" ? peerMatchesLoading : recommendationsLoading;
+  const hasRecommendations = (activeTab === "peers" ? recommendedPeers.length > 0 : recommendedRooms.length > 0);
   const showRecommendations = hasRecommendations && !searchQuery && selectedSkills.length === 0;
 
   const handleRoomAction = (room: { slug?: string; id: string }) => {
@@ -272,7 +280,7 @@ function BrowsePageContent() {
                 : "Study rooms matching your learning interests"}
             </p>
             
-            {recommendationsLoading ? (
+            {isRecLoading ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {Array.from({ length: 4 }).map((_, index) => (
                   <div key={index} className="h-full">

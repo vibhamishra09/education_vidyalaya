@@ -3,7 +3,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Star, Users, BrainCircuit, ExternalLink } from 'lucide-react';
+import { Star, Users, BrainCircuit, ExternalLink, Sparkles } from 'lucide-react';
 import type { BrowsePeer } from '@/types/api.types';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
@@ -60,6 +60,13 @@ export function PeerCardComponent({ peer }: PeerCardProps) {
                     <span>{totalSessions} sessions</span>
                 </div>
             ) : null}
+
+            {peer.matchScore !== undefined && (
+                <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-bold text-emerald-700 dark:text-emerald-400">
+                    <Sparkles className="h-3 w-3 fill-emerald-500" />
+                    <span>{Math.round(peer.matchScore * 100)}% Match</span>
+                </div>
+            )}
           </div>
 
           {/* Main Profile Info */}
@@ -92,17 +99,42 @@ export function PeerCardComponent({ peer }: PeerCardProps) {
 
           {/* Bottom: Skills & Action */}
           <div className="mt-auto space-y-2">
-             {/* Skills */}
-             <div className="flex items-center gap-1.5 overflow-hidden flex-wrap h-[24px]">
-                {skills.slice(0, 3).map((skill, i) => (
-                    <Badge 
+              {/* Skills */}
+              <div className="flex items-center gap-1.5 overflow-hidden flex-wrap h-[24px]">
+                {skills.map((skill, i) => {
+                  const isMatched = peer.matchedSkills?.some((s: string) => s.toLowerCase() === skill.toLowerCase());
+                  if (i >= 3 && !isMatched) return null; // Show only first 3 plus matched ones? No, let's keep it simple.
+                  // Actually, let's prioritize matched skills in the display.
+                  return null;
+                }).filter(x => x)}
+                {/* Refined logic: Show up to 3 skills, prioritizing matched ones */}
+                {(() => {
+                  const sortedSkills = [...skills].sort((a, b) => {
+                    const aMatched = peer.matchedSkills?.some((s: string) => s.toLowerCase() === a.toLowerCase());
+                    const bMatched = peer.matchedSkills?.some((s: string) => s.toLowerCase() === b.toLowerCase());
+                    if (aMatched && !bMatched) return -1;
+                    if (!aMatched && bMatched) return 1;
+                    return 0;
+                  });
+                  
+                  return sortedSkills.slice(0, 3).map((skill, i) => {
+                    const isMatched = peer.matchedSkills?.some((s: string) => s.toLowerCase() === skill.toLowerCase());
+                    return (
+                      <Badge 
                         key={i} 
                         variant="secondary" 
-                        className={cn("text-[10px] font-medium px-1.5 h-5 border-0", theme.badge)}
-                    >
+                        className={cn(
+                          "text-[10px] font-medium px-1.5 h-5 border-0 transition-all",
+                          isMatched 
+                            ? "bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-600/20" 
+                            : theme.badge
+                        )}
+                      >
                         {skill}
-                    </Badge>
-                ))}
+                      </Badge>
+                    );
+                  });
+                })()}
                 {skills.length > 3 && (
                     <span className="text-[10px] text-muted-foreground font-medium pl-0.5">
                         +{skills.length - 3}

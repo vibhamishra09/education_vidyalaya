@@ -1,6 +1,6 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { BrowseService } from './browse.service';
-import { BrowseQueryDto } from './dto/browse-query.dto';
+import { BrowseQueryDto, PeerMatchesQueryDto } from './dto/browse-query.dto';
 import { ClerkAuthGuard } from '../common/guards/clerk-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 
@@ -41,6 +41,24 @@ export class BrowseController {
     return this.browseService.getRecommendations(
       dbUserId ?? clerkUserId,
       limit ? parseInt(limit, 10) : 8,
+    );
+  }
+
+  /**
+   * Get ranked peer matches for the authenticated user
+   * based on Skills (60%), Availability (30%), and Ratings (10%)
+   */
+  @Get('peer-matches')
+  @UseGuards(ClerkAuthGuard)
+  async getPeerMatches(
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
+    @Query() query: PeerMatchesQueryDto,
+  ) {
+    return this.browseService.getRecommendedPeerMatches(
+      dbUserId ?? clerkUserId,
+      query.page || 1,
+      query.limit || 10,
     );
   }
 }

@@ -9,11 +9,13 @@ const isPublicRoute = createRouteMatcher([
   '/browse',
   '/how-it-works',
   '/about',
+  '/manifest.json',
   '/studyroom(.*)',
   '/rooms/studyroom(.*)',
   '/terms-of-use',
   '/privacy-policy',
   '/careers',
+  '/(.*).webmanifest'
 ]);
 const isApiRoute = createRouteMatcher(['/api(.*)']);
 
