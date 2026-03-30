@@ -367,11 +367,16 @@ export class BrowseService {
           }
 
           // Get counts for both tabs (always calculated for search results display)
-          const [peerCount, studyRoomCount] = await Promise.all([
+          const [peerCount] = await Promise.all([
             this.prisma.user.count({ where: peerWhere }),
-            this.prisma.studyRoom.count({ where: studyRoomWhere }),
           ]);
+          const distinctRooms = await this.prisma.studyRoom.findMany({
+            where: studyRoomWhere,
+            distinct: ['slug'],
+            select: { slug: true },
+          });
 
+          const studyRoomCount = distinctRooms.length;
           if (tab === 'peers') {
             const users = await this.prisma.user.findMany({
               where: peerWhere,

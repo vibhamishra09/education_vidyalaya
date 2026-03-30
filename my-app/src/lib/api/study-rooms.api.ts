@@ -31,6 +31,13 @@ export const studyRoomsApi = {
     return response.data;
   },
 
+  async createRecurringRoom(data: CreateStudyRoomDto) {
+    console.log("HERE!");
+    
+    const res = await apiClient.post('/api/study-rooms/recurring', data);
+    return res.data;
+  },
+  
   // Update study room
   updateStudyRoom: async (
     studyRoomId: string,
