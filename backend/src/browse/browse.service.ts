@@ -262,7 +262,7 @@ export class BrowseService {
   }
 
   async getBrowseData(
-    tab: 'peers' | 'studyRooms',
+    tab: 'peers' | 'studyRooms' | "webinars",
     search?: string,
     skills?: string[],
     page: number = 1,
