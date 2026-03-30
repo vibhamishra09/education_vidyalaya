@@ -1,6 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { SessionStatus } from '../generated/prisma/client';
+import {
+  SessionStatus,
+  StudyRoomSessionMode,
+} from '../generated/prisma/client';
 import { CacheService } from '../redis/cache.service';
 import { LoggerService } from '../common/logger';
 import { isConnectionError } from '../common/db-error-handler';
@@ -262,7 +265,7 @@ export class BrowseService {
   }
 
   async getBrowseData(
-    tab: 'peers' | 'studyRooms',
+    tab: 'peers' | 'studyRooms' | 'webinars',
     search?: string,
     skills?: string[],
     page: number = 1,
@@ -326,9 +329,8 @@ export class BrowseService {
             peerWhere.socialLinks = { not: null };
           }
 
-          // Build study room where clause for counting
-          // Include both UPCOMING and ONGOING study rooms
-          const studyRoomWhere: any = {
+          // Base filters for browse lists (session mode applied per tab)
+          const baseStudyRoomWhere: any = {
             sessionStatus: studyStatus
               ? studyStatus
               : {
@@ -336,7 +338,7 @@ export class BrowseService {
                 },
           };
           if (search) {
-            studyRoomWhere.OR = [
+            baseStudyRoomWhere.OR = [
               { title: { contains: search, mode: 'insensitive' } },
               { description: { contains: search, mode: 'insensitive' } },
               {
@@ -356,19 +358,30 @@ export class BrowseService {
             ];
           }
           if (skills && skills.length > 0) {
-            studyRoomWhere.skills = {
+            baseStudyRoomWhere.skills = {
               some: {
                 skill: { name: { in: skills } },
               },
             };
           }
           if (studyFreeOnly) {
-            studyRoomWhere.joiningFee = 0;
+            baseStudyRoomWhere.joiningFee = 0;
           }
 
-          // Get counts for both tabs (always calculated for search results display)
-          const [peerCount] = await Promise.all([
+          const standardRoomWhere = {
+            ...baseStudyRoomWhere,
+            sessionMode: StudyRoomSessionMode.STANDARD,
+          };
+          const webinarRoomWhere = {
+            ...baseStudyRoomWhere,
+            sessionMode: StudyRoomSessionMode.WEBINAR,
+          };
+
+          // Counts: peers + standard study rooms + webinars (badges on Browse tabs)
+          const [peerCount, studyRoomCount, webinarCount] = await Promise.all([
             this.prisma.user.count({ where: peerWhere }),
+            this.prisma.studyRoom.count({ where: standardRoomWhere }),
+            this.prisma.studyRoom.count({ where: webinarRoomWhere }),
           ]);
           const distinctRooms = await this.prisma.studyRoom.findMany({
             where: studyRoomWhere,
@@ -433,6 +446,7 @@ export class BrowseService {
               counts: {
                 peers: peerCount,
                 studyRooms: studyRoomCount,
+                webinars: webinarCount,
               },
               pagination: {
                 total: peerCount,
@@ -443,9 +457,14 @@ export class BrowseService {
               },
             };
           } else {
+            const listWhere =
+              tab === 'webinars' ? webinarRoomWhere : standardRoomWhere;
+            const listTotal =
+              tab === 'webinars' ? webinarCount : studyRoomCount;
+
             const studyRooms = await this.prisma.studyRoom.findMany({
-              where: studyRoomWhere,
-              distinct: ["slug"],
+              where: listWhere,
+              distinct: ['slug'],
               skip,
               take: limit,
               select: {
@@ -459,6 +478,7 @@ export class BrowseService {
                 duration: true,
                 maxParticipants: true,
                 joiningFee: true,
+                webinarRegistrationSlug: true,
                 createdBy: {
                   select: {
                     id: true,
@@ -516,6 +536,7 @@ export class BrowseService {
                 maxParticipants: room.maxParticipants,
                 joiningFee: room.joiningFee,
                 participantCount: room.learners.length,
+                webinarRegistrationSlug: room.webinarRegistrationSlug ?? null,
                 createdBy: {
                   id: room.createdBy.id,
                   name: room.createdBy.name,
@@ -530,9 +551,10 @@ export class BrowseService {
               };
             });
 
-            const trendingStudyRooms = includeTrendingStudyRooms
-              ? await this.getTrendingStudyRooms(trendingLimit)
-              : [];
+            const trendingStudyRooms =
+              tab === 'studyRooms' && includeTrendingStudyRooms
+                ? await this.getTrendingStudyRooms(trendingLimit)
+                : [];
 
             return {
               peers: [],
@@ -541,13 +563,14 @@ export class BrowseService {
               counts: {
                 peers: peerCount,
                 studyRooms: studyRoomCount,
+                webinars: webinarCount,
               },
               pagination: {
-                total: studyRoomCount,
+                total: listTotal,
                 page,
                 limit,
-                totalPages: Math.ceil(studyRoomCount / limit),
-                hasMore: skip + limit < studyRoomCount,
+                totalPages: Math.ceil(listTotal / limit) || 0,
+                hasMore: skip + limit < listTotal,
               },
             };
           }
@@ -564,7 +587,7 @@ export class BrowseService {
               tab === 'peers'
                 ? {
                     peers: [],
-                    counts: { peers: 0, studyRooms: 0 },
+                    counts: { peers: 0, studyRooms: 0, webinars: 0 },
                     pagination: {
                       total: 0,
                       page,
@@ -577,7 +600,7 @@ export class BrowseService {
                     peers: [],
                     studyRooms: [],
                     trendingStudyRooms: [],
-                    counts: { peers: 0, studyRooms: 0 },
+                    counts: { peers: 0, studyRooms: 0, webinars: 0 },
                     pagination: {
                       total: 0,
                       page,
@@ -602,6 +625,7 @@ export class BrowseService {
     try {
       const rooms = await this.prisma.studyRoom.findMany({
         where: {
+          sessionMode: StudyRoomSessionMode.STANDARD,
           sessionStatus: {
             in: [SessionStatus.UPCOMING, SessionStatus.ONGOING],
           },

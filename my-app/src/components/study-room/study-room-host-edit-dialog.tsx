@@ -90,6 +90,7 @@ export function StudyRoomHostEditDialog({
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [removedImage, setRemovedImage] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [titleError, setTitleError] = useState("");
   const replaceInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -116,6 +117,7 @@ export function StudyRoomHostEditDialog({
     setImagePreview(null);
     setPendingFile(null);
     setRemovedImage(false);
+    setTitleError("");
   }, [
     open,
     roomId,
@@ -154,9 +156,11 @@ export function StudyRoomHostEditDialog({
   const handleSave = async () => {
     const trimmed = title.trim();
     if (!trimmed) {
+      setTitleError("Title is required.");
       showError("Title required", "Please enter a room title.");
       return;
     }
+    setTitleError("");
     try {
       let uploadedUrl: string | undefined;
       if (pendingFile) {
@@ -178,7 +182,8 @@ export function StudyRoomHostEditDialog({
 
       const payload: UpdateStudyRoomDto = {
         title: trimmed,
-        description: description.trim() || undefined,
+        // Always send so PATCH clears DB when user empties optional description (omit was skipping update)
+        description: description.trim(),
         date,
         time,
         timezone,
@@ -246,8 +251,18 @@ export function StudyRoomHostEditDialog({
             <Input
               id="host-edit-title"
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                if (titleError) setTitleError("");
+              }}
+              aria-invalid={!!titleError}
+              aria-describedby={titleError ? "host-edit-title-error" : undefined}
             />
+            {titleError ? (
+              <p id="host-edit-title-error" className="text-sm text-destructive">
+                {titleError}
+              </p>
+            ) : null}
           </div>
           <div className="space-y-2">
             <Label htmlFor="host-edit-desc">Description</Label>
@@ -411,9 +426,7 @@ export function StudyRoomHostEditDialog({
           <Button
             type="button"
             onClick={handleSave}
-            disabled={
-              updateStudyRoom.isPending || uploadingImage || !title.trim()
-            }
+            disabled={updateStudyRoom.isPending || uploadingImage}
           >
             {updateStudyRoom.isPending || uploadingImage ? (
               <>

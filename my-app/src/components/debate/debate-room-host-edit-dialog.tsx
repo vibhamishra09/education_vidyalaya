@@ -182,9 +182,19 @@ export function DebateRoomHostEditDialog({
                 id={fieldId("max")}
                 type="number"
                 min={1}
-                max={10}
-                value={maxPerTeam}
-                onChange={(e) => setMaxPerTeam(Number(e.target.value))}
+                max={6}
+                value={maxPerTeam || ''}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === '') {
+                    setMaxPerTeam('' as any);
+                    return;
+                  }
+                  const num = parseInt(val, 10);
+                  if (num >= 1 && num <= 6) {
+                    setMaxPerTeam(num);
+                  }
+                }}
               />
             </div>
             <div className="space-y-2">

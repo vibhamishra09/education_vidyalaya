@@ -17,7 +17,7 @@ import { SessionStatus } from '../../generated/prisma/client';
 
 export class BrowseQueryDto extends PaginationQueryDto {
   @IsOptional()
-  @IsIn(['peers', 'studyRooms'])
+  @IsIn(['peers', 'studyRooms', 'webinars'])
   @Transform(({ value }) => {
     // Handle empty strings, null, or undefined from mobile browsers
     if (!value || value === '') {
@@ -25,7 +25,7 @@ export class BrowseQueryDto extends PaginationQueryDto {
     }
     return value;
   })
-  tab?: 'peers' | 'studyRooms' = 'peers';
+  tab?: 'peers' | 'studyRooms' | 'webinars' = 'peers';
 
   @IsOptional()
   @IsString()
@@ -59,7 +59,6 @@ export class BrowseQueryDto extends PaginationQueryDto {
 
   @IsOptional()
   @IsEnum(SessionStatus)
-  @IsIn([SessionStatus.UPCOMING, SessionStatus.ONGOING])
   studyStatus?: SessionStatus;
 
   @IsOptional()
