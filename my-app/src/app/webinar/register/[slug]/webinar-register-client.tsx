@@ -2,10 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useAuth } from "@clerk/nextjs";
 import { Navigation } from "@/components/layout/navigation";
 import { Footer } from "@/components/layout/footer";
-import { AuthPromptButtons } from "@/components/auth/auth-prompt-buttons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,7 +26,6 @@ export function WebinarRegisterClient({
   /** From server RSC; null = not found or error */
   initialMeta: WebinarPublicMetadata | null;
 }) {
-  const { isSignedIn, isLoaded: authLoaded } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -46,10 +43,6 @@ export function WebinarRegisterClient({
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isSignedIn) {
-      setError("Please sign in first to register.");
-      return;
-    }
     setSubmitting(true);
     setError(null);
     try {
@@ -135,7 +128,6 @@ export function WebinarRegisterClient({
   }
 
   const fields = initialMeta.registrationFields || [];
-  const formLocked = !authLoaded || !isSignedIn;
 
   return (
     <div className="min-h-screen flex flex-col bg-muted/20">
@@ -153,21 +145,9 @@ export function WebinarRegisterClient({
         </div>
 
         <form onSubmit={onSubmit} className="space-y-4 rounded-2xl border bg-background p-6 shadow-sm">
-          {authLoaded && !isSignedIn && (
-            <div
-              className="rounded-xl border border-amber-200 bg-amber-50/90 dark:bg-amber-950/40 dark:border-amber-800 px-4 py-4 space-y-3 text-sm"
-              role="status"
-              aria-live="polite"
-            >
-              <p className="font-semibold text-foreground">Please sign in first</p>
-              <p className="text-muted-foreground text-xs leading-relaxed">
-                Use <strong className="text-foreground font-medium">Sign in</strong> or{" "}
-                <strong className="text-foreground font-medium">Sign up</strong> below. After you
-                return, you can fill out this form and submit your registration.
-              </p>
-              <AuthPromptButtons className="pt-1 w-full justify-center sm:justify-start flex-wrap" />
-            </div>
-          )}
+          <p className="text-sm text-muted-foreground rounded-lg bg-muted/50 px-3 py-2.5">
+            No sign-in required. We&apos;ll email you a join link and passcode.
+          </p>
 
           <div className="space-y-2">
             <Label htmlFor="reg-name">Full name *</Label>
@@ -177,8 +157,7 @@ export function WebinarRegisterClient({
               value={name}
               onChange={(e) => setName(e.target.value)}
               autoComplete="name"
-              disabled={formLocked}
-              aria-disabled={formLocked}
+              disabled={submitting}
             />
           </div>
           <div className="space-y-2">
@@ -190,8 +169,7 @@ export function WebinarRegisterClient({
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               autoComplete="email"
-              disabled={formLocked}
-              aria-disabled={formLocked}
+              disabled={submitting}
             />
           </div>
           {fields
@@ -211,8 +189,7 @@ export function WebinarRegisterClient({
                       setExtra((prev) => ({ ...prev, [f.id]: e.target.value }))
                     }
                     rows={3}
-                    disabled={formLocked}
-                    aria-disabled={formLocked}
+                    disabled={submitting}
                   />
                 ) : f.type === "number" ? (
                   <Input
@@ -224,8 +201,7 @@ export function WebinarRegisterClient({
                     onChange={(e) =>
                       setExtra((prev) => ({ ...prev, [f.id]: e.target.value }))
                     }
-                    disabled={formLocked}
-                    aria-disabled={formLocked}
+                    disabled={submitting}
                   />
                 ) : (
                   <Input
@@ -236,8 +212,7 @@ export function WebinarRegisterClient({
                     onChange={(e) =>
                       setExtra((prev) => ({ ...prev, [f.id]: e.target.value }))
                     }
-                    disabled={formLocked}
-                    aria-disabled={formLocked}
+                    disabled={submitting}
                   />
                 )}
               </div>
@@ -247,16 +222,12 @@ export function WebinarRegisterClient({
             <p className="text-sm text-destructive">{error}</p>
           )}
 
-          <Button type="submit" className="w-full" disabled={submitting || formLocked}>
+          <Button type="submit" className="w-full" disabled={submitting}>
             {submitting ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 Registering…
               </>
-            ) : !authLoaded ? (
-              "Loading…"
-            ) : !isSignedIn ? (
-              "Sign in to register"
             ) : (
               "Register"
             )}
