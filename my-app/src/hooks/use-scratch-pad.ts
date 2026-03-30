@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Room } from 'livekit-client'
+import { Room, RoomEvent } from 'livekit-client'
 import { createTLStore, defaultShapeUtils, Editor, loadSnapshot, getSnapshot } from 'tldraw'
 import { useAuth } from '@clerk/nextjs'
 
@@ -12,8 +12,13 @@ interface UseScratchPadOptions {
 	enabled?: boolean
 }
 
+export type ScratchPadMode = 'shared' | 'personal'
+
 export function useScratchPad({ roomId, room, isHost, canEdit = true, roomTitle, enabled }: UseScratchPadOptions) {
-	const [store] = useState(() => createTLStore({ shapeUtils: defaultShapeUtils }))
+	const [sharedStore] = useState(() => createTLStore({ shapeUtils: defaultShapeUtils }))
+	const [personalStore] = useState(() => createTLStore({ shapeUtils: defaultShapeUtils }))
+	const [mode, setMode] = useState<ScratchPadMode>('shared')
+	
 	const [loading, setLoading] = useState(true)
 	const [error, setError] = useState<string | null>(null)
 	const editorRef = useRef<Editor | null>(null)
@@ -21,7 +26,7 @@ export function useScratchPad({ roomId, room, isHost, canEdit = true, roomTitle,
 	const lastSyncRef = useRef<number>(0)
 	const skipRemoteUpdateRef = useRef(false)
 
-	// Load initial state from S3
+	// Load initial state from S3 (Only for shared store)
 	useEffect(() => {
 		if (!enabled || !roomId) return
 
@@ -42,8 +47,8 @@ export function useScratchPad({ roomId, room, isHost, canEdit = true, roomTitle,
 				}
 
 				const data = await response.json()
-				if (data.content && editorRef.current) {
-					loadSnapshot(editorRef.current.store, data.content)
+				if (data.content) {
+					loadSnapshot(sharedStore, data.content)
 				}
 			} catch (err) {
 				console.error('ScratchPad Load Error:', err)
@@ -54,22 +59,25 @@ export function useScratchPad({ roomId, room, isHost, canEdit = true, roomTitle,
 		}
 
 		loadInitialState()
-	}, [roomId, enabled])
+	}, [roomId, enabled, sharedStore])
 
-	// LiveKit Sync: Remote -> Local
+	// LiveKit Sync: Remote -> Local (Only for shared store)
 	useEffect(() => {
 		if (!room || !enabled) return
 
-		const handleData = (payload: Uint8Array, _participant: unknown) => {
+		const handleData = (payload: Uint8Array, _participant: unknown, _kind: unknown, topic?: string) => {
+			// Support both legacy (no topic) and new topic-based sync
+			if (topic && topic !== 'scratch-pad-update') return
+
 			try {
 				const decoder = new TextDecoder()
 				const data = JSON.parse(decoder.decode(payload))
 
-				if (data.type === 'scratch-pad-update' && editorRef.current) {
+				if (data.type === 'scratch-pad-update') {
 					skipRemoteUpdateRef.current = true
-					editorRef.current.store.mergeRemoteChanges(() => {
+					sharedStore.mergeRemoteChanges(() => {
 						if (data.changes) {
-							editorRef.current?.store.applyDiff(data.changes)
+							sharedStore.applyDiff(data.changes)
 						}
 					})
 					skipRemoteUpdateRef.current = false
@@ -79,49 +87,52 @@ export function useScratchPad({ roomId, room, isHost, canEdit = true, roomTitle,
 			}
 		}
 
-		room.on('dataReceived', handleData)
-		return () => { room.off('dataReceived', handleData) }
-	}, [room, enabled])
+		room.on(RoomEvent.DataReceived, handleData)
+		return () => { room.off(RoomEvent.DataReceived, handleData) }
+	}, [room, enabled, sharedStore])
 
-	// LiveKit Sync: Local -> Remote
-	const onEditorMount = useCallback((editor: Editor) => {
-		editorRef.current = editor
-		
-		const unlisten = editor.store.listen((change) => {
+	// LiveKit Sync: Local -> Remote (Shared Store Listener)
+	useEffect(() => {
+		if (!room || room.state !== 'connected') return
+
+		const unlisten = sharedStore.listen((change) => {
 			if (skipRemoteUpdateRef.current) return
 			if (change.source !== 'user') return
+			if (!canEdit) return
 
 			// Throttle sync
 			const now = Date.now()
 			if (now - lastSyncRef.current < 50) return
 			lastSyncRef.current = now
 
-			// Broadcast changes
-			if (room && room.state === 'connected' && canEdit) {
-				const encoder = new TextEncoder()
-				const payload = encoder.encode(JSON.stringify({
-					type: 'scratch-pad-update',
-					changes: change.changes,
-				}))
-				room.localParticipant.publishData(payload, {
-					reliable: true
-				})
-			}
+			// Broadcast changes to everyone else at the Room level
+			const encoder = new TextEncoder()
+			const payload = encoder.encode(JSON.stringify({
+				type: 'scratch-pad-update',
+				changes: change.changes,
+			}))
+			
+			room.localParticipant.publishData(payload, {
+				reliable: true,
+				topic: 'scratch-pad-update'
+			}).catch(err => console.error("ScratchPad sync error:", err))
 		}, { scope: 'document', source: 'user' })
 
 		return () => unlisten()
-	}, [room, canEdit])
+	}, [room, canEdit, sharedStore])
 
-	// Auto-save to S3 (Host or Solo Editor)
+	const onEditorMount = useCallback((editor: Editor) => {
+		editorRef.current = editor
+	}, [])
+
+	// Auto-save to S3 (Host only, for shared board)
 	useEffect(() => {
-		const shouldAutoSave = (isHost || !room) && enabled && roomId && canEdit
+		const shouldAutoSave = isHost && enabled && roomId && canEdit
 		if (!shouldAutoSave) return
 
 		const interval = setInterval(async () => {
-			if (!editorRef.current) return
-
 			try {
-				const snapshot = getSnapshot(editorRef.current.store)
+				const snapshot = getSnapshot(sharedStore)
 				const token = await getToken()
 				await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/scratch-pad/${roomId}`, {
 					method: 'POST',
@@ -134,13 +145,15 @@ export function useScratchPad({ roomId, room, isHost, canEdit = true, roomTitle,
 			} catch (err) {
 				console.error('ScratchPad Auto-save Error:', err)
 			}
-		}, 30000) // Save every 30s
+		}, 30000)
 
 		return () => clearInterval(interval)
-	}, [isHost, enabled, roomId, room, canEdit, roomTitle, getToken])
+	}, [isHost, enabled, roomId, canEdit, roomTitle, getToken, sharedStore])
 
 	return {
-		store,
+		store: mode === 'shared' ? sharedStore : personalStore,
+		mode,
+		setMode,
 		loading,
 		error,
 		onEditorMount,

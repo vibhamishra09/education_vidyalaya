@@ -1,9 +1,9 @@
-'use client'
 import { Tldraw, Editor, TldrawProps } from 'tldraw'
 import 'tldraw/tldraw.css'
 import { Room } from 'livekit-client'
-import { useScratchPad } from '@/hooks/use-scratch-pad'
+import { useScratchPad, ScratchPadMode } from '@/hooks/use-scratch-pad'
 import { memo } from 'react'
+import { LayoutGrid, User, Share2 } from 'lucide-react'
 
 interface ScratchPadProps {
 	roomId: string
@@ -15,7 +15,7 @@ interface ScratchPadProps {
 }
 
 export const ScratchPad = memo(function ScratchPad({ roomId, room, isHost, canEdit = true, roomTitle, enabled = true }: ScratchPadProps) {
-	const { loading, error, onEditorMount } = useScratchPad({
+	const { store, mode, setMode, loading, error, onEditorMount } = useScratchPad({
 		roomId,
 		room,
 		isHost,
@@ -41,18 +41,43 @@ export const ScratchPad = memo(function ScratchPad({ roomId, room, isHost, canEd
 	}
 
 	return (
-		<div className="h-full w-full bg-zinc-950/50 backdrop-blur-md rounded-xl overflow-hidden border border-zinc-800 shadow-2xl relative">
-            <div className="absolute top-4 left-4 z-[9999] pointer-events-none">
-                <h3 className="text-white/60 text-xs font-semibold tracking-widest uppercase">
-                    {isHost ? 'Collaborative Scratchpad (Host)' : 'Collaborative Scratchpad'}
-                </h3>
+		<div className="h-full w-full bg-zinc-950/50 backdrop-blur-md rounded-xl overflow-hidden border border-zinc-800 shadow-2xl relative flex flex-col">
+            {/* Mode Toggle Header */}
+            <div className="h-12 bg-white/5 border-b border-white/5 flex items-center justify-center gap-1 z-[9999]">
+                <button
+                    onClick={() => setMode('personal')}
+                    className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                        mode === 'personal' 
+                            ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' 
+                            : 'text-white/40 hover:text-white/60 hover:bg-white/5 border border-transparent'
+                    }`}
+                >
+                    <User className="h-3.5 w-3.5" />
+                    Personal Page
+                </button>
+                <div className="w-px h-4 bg-white/10 mx-1" />
+                <button
+                    onClick={() => setMode('shared')}
+                    className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                        mode === 'shared' 
+                            ? 'bg-sky-500/20 text-sky-400 border border-sky-500/30' 
+                            : 'text-white/40 hover:text-white/60 hover:bg-white/5 border border-transparent'
+                    }`}
+                >
+                    <Share2 className="h-3.5 w-3.5" />
+                    {isHost ? 'Shared Page (Host)' : 'Shared Page'}
+                </button>
             </div>
             
-			<Tldraw 
-                autoFocus 
-                onMount={onEditorMount}
-                inferDarkMode
-            />
+            <div className="flex-1 relative">
+                <Tldraw 
+                    key={mode} // Forced re-mount when switching modes to update UI/store cleanly
+                    store={store}
+                    autoFocus 
+                    onMount={onEditorMount}
+                    inferDarkMode
+                />
+            </div>
             
             <style jsx global>{`
                 .tl-container {
@@ -72,3 +97,4 @@ export const ScratchPad = memo(function ScratchPad({ roomId, room, isHost, canEd
 		</div>
 	)
 })
+
