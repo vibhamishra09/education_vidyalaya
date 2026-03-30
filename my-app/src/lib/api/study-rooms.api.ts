@@ -48,6 +48,11 @@ export const studyRoomsApi = {
     return response.data;
   },
 
+  async createRecurringRoom(data: CreateStudyRoomDto) {
+    const res = await apiClient.post('/api/study-rooms/recurring', data);
+    return res.data;
+  },
+  
   getWebinarPublic: async (slug: string): Promise<WebinarPublicMetadata> => {
     const response = await apiClient.get(
       `/api/study-rooms/webinar/public/${encodeURIComponent(slug)}`,

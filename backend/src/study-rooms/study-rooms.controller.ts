@@ -250,6 +250,23 @@ export class StudyRoomsController {
     );
   }
 
+  @Post('/recurring')
+  @UseGuards(ClerkAuthGuard)
+  async createRecurringStudyRoom(
+    @CurrentUser('dbUserId') userId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
+    @Body() createDto: CreateStudyRoomDto,
+  ) {
+    this.logger.debug({
+      message: 'Creating study room',
+      createDto,
+    });
+    return this.studyRoomsService.createRecurringRoom(
+      userId ?? clerkUserId,
+      createDto,
+    );
+  }
+
   @Patch(':studyRoomId')
   @UseGuards(ClerkAuthGuard)
   async updateStudyRoom(
@@ -289,37 +306,49 @@ export class StudyRoomsController {
   async joinRecurring(
     @Param('id') id: string,
     @Body() dto: { scope: 'THIS' | 'FOLLOWING' },
-    @CurrentUser('dbUserId') userId: string,
+    @CurrentUser('dbUserId') dbUserId: string,
+    @CurrentUser('clerkId') clerkUserId?: string,
   ) {
-    if (!userId) {
-      throw new UnauthorizedException("User ID could not be resolved from token");
+    const actorKey = dbUserId ?? clerkUserId;
+    if (!actorKey) {
+      throw new UnauthorizedException('User identity missing');
     }
 
-    return this.studyRoomsService.joinRecurringStudyRoom(id, userId, dto);
+    return this.studyRoomsService.joinRecurringStudyRoom(id, actorKey, dto);
   }
 
   @Post(':id/unenroll')
   @UseGuards(ClerkAuthGuard)
   async unenroll(
     @Param('id') roomId: string,
-    @CurrentUser('dbUserId') userId: string,
+    @CurrentUser('clerkId') clerkUserId: string,
+    @CurrentUser('dbUserId') dbUserId: string,
     @Body() dto: { scope: 'ALL' | 'THIS' | 'FOLLOWING' }
   ) {
-    console.log( "HITTING IT : ", roomId, userId);
+    const actorKey = dbUserId ?? clerkUserId;
+    if (!actorKey) {
+      throw new UnauthorizedException('User identity missing');
+    }
     
-    return this.studyRoomsService.unenroll(userId, roomId, dto.scope);
+    return this.studyRoomsService.unenroll(actorKey, roomId, dto.scope);
   }
 
   @Post(':studyRoomId/participants/role')
   @UseGuards(ClerkAuthGuard)
   async updateParticipantRole(
     @Param('studyRoomId') studyRoomId: string,
-    @CurrentUser('dbUserId') userId: string,
+    @CurrentUser('clerkId') clerkUserId: string,
+    @CurrentUser('dbUserId') dbUserId: string,
     @Body() dto: PromoteParticipantRoleDto,
   ) {
+     const actorKey = dbUserId ?? clerkUserId;
+    if (!actorKey) {
+      throw new UnauthorizedException('User identity missing');
+    }
+    
     return this.studyRoomsService.updateParticipantRole(
       studyRoomId,
-      userId,
+      actorKey,
       dto.participantIdentity,
       dto.role,
     );
@@ -329,12 +358,18 @@ export class StudyRoomsController {
   @UseGuards(ClerkAuthGuard)
   async cancelStudyRoom(
     @Param('studyRoomId') studyRoomId: string,
+    @CurrentUser('clerkId') clerkUserId: string,
     @CurrentUser('dbUserId') userId: string,
     @Body('editScope') editScope?: StudyRoomEditScope,
   ) {
+    const actorKey = userId ?? clerkUserId;
+    if (!actorKey) {
+      throw new UnauthorizedException('User identity missing');
+    }
+    
     return this.studyRoomsService.cancelStudyRoom(
       studyRoomId,
-      userId,
+      actorKey,
       editScope ?? StudyRoomEditScope.SINGLE,
     );
   }
@@ -343,8 +378,13 @@ export class StudyRoomsController {
   @UseGuards(ClerkAuthGuard)
   async completeStudyRoom(
     @Param('studyRoomId') studyRoomId: string,
+    @CurrentUser('clerkId') clerkUserId: string,
     @CurrentUser('dbUserId') userId: string,
   ) {
+    const actorKey = userId ?? clerkUserId;
+    if (!actorKey) {
+      throw new UnauthorizedException('User identity missing');
+    }
     this.logger.debug({
       message: '🎯 [StudyRoomsController.completeStudyRoom] Endpoint called',
       studyRoomId,
@@ -352,7 +392,7 @@ export class StudyRoomsController {
     });
     const result = await this.studyRoomsService.completeStudyRoom(
       studyRoomId,
-      userId,
+      actorKey,
     );
     this.logger.log(
       '✅ [StudyRoomsController.completeStudyRoom] Completed successfully',
@@ -364,12 +404,17 @@ export class StudyRoomsController {
   @UseGuards(ClerkAuthGuard)
   async markNotCompleted(
     @Param('studyRoomId') studyRoomId: string,
+    @CurrentUser('clerkId') clerkUserId: string,
     @CurrentUser('dbUserId') userId: string,
   ) {
+    const actorKey = userId ?? clerkUserId;
+    if (!actorKey) {
+      throw new UnauthorizedException('User identity missing');
+    }
     this.logger.debug({
       message: '⏱️ [StudyRoomsController.markNotCompleted] Endpoint called',
       studyRoomId,
-      userId,
+      actorKey,
     });
     return this.studyRoomsService.markNotCompleted(studyRoomId, userId);
   }
@@ -393,9 +438,14 @@ export class StudyRoomsController {
   @UseGuards(ClerkAuthGuard)
   async submitSessionFeedback(
     @Param('studyRoomId') studyRoomId: string,
+    @CurrentUser('clerkId') clerkUserId: string,
     @CurrentUser('dbUserId') userId: string,
     @Body() feedbackDto: SessionFeedbackDto,
   ) {
+    const actorKey = userId ?? clerkUserId;
+    if (!actorKey) {
+      throw new UnauthorizedException('User identity missing');
+    }
     this.logger.debug({
       message:
         '📝 [StudyRoomsController.submitSessionFeedback] Endpoint called',
@@ -405,7 +455,7 @@ export class StudyRoomsController {
     });
     return this.studyRoomsService.saveSessionFeedback(
       studyRoomId,
-      userId,
+      actorKey,
       feedbackDto,
     );
   }

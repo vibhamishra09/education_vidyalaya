@@ -72,6 +72,26 @@ export function useCreateStudyRoom() {
   });
 }
 
+export function useCreateRecurringRoom() {
+  const queryClient = useQueryClient();
+  const { getToken, isLoaded } = useAuth();
+
+  return useMutation({
+    mutationFn: async (data: CreateStudyRoomDto) => {
+      if (isLoaded) {
+        const token = await getToken();
+        if (token) {
+          setAuthToken(token);
+        }
+      }
+      return studyRoomsApi.createRecurringRoom(data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: studyRoomKeys.lists() });
+    },
+  });
+}
+
 // Update study room
 export function useUpdateStudyRoom(studyRoomId: string) {
   const queryClient = useQueryClient();
