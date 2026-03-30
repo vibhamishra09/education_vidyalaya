@@ -1,8 +1,7 @@
-import React, { useEffect } from 'react';
-import { View, Text, TouchableOpacity, Pressable, Image, Dimensions, StyleSheet } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, Text, TouchableOpacity, Pressable, Image, Dimensions, StyleSheet, Animated } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X, Search, HelpCircle, LayoutDashboard, Coins, User, LogOut, Bell } from 'lucide-react-native';
-import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import { useSidebar } from '../lib/SidebarContext';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth, useClerk, useUser } from '@clerk/clerk-expo';
@@ -33,30 +32,51 @@ export function Sidebar() {
     const { isSignedIn } = useAuth();
     const { signOut } = useClerk();
     const { user } = useUser();
-    const translateX = useSharedValue(-SIDEBAR_WIDTH);
-    const opacity = useSharedValue(0);
+    const translateX = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
+    const opacity = useRef(new Animated.Value(0)).current;
     const [isVisible, setIsVisible] = React.useState(false);
 
     useEffect(() => {
         if (isOpen) {
             setIsVisible(true);
-            translateX.value = withTiming(0, { duration: 300 });
-            opacity.value = withTiming(1, { duration: 300 });
+            const openAnimation = Animated.parallel([
+                Animated.timing(translateX, {
+                    toValue: 0,
+                    duration: 300,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(opacity, {
+                    toValue: 1,
+                    duration: 300,
+                    useNativeDriver: true,
+                }),
+            ]);
+
+            openAnimation.start();
+            return () => openAnimation.stop();
         } else {
-            translateX.value = withTiming(-SIDEBAR_WIDTH, { duration: 300 });
-            opacity.value = withTiming(0, { duration: 300 });
-            const timeout = setTimeout(() => setIsVisible(false), 300);
-            return () => clearTimeout(timeout);
+            const closeAnimation = Animated.parallel([
+                Animated.timing(translateX, {
+                    toValue: -SIDEBAR_WIDTH,
+                    duration: 300,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(opacity, {
+                    toValue: 0,
+                    duration: 300,
+                    useNativeDriver: true,
+                }),
+            ]);
+
+            closeAnimation.start(({ finished }) => {
+                if (finished) {
+                    setIsVisible(false);
+                }
+            });
+
+            return () => closeAnimation.stop();
         }
-    }, [isOpen]);
-
-    const animatedStyle = useAnimatedStyle(() => ({
-        transform: [{ translateX: translateX.value }],
-    }));
-
-    const backdropStyle = useAnimatedStyle(() => ({
-        opacity: opacity.value,
-    }));
+    }, [isOpen, opacity, translateX]);
 
     if (!isVisible) return null;
     
@@ -97,12 +117,12 @@ export function Sidebar() {
     return (
         <View style={styles.container} pointerEvents={isOpen ? 'auto' : 'none'}>
             {/* Backdrop */}
-            <Animated.View style={[styles.backdrop, backdropStyle]}>
+            <Animated.View style={[styles.backdrop, { opacity }]}>
                 <TouchableOpacity style={styles.backdropTouchable} onPress={closeSidebar} activeOpacity={1} />
             </Animated.View>
             
             {/* Sidebar Content */}
-            <Animated.View style={[styles.sidebarContainer, animatedStyle]}>
+            <Animated.View style={[styles.sidebarContainer, { transform: [{ translateX }] }]}>
                 <LinearGradient
                     colors={['#f6fffa', '#ecfdf5', '#ffffff']}
                     locations={[0, 0.4, 1]}
