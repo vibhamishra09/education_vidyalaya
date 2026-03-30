@@ -73,6 +73,11 @@ export class ScratchPadService {
    * Load scratch pad data from S3
    */
   async getScratchPad(roomId: string) {
+    if (!this.bucketName || this.bucketName.includes('bucket_name')) {
+      console.warn('ScratchPadService: S3 bucket name not configured or using placeholder. Returning empty state.');
+      return null;
+    }
+
     const key = this.getS3Key(roomId);
     try {
       const command = new GetObjectCommand({
@@ -83,11 +88,19 @@ export class ScratchPadService {
       const str = await response.Body?.transformToString();
       return str ? JSON.parse(str) : null;
     } catch (error: any) {
-      if (error.name === 'NoSuchKey') {
+      // Correctly handle "Not Found" errors from S3 (NoSuchKey or 404 status)
+      const isNotFound = 
+        error.name === 'NoSuchKey' || 
+        error.name === 'NotFound' ||
+        error.$metadata?.httpStatusCode === 404;
+
+      if (isNotFound) {
         return null; // Pad doesn't exist yet
       }
+      
       console.error('Error loading scratch pad from S3:', error);
-      throw new InternalServerErrorException('Failed to load scratch pad');
+      // Don't crash if S3 is misconfigured or down, just return null so user can use a blank canvas
+      return null;
     }
   }
 

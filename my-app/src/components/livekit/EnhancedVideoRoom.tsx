@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react'
 import { LiveKitRoom, useParticipants, useTracks, RoomAudioRenderer, useSpeakingParticipants, VideoTrack, useLocalParticipant, isTrackReference, useRoomContext } from '@livekit/components-react'
-import { Track, RoomOptions, VideoPresets, LocalVideoTrack } from 'livekit-client'
+import { Track, RoomOptions, VideoPresets, LocalVideoTrack, ConnectionState, RoomEvent } from 'livekit-client'
 import '@livekit/components-styles'
 import { BackgroundProcessor, BackgroundBlur, VirtualBackground, BackgroundOptions } from '@livekit/track-processors'
 import { ChatWidget } from '@/components/chat/ChatWidget'
@@ -12,7 +12,7 @@ import {
 	PinOff, User, PictureInPicture2, Camera, CameraOff, Sparkles, Lock, Settings2,
 	PhoneOff, ChevronUp, ChevronLeft, ChevronRight, ShieldCheck, Ban, Aperture,
 	ImageIcon, LayoutGrid, Check, Timer, Power, Zap, LogOut, ZoomIn, ZoomOut, MousePointer2,
-	PencilLine
+	PencilLine, PenTool, Eraser, Type, Square, Circle, Minus
 } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
@@ -29,12 +29,24 @@ import { useSpeechRecognition } from '@/hooks/use-speech-recognition'
 import { useSessionExtension } from '@/hooks/use-session-extension'
 import { ExtensionRequestDialog } from '@/components/study-room/extension-request-dialog'
 import { EndMeetingDialog } from '@/components/study-room/end-meeting-dialog'
-import { useSessionModeration, RoomPermissions, PermissionRequest, ParticipantPermissionRequest, ParticipantChatLocks, RoomSettings } from '@/hooks/use-session-moderation'
+import {
+	useSessionModeration,
+	RoomPermissions,
+	RoomSettings,
+	ParticipantChatLocks,
+	PermissionRequest,
+	ModerationNotification,
+	ParticipantPermissionRequest,
+} from '@/hooks/use-session-moderation'
 import { ChatRecipient } from '@/components/chat/MessageInput'
 import { useRemoteControl } from '@/hooks/use-remote-control'
 import { RemoteControlOverlay } from '@/components/livekit/RemoteControlOverlay'
 import { ScratchPad } from '@/components/scratch-pad/ScratchPad'
+
 // Stable virtual backgrounds constant to avoid re-creating array each render
+=======
+
+>>>>>>> Stashed changes
 const VIRTUAL_BACKGROUNDS = [
 	{
 		id: 0,
@@ -125,6 +137,8 @@ export function EnhancedVideoRoom({
 	const [showParticipants, setShowParticipants] = useState(false)
 	const [isFullscreen, setIsFullscreen] = useState(false)
 	const [showWarning, setShowWarning] = useState(false)
+	const [showScratchPad, setShowScratchPad] = useState(false)
+	const [allowScratchPadEdit, setAllowScratchPadEdit] = useState(isHost) // Default to locked for participants until host unlocks
 	const [isMobileViewport, setIsMobileViewport] = useState(false)
 	const [isMobileDevice, setIsMobileDevice] = useState(false)
 	const router = useRouter()
@@ -804,8 +818,11 @@ export function EnhancedVideoRoom({
 					onParticipantListChange={onParticipantListChange}
 					isGuest={isGuest}
 					guestToken={isGuest ? externalAccessToken : undefined}
-                    sessionData={sessionData}
-
+					sessionData={sessionData}
+					showScratchPad={showScratchPad}
+					setShowScratchPad={setShowScratchPad}
+					allowScratchPadEdit={allowScratchPadEdit}
+					setAllowScratchPadEdit={setAllowScratchPadEdit}
 					onPromoteToCohost={async (participantIdentity, role) => {
 						if (sessionData?.sessionType !== 'studyRoom' || !sessionData?.id) return
 						const authTokenValue = await getToken()
@@ -978,13 +995,17 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	isMobileViewport,
 	chatRecipients,
 	hostUser,
-					currentUserDbId,
-					onParticipantListChange,
-					isGuest = false,
-					guestToken,
-					participantChatLocks,
-					onPromoteToCohost,
-					sessionData,
+	currentUserDbId,
+	onParticipantListChange,
+	isGuest = false,
+	guestToken,
+	participantChatLocks,
+	onPromoteToCohost,
+	sessionData,
+	showScratchPad,
+	setShowScratchPad,
+	allowScratchPadEdit,
+	setAllowScratchPadEdit,
 }: {
 	isUserActive: boolean
 	showChat: boolean
@@ -1057,12 +1078,11 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		role: 'PARTICIPANT' | 'COHOST',
 	) => void
 	sessionData?: SessionData | null
+	showScratchPad: boolean
+	setShowScratchPad: (show: boolean) => void
+	allowScratchPadEdit: boolean
+	setAllowScratchPadEdit: (allow: boolean) => void
 }) {
-	// Room context removed to avoid race conditions, using localParticipant hook instead
-	const params = useParams<{ room: string }>()
-	const room = useRoomContext()
-	const { showWarning, showSuccess, showInfo, showError } = useToast()
-	// Remote Control Hook
 	const {
 		isControlling,
 		isRequestPending,
@@ -1076,10 +1096,6 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		denyControl,
 		revokeControl
 	} = useRemoteControl()
-
-	// Scratch pad state
-    const [showScratchPad, setShowScratchPad] = useState(false)
-    const [allowScratchPadEdit, setAllowScratchPadEdit] = useState(isHost)
 
 	// Get participants list for name lookup
 	const allParticipants = useParticipants()
@@ -1095,6 +1111,46 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			participantIdentitiesKey ? participantIdentitiesKey.split('|') : [],
 		)
 	}, [onParticipantListChange, participantIdentitiesKey])
+
+	// Host: Broadcast scratchpad lock state
+	useEffect(() => {
+		if (!isHost || !room) return
+
+		const broadcastLockState = async () => {
+			try {
+				const payload = new TextEncoder().encode(JSON.stringify({ 
+					enabled: allowScratchPadEdit 
+				}))
+				await room.localParticipant.publishData(
+					payload,
+					{ reliable: true, topic: 'scratch-pad-lock-update' }
+				)
+			} catch (err) {
+				console.error("Failed to broadcast scratchpad lock state:", err)
+			}
+		}
+
+		broadcastLockState()
+	}, [allowScratchPadEdit, isHost, room])
+
+	// Participants: Listen for scratchpad lock state updates
+	useEffect(() => {
+		if (!room || isHost) return
+
+		const handleData = (payload: Uint8Array, _participant?: any, _kind?: any, topic?: string) => {
+			if (topic === 'scratch-pad-lock-update') {
+				try {
+					const { enabled } = JSON.parse(new TextDecoder().decode(payload))
+					setAllowScratchPadEdit(enabled)
+				} catch (err) {
+					console.error("Failed to parse scratchpad lock update:", err)
+				}
+			}
+		}
+
+		room.on(RoomEvent.DataReceived, handleData)
+		return () => { room.off(RoomEvent.DataReceived, handleData) }
+	}, [room, isHost, setAllowScratchPadEdit])
 
 	useEffect(() => {
 		if (canViewParticipantList) return
@@ -3678,44 +3734,43 @@ const VideoRoomContent = memo(function VideoRoomContent({
 							</button>
 						</div>
 
-
-						{/* Scratch Pad */}
-						<div className="flex flex-col items-center justify-center group text-center">
+						{/* Scratch Pad Toggle */}
+						<div className="flex relative flex-col items-center justify-center group">
 							<button
 								onClick={() => {
 									if (!showScratchPad) { setShowChat(false); setShowParticipants(false) }
 									setShowScratchPad(!showScratchPad)
 								}}
-								className={`h-11 w-11 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl hover:bg-purple-500/20 active:scale-95 transition-all relative ${showScratchPad ? 'bg-purple-500/20 text-purple-400' : 'text-white/80 hover:text-purple-400'}`}
-								title="Scratch Pad"
+								className={`h-9 w-9 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl transition-all active:scale-95 ${showScratchPad
+										? 'bg-purple-600 text-white shadow-lg shadow-purple-600/20'
+										: 'bg-white/5 text-white/80 hover:bg-white/10 hover:text-white'
+									}`}
+								title="Open Whiteboard"
 							>
-								<PencilLine className="h-5 w-5 md:h-5 md:w-5" />
+								<PenTool className={`h-4 w-4 md:h-5 md:w-5 ${showScratchPad ? 'text-white' : 'text-white/80'}`} />
 							</button>
 						</div>
 
-						{!isGuest && (
-							<div className="flex flex-col items-center justify-center group">
-								{/* Participants */}
-								<button
-									onClick={() => {
-										if (!canViewParticipantList) return
-										if (!showParticipants) { setShowChat(false); setShowScratchPad(false) }
-										setShowParticipants(!showParticipants)
-									}}
-									disabled={!canViewParticipantList}
-									className={`h-11 w-11 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl hover:bg-sky-500/20 active:scale-95 transition-all relative ${showParticipants ? 'bg-sky-500/20 text-sky-400' : 'text-white/80 hover:text-sky-400'}`}
-									title={canViewParticipantList ? 'Participants' : 'Participant list is hidden by host'}
-								>
-									<Users className="h-5 w-5 md:h-5 md:w-5" />
-									{allParticipants && allParticipants.length > 0 && (
-										<span className="absolute -top-1 -right-1 bg-sky-500 text-white text-[8px] md:text-[9px] font-bold px-1 md:px-1.5 rounded-full min-w-[14px] md:min-w-[16px] h-[14px] md:h-[16px] flex items-center justify-center border-2 border-[#141414]">
-											{allParticipants.length}
-										</span>
-									)}
-								</button>
-							</div>
-						)}
-
+						{/* Participants Toggle */}
+						<div className="flex flex-col items-center justify-center group">
+							<button
+								onClick={() => {
+									if (!canViewParticipantList) return
+									if (!showParticipants) { setShowChat(false); setShowScratchPad(false) }
+									setShowParticipants(!showParticipants)
+								}}
+								disabled={!canViewParticipantList}
+								className={`h-11 w-11 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl hover:bg-sky-500/20 active:scale-95 transition-all relative ${showParticipants ? 'bg-sky-500/20 text-sky-400' : 'text-white/80 hover:text-sky-400'}`}
+								title={canViewParticipantList ? 'Participants' : 'Participant list is hidden by host'}
+							>
+								<Users className="h-5 w-5 md:h-5 md:w-5" />
+								{allParticipants && allParticipants.length > 0 && (
+									<span className="absolute -top-1 -right-1 bg-sky-500 text-white text-[8px] md:text-[9px] font-bold px-1 md:px-1.5 rounded-full min-w-[14px] md:min-w-[16px] h-[14px] md:h-[16px] flex items-center justify-center border-2 border-[#141414]">
+										{allParticipants.length}
+									</span>
+								)}
+							</button>
+						</div>
 
 						{/* PiP */}
 						<div className="hidden md:flex flex-col items-center justify-center group">
@@ -3728,7 +3783,6 @@ const VideoRoomContent = memo(function VideoRoomContent({
 							</button>
 						</div>
 
-						{/* Extend Session - Only show if timer is enabled AND user is host */}
 						{timerEnabled && isHost && (
 							<div className="hidden md:flex relative flex-col items-center justify-center group">
 								<button
@@ -4282,6 +4336,70 @@ const VideoRoomContent = memo(function VideoRoomContent({
 					}}
 					onDismiss={dismissPermissionRequest}
 				/>
+			)}
+
+			{/* Collaborative Scratchpad Overlay */}
+			{showScratchPad && (
+				<div className="fixed inset-0 z-[110] flex items-center justify-center p-4 md:p-12 animate-in fade-in zoom-in-95 duration-300">
+					<div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowScratchPad(false)} />
+					
+					<div className="relative w-full h-full max-w-7xl bg-[#0a0a0a]/90 backdrop-blur-2xl rounded-[32px] border border-white/10 shadow-[0_0_80px_-20px_rgba(0,0,0,0.8)] flex flex-col overflow-hidden ring-1 ring-white/5">
+						{/* Header */}
+						<div className="h-14 md:h-16 px-6 md:px-8 flex items-center justify-between border-b border-white/5 bg-white/5 flex-shrink-0">
+							<div className="flex items-center gap-3">
+								<div className="h-8 w-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
+									<PenTool className="h-4 w-4 text-purple-400" />
+								</div>
+								<div>
+									<h2 className="text-white font-bold text-sm md:text-base tracking-tight">Open Whiteboard</h2>
+									<p className="text-[10px] text-white/40 uppercase tracking-widest font-semibold flex items-center gap-1.5">
+										<span className="w-1.5 h-1.5 bg-[#00DC6E] rounded-full animate-pulse" />
+										Live Collaboration
+									</p>
+								</div>
+							</div>
+
+							<div className="flex items-center gap-3">
+								{isHost && (
+									<Button
+										variant="ghost"
+										size="sm"
+										onClick={() => setAllowScratchPadEdit(!allowScratchPadEdit)}
+										className={`h-9 px-4 rounded-xl border transition-all text-xs font-semibold gap-2 ${
+											allowScratchPadEdit 
+												? 'bg-sky-500/10 text-sky-400 border-sky-500/20 hover:bg-sky-500/20' 
+												: 'bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20'
+										}`}
+									>
+										{allowScratchPadEdit ? <Lock className="h-3.5 w-3.5" /> : <ShieldCheck className="h-3.5 w-3.5" />}
+										{allowScratchPadEdit ? 'Lock for Participants' : 'Allow Participants to Edit'}
+									</Button>
+								)}
+								<div className="w-px h-6 bg-white/10 mx-1" />
+								<Button
+									variant="ghost"
+									size="sm"
+									onClick={() => setShowScratchPad(false)}
+									className="h-9 w-9 p-0 text-white/40 hover:text-white hover:bg-white/10 rounded-xl transition-all"
+								>
+									<X className="h-5 w-5" />
+								</Button>
+							</div>
+						</div>
+
+						{/* Editor Canvas */}
+						<div className="flex-1 min-h-0 relative bg-zinc-950">
+							<ScratchPad
+								roomId={sessionData?.id || 'default'}
+								room={room}
+								isHost={isHost}
+								canEdit={isHost || allowScratchPadEdit}
+								roomTitle={sessionData?.id || 'Meeting'}
+								enabled={showScratchPad}
+							/>
+						</div>
+					</div>
+				</div>
 			)}
 
 			{/* Remote Control Consent UI (Screen Sharer Side) */}

@@ -1,14 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Room, DataPacket_Kind } from 'livekit-client'
-import { createTLStore, defaultShapeUtils, TLStore, TLRecord, Editor, loadSnapshot, getSnapshot } from 'tldraw'
+import { Room } from 'livekit-client'
+import { createTLStore, defaultShapeUtils, Editor, loadSnapshot, getSnapshot } from 'tldraw'
 import { useAuth } from '@clerk/nextjs'
 
 interface UseScratchPadOptions {
 	roomId: string
 	room?: Room
 	isHost?: boolean
-    canEdit?: boolean
-    roomTitle?: string
+	canEdit?: boolean
+	roomTitle?: string
 	enabled?: boolean
 }
 
@@ -29,9 +29,19 @@ export function useScratchPad({ roomId, room, isHost, canEdit = true, roomTitle,
 			try {
 				setLoading(true)
 				const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/scratch-pad/${roomId}`)
-				if (!response.ok) throw new Error('Failed to load scratch pad')
-				const data = await response.json()
 				
+				if (response.status === 404) {
+					console.log('ScratchPad: No previous state found (expected for new rooms).')
+					setLoading(false)
+					return
+				}
+
+				if (!response.ok) {
+					const errorText = await response.text().catch(() => 'Unknown error')
+					throw new Error(`Failed to load scratch pad: ${response.status} ${errorText}`)
+				}
+
+				const data = await response.json()
 				if (data.content && editorRef.current) {
 					loadSnapshot(editorRef.current.store, data.content)
 				}
@@ -50,7 +60,7 @@ export function useScratchPad({ roomId, room, isHost, canEdit = true, roomTitle,
 	useEffect(() => {
 		if (!room || !enabled) return
 
-		const handleData = (payload: Uint8Array, participant: any) => {
+		const handleData = (payload: Uint8Array, _participant: unknown) => {
 			try {
 				const decoder = new TextDecoder()
 				const data = JSON.parse(decoder.decode(payload))
@@ -58,15 +68,14 @@ export function useScratchPad({ roomId, room, isHost, canEdit = true, roomTitle,
 				if (data.type === 'scratch-pad-update' && editorRef.current) {
 					skipRemoteUpdateRef.current = true
 					editorRef.current.store.mergeRemoteChanges(() => {
-                        // Apply incremental changes or full snapshot
-                        if (data.changes) {
-                            editorRef.current?.store.applyDiff(data.changes)
-                        }
-                    })
+						if (data.changes) {
+							editorRef.current?.store.applyDiff(data.changes)
+						}
+					})
 					skipRemoteUpdateRef.current = false
 				}
 			} catch (err) {
-				// Silent fail for malformed data
+				// Silent fail
 			}
 		}
 
@@ -82,7 +91,7 @@ export function useScratchPad({ roomId, room, isHost, canEdit = true, roomTitle,
 			if (skipRemoteUpdateRef.current) return
 			if (change.source !== 'user') return
 
-			// Only sync every 100ms for performance
+			// Throttle sync
 			const now = Date.now()
 			if (now - lastSyncRef.current < 50) return
 			lastSyncRef.current = now
@@ -95,8 +104,8 @@ export function useScratchPad({ roomId, room, isHost, canEdit = true, roomTitle,
 					changes: change.changes,
 				}))
 				room.localParticipant.publishData(payload, {
-                    reliable: true
-                })
+					reliable: true
+				})
 			}
 		}, { scope: 'document', source: 'user' })
 
@@ -110,7 +119,7 @@ export function useScratchPad({ roomId, room, isHost, canEdit = true, roomTitle,
 
 		const interval = setInterval(async () => {
 			if (!editorRef.current) return
-			
+
 			try {
 				const snapshot = getSnapshot(editorRef.current.store)
 				const token = await getToken()
@@ -128,7 +137,7 @@ export function useScratchPad({ roomId, room, isHost, canEdit = true, roomTitle,
 		}, 30000) // Save every 30s
 
 		return () => clearInterval(interval)
-	}, [isHost, enabled, roomId])
+	}, [isHost, enabled, roomId, room, canEdit, roomTitle, getToken])
 
 	return {
 		store,

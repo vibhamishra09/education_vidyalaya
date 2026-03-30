@@ -30,7 +30,7 @@ export function ScratchPadHistory() {
           </div>
           <CardTitle className="text-xl mb-2">No Scratch Pads Yet</CardTitle>
           <CardDescription className="max-w-xs mx-auto">
-            Use the scratch pad during your study, peer, or debate sessions and they'll show up here for later review and edits.
+            Use the scratch pad during your study, peer, or debate sessions and they&apos;ll show up here for later review and edits.
           </CardDescription>
         </CardContent>
       </Card>
