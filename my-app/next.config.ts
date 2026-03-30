@@ -10,8 +10,6 @@ const backendOrigin =
   "http://127.0.0.1:3001";
 
 const nextConfig: NextConfig = {
-  /** Monorepo: repo root + my-app both have lockfiles; trace deps from repo root. */
-  outputFileTracingRoot: repoRoot,
   /**
    * Forward /api/* to Nest so browser calls like PATCH /api/peer-sessions/:id work when
    * NEXT_PUBLIC_API_URL is empty or matches the site origin (same-origin + Bearer token).
