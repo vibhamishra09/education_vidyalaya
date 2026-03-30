@@ -5,7 +5,6 @@ import { Navigation } from '@/components/layout/navigation';
 import { Footer } from '@/components/layout/footer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Select,
@@ -451,14 +450,6 @@ export default function DebateRoomsPage() {
             {trendingOnly ? 'Trending: On' : 'Trending: Off'}
           </Button>
         </div>
-
-        {trendingOnly && (
-          <div className="mb-4">
-            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-              Trending uses hybrid sort: LIVE first, then upcoming soonest, then participation.
-            </Badge>
-          </div>
-        )}
 
         {/* Loading State */}
         {isLoading && (

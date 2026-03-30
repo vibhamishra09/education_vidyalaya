@@ -82,9 +82,18 @@ export class BrowseQueryDto extends PaginationQueryDto {
   includeTrendingStudyRooms?: boolean;
 
   @IsOptional()
+  @Transform(({ value }) => {
+    if (value === 'true' || value === true) return true;
+    if (value === 'false' || value === false) return false;
+    return undefined;
+  })
+  @IsBoolean()
+  includeTrendingWebinars?: boolean;
+
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  @Max(12)
+  @Max(10)
   trendingLimit?: number;
 }

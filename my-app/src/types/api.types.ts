@@ -489,6 +489,7 @@ export interface BrowseResponse {
   peers: BrowsePeer[];
   studyRooms: StudyRoomCard[];
   trendingStudyRooms?: StudyRoomCard[];
+  trendingWebinars?: StudyRoomCard[];
   counts: {
     peers: number;
     studyRooms: number;
@@ -687,6 +688,7 @@ export interface BrowseFilters extends PaginationQuery {
   studyStatus?: SessionStatus;
   studyFreeOnly?: boolean;
   includeTrendingStudyRooms?: boolean;
+  includeTrendingWebinars?: boolean;
   trendingLimit?: number;
   [key: string]: unknown;
 }

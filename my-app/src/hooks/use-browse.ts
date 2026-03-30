@@ -33,7 +33,7 @@ export function useBrowseRecommendations(
   return useQuery<RecommendationsHookResponse>({
     queryKey: browseKeys.recommendations(),
     queryFn: async () => {
-      const response = await browseApi.getRecommendations(8);
+      const response = await browseApi.getRecommendations(10);
       
       // Transform the response to match the expected format
       return {
