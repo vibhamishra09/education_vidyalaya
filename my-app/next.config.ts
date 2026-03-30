@@ -1,8 +1,4 @@
-import path from "path";
 import type { NextConfig } from "next";
-
-/** Monorepo root when `next` is run from `my-app` (e.g. `pnpm build`). */
-const repoRoot = path.join(process.cwd(), "..");
 
 /**
  * Nest API target for same-origin /api/* rewrites (when the browser hits localhost:3000/api/...).
