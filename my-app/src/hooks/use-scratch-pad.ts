@@ -18,6 +18,7 @@ export function useScratchPad({ roomId, room, isHost, canEdit = true, roomTitle,
 	const [sharedStore] = useState(() => createTLStore({ shapeUtils: defaultShapeUtils }))
 	const [personalStore] = useState(() => createTLStore({ shapeUtils: defaultShapeUtils }))
 	const [mode, setMode] = useState<ScratchPadMode>('personal')
+	const [saving, setSaving] = useState(false)
 	
 	const [loading, setLoading] = useState(true)
 	const [error, setError] = useState<string | null>(null)
@@ -26,17 +27,22 @@ export function useScratchPad({ roomId, room, isHost, canEdit = true, roomTitle,
 	const lastSyncRef = useRef<number>(0)
 	const skipRemoteUpdateRef = useRef(false)
 
-	// Load initial state from S3 (Only for shared store)
+	// Load initial state from S3
 	useEffect(() => {
 		if (!enabled || !roomId) return
 
 		async function loadInitialState() {
 			try {
 				setLoading(true)
-				const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/scratch-pad/${roomId}`)
+				const token = await getToken()
+				const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/scratch-pad/${roomId}`, {
+					headers: {
+						...(token ? { Authorization: `Bearer ${token}` } : {})
+					}
+				})
 				
 				if (response.status === 404) {
-					console.log('ScratchPad: No previous state found (expected for new rooms).')
+					console.log('ScratchPad: No previous state found.')
 					setLoading(false)
 					return
 				}
@@ -48,6 +54,9 @@ export function useScratchPad({ roomId, room, isHost, canEdit = true, roomTitle,
 
 				const data = await response.json()
 				if (data.content) {
+					// Use personal store by default now
+					loadSnapshot(personalStore, data.content)
+					// Also keep shared sync if needed, but the UI focuses on personal
 					loadSnapshot(sharedStore, data.content)
 				}
 			} catch (err) {
@@ -59,14 +68,13 @@ export function useScratchPad({ roomId, room, isHost, canEdit = true, roomTitle,
 		}
 
 		loadInitialState()
-	}, [roomId, enabled, sharedStore])
+	}, [roomId, enabled, sharedStore, personalStore, getToken])
 
 	// LiveKit Sync: Remote -> Local (Only for shared store)
 	useEffect(() => {
 		if (!room || !enabled) return
 
 		const handleData = (payload: Uint8Array, _participant: unknown, _kind: unknown, topic?: string) => {
-			// Support both legacy (no topic) and new topic-based sync
 			if (topic && topic !== 'scratch-pad-update') return
 
 			try {
@@ -125,7 +133,36 @@ export function useScratchPad({ roomId, room, isHost, canEdit = true, roomTitle,
 		editorRef.current = editor
 	}, [])
 
-	// Auto-save to S3 (Host only, for shared board)
+	const saveManual = useCallback(async () => {
+		if (!roomId) return
+		try {
+			setSaving(true)
+			const snapshot = getSnapshot(personalStore)
+			const token = await getToken()
+			const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/scratch-pad/${roomId}`, {
+				method: 'POST',
+				headers: { 
+					'Content-Type': 'application/json',
+					...(token ? { Authorization: `Bearer ${token}` } : {})
+				},
+				body: JSON.stringify({ 
+					content: snapshot, 
+					roomTitle,
+					isPersonal: true 
+				}),
+			})
+			
+			if (!response.ok) throw new Error('Save failed')
+			return true
+		} catch (err) {
+			console.error('ScratchPad Save Error:', err)
+			return false
+		} finally {
+			setSaving(false)
+		}
+	}, [roomId, personalStore, getToken, roomTitle])
+
+	// Auto-save to S3 (Host only)
 	useEffect(() => {
 		const shouldAutoSave = isHost && enabled && roomId && canEdit
 		if (!shouldAutoSave) return
@@ -140,7 +177,11 @@ export function useScratchPad({ roomId, room, isHost, canEdit = true, roomTitle,
 						'Content-Type': 'application/json',
 						...(token ? { Authorization: `Bearer ${token}` } : {})
 					},
-					body: JSON.stringify({ content: snapshot, roomTitle }),
+					body: JSON.stringify({ 
+						content: snapshot, 
+						roomTitle,
+						isPersonal: false 
+					}),
 				})
 			} catch (err) {
 				console.error('ScratchPad Auto-save Error:', err)
@@ -155,7 +196,9 @@ export function useScratchPad({ roomId, room, isHost, canEdit = true, roomTitle,
 		mode,
 		setMode,
 		loading,
+		saving,
 		error,
 		onEditorMount,
+		saveManual
 	}
 }

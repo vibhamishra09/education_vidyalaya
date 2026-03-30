@@ -20,8 +20,13 @@ export class ScratchPadController {
    * Get the saved scratch pad data for a specific room
    */
   @Get(':roomId')
-  async getScratchPad(@Param('roomId') roomId: string) {
-    const data = await this.scratchPadService.getScratchPad(roomId);
+  async getScratchPad(
+    @Param('roomId') roomId: string,
+    @Req() req: any
+  ) {
+    // Optional user ID for personal pad lookup
+    const userId = req.auth?.userId; // Clerk usually puts this in req.auth or req.user
+    const data = await this.scratchPadService.getScratchPad(roomId, userId);
     if (!data) return { content: null };
     return data;
   }
@@ -35,8 +40,9 @@ export class ScratchPadController {
     @Param('roomId') roomId: string, 
     @CurrentUser() userId: string, 
     @Body('content') content: any,
-    @Body('roomTitle') roomTitle?: string
+    @Body('roomTitle') roomTitle?: string,
+    @Body('isPersonal') isPersonal?: boolean
   ) {
-    return this.scratchPadService.saveScratchPad(userId, roomId, content, roomTitle);
+    return this.scratchPadService.saveScratchPad(userId, roomId, content, roomTitle, isPersonal !== false);
   }
 }

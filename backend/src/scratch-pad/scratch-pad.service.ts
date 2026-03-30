@@ -23,20 +23,22 @@ export class ScratchPadService {
     });
   }
 
-  private getS3Key(roomId: string): string {
+  private getS3Key(roomId: string, userId?: string): string {
+    if (userId) return `scratch-pads/personal/${userId}/${roomId}.json`;
     return `scratch-pads/${roomId}.json`;
   }
 
   /**
    * Save scratch pad data to S3 and index in Redis
    */
-  async saveScratchPad(userId: string, roomId: string, content: any, roomTitle?: string) {
-    const key = this.getS3Key(roomId);
+  async saveScratchPad(userId: string, roomId: string, content: any, roomTitle?: string, isPersonal = true) {
+    const key = this.getS3Key(roomId, isPersonal ? userId : undefined);
     const data = JSON.stringify({
       content,
       updatedAt: new Date().toISOString(),
       updatedBy: userId,
       roomTitle: roomTitle || 'Untitled Session',
+      isPersonal,
     });
 
     try {
@@ -50,16 +52,18 @@ export class ScratchPadService {
       await this.s3Client.send(command);
 
       // 2. Index in Redis for history listing
-      // Use a set to keep track of unique room IDs per user
       const userPadsKey = `user:pads:${userId}`;
-      await redisClient.sAdd(userPadsKey, roomId);
+      // For history, we store a composite ID if it's personal
+      const storageId = isPersonal ? `p:${roomId}` : roomId;
+      await redisClient.sAdd(userPadsKey, storageId);
       
-      // Store metadata separately for easy listing without hitting S3
-      const padMetaKey = `pad:meta:${roomId}`;
+      // Store metadata separately
+      const padMetaKey = isPersonal ? `pad:meta:${userId}:${roomId}` : `pad:meta:${roomId}`;
       await redisClient.hSet(padMetaKey, {
         roomId,
         roomTitle: roomTitle || 'Untitled Session',
         updatedAt: new Date().toISOString(),
+        isPersonal: isPersonal ? 'true' : 'false',
       });
 
       return { success: true, roomId };
@@ -72,34 +76,47 @@ export class ScratchPadService {
   /**
    * Load scratch pad data from S3
    */
-  async getScratchPad(roomId: string) {
+  async getScratchPad(roomId: string, userId?: string) {
     if (!this.bucketName || this.bucketName.includes('bucket_name')) {
-      console.warn('ScratchPadService: S3 bucket name not configured or using placeholder. Returning empty state.');
+      console.warn('ScratchPadService: S3 bucket name not configured or using placeholder.');
       return null;
     }
 
-    const key = this.getS3Key(roomId);
+    // Attempt to load personal first if userId provided
+    let key = this.getS3Key(roomId, userId);
+    
     try {
-      const command = new GetObjectCommand({
+      let command = new GetObjectCommand({
         Bucket: this.bucketName,
         Key: key,
       });
-      const response = await this.s3Client.send(command);
-      const str = await response.Body?.transformToString();
-      return str ? JSON.parse(str) : null;
+      
+      try {
+        const response = await this.s3Client.send(command);
+        const str = await response.Body?.transformToString();
+        return str ? JSON.parse(str) : null;
+      } catch (error: any) {
+        // If personal not found and we had a userId, fallback to shared
+        if (userId && (error.name === 'NoSuchKey' || error.$metadata?.httpStatusCode === 404)) {
+          key = this.getS3Key(roomId);
+          command = new GetObjectCommand({
+            Bucket: this.bucketName,
+            Key: key,
+          });
+          const response = await this.s3Client.send(command);
+          const str = await response.Body?.transformToString();
+          return str ? JSON.parse(str) : null;
+        }
+        throw error;
+      }
     } catch (error: any) {
-      // Correctly handle "Not Found" errors from S3 (NoSuchKey or 404 status)
       const isNotFound = 
         error.name === 'NoSuchKey' || 
         error.name === 'NotFound' ||
         error.$metadata?.httpStatusCode === 404;
 
-      if (isNotFound) {
-        return null; // Pad doesn't exist yet
-      }
-      
+      if (isNotFound) return null;
       console.error('Error loading scratch pad from S3:', error);
-      // Don't crash if S3 is misconfigured or down, just return null so user can use a blank canvas
       return null;
     }
   }
@@ -109,17 +126,22 @@ export class ScratchPadService {
    */
   async getUserHistory(userId: string) {
     const userPadsKey = `user:pads:${userId}`;
-    const roomIds = await redisClient.sMembers(userPadsKey);
+    const storageIds = await redisClient.sMembers(userPadsKey);
     
-    if (roomIds.length === 0) return [];
+    if (storageIds.length === 0) return [];
 
     const history = await Promise.all(
-      roomIds.map(async (roomId) => {
-        const meta = await redisClient.hGetAll(`pad:meta:${roomId}`);
+      storageIds.map(async (storageId) => {
+        const isPersonal = storageId.startsWith('p:');
+        const roomId = isPersonal ? storageId.substring(2) : storageId;
+        const padMetaKey = isPersonal ? `pad:meta:${userId}:${roomId}` : `pad:meta:${roomId}`;
+        
+        const meta = await redisClient.hGetAll(padMetaKey);
         return {
-          roomId: meta.roomId || roomId,
-          roomTitle: meta.roomTitle || 'Unknown Room',
+          roomId: roomId,
+          roomTitle: meta.roomTitle || 'Unknown Session',
           updatedAt: meta.updatedAt || 'Unknown',
+          isPersonal: isPersonal,
         };
       })
     );
