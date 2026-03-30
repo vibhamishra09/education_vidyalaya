@@ -36,6 +36,11 @@ import { getStudyRoomPagePathWithJoinIntent } from "@/lib/utils/study-room-share
 const BROWSE_TABS = ["peers", "studyRooms", "webinars"] as const;
 type BrowseTab = typeof BROWSE_TABS[number];
 
+/** Default first page: trending / most-active lists (max 10 each). */
+const BROWSE_DEFAULT_LIMIT = 10;
+const BROWSE_TRENDING_LIMIT = 10;
+const BROWSE_FILTERED_LIMIT = 20;
+
 function studyRoomSkillNames(
   skills: StudyRoomCard["skills"] | undefined,
 ): string[] {
@@ -167,17 +172,21 @@ function BrowsePageContent() {
     studyFreeOnly,
   ]);
 
-  // Fetch data from API
+  const isDefaultBrowseView =
+    currentPage === 1 &&
+    !searchQuery.trim() &&
+    selectedSkills.length === 0;
+
   const browseFilters: BrowseFilters = {
     tab: activeTab,
     page: currentPage,
-    limit: 20,
+    limit: isDefaultBrowseView ? BROWSE_DEFAULT_LIMIT : BROWSE_FILTERED_LIMIT,
   };
-  
+
   if (searchQuery && searchQuery.trim()) {
     browseFilters.search = searchQuery.trim();
   }
-  
+
   if (selectedSkills.length > 0) {
     browseFilters.skills = selectedSkills.map((s) => s.name);
   }
@@ -202,14 +211,40 @@ function BrowsePageContent() {
 
   if (
     activeTab === "studyRooms" &&
-    !searchQuery &&
-    selectedSkills.length === 0 &&
-    currentPage === 1
+    isDefaultBrowseView &&
+    studyRoomStatusFilter === "all" &&
+    studyFreeOnly === "all"
   ) {
     browseFilters.includeTrendingStudyRooms = true;
-    browseFilters.trendingLimit = 4;
+    browseFilters.trendingLimit = BROWSE_TRENDING_LIMIT;
   }
-  
+
+  if (
+    activeTab === "webinars" &&
+    isDefaultBrowseView &&
+    webinarStatusFilter === "all"
+  ) {
+    browseFilters.includeTrendingWebinars = true;
+    browseFilters.trendingLimit = BROWSE_TRENDING_LIMIT;
+  }
+
+  const showStudyTrendingDefaultOnly =
+    activeTab === "studyRooms" &&
+    isDefaultBrowseView &&
+    studyRoomStatusFilter === "all" &&
+    studyFreeOnly === "all";
+
+  const showWebinarTrendingDefaultOnly =
+    activeTab === "webinars" &&
+    isDefaultBrowseView &&
+    webinarStatusFilter === "all";
+
+  /** Page 1, no search/skills, all peers — API sorts by reviews (most active); show at most 10, no pagination. */
+  const showPeersMostActiveDefaultOnly =
+    activeTab === "peers" &&
+    isDefaultBrowseView &&
+    peerHasSocialLinks === "all";
+
   const { data: browseData, isLoading: browseLoading, error: browseError } = useBrowse(browseFilters);
   const { data: skillsData, isLoading: skillsLoading } = useSkills(undefined, 20);
 
@@ -239,6 +274,7 @@ function BrowsePageContent() {
   const peers = browseData?.peers || [];
   const studyRooms = browseData?.studyRooms || [];
   const trendingStudyRooms = browseData?.trendingStudyRooms || [];
+  const trendingWebinars = browseData?.trendingWebinars || [];
   const skills = skillsData?.skills || [];
 
   // Fetch recommendations based on user's "want to learn" skills
@@ -304,10 +340,10 @@ function BrowsePageContent() {
                 ? "Peers who can teach what you want to learn"
                 : "Study rooms matching your learning interests"}
             </p>
-            
+
             {recommendationsLoading ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {Array.from({ length: 4 }).map((_, index) => (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                {Array.from({ length: 10 }).map((_, index) => (
                   <div key={index} className="h-full">
                     <div className="border border-border/40 rounded-2xl p-4 space-y-3 bg-background/40 backdrop-blur-sm">
                       <Skeleton className="h-10 w-10 rounded-full" />
@@ -318,12 +354,12 @@ function BrowsePageContent() {
                 ))}
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                 {activeTab === "peers" 
-                  ? recommendedPeers.slice(0, 4).map((peer) => (
+                  ? recommendedPeers.slice(0, 10).map((peer) => (
                       <PeerCardComponent key={peer.id} peer={peer} />
                     ))
-                  : recommendedRooms.slice(0, 4).map((room) => (
+                  : recommendedRooms.slice(0, 10).map((room) => (
                       <StudyRoomCardComponent 
                         key={room.id}
                         roomId={room.id}
@@ -631,57 +667,10 @@ function BrowsePageContent() {
           )}
         </div>
 
-          {/* {activeTab === "studyRooms" &&
-            trendingStudyRooms.length > 0 &&
-            !searchQuery &&
-            selectedSkills.length === 0 &&
-            studyRoomStatusFilter === "all" &&
-            studyFreeOnly === "all" && (
-              <div className="mb-8">
-                <div className="flex items-center gap-2 mb-3">
-                  <Sparkles className="h-4 w-4 text-green-600" />
-                  <h3 className="text-sm font-semibold text-foreground">Trending Study Rooms</h3>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {trendingStudyRooms.map((room) => (
-                    <StudyRoomCardComponent
-                      key={`trending-${room.id}`}
-                      roomId={room.id}
-                      slug={room.slug ?? room.id}
-                      status={
-                        studyRoomCardDisplayLive(room.sessionStatus, room.date)
-                          ? "live"
-                          : "scheduled"
-                      }
-                      title={room.title}
-                      description={room.description}
-                      date={room.date}
-                      duration={room.duration}
-                      imageUrl={room.imageUrl}
-                      participants={{
-                        current: room.participantCount,
-                        max: room.maxParticipants,
-                      }}
-                      host={studyRoomCardHost(room)}
-                      category={studyRoomCategoryLabel(room.skills)}
-                      skillNames={studyRoomSkillNames(room.skills)}
-                      sessionStatus={room.sessionStatus}
-                      currentUserId={currentUserData?.user?.id ?? null}
-                      seriesId={room.seriesId ?? null}
-                      joiningFee={room.joiningFee}
-                      timezone={room.timezone ?? null}
-                      actionLabel="Join Room"
-                      onAction={() => handleRoomAction(room)}
-                    />
-                  ))}
-                </div>
-              </div>
-            )} */}
-
           <div className="mt-6">
             {browseLoading ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {Array.from({ length: 8 }).map((_, index) => (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                {Array.from({ length: 10 }).map((_, index) => (
                   <div key={index} className="h-full">
                     <div className="border rounded-lg p-4 sm:p-6 space-y-4">
                       <div className="flex items-center justify-between">
@@ -719,186 +708,337 @@ function BrowsePageContent() {
               <>
                 {activeTab === "peers" && (
                   <>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                      {peers.map((peer) => (
-                        <PeerCardComponent key={peer.id} peer={peer} />
-                      ))}
-                      {peers.length === 0 && !browseLoading && (
-                        <div className="col-span-full text-center py-12 text-muted-foreground text-sm sm:text-base">
-                          No peers found matching your criteria
+                    {showPeersMostActiveDefaultOnly ? (
+                      <>
+                        <div className="mb-6 flex items-center gap-2">
+                          <Sparkles className="h-5 w-5 text-green-600 shrink-0" />
+                          <h2 className="text-lg font-bold text-foreground">
+                            Most Active Peers
+                          </h2>
                         </div>
-                      )}
-                    </div>
-                    {browseData?.pagination.totalPages &&
-                      browseData.pagination.totalPages > 1 && (
-                        <div className="mt-6 flex justify-center">
-                          <div className="flex items-center gap-2">
-                            <Button
-                              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                              disabled={currentPage === 1 || browseLoading}
-                              variant="outline"
-                            >
-                              Previous
-                            </Button>
-                            <span className="text-sm text-muted-foreground px-2">
-                              Page {browseData.pagination.page} of {browseData.pagination.totalPages}
-                            </span>
-                            <Button
-                              onClick={() => setCurrentPage((p) => p + 1)}
-                              disabled={!browseData.pagination.hasMore || browseLoading}
-                              variant="outline"
-                            >
-                              Next
-                            </Button>
-                          </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                          {peers
+                            .slice(0, BROWSE_TRENDING_LIMIT)
+                            .map((peer) => (
+                              <PeerCardComponent key={peer.id} peer={peer} />
+                            ))}
+                          {peers.length === 0 && !browseLoading && (
+                            <div className="col-span-full text-center py-12 text-muted-foreground text-sm sm:text-base">
+                              No peers found matching your criteria
+                            </div>
+                          )}
                         </div>
-                      )}
+                      </>
+                    ) : (
+                      <>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                          {peers.map((peer) => (
+                            <PeerCardComponent key={peer.id} peer={peer} />
+                          ))}
+                          {peers.length === 0 && !browseLoading && (
+                            <div className="col-span-full text-center py-12 text-muted-foreground text-sm sm:text-base">
+                              No peers found matching your criteria
+                            </div>
+                          )}
+                        </div>
+                        {browseData?.pagination.totalPages &&
+                          browseData.pagination.totalPages > 1 && (
+                            <div className="mt-6 flex justify-center">
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                                  disabled={currentPage === 1 || browseLoading}
+                                  variant="outline"
+                                >
+                                  Previous
+                                </Button>
+                                <span className="text-sm text-muted-foreground px-2">
+                                  Page {browseData.pagination.page} of{" "}
+                                  {browseData.pagination.totalPages}
+                                </span>
+                                <Button
+                                  onClick={() => setCurrentPage((p) => p + 1)}
+                                  disabled={!browseData.pagination.hasMore || browseLoading}
+                                  variant="outline"
+                                >
+                                  Next
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                      </>
+                    )}
                   </>
                 )}
 
                 {activeTab === "studyRooms" && (
                   <>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                      {studyRooms.map((room) => (
-                        <StudyRoomCardComponent 
-                          key={room.id}
-                          roomId={room.id}
-                          slug={room.slug ?? room.id}
-                          status={
-                          studyRoomCardDisplayLive(room.sessionStatus, room.date)
-                            ? "live"
-                            : "scheduled"
-                        }
-                          title={room.title}
-                          description={room.description}
-                          date={room.date}
-                          duration={room.duration}
-                          imageUrl={room.imageUrl}
-                          participants={{
-                            current: room.participantCount,
-                            max: room.maxParticipants
-                          }}
-                          host={studyRoomCardHost(room)}
-                          category={studyRoomCategoryLabel(room.skills)}
-                          skillNames={studyRoomSkillNames(room.skills)}
-                          sessionStatus={room.sessionStatus}
-                          currentUserId={currentUserData?.user?.id ?? null}
-                          seriesId={room.seriesId ?? null}
-                          joiningFee={room.joiningFee}
-                          timezone={room.timezone ?? null}
-                          actionLabel="Join Room"
-                          onAction={() => handleRoomAction(room)}
-                        />
-                      ))}
-                      {studyRooms.length === 0 && !browseLoading && (
-                        <div className="col-span-full text-center py-12 text-muted-foreground text-sm sm:text-base">
-                          No study rooms found matching your criteria
+                    {showStudyTrendingDefaultOnly ? (
+                      <>
+                        <div className="mb-6 flex items-center gap-2">
+                          <Sparkles className="h-5 w-5 text-green-600 shrink-0" />
+                          <h2 className="text-lg font-bold text-foreground">
+                            Trending Study Rooms
+                          </h2>
                         </div>
-                      )}
-                    </div>
-                    {browseData?.pagination.totalPages &&
-                      browseData.pagination.totalPages > 1 && (
-                        <div className="mt-6 flex justify-center">
-                          <div className="flex items-center gap-2">
-                            <Button
-                              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                              disabled={currentPage === 1 || browseLoading}
-                              variant="outline"
-                            >
-                              Previous
-                            </Button>
-                            <span className="text-sm text-muted-foreground px-2">
-                              Page {browseData.pagination.page} of {browseData.pagination.totalPages}
-                            </span>
-                            <Button
-                              onClick={() => setCurrentPage((p) => p + 1)}
-                              disabled={!browseData.pagination.hasMore || browseLoading}
-                              variant="outline"
-                            >
-                              Next
-                            </Button>
-                          </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                          {trendingStudyRooms
+                            .slice(0, BROWSE_TRENDING_LIMIT)
+                            .map((room) => (
+                              <StudyRoomCardComponent
+                                key={`trending-${room.id}`}
+                                roomId={room.id}
+                                slug={room.slug ?? room.id}
+                                status={
+                                  studyRoomCardDisplayLive(
+                                    room.sessionStatus,
+                                    room.date,
+                                  )
+                                    ? "live"
+                                    : "scheduled"
+                                }
+                                title={room.title}
+                                description={room.description}
+                                date={room.date}
+                                duration={room.duration}
+                                imageUrl={room.imageUrl}
+                                participants={{
+                                  current: room.participantCount,
+                                  max: room.maxParticipants,
+                                }}
+                                host={studyRoomCardHost(room)}
+                                category={studyRoomCategoryLabel(room.skills)}
+                                skillNames={studyRoomSkillNames(room.skills)}
+                                sessionStatus={room.sessionStatus}
+                                currentUserId={currentUserData?.user?.id ?? null}
+                                seriesId={room.seriesId ?? null}
+                                joiningFee={room.joiningFee}
+                                timezone={room.timezone ?? null}
+                                actionLabel="Join Room"
+                                onAction={() => handleRoomAction(room)}
+                              />
+                            ))}
+                          {trendingStudyRooms.length === 0 && !browseLoading && (
+                            <div className="col-span-full text-center py-12 text-muted-foreground text-sm sm:text-base">
+                              No trending study rooms right now. Try a search or filters
+                              below.
+                            </div>
+                          )}
                         </div>
-                      )}
+                      </>
+                    ) : (
+                      <>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                          {studyRooms.map((room) => (
+                            <StudyRoomCardComponent 
+                              key={room.id}
+                              roomId={room.id}
+                              slug={room.slug ?? room.id}
+                              status={
+                              studyRoomCardDisplayLive(room.sessionStatus, room.date)
+                                ? "live"
+                                : "scheduled"
+                            }
+                              title={room.title}
+                              description={room.description}
+                              date={room.date}
+                              duration={room.duration}
+                              imageUrl={room.imageUrl}
+                              participants={{
+                                current: room.participantCount,
+                                max: room.maxParticipants
+                              }}
+                              host={studyRoomCardHost(room)}
+                              category={studyRoomCategoryLabel(room.skills)}
+                              skillNames={studyRoomSkillNames(room.skills)}
+                              sessionStatus={room.sessionStatus}
+                              currentUserId={currentUserData?.user?.id ?? null}
+                              seriesId={room.seriesId ?? null}
+                              joiningFee={room.joiningFee}
+                              timezone={room.timezone ?? null}
+                              actionLabel="Join Room"
+                              onAction={() => handleRoomAction(room)}
+                            />
+                          ))}
+                          {studyRooms.length === 0 && !browseLoading && (
+                            <div className="col-span-full text-center py-12 text-muted-foreground text-sm sm:text-base">
+                              No study rooms found matching your criteria
+                            </div>
+                          )}
+                        </div>
+                        {browseData?.pagination.totalPages &&
+                          browseData.pagination.totalPages > 1 && (
+                            <div className="mt-6 flex justify-center">
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                                  disabled={currentPage === 1 || browseLoading}
+                                  variant="outline"
+                                >
+                                  Previous
+                                </Button>
+                                <span className="text-sm text-muted-foreground px-2">
+                                  Page {browseData.pagination.page} of {browseData.pagination.totalPages}
+                                </span>
+                                <Button
+                                  onClick={() => setCurrentPage((p) => p + 1)}
+                                  disabled={!browseData.pagination.hasMore || browseLoading}
+                                  variant="outline"
+                                >
+                                  Next
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                      </>
+                    )}
                   </>
                 )}
 
                 {activeTab === "webinars" && (
                   <>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                      {studyRooms.map((room) => (
-                        <StudyRoomCardComponent
-                          key={room.id}
-                          roomId={room.id}
-                          slug={room.slug ?? room.id}
-                          status={
-                            studyRoomCardDisplayLive(room.sessionStatus, room.date)
-                              ? "live"
-                              : "scheduled"
-                          }
-                          title={room.title}
-                          description={room.description}
-                          date={room.date}
-                          duration={room.duration}
-                          imageUrl={room.imageUrl}
-                          participants={{
-                            current: room.participantCount,
-                            max: room.maxParticipants,
-                          }}
-                          host={studyRoomCardHost(room)}
-                          category={studyRoomCategoryLabel(room.skills)}
-                          skillNames={studyRoomSkillNames(room.skills)}
-                          sessionStatus={room.sessionStatus}
-                          currentUserId={currentUserData?.user?.id ?? null}
-                          seriesId={room.seriesId ?? null}
-                          joiningFee={room.joiningFee}
-                          timezone={room.timezone ?? null}
-                          actionLabel="Register"
-                          onAction={() => {
-                            const slug = room.webinarRegistrationSlug;
-                            if (slug) {
-                              router.push(
-                                `/webinar/register/${encodeURIComponent(slug)}`,
-                              );
-                            } else {
-                              router.push(
-                                getStudyRoomPagePathWithJoinIntent(room.id),
-                              );
-                            }
-                          }}
-                        />
-                      ))}
-                      {studyRooms.length === 0 && !browseLoading && (
-                        <div className="col-span-full text-center py-12 text-muted-foreground text-sm sm:text-base">
-                          No webinars found matching your criteria
+                    {showWebinarTrendingDefaultOnly ? (
+                      <>
+                        <div className="mb-6 flex items-center gap-2">
+                          <Sparkles className="h-5 w-5 text-green-600 shrink-0" />
+                          <h2 className="text-lg font-bold text-foreground">
+                            Trending Webinars
+                          </h2>
                         </div>
-                      )}
-                    </div>
-                    {browseData?.pagination.totalPages &&
-                      browseData.pagination.totalPages > 1 && (
-                        <div className="mt-6 flex justify-center">
-                          <div className="flex items-center gap-2">
-                            <Button
-                              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                              disabled={currentPage === 1 || browseLoading}
-                              variant="outline"
-                            >
-                              Previous
-                            </Button>
-                            <span className="text-sm text-muted-foreground px-2">
-                              Page {browseData.pagination.page} of{" "}
-                              {browseData.pagination.totalPages}
-                            </span>
-                            <Button
-                              onClick={() => setCurrentPage((p) => p + 1)}
-                              disabled={!browseData.pagination.hasMore || browseLoading}
-                              variant="outline"
-                            >
-                              Next
-                            </Button>
-                          </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                          {trendingWebinars
+                            .slice(0, BROWSE_TRENDING_LIMIT)
+                            .map((room) => (
+                              <StudyRoomCardComponent
+                                key={`trending-${room.id}`}
+                                roomId={room.id}
+                                slug={room.slug ?? room.id}
+                                status={
+                                  studyRoomCardDisplayLive(
+                                    room.sessionStatus,
+                                    room.date,
+                                  )
+                                    ? "live"
+                                    : "scheduled"
+                                }
+                                title={room.title}
+                                description={room.description}
+                                date={room.date}
+                                duration={room.duration}
+                                imageUrl={room.imageUrl}
+                                participants={{
+                                  current: room.participantCount,
+                                  max: room.maxParticipants,
+                                }}
+                                host={studyRoomCardHost(room)}
+                                category={studyRoomCategoryLabel(room.skills)}
+                                skillNames={studyRoomSkillNames(room.skills)}
+                                sessionStatus={room.sessionStatus}
+                                currentUserId={currentUserData?.user?.id ?? null}
+                                seriesId={room.seriesId ?? null}
+                                joiningFee={room.joiningFee}
+                                timezone={room.timezone ?? null}
+                                actionLabel="Register"
+                                onAction={() => {
+                                  const slug = room.webinarRegistrationSlug;
+                                  if (slug) {
+                                    router.push(
+                                      `/webinar/register/${encodeURIComponent(slug)}`,
+                                    );
+                                  } else {
+                                    router.push(
+                                      getStudyRoomPagePathWithJoinIntent(room.id),
+                                    );
+                                  }
+                                }}
+                              />
+                            ))}
+                          {trendingWebinars.length === 0 && !browseLoading && (
+                            <div className="col-span-full text-center py-12 text-muted-foreground text-sm sm:text-base">
+                              No trending webinars right now. Try a search or filters
+                              below.
+                            </div>
+                          )}
                         </div>
-                      )}
+                      </>
+                    ) : (
+                      <>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                          {studyRooms.map((room) => (
+                            <StudyRoomCardComponent
+                              key={room.id}
+                              roomId={room.id}
+                              slug={room.slug ?? room.id}
+                              status={
+                                studyRoomCardDisplayLive(room.sessionStatus, room.date)
+                                  ? "live"
+                                  : "scheduled"
+                              }
+                              title={room.title}
+                              description={room.description}
+                              date={room.date}
+                              duration={room.duration}
+                              imageUrl={room.imageUrl}
+                              participants={{
+                                current: room.participantCount,
+                                max: room.maxParticipants,
+                              }}
+                              host={studyRoomCardHost(room)}
+                              category={studyRoomCategoryLabel(room.skills)}
+                              skillNames={studyRoomSkillNames(room.skills)}
+                              sessionStatus={room.sessionStatus}
+                              currentUserId={currentUserData?.user?.id ?? null}
+                              seriesId={room.seriesId ?? null}
+                              joiningFee={room.joiningFee}
+                              timezone={room.timezone ?? null}
+                              actionLabel="Register"
+                              onAction={() => {
+                                const slug = room.webinarRegistrationSlug;
+                                if (slug) {
+                                  router.push(
+                                    `/webinar/register/${encodeURIComponent(slug)}`,
+                                  );
+                                } else {
+                                  router.push(
+                                    getStudyRoomPagePathWithJoinIntent(room.id),
+                                  );
+                                }
+                              }}
+                            />
+                          ))}
+                          {studyRooms.length === 0 && !browseLoading && (
+                            <div className="col-span-full text-center py-12 text-muted-foreground text-sm sm:text-base">
+                              No webinars found matching your criteria
+                            </div>
+                          )}
+                        </div>
+                        {browseData?.pagination.totalPages &&
+                          browseData.pagination.totalPages > 1 && (
+                            <div className="mt-6 flex justify-center">
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                                  disabled={currentPage === 1 || browseLoading}
+                                  variant="outline"
+                                >
+                                  Previous
+                                </Button>
+                                <span className="text-sm text-muted-foreground px-2">
+                                  Page {browseData.pagination.page} of{" "}
+                                  {browseData.pagination.totalPages}
+                                </span>
+                                <Button
+                                  onClick={() => setCurrentPage((p) => p + 1)}
+                                  disabled={!browseData.pagination.hasMore || browseLoading}
+                                  variant="outline"
+                                >
+                                  Next
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                      </>
+                    )}
                   </>
                 )}
               </>
