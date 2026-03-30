@@ -53,38 +53,69 @@ export class ChatService {
     });
   }
 
+  // async getOrCreateChannelForStudyRoom(
+  //   studyRoomId: string,
+  //   memberUserIds: string[],
+  // ) {
+  //   const existing = await this.prisma.channel.findFirst({
+  //     where: { externalType: 'studyRoom', externalId: studyRoomId } as any,
+  //   });
+  //   if (existing) {
+  //     // Ensure all members are added to the channel
+  //     for (const userId of memberUserIds) {
+  //       const memberExists = await this.prisma.channelMember.findFirst({
+  //         where: { channelId: existing.id, userId },
+  //       });
+  //       if (!memberExists) {
+  //         await this.prisma.channelMember.create({
+  //           data: { channelId: existing.id, userId },
+  //         });
+  //       }
+  //     }
+  //     return existing;
+  //   }
+  //   return this.prisma.channel.create({
+  //     data: {
+  //       name: `studyRoom:${studyRoomId}`,
+  //       isDirect: false,
+  //       externalType: 'studyRoom',
+  //       externalId: studyRoomId,
+  //       members: {
+  //         create: memberUserIds.map((userId) => ({ userId })),
+  //       },
+  //     } as any,
+  //   });
+  // }
+
   async getOrCreateChannelForStudyRoom(
     studyRoomId: string,
     memberUserIds: string[],
   ) {
-    const existing = await this.prisma.channel.findFirst({
-      where: { externalType: 'studyRoom', externalId: studyRoomId } as any,
-    });
-    if (existing) {
-      // Ensure all members are added to the channel
-      for (const userId of memberUserIds) {
-        const memberExists = await this.prisma.channelMember.findFirst({
-          where: { channelId: existing.id, userId },
-        });
-        if (!memberExists) {
-          await this.prisma.channelMember.create({
-            data: { channelId: existing.id, userId },
-          });
-        }
-      }
-      return existing;
-    }
-    return this.prisma.channel.create({
-      data: {
+    const channel = await this.prisma.channel.upsert({
+      where: {
+        externalType_externalId: {
+          externalType: 'studyRoom',
+          externalId: studyRoomId,
+        },
+      },
+      update: {},
+      create: {
         name: `studyRoom:${studyRoomId}`,
         isDirect: false,
         externalType: 'studyRoom',
         externalId: studyRoomId,
-        members: {
-          create: memberUserIds.map((userId) => ({ userId })),
-        },
-      } as any,
+      },
     });
+
+    await this.prisma.channelMember.createMany({
+      data: memberUserIds.map((userId) => ({
+        channelId: channel.id,
+        userId,
+      })),
+      skipDuplicates: true,
+    });
+
+    return channel;
   }
 
   async listChannels(userId: string) {

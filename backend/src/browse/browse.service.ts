@@ -383,7 +383,13 @@ export class BrowseService {
             this.prisma.studyRoom.count({ where: standardRoomWhere }),
             this.prisma.studyRoom.count({ where: webinarRoomWhere }),
           ]);
+          const distinctRooms = await this.prisma.studyRoom.findMany({
+            where: studyRoomWhere,
+            distinct: ['slug'],
+            select: { slug: true },
+          });
 
+          const studyRoomCount = distinctRooms.length;
           if (tab === 'peers') {
             const users = await this.prisma.user.findMany({
               where: peerWhere,

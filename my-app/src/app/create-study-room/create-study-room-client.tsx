@@ -31,7 +31,7 @@ import {
 } from "@/types/api.types";
 import { ShareButton } from "@/components/share/share-button";
 import { useFormPersistence } from "@/hooks/use-local-storage";
-import { useCreateStudyRoom } from "@/hooks/use-study-rooms";
+import { useCreateRecurringRoom, useCreateStudyRoom } from "@/hooks/use-study-rooms";
 import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -172,6 +172,7 @@ export function CreateStudyRoomClient() {
   const searchParams = useSearchParams();
   const { isLoaded: isAuthLoaded, getToken } = useAuth();
   const createStudyRoomMutation = useCreateStudyRoom();
+  const createRecurringRoomMutation = useCreateRecurringRoom()
 
   const { formData, setFormData, updateField, clearForm, hasStoredData } = useFormPersistence<StudyRoomFormData>(
     "create_study_room",
@@ -453,7 +454,13 @@ export function CreateStudyRoomClient() {
       createData.time = `${hours}:${minutes}`;
     }
 
-    createStudyRoomMutation.mutate(createData, {
+    const isRecurring = !isInstantRoom && formData.recurrenceEnabled;
+
+    console.log("MUTATION :: ", isRecurring);
+    
+    const mutation = isRecurring ? createRecurringRoomMutation : createStudyRoomMutation;    
+
+    mutation.mutate(createData, {
       onSuccess: (room) => {
         clearForm();
         setCreatedRoom(room);
@@ -1333,11 +1340,11 @@ export function CreateStudyRoomClient() {
                         size="lg"
                         className="w-full h-14 text-base font-bold shadow-sm hover:shadow-md transition-all rounded-lg bg-green-100 text-green-800 hover:bg-green-200 border border-green-300 dark:bg-green-900/40 dark:text-green-300 dark:border-green-800 dark:hover:bg-green-900/60"
                         disabled={
-                          createStudyRoomMutation.isPending ||
+                          createStudyRoomMutation.isPending || createRecurringRoomMutation.isPending ||
                           !isAuthLoaded
                         }
                       >
-                        {createStudyRoomMutation.isPending ? (
+                        {(createStudyRoomMutation.isPending || createRecurringRoomMutation.isPending) ? (
                           <>
                             <Loader2 className="h-5 w-5 mr-2 animate-spin" />
                             Creating Room...
