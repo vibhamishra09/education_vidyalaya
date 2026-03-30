@@ -140,7 +140,7 @@ export function StudyRoomHostEditDialog({
     initialDuration,
     initialMaxParticipants,
     initialJoiningFee,
-    initialSkillNames.join("|"),
+    initialSkillNames,
     initialTimezone,
     initialImageUrl,
   ]);

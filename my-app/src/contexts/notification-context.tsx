@@ -77,7 +77,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
       setUnreadCount(response.unreadCount);
       setHasMore(response.pagination.hasMore);
       setCurrentPage(page);
-    } catch (err: unknown) {
+    } catch (_err: unknown) {
       if (!append && page === 1 && !silent) {
         setError('Failed to load notifications');
       }
@@ -106,7 +106,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
         setUnreadCount(updated.filter((n) => !n.viewed).length);
         return updated;
       });
-    } catch (err) {
+    } catch (_err) {
       // Error marking notification as read
     }
   };
@@ -118,7 +118,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
         prev.map(notification => ({ ...notification, viewed: true }))
       );
       setUnreadCount(0);
-    } catch (err) {
+    } catch (_err) {
       // Error marking all notifications as read
     }
   };
@@ -140,7 +140,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
         setUnreadCount(updated.filter((n) => !n.viewed).length);
         return updated;
       });
-    } catch (err) {
+    } catch (_err) {
       // Error marking notifications as read
     }
   };

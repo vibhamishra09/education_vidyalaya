@@ -298,7 +298,7 @@ export default function DebateRoomsPage() {
                       onChange={(e) => {
                         const val = e.target.value;
                         if (val === '') {
-                          setNewMaxParticipants('' as any);
+                          setNewMaxParticipants(0 as unknown as number);
                           return;
                         }
                         const num = parseInt(val, 10);

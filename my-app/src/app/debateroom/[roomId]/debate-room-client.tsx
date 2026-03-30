@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser, useAuth } from '@clerk/nextjs';
 import { Navigation } from '@/components/layout/navigation';
@@ -78,10 +78,10 @@ import {
 } from '@/types/debate.types';
 import {
   DebateTeamsDisplay,
-  DebateTurnTimer,
-  PrepCountdown,
-  DebateBuzzer,
-  DebateTeamChat,
+  DebateTurnTimer as _DebateTurnTimer,
+  PrepCountdown as _PrepCountdown,
+  DebateBuzzer as _DebateBuzzer,
+  DebateTeamChat as _DebateTeamChat,
   DebateResultsDisplay,
 } from '@/components/debate';
 import { ShareButton } from '@/components/share/share-button';
@@ -210,7 +210,7 @@ function PrepTimerDisplay({ secondsRemaining: initialSeconds }: { secondsRemaini
 export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
   const router = useRouter();
   const { user } = useUser();
-  const { getToken } = useAuth();
+  const { getToken: _getToken } = useAuth();
   const { showSuccess, showError } = useToast();
 
   // State
@@ -272,14 +272,14 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
   const {
     isConnected,
     debateState,
-    teamChatMessages,
-    buzzerQueue,
+    teamChatMessages: _teamChatMessages,
+    buzzerQueue: _buzzerQueue,
     prepCountdown,
     joinRoom: socketJoinRoom,
-    pressBuzzer,
-    sendTeamChat,
-    advanceTurn,
-    endDebate,
+    pressBuzzer: _pressBuzzer,
+    sendTeamChat: _sendTeamChat,
+    advanceTurn: _advanceTurn,
+    endDebate: _endDebate,
   } = useDebateSocket({
     roomId,
     enabled: !!room && room.status !== DebateStatus.CANCELLED,
@@ -290,7 +290,7 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
     onParticipantJoined: (event) => {
       showSuccess('Participant Joined', `${event.name} joined the debate`);
     },
-    onParticipantLeft: (event) => {
+    onParticipantLeft: (_event) => {
       showSuccess('Participant Left', `A participant left the debate`);
     },
     onMicEnabled: (event) => {
@@ -1405,7 +1405,7 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
                   onChange={(e) => {
                     const val = e.target.value;
                     if (val === '') {
-                      setEditMaxPerTeam('' as any);
+                      setEditMaxPerTeam(0 as unknown as number);
                       return;
                     }
                     const num = parseInt(val, 10);
