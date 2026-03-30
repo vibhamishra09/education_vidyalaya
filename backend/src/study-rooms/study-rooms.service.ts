@@ -2716,18 +2716,6 @@ export class StudyRoomsService {
     const uniqueHash = Math.random().toString(36).substring(2, 6);
     const seriesSlug = `${slugBase}-${uniqueHash}`;
 
-    const normalizedExternalInvites = (createDto.externalInvites || []).map(
-      (invite) => ({
-        email: this.normalizeEmail(invite.email),
-        role: invite.role,
-      }),
-    );
-
-    const allowExternalUsers = !!createDto.allowExternalUsers;
-    const externalPasscode = allowExternalUsers
-      ? createDto.externalPasscode || this.generatePasscode()
-      : null;
-
     let occurrences;
     try {
       occurrences = buildStudyRoomOccurrences({
@@ -2801,10 +2789,6 @@ export class StudyRoomsService {
           createDto.timezone,
         ),
         timezone: createDto.timezone,
-        allowExternalUsers,
-        externalPasscode,
-        externalAutoAccept:
-          allowExternalUsers && !!createDto.externalAutoAccept,
       };
     });
 
@@ -2833,15 +2817,6 @@ export class StudyRoomsService {
             data: skillMappings,
           });
         }
-
-        if (rooms.length > 0 && allowExternalUsers) {
-          await this.updateExternalInvites(
-            tx,
-            rooms[0].id,
-            normalizedExternalInvites,
-          );
-        }
-
         return rooms;
       }, {
         timeout: 10000
@@ -2862,22 +2837,6 @@ export class StudyRoomsService {
       }
     });
 
-    let emailDelivery: InviteEmailDeliverySummary | undefined;
-
-    if (
-      allowExternalUsers &&
-      externalPasscode &&
-      normalizedExternalInvites.length > 0
-    ) {
-       setImmediate(() => {
-        this.sendExternalInviteEmails(
-          createdRooms[0].id,
-          createDto.title,
-          externalPasscode,
-          normalizedExternalInvites,
-        );
-      });
-    }
 
     const firstRoom = createdRooms[0];
 
@@ -2906,9 +2865,6 @@ export class StudyRoomsService {
       reviews: [],
       chatChannelId: null,
       summary: null,
-      allowExternalUsers,
-      externalAutoAccept: allowExternalUsers && !!createDto.externalAutoAccept,
-      externalPasscode: allowExternalUsers ? externalPasscode : null,
       occurrencesCreated: createdRooms.length,
       slug: seriesSlug,
       isRecurring: true,
