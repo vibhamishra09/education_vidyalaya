@@ -16,7 +16,7 @@
     "test:components": "playwright test tests/frontend-components.spec.ts"
   },
   "dependencies": {
-    "@clerk/nextjs": "^6.33.3",
+    "@clerk/nextjs": "^7.0.7",
     "@livekit/components-react": "^2.9.15",
     "@livekit/components-styles": "^1.1.6",
     "@livekit/track-processors": "^0.7.0",
