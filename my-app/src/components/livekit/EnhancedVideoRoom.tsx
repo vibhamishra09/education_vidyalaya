@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react'
-import { LiveKitRoom, useParticipants, useTracks, RoomAudioRenderer, useSpeakingParticipants, VideoTrack, useLocalParticipant, isTrackReference } from '@livekit/components-react'
+import { LiveKitRoom, useParticipants, useTracks, RoomAudioRenderer, useSpeakingParticipants, VideoTrack, useLocalParticipant, isTrackReference, useRoomContext } from '@livekit/components-react'
 import { Track, RoomOptions, VideoPresets, LocalVideoTrack } from 'livekit-client'
 import '@livekit/components-styles'
 import { BackgroundProcessor, BackgroundBlur, VirtualBackground, BackgroundOptions } from '@livekit/track-processors'
@@ -11,7 +11,8 @@ import {
 	Clock, MonitorUp, MonitorOff, Grid2X2, Presentation, Pin,
 	PinOff, User, PictureInPicture2, Camera, CameraOff, Sparkles, Lock, Settings2,
 	PhoneOff, ChevronUp, ChevronLeft, ChevronRight, ShieldCheck, Ban, Aperture,
-	ImageIcon, LayoutGrid, Check, Timer, Power, LogOut, Zap, ZoomIn, ZoomOut, MousePointer2
+	ImageIcon, LayoutGrid, Check, Timer, Power, LogOut, Zap, ZoomIn, ZoomOut, MousePointer2,
+	PencilLine
 } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
@@ -34,6 +35,7 @@ import { QuestionManager } from '@/components/study-room/QuestionManager'
 import { ChatRecipient } from '@/components/chat/MessageInput'
 import { useRemoteControl } from '@/hooks/use-remote-control'
 import { RemoteControlOverlay } from '@/components/livekit/RemoteControlOverlay'
+import { ScratchPad } from '@/components/scratch-pad/ScratchPad'
 // Stable virtual backgrounds constant to avoid re-creating array each render
 const VIRTUAL_BACKGROUNDS = [
 	{
@@ -804,6 +806,7 @@ export function EnhancedVideoRoom({
 					onParticipantListChange={onParticipantListChange}
 					isGuest={isGuest}
 					guestToken={isGuest ? externalAccessToken : undefined}
+					sessionData={sessionData}
 					// Flash message props
 					activeFlashMessage={activeFlashMessage}
 					flashQuestions={flashQuestions}
@@ -1007,6 +1010,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	onFlashDismissForAll,
 	onFlashGetList,
 	onDismissFlashMessage,
+	sessionData,
 }: {
 	isUserActive: boolean
 	showChat: boolean
@@ -1090,11 +1094,12 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	onFlashDismissForAll?: () => void
 	onFlashGetList?: () => void
 	onDismissFlashMessage?: () => void
+	sessionData?: SessionData | null
 }) {
 	// Room context removed to avoid race conditions, using localParticipant hook instead
 	const params = useParams<{ room: string }>()
+	const room = useRoomContext()
 	const { showWarning, showSuccess, showInfo, showError } = useToast()
-
 	// Remote Control Hook
 	const {
 		isControlling,
@@ -1112,6 +1117,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 
 	// Flash panel state (host only)
 	const [showFlashPanel, setShowFlashPanel] = useState(false)
+	const [showScratchPad, setShowScratchPad] = useState(false)
+	const [allowScratchPadEdit, setAllowScratchPadEdit] = useState(isHost)
 
 	// Get participants list for name lookup
 	const allParticipants = useParticipants()
@@ -1862,9 +1869,9 @@ const VideoRoomContent = memo(function VideoRoomContent({
 
 		// Detection for Split Mode - Both screen share and a pinned participant
 		if (pinnedParticipantId && activeScreenShare) {
-			const pinned = cameraTrackByParticipantId.get(pinnedParticipantId) || { 
+			const pinned = cameraTrackByParticipantId.get(pinnedParticipantId) || {
 				participant: allParticipants.find(p => p.identity === pinnedParticipantId) || activeScreenShare.participant,
-				source: Track.Source.Camera 
+				source: Track.Source.Camera
 			}
 			return {
 				focusedTrack: activeScreenShare,
@@ -1876,9 +1883,9 @@ const VideoRoomContent = memo(function VideoRoomContent({
 
 		// Priority 1: Pinned participant (single focus)
 		if (pinnedParticipantId) {
-			const pinned = cameraTrackByParticipantId.get(pinnedParticipantId) || { 
+			const pinned = cameraTrackByParticipantId.get(pinnedParticipantId) || {
 				participant: allParticipants.find(p => p.identity === pinnedParticipantId),
-				source: Track.Source.Camera 
+				source: Track.Source.Camera
 			}
 			if (pinned.participant) return { focusedTrack: pinned, isScreenShareFocused: false, isSplitMode: false, pinnedTrack: pinned }
 		}
@@ -1952,15 +1959,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		})
 	}
 
-	const toggleFullscreen = () => {
-		if (!document.fullscreenElement) {
-			document.documentElement.requestFullscreen()
-			setIsFullscreen(true)
-		} else {
-			document.exitFullscreen()
-			setIsFullscreen(false)
-		}
-	}
+
 
 	// Native Picture-in-Picture state and refs
 	const [isPiPActive, setIsPiPActive] = useState(false)
@@ -2002,35 +2001,231 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	}
 
 	const pipVideoRef = useRef<HTMLVideoElement | null>(null)
-	const pipAnimationFrameRef = useRef<number | null>(null)
+	const pipWindowRef = useRef<Window | null>(null)
+	const _pipAnimationFrameRef = useRef<number | null>(null)
+	const isAutoPiPRef = useRef(false)
+	const bridgeCanvasRef = useRef<HTMLCanvasElement | null>(null)
+	const bridgeVideoRef = useRef<HTMLVideoElement | null>(null)
+	const bridgeLoopRef = useRef<number | null>(null)
 
-	// Toggle native PiP mode
+	// Function to start a "Canvas Bridge" stream (removes the "LIVE" badge and scrubber)
+	const startCanvasBridge = useCallback((sourceVideo: HTMLVideoElement) => {
+		if (!bridgeCanvasRef.current || !bridgeVideoRef.current) return null;
+		
+		const canvas = bridgeCanvasRef.current;
+		const ctx = canvas.getContext('2d', { alpha: false });
+		if (!ctx) return null;
+
+		// Set canvas size to match video source
+		canvas.width = sourceVideo.videoWidth || 640;
+		canvas.height = sourceVideo.videoHeight || 360;
+
+		const drawFrame = () => {
+			if (sourceVideo.paused || sourceVideo.ended) return;
+			ctx.drawImage(sourceVideo, 0, 0, canvas.width, canvas.height);
+			bridgeLoopRef.current = requestAnimationFrame(drawFrame);
+		};
+
+		// Start drawing loop
+		if (bridgeLoopRef.current) cancelAnimationFrame(bridgeLoopRef.current);
+		drawFrame();
+
+		// Capture stream from canvas and play it in bridge video
+		const stream = canvas.captureStream(30); // 30 fps
+		bridgeVideoRef.current.srcObject = stream;
+		
+		// Set a dummy title and disable controls to trick the browser's PiP UI
+		bridgeVideoRef.current.title = ' ';
+		bridgeVideoRef.current.controls = false;
+		
+		bridgeVideoRef.current.play().catch(() => {});
+		
+		return bridgeVideoRef.current;
+	}, []);
+
+	// Toggle PiP mode (Document PiP or native Video PiP with Canvas Bridge)
+	// Unused toggles removed to fix build warnings
 	const togglePiP = useCallback(async () => {
 		try {
-			if (isMobileViewport || !document.pictureInPictureEnabled) return
+			if (isMobileViewport) return
+
+			// Case 1: Already in PiP (either Document or Video)
+			if (pipWindowRef.current) {
+				pipWindowRef.current.close()
+				pipWindowRef.current = null
+				return
+			}
 
 			if (document.pictureInPictureElement) {
 				await document.exitPictureInPicture()
 				return
 			}
 
+			// Case 2: Requesting PiP
 			const videoElement = document.querySelector('.focus-main-video video, .custom-grid-tile video, .lk-participant-tile video, video:not([data-remote-ignore])') as HTMLVideoElement
-			if (videoElement) {
-				// Handle mirroring manually to avoid React re-renders (which close PiP)
-				if (videoElement.classList.contains('scale-x-[-1]') || videoElement.style.transform.includes('scaleX(-1)')) {
-					videoElement.style.transform = 'none'
-				}
+			if (!videoElement) return
 
-				// Prevent track pausing during transitions
-				await videoElement.play().catch(() => { })
-				await videoElement.requestPictureInPicture()
+			// Handle mirroring manually to avoid React re-renders (which close PiP)
+			const isMirrored = videoElement.classList.contains('scale-x-[-1]') || videoElement.style.transform.includes('scaleX(-1)')
+			if (isMirrored) {
+				videoElement.style.transform = 'none'
+			}
+
+			// Try Document PiP first (Available in Chrome 116+, requires gesture)
+			if ('documentPictureInPicture' in window) {
+				try {
+					console.log('[PiP] Requesting Document PiP window...');
+					// eslint-disable-next-line @typescript-eslint/no-explicit-any
+					const pipWindow = await (window as any).documentPictureInPicture.requestWindow({
+						width: videoElement.clientWidth || 400,
+						height: videoElement.clientHeight || 300,
+					})
+
+					pipWindowRef.current = pipWindow
+					setIsPiPActive(true)
+					pipVideoRef.current = videoElement
+					
+					// Set window title
+					pipWindow.document.title = 'Webyalaya PiP'
+
+					// Style the PiP window
+					const style = pipWindow.document.createElement('style')
+					style.textContent = `
+						body { 
+							margin: 0; 
+							padding: 0; 
+							background: #09090b; 
+							display: flex; 
+							align-items: center; 
+							justify-content: center; 
+							overflow: hidden; 
+							width: 100vw; 
+							height: 100vh; 
+							font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+						}
+						video { 
+							width: 100%; 
+							height: 100%; 
+							object-fit: contain; 
+							background: black;
+							transition: transform 0.3s ease;
+						}
+						.overlay {
+							position: absolute;
+							inset: 0;
+							pointer-events: none;
+							background: linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, transparent 20%, transparent 80%, rgba(0,0,0,0.3) 100%);
+							opacity: 0;
+							transition: opacity 0.3s;
+						}
+						body:hover .overlay { opacity: 1; }
+						.controls { 
+							position: absolute; 
+							top: 12px; 
+							right: 12px; 
+							z-index: 100; 
+							pointer-events: auto;
+						}
+						.badge {
+							position: absolute;
+							top: 12px;
+							left: 12px;
+							background: rgba(0, 220, 110, 0.2);
+							color: #00dc6e;
+							padding: 4px 10px;
+							border-radius: 99px;
+							font-size: 10px;
+							font-weight: 700;
+							letter-spacing: 0.05em;
+							border: 1px solid rgba(0, 220, 110, 0.3);
+							backdrop-filter: blur(8px);
+						}
+						button { 
+							background: rgba(255, 255, 255, 0.1);
+							color: white; 
+							border: 1px solid rgba(255, 255, 255, 0.2); 
+							padding: 6px 14px; 
+							border-radius: 8px; 
+							cursor: pointer; 
+							backdrop-filter: blur(12px);
+							font-size: 11px;
+							font-weight: 600;
+							transition: all 0.2s;
+							display: flex;
+							align-items: center;
+							gap: 6px;
+						}
+						button:hover {
+							background: rgba(255, 255, 255, 0.2);
+							transform: translateY(-1px);
+							box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+						}
+						button:active { transform: translateY(0); }
+					`
+					pipWindow.document.head.append(style)
+
+					// Container for overlay/UI
+					const overlay = pipWindow.document.createElement('div')
+					overlay.className = 'overlay'
+					pipWindow.document.body.append(overlay)
+
+					// Custom Badge
+					const customBadge = pipWindow.document.createElement('div')
+					customBadge.className = 'badge'
+					customBadge.textContent = 'SESSION LIVE'
+					pipWindow.document.body.append(customBadge)
+
+					// Move the video element to the PiP window
+					const videoParent = videoElement.parentElement
+					const videoNextSibling = videoElement.nextSibling
+					pipWindow.document.body.append(videoElement)
+					
+					// Add a premium "Return" button
+					const controls = pipWindow.document.createElement('div')
+					controls.className = 'controls'
+					const returnBtn = pipWindow.document.createElement('button')
+					returnBtn.innerHTML = `
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
+						Back to Session
+					`
+					returnBtn.onclick = () => pipWindow.close()
+					controls.append(returnBtn)
+					pipWindow.document.body.append(controls)
+
+					pipWindow.addEventListener('pagehide', () => {
+						console.log('[PiP] Document PiP window closed');
+						setIsPiPActive(false)
+						pipWindowRef.current = null
+						if (videoParent) {
+							if (videoNextSibling) { videoParent.insertBefore(videoElement, videoNextSibling) }
+							else { videoParent.append(videoElement) }
+						}
+						// Small timeout to ensure it's removed from PiP doc before playing
+						setTimeout(() => {
+							videoElement.play().catch(() => {});
+						}, 50);
+						if (isMirrored) { videoElement.style.transform = '' }
+						pipVideoRef.current = null
+					}, { once: true })
+
+					return
+				} catch (e) {
+					console.warn('[PiP] Document PiP failed:', e);
+				}
+			}
+
+			// Fallback: Native Video Picture-in-Picture using the "Canvas Bridge"
+			// This tricks the browser into hiding the "LIVE" badge and scrubber line.
+			const bridgeVideo = startCanvasBridge(videoElement);
+			if (bridgeVideo) {
+				await bridgeVideo.requestPictureInPicture()
 				setIsPiPActive(true)
 				pipVideoRef.current = videoElement
 			}
 		} catch (error) {
 			console.error('PiP error:', error)
 		}
-	}, [isMobileViewport])
+	}, [isMobileViewport, startCanvasBridge])
 
 	// Auto-trigger PiP on visibility change (like Google Meet)
 	useEffect(() => {
@@ -2043,7 +2238,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 
 			console.log(`[PiP] ${e?.type || 'poll'} event: hidden=${isHidden}, pip=${!!document.pictureInPictureElement}`);
 
-			if (isHidden && !document.pictureInPictureElement) {
+			if (isHidden && !document.pictureInPictureElement && !pipWindowRef.current) {
 				// Search for candidate video
 				const videos = Array.from(document.querySelectorAll('.focus-main-video video, .custom-grid-tile video, .lk-participant-tile video, video:not([data-remote-ignore])')) as HTMLVideoElement[];
 				const videoElement = videos.find(v => v.readyState >= 2 && v.srcObject) || videos.find(v => v.readyState >= 2) || videos[0];
@@ -2056,23 +2251,82 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						// Ensure video is active
 						await videoElement.play().catch(() => { });
 
-						if (videoElement.classList.contains('scale-x-[-1]') || videoElement.style.transform.includes('scaleX(-1)')) {
+						const isMirrored = videoElement.classList.contains('scale-x-[-1]') || videoElement.style.transform.includes('scaleX(-1)')
+						if (isMirrored) {
 							videoElement.style.transform = 'none';
 						}
 
-						console.log('[PiP] Requesting PiP window...');
-						await videoElement.requestPictureInPicture();
-						setIsPiPActive(true);
-						pipVideoRef.current = videoElement;
+						// Try Document PiP first
+						if ('documentPictureInPicture' in window) {
+							try {
+								console.log('[PiP] Requesting auto D-PiP window...');
+								// eslint-disable-next-line @typescript-eslint/no-explicit-any
+								const pipWindow = await (window as any).documentPictureInPicture.requestWindow({
+									width: videoElement.clientWidth || 400,
+									height: videoElement.clientHeight || 300,
+								})
+
+								pipWindowRef.current = pipWindow
+								setIsPiPActive(true)
+								pipVideoRef.current = videoElement
+								isAutoPiPRef.current = true
+
+								// Set window title
+								pipWindow.document.title = 'Webyalaya PiP'
+
+								const style = pipWindow.document.createElement('style')
+								style.textContent = `
+									body { margin: 0; padding: 0; background: black; display: flex; align-items: center; justify-content: center; overflow: hidden; width: 100vw; height: 100vh; }
+									video { width: 100%; height: 100%; object-fit: contain; }
+								`
+								pipWindow.document.head.append(style)
+
+								const videoParent = videoElement.parentElement
+								const videoNextSibling = videoElement.nextSibling
+								pipWindow.document.body.append(videoElement)
+
+								pipWindow.addEventListener('pagehide', () => {
+									setIsPiPActive(false)
+									pipWindowRef.current = null
+									isAutoPiPRef.current = false
+									if (videoParent) {
+										if (videoNextSibling) { videoParent.insertBefore(videoElement, videoNextSibling) }
+										else { videoParent.append(videoElement) }
+									}
+									if (isMirrored) { videoElement.style.transform = '' }
+									pipVideoRef.current = null
+								}, { once: true })
+								return; // Success
+							} catch (e) {
+								console.warn('[PiP] Auto D-PiP failed:', e);
+							}
+						}
+
+						// Fallback to Canvas Bridge (avoids the badge/line in native PiP)
+						const bridgeVideo = startCanvasBridge(videoElement);
+						if (bridgeVideo) {
+							await bridgeVideo.requestPictureInPicture();
+							setIsPiPActive(true);
+							pipVideoRef.current = videoElement;
+						}
 					} catch (error) {
 						console.warn('[PiP] Auto-PiP failed:', error);
 					}
 				}
-			} else if (isVisible && document.pictureInPictureElement) {
+			} else if (isVisible && (document.pictureInPictureElement || pipWindowRef.current)) {
 				try {
 					console.log('[PiP] Tab active, closing PiP');
-					await document.exitPictureInPicture();
-					// Explicitly cleanup state here too
+					if (document.pictureInPictureElement) {
+						await document.exitPictureInPicture();
+					}
+					if (pipWindowRef.current) {
+						pipWindowRef.current.close()
+						pipWindowRef.current = null
+					}
+					if (bridgeLoopRef.current) {
+						cancelAnimationFrame(bridgeLoopRef.current);
+						bridgeLoopRef.current = null;
+					}
 					setIsPiPActive(false);
 				} catch (error) {
 					// Ignore
@@ -2080,10 +2334,14 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			}
 		}
 
-		// Listen for PiP exit
+		// Listen for native PiP exit
 		const handlePiPExit = () => {
 			console.log('[PiP] leavepictureinpicture event received');
 			setIsPiPActive(false)
+			if (bridgeLoopRef.current) {
+				cancelAnimationFrame(bridgeLoopRef.current);
+				bridgeLoopRef.current = null;
+			}
 			const videoElement = pipVideoRef.current
 			if (videoElement) {
 				if (videoElement.classList.contains('scale-x-[-1]')) {
@@ -2097,10 +2355,11 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		document.addEventListener('leavepictureinpicture', handlePiPExit)
 
 		return () => {
+			if (bridgeLoopRef.current) cancelAnimationFrame(bridgeLoopRef.current);
 			document.removeEventListener('visibilitychange', handleVisibilityChange)
 			document.removeEventListener('leavepictureinpicture', handlePiPExit)
 		}
-	}, [isMobileViewport])
+	}, [isMobileViewport, startCanvasBridge])
 
 	// Mobile: Restore mic/camera after Android tab switch
 	// Android browsers suspend media tracks when the page is hidden.
@@ -2869,188 +3128,265 @@ const VideoRoomContent = memo(function VideoRoomContent({
 					}
 					`}} />
 						{/* Layout rendering */}
-					{layoutMode === 'focus' ? (
-						<div className="focus-layout-container">
-							{/* Thumbnail strip at TOP with Scroll Buttons */}
-							{!isExpandedView && (
-							<div className="focus-thumbnails-wrapper">
-								{/* Left Scroll Button */}
-								<button 
-									className={`focus-scroll-btn left ${!canScrollLeft ? 'opacity-0 pointer-events-none' : ''}`}
-									onClick={() => scrollThumbnails('left')}
-									disabled={!canScrollLeft}
-								>
-									<ChevronLeft className="w-5 h-5" />
-								</button>
-
-								<div className="focus-thumbnails" ref={thumbnailsRef}>
-									{sortedParticipants
-										.filter((participant) => {
-											// Exclude the focused participant from thumbnails to avoid showing them twice.
-											const isFocused = focusedParticipantForDisplay?.identity === participant.identity
-											return !isFocused || isScreenShareFocused
-										})
-										.map((participant) => {
-										const isLocal = participant.isLocal
-										const isMuted = !participant.isMicrophoneEnabled
-										const isVideoOff = !participant.isCameraEnabled
-										const participantCameraTrack = cameraTrackByParticipantId.get(participant.identity)
-										const isVideoTrackRef = !!participantCameraTrack && isTrackReference(participantCameraTrack)
-										const hasVideo = isVideoTrackRef && !!participantCameraTrack.publication?.track
-										const avatarUrl = getParticipantAvatar(participant)
-										const name = participant.isLocal ? 'You' : (participant.name || participant.identity)
-										
-										return (
-											<div 
-												key={`thumb-${participant.identity}`}
-												className={`focus-thumbnail ${
-													participant.isSpeaking ? 'speaking' : ''
-												} ${
-													pinnedParticipantId === participant.identity ? 'pinned' : ''
-												}`}
-												onClick={() => handleThumbnailClick(participant.identity)}
-											>
-												{/* Video/Avatar Container */}
-												<div className="focus-thumbnail-video-container">
-													{/* Avatar background layer - always visible */}
-													<div className="absolute inset-0 flex items-center justify-center bg-gradient-to-b from-[#2a2a2a] to-[#1f1f1f] z-[1]">
-														{avatarUrl ? (
-															<Image
-																src={avatarUrl}
-																alt={participant.name || 'Participant'}
-																width={40}
-																height={40}
-																className="w-10 h-10 rounded-full object-cover"
-															/>
-														) : (
-															<div className="w-10 h-10 rounded-full bg-gradient-to-b from-[#404040] to-[#303030] flex items-center justify-center">
-																<User className="w-5 h-5 text-[#666]" />
-															</div>
-														)}
-													</div>
-													{/* Video layer on top - ONLY render when there's actual video track */}
-													{hasVideo && isVideoTrackRef && (
-														<div className="absolute inset-0 z-[2]">
-															<VideoTrack 
-																trackRef={participantCameraTrack} 
-																className={`w-full h-full object-cover ${isLocal ? 'scale-x-[-1]' : ''}`} 
-															/>
-														</div>
-													)}
-													{/* Off-state badges */}
-													{(isMuted || isVideoOff) && (
-														<div className="absolute top-2 right-2 z-[3] flex items-center gap-1">
-															{isMuted && (
-																<div
-																	className="w-6 h-6 rounded-full flex items-center justify-center bg-sky-500"
-																	title="Muted"
-																>
-																	<MicOff className="h-3 w-3 text-white" />
-																</div>
-															)}
-															{isVideoOff && (
-																<div
-																	className="w-6 h-6 rounded-full flex items-center justify-center bg-sky-500"
-																	title="Camera off"
-																>
-																	<VideoOff className="h-3 w-3 text-white" />
-																</div>
-															)}
-														</div>
-													)}
-												</div>
-												
-												{/* Name below video */}
-												<div className="focus-thumbnail-name">
-													<span>{name}</span>
-													{participant.isSpeaking && (
-														<div className="w-1.5 h-1.5 rounded-full bg-[#00DC6E] animate-pulse ml-1.5" />
-													)}
-												</div>
-											</div>
-										)
-									})}
-									{/* View All button - switch to grid view */}
-									{sortedParticipants.length > 1 && (
+						{layoutMode === 'focus' ? (
+							<div className="focus-layout-container">
+								{/* Thumbnail strip at TOP with Scroll Buttons */}
+								{!isExpandedView && (
+									<div className="focus-thumbnails-wrapper">
+										{/* Left Scroll Button */}
 										<button
-											onClick={() => setLayoutMode('grid')}
-											className="focus-view-more"
-											title="View All"
+											className={`focus-scroll-btn left ${!canScrollLeft ? 'opacity-0 pointer-events-none' : ''}`}
+											onClick={() => scrollThumbnails('left')}
+											disabled={!canScrollLeft}
 										>
-											<Grid2X2 className="h-4 w-4 text-white/80" />
-											<span className="sr-only">View All</span>
+											<ChevronLeft className="w-5 h-5" />
 										</button>
-									)}
-								</div>
 
-								{/* Right Scroll Button */}
-								<button 
-									className={`focus-scroll-btn right ${!canScrollRight ? 'opacity-0 pointer-events-none' : ''}`}
-									onClick={() => scrollThumbnails('right')}
-									disabled={!canScrollRight}
-								>
-									<ChevronRight className="w-5 h-5" />
-								</button>
-							</div>
-							)}
+										<div className="focus-thumbnails" ref={thumbnailsRef}>
+											{sortedParticipants
+												.filter((participant) => {
+													// Exclude the focused participant from thumbnails to avoid showing them twice.
+													const isFocused = focusedParticipantForDisplay?.identity === participant.identity
+													return !isFocused || isScreenShareFocused
+												})
+												.map((participant) => {
+													const isLocal = participant.isLocal
+													const isMuted = !participant.isMicrophoneEnabled
+													const isVideoOff = !participant.isCameraEnabled
+													const participantCameraTrack = cameraTrackByParticipantId.get(participant.identity)
+													const isVideoTrackRef = !!participantCameraTrack && isTrackReference(participantCameraTrack)
+													const hasVideo = isVideoTrackRef && !!participantCameraTrack.publication?.track
+													const avatarUrl = getParticipantAvatar(participant)
+													const name = participant.isLocal ? 'You' : (participant.name || participant.identity)
 
-							{/* Main focused video wrapper - centers the video */}
-							<div className="focus-main-wrapper">
-								{focusedParticipantForDisplay ? (
-									<div className="flex flex-col w-full h-full max-h-full">
-										<div className={`focus-main-video relative group flex-1 min-h-0`}>
-											{/* Always show avatar background */}
-											<div className="absolute inset-0 flex items-center justify-center bg-gradient-to-b from-[#252525] to-[#1a1a1a] z-[1]">
-												{(() => {
-													const avatarUrl = getParticipantAvatar(focusedParticipantForDisplay)
-													return avatarUrl ? (
-														<Image
-															src={avatarUrl}
-															alt={focusedParticipantForDisplay.name || 'Participant'}
-															width={112}
-															height={112}
-															className="w-28 h-28 rounded-full object-cover shadow-2xl"
-														/>
-													) : (
-														<div className="w-28 h-28 rounded-full bg-gradient-to-b from-[#3a3a3a] to-[#2a2a2a] flex items-center justify-center shadow-2xl">
-															<User className="w-14 h-14 text-[#555]" />
-														</div>
-													)
-												})()}
-											</div>
-											{/* Video layer — screen share (zoom / min / max) vs camera */}
-											{isTrackReference(focusedTrack) && (
-												<>
-													{isSplitMode && pinnedTrack && (
-														<div className="absolute inset-0 z-[2] flex flex-col md:flex-row gap-2 p-2 bg-[#0f0f0f]">
-															{/* Left/Top: Screen Share */}
-															<div className="flex-1 relative bg-black/40 rounded-xl overflow-hidden group border border-white/5">
-																{isTrackReference(focusedTrack) ? (
-																	<div
-																		className="relative flex h-full w-full items-center justify-center p-2"
-																		style={{
-																			transform: `scale(${screenShareZoom})`,
-																			transformOrigin: 'center center',
-																			transition: 'transform 0.12s ease-out',
-																		}}
-																	>
+													return (
+														<div
+															key={`thumb-${participant.identity}`}
+															className={`focus-thumbnail ${participant.isSpeaking ? 'speaking' : ''
+																} ${pinnedParticipantId === participant.identity ? 'pinned' : ''
+																}`}
+															onClick={() => handleThumbnailClick(participant.identity)}
+														>
+															{/* Video/Avatar Container */}
+															<div className="focus-thumbnail-video-container">
+																{/* Avatar background layer - always visible */}
+																<div className="absolute inset-0 flex items-center justify-center bg-gradient-to-b from-[#2a2a2a] to-[#1f1f1f] z-[1]">
+																	{avatarUrl ? (
+																		<Image
+																			src={avatarUrl}
+																			alt={participant.name || 'Participant'}
+																			width={40}
+																			height={40}
+																			className="w-10 h-10 rounded-full object-cover"
+																		/>
+																	) : (
+																		<div className="w-10 h-10 rounded-full bg-gradient-to-b from-[#404040] to-[#303030] flex items-center justify-center">
+																			<User className="w-5 h-5 text-[#666]" />
+																		</div>
+																	)}
+																</div>
+																{/* Video layer on top - ONLY render when there's actual video track */}
+																{hasVideo && isVideoTrackRef && (
+																	<div className="absolute inset-0 z-[2]">
 																		<VideoTrack
-																			trackRef={focusedTrack}
-																			className="h-full w-full object-contain"
+																			trackRef={participantCameraTrack}
+																			className={`w-full h-full object-cover ${isLocal ? 'scale-x-[-1]' : ''}`}
 																		/>
 																	</div>
-																) : (
-																	<div className="absolute inset-0 flex items-center justify-center bg-[#1a1a1a]">
-																		<MonitorUp className="h-12 w-12 text-white/20" />
+																)}
+																{/* Off-state badges */}
+																{(isMuted || isVideoOff) && (
+																	<div className="absolute top-2 right-2 z-[3] flex items-center gap-1">
+																		{isMuted && (
+																			<div
+																				className="w-6 h-6 rounded-full flex items-center justify-center bg-sky-500"
+																				title="Muted"
+																			>
+																				<MicOff className="h-3 w-3 text-white" />
+																			</div>
+																		)}
+																		{isVideoOff && (
+																			<div
+																				className="w-6 h-6 rounded-full flex items-center justify-center bg-sky-500"
+																				title="Camera off"
+																			>
+																				<VideoOff className="h-3 w-3 text-white" />
+																			</div>
+																		)}
 																	</div>
 																)}
-																{/* Label for Screen share */}
-																<div className="absolute top-3 left-3 bg-blue-600/90 backdrop-blur-md text-[10px] font-bold text-white px-2 py-1 rounded flex items-center gap-1.5 z-10 shadow-lg border border-white/10">
-																	<MonitorUp className="h-3 w-3" />
-																	<span>SCREEN SHARE</span>
+															</div>
+
+															{/* Name below video */}
+															<div className="focus-thumbnail-name">
+																<span>{name}</span>
+																{participant.isSpeaking && (
+																	<div className="w-1.5 h-1.5 rounded-full bg-[#00DC6E] animate-pulse ml-1.5" />
+																)}
+															</div>
+														</div>
+													)
+												})}
+											{/* View All button - switch to grid view */}
+											{sortedParticipants.length > 1 && (
+												<button
+													onClick={() => setLayoutMode('grid')}
+													className="focus-view-more"
+													title="View All"
+												>
+													<Grid2X2 className="h-4 w-4 text-white/80" />
+													<span className="sr-only">View All</span>
+												</button>
+											)}
+										</div>
+
+										{/* Right Scroll Button */}
+										<button
+											className={`focus-scroll-btn right ${!canScrollRight ? 'opacity-0 pointer-events-none' : ''}`}
+											onClick={() => scrollThumbnails('right')}
+											disabled={!canScrollRight}
+										>
+											<ChevronRight className="w-5 h-5" />
+										</button>
+									</div>
+								)}
+
+								{/* Main focused video wrapper - centers the video */}
+								<div className="focus-main-wrapper">
+									{focusedParticipantForDisplay ? (
+										<div className="flex flex-col w-full h-full max-h-full">
+											<div className={`focus-main-video relative group flex-1 min-h-0`}>
+												{/* Always show avatar background */}
+												<div className="absolute inset-0 flex items-center justify-center bg-gradient-to-b from-[#252525] to-[#1a1a1a] z-[1]">
+													{(() => {
+														const avatarUrl = getParticipantAvatar(focusedParticipantForDisplay)
+														return avatarUrl ? (
+															<Image
+																src={avatarUrl}
+																alt={focusedParticipantForDisplay.name || 'Participant'}
+																width={112}
+																height={112}
+																className="w-28 h-28 rounded-full object-cover shadow-2xl"
+															/>
+														) : (
+															<div className="w-28 h-28 rounded-full bg-gradient-to-b from-[#3a3a3a] to-[#2a2a2a] flex items-center justify-center shadow-2xl">
+																<User className="w-14 h-14 text-[#555]" />
+															</div>
+														)
+													})()}
+												</div>
+												{/* Video layer — screen share (zoom / min / max) vs camera */}
+												{isTrackReference(focusedTrack) && (
+													<>
+														{isSplitMode && pinnedTrack && (
+															<div className="absolute inset-0 z-[2] flex flex-col md:flex-row gap-2 p-2 bg-[#0f0f0f]">
+																{/* Left/Top: Screen Share */}
+																<div className="flex-1 relative bg-black/40 rounded-xl overflow-hidden group border border-white/5">
+																	{isTrackReference(focusedTrack) ? (
+																		<div
+																			className="relative flex h-full w-full items-center justify-center p-2"
+																			style={{
+																				transform: `scale(${screenShareZoom})`,
+																				transformOrigin: 'center center',
+																				transition: 'transform 0.12s ease-out',
+																			}}
+																		>
+																			<VideoTrack
+																				trackRef={focusedTrack}
+																				className="h-full w-full object-contain"
+																			/>
+																		</div>
+																	) : (
+																		<div className="absolute inset-0 flex items-center justify-center bg-[#1a1a1a]">
+																			<MonitorUp className="h-12 w-12 text-white/20" />
+																		</div>
+																	)}
+																	{/* Label for Screen share */}
+																	<div className="absolute top-3 left-3 bg-blue-600/90 backdrop-blur-md text-[10px] font-bold text-white px-2 py-1 rounded flex items-center gap-1.5 z-10 shadow-lg border border-white/10">
+																		<MonitorUp className="h-3 w-3" />
+																		<span>SCREEN SHARE</span>
+																	</div>
+
+																	{/* Remote Control Actions - Overlay */}
+																	<RemoteControlOverlay
+																		isControlling={isControlling && targetScreenShareId === focusedParticipantForDisplay.identity}
+																		isSharing={focusedParticipantForDisplay.isLocal}
+																		controllerId={controllerId}
+																		onSendInput={sendInputEvent}
+																		onStopControl={stopControl}
+																		onRevokeControl={revokeControl}
+																	/>
 																</div>
-																
-																{/* Remote Control Actions - Overlay on the screen share half */}
+																{showScratchPad && (
+																	<div className="absolute inset-0 z-[20] p-2 bg-[#0f0f0f]">
+																		<ScratchPad
+																			roomId={sessionData?.id || 'default'}
+																			room={room}
+																			isHost={isHost}
+																			canEdit={isHost || allowScratchPadEdit}
+																		/>
+																		<button
+																			onClick={() => setShowScratchPad(false)}
+																			className="absolute top-6 right-6 z-[21] w-10 h-10 bg-black/60 hover:bg-black/80 rounded-full flex items-center justify-center border border-white/10 text-white shadow-xl backdrop-blur-md"
+																		>
+																			<X className="h-5 w-5" />
+																		</button>
+																	</div>
+																)}
+
+																{/* Right/Bottom: Pinned Participant */}
+																<div className="flex-1 relative bg-[#1a1a1a] rounded-xl overflow-hidden group border border-blue-500/30">
+																	{isTrackReference(pinnedTrack) && pinnedTrack.publication?.track ? (
+																		<VideoTrack
+																			trackRef={pinnedTrack}
+																			className={`h-full w-full object-contain ${pinnedTrack.participant.isLocal ? 'scale-x-[-1]' : ''}`}
+																		/>
+																	) : (
+																		<div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-[#252525] to-[#1a1a1a]">
+																			{pinnedTrack.participant ? (
+																				(() => {
+																					const avatarUrl = getParticipantAvatar(pinnedTrack.participant)
+																					return avatarUrl ? (
+																						<Image
+																							src={avatarUrl}
+																							alt={pinnedTrack.participant.name || 'Participant'}
+																							width={80}
+																							height={80}
+																							className="w-20 h-20 rounded-full object-cover shadow-xl border-2 border-white/10"
+																						/>
+																					) : (
+																						<div className="w-20 h-20 rounded-full bg-gradient-to-b from-[#3a3a3a] to-[#2a2a2a] flex items-center justify-center shadow-xl border-2 border-white/10">
+																							<User className="w-10 h-10 text-[#555]" />
+																						</div>
+																					)
+																				})()
+																			) : null}
+																			<p className="mt-4 text-white/50 text-[10px] font-bold tracking-[0.2em] uppercase bg-black/20 px-3 py-1 rounded-full backdrop-blur-sm">Camera Off</p>
+																		</div>
+																	)}
+																	{/* Label for Pinned Participant */}
+																	<div className="absolute bottom-3 left-3 bg-blue-600/90 backdrop-blur-md text-[10px] font-bold text-white px-2 py-1 rounded flex items-center gap-1.5 z-10 shadow-lg border border-white/10">
+																		<Pin className="h-3 w-3 fill-current" />
+																		<span>{pinnedTrack.participant?.name || pinnedTrack.participant?.identity || 'Participant'}</span>
+																	</div>
+																	{/* Unpin button overlay */}
+																	<button
+																		onClick={() => setPinnedParticipantId(null)}
+																		className="absolute top-3 right-3 w-8 h-8 bg-black/60 hover:bg-black/80 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20 border border-white/10 text-white"
+																		title="Exit split view (unpin)"
+																	>
+																		<PinOff className="h-4 w-4" />
+																	</button>
+																</div>
+															</div>
+														)}
+														{!isSplitMode && isScreenShareFocused && showScreenShareInMain && (
+															<div className="absolute inset-0 z-[2] overflow-hidden bg-black/40">
+																<VideoTrack
+																	trackRef={focusedTrack}
+																	className="w-full h-full object-contain"
+																/>
+
 																<RemoteControlOverlay
 																	isControlling={isControlling && targetScreenShareId === focusedParticipantForDisplay.identity}
 																	isSharing={focusedParticipantForDisplay.isLocal}
@@ -3059,423 +3395,358 @@ const VideoRoomContent = memo(function VideoRoomContent({
 																	onStopControl={stopControl}
 																	onRevokeControl={revokeControl}
 																/>
-															</div>
 
-															{/* Right/Bottom: Pinned Participant */}
-															<div className="flex-1 relative bg-[#1a1a1a] rounded-xl overflow-hidden group border border-blue-500/30">
-																{isTrackReference(pinnedTrack) && pinnedTrack.publication?.track ? (
-																	<VideoTrack
-																		trackRef={pinnedTrack}
-																		className={`h-full w-full object-contain ${pinnedTrack.participant.isLocal ? 'scale-x-[-1]' : ''}`}
-																	/>
-																) : (
-																	<div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-[#252525] to-[#1a1a1a]">
-																		{pinnedTrack.participant ? (
-																			(() => {
-																				const avatarUrl = getParticipantAvatar(pinnedTrack.participant)
-																				return avatarUrl ? (
-																					<Image
-																						src={avatarUrl}
-																						alt={pinnedTrack.participant.name || 'Participant'}
-																						width={80}
-																						height={80}
-																						className="w-20 h-20 rounded-full object-cover shadow-xl border-2 border-white/10"
-																					/>
-																				) : (
-																					<div className="w-20 h-20 rounded-full bg-gradient-to-b from-[#3a3a3a] to-[#2a2a2a] flex items-center justify-center shadow-xl border-2 border-white/10">
-																						<User className="w-10 h-10 text-[#555]" />
-																					</div>
-																				)
-																			})()
-																		) : null}
-																		<p className="mt-4 text-white/50 text-[10px] font-bold tracking-[0.2em] uppercase bg-black/20 px-3 py-1 rounded-full backdrop-blur-sm">Camera Off</p>
+																{/* Remote Control Actions */}
+																{!focusedParticipantForDisplay.isLocal && !isControlling && (
+																	<div className="absolute top-4 left-4 z-30">
+																		<Button
+																			variant="secondary"
+																			size="sm"
+																			onClick={(e) => {
+																				e.stopPropagation();
+																				requestControl(focusedParticipantForDisplay.identity);
+																			}}
+																			disabled={isRequestPending && targetScreenShareId === focusedParticipantForDisplay.identity}
+																			className="bg-black/60 hover:bg-black/80 text-white border border-white/20 backdrop-blur"
+																		>
+																			{isRequestPending && targetScreenShareId === focusedParticipantForDisplay.identity
+																				? 'Requesting Control...'
+																				: 'Request Control'}
+																		</Button>
 																	</div>
 																)}
-																{/* Label for Pinned Participant */}
-																<div className="absolute bottom-3 left-3 bg-blue-600/90 backdrop-blur-md text-[10px] font-bold text-white px-2 py-1 rounded flex items-center gap-1.5 z-10 shadow-lg border border-white/10">
-																	<Pin className="h-3 w-3 fill-current" />
-																	<span>{pinnedTrack.participant?.name || pinnedTrack.participant?.identity || 'Participant'}</span>
-																</div>
-																{/* Unpin button overlay */}
-																<button 
-																	onClick={() => setPinnedParticipantId(null)}
-																	className="absolute top-3 right-3 w-8 h-8 bg-black/60 hover:bg-black/80 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20 border border-white/10 text-white"
-																	title="Exit split view (unpin)"
-																>
-																	<PinOff className="h-4 w-4" />
-																</button>
 															</div>
-														</div>
-													)}
-													{!isSplitMode && isScreenShareFocused && showScreenShareInMain && (
-														<div className="absolute inset-0 z-[2] overflow-hidden bg-black/40">
-															<VideoTrack
-																trackRef={focusedTrack}
-																className="w-full h-full object-contain"
-															/>
-															
-															<RemoteControlOverlay
-																isControlling={isControlling && targetScreenShareId === focusedParticipantForDisplay.identity}
-																isSharing={focusedParticipantForDisplay.isLocal}
-																controllerId={controllerId}
-																onSendInput={sendInputEvent}
-																onStopControl={stopControl}
-																onRevokeControl={revokeControl}
-															/>
+														)}
+														{isScreenShareFocused && !showScreenShareInMain && (
+															<div className="absolute inset-0 z-[2] flex flex-col items-center justify-center gap-3 bg-gradient-to-b from-[#252525] to-[#1a1a1a] px-6 text-center">
+																{screenShareMaximized ? (
+																	<Maximize2 className="h-10 w-10 text-sky-400" />
+																) : (
+																	<PictureInPicture2 className="h-10 w-10 text-sky-400" />
+																)}
+																<p className="text-sm font-medium text-white">
+																	{screenShareMaximized
+																		? 'Screen share is using the full workspace'
+																		: 'Screen share is in a small window'}
+																</p>
+																<p className="max-w-xs text-xs text-white/50">
+																	Restore the small window or exit full workspace from its top bar.
+																</p>
+																<Button
+																	size="sm"
+																	variant="secondary"
+																	className="mt-1"
+																	onClick={() => {
+																		setScreenShareMinimized(false)
+																		setScreenShareMaximized(false)
+																	}}
+																>
+																	Back to meeting layout
+																</Button>
+															</div>
+														)}
+														{!isSplitMode && !isScreenShareFocused && focusedTrack.publication?.track && (
+															<div className="absolute inset-0 z-[2]">
+																<VideoTrack
+																	trackRef={focusedTrack}
+																	className={`h-full w-full object-contain ${focusedParticipantForDisplay.isLocal ? 'scale-x-[-1]' : ''}`}
+																/>
+															</div>
+														)}
+													</>
+												)}
 
-															{/* Remote Control Actions */}
-															{!focusedParticipantForDisplay.isLocal && !isControlling && (
-																<div className="absolute top-4 left-4 z-30">
-																	<Button
-																		variant="secondary"
-																		size="sm"
-																		onClick={(e) => {
-																			e.stopPropagation();
-																			requestControl(focusedParticipantForDisplay.identity);
-																		}}
-																		disabled={isRequestPending && targetScreenShareId === focusedParticipantForDisplay.identity}
-																		className="bg-black/60 hover:bg-black/80 text-white border border-white/20 backdrop-blur"
-																	>
-																		{isRequestPending && targetScreenShareId === focusedParticipantForDisplay.identity 
-																			? 'Requesting Control...' 
-																			: 'Request Control'}
-																	</Button>
-																</div>
-															)}
+												<div className="absolute top-4 right-4 flex items-center gap-2 z-20">
+													<div
+														className={`w-8 h-8 rounded-full flex items-center justify-center ${focusedParticipantForDisplay.isMicrophoneEnabled
+																? 'bg-black/60 border border-white/20'
+																: 'bg-sky-500'
+															}`}
+														title={focusedParticipantForDisplay.isMicrophoneEnabled ? 'Unmuted' : 'Muted'}
+													>
+														{focusedParticipantForDisplay.isMicrophoneEnabled ? (
+															<Mic className="h-4 w-4 text-white" />
+														) : (
+															<MicOff className="h-4 w-4 text-white" />
+														)}
+													</div>
+													{!focusedParticipantForDisplay.isCameraEnabled && !isScreenShareFocused && (
+														<div className="w-8 h-8 bg-sky-500 rounded-full flex items-center justify-center" title="Camera off">
+															<VideoOff className="h-4 w-4 text-white" />
 														</div>
-													)}
-													{isScreenShareFocused && !showScreenShareInMain && (
-														<div className="absolute inset-0 z-[2] flex flex-col items-center justify-center gap-3 bg-gradient-to-b from-[#252525] to-[#1a1a1a] px-6 text-center">
-															{screenShareMaximized ? (
-																<Maximize2 className="h-10 w-10 text-sky-400" />
-															) : (
-																<PictureInPicture2 className="h-10 w-10 text-sky-400" />
-															)}
-															<p className="text-sm font-medium text-white">
-																{screenShareMaximized
-																	? 'Screen share is using the full workspace'
-																	: 'Screen share is in a small window'}
-															</p>
-															<p className="max-w-xs text-xs text-white/50">
-																Restore the small window or exit full workspace from its top bar.
-															</p>
-															<Button
-																size="sm"
-																variant="secondary"
-																className="mt-1"
-																onClick={() => {
-																	setScreenShareMinimized(false)
-																	setScreenShareMaximized(false)
-																}}
-															>
-																Back to meeting layout
-															</Button>
-														</div>
-													)}
-													{!isSplitMode && !isScreenShareFocused && focusedTrack.publication?.track && (
-														<div className="absolute inset-0 z-[2]">
-															<VideoTrack
-																trackRef={focusedTrack}
-																className={`h-full w-full object-contain ${focusedParticipantForDisplay.isLocal ? 'scale-x-[-1]' : ''}`}
-															/>
-														</div>
-													)}
-												</>
-											)}
-
-											<div className="absolute top-4 right-4 flex items-center gap-2 z-20">
-												<div
-													className={`w-8 h-8 rounded-full flex items-center justify-center ${
-														focusedParticipantForDisplay.isMicrophoneEnabled
-															? 'bg-black/60 border border-white/20'
-															: 'bg-sky-500'
-													}`}
-													title={focusedParticipantForDisplay.isMicrophoneEnabled ? 'Unmuted' : 'Muted'}
-												>
-													{focusedParticipantForDisplay.isMicrophoneEnabled ? (
-														<Mic className="h-4 w-4 text-white" />
-													) : (
-														<MicOff className="h-4 w-4 text-white" />
 													)}
 												</div>
-												{!focusedParticipantForDisplay.isCameraEnabled && !isScreenShareFocused && (
-													<div className="w-8 h-8 bg-sky-500 rounded-full flex items-center justify-center" title="Camera off">
-														<VideoOff className="h-4 w-4 text-white" />
+
+												{/* Pin/Unpin button overlay - Top Left */}
+												{!isScreenShareFocused && (
+													<div className="absolute top-4 left-4 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+														<Button
+															variant="ghost"
+															size="sm"
+															onClick={togglePinFocused}
+															className={`h-9 px-4 rounded-lg border ${pinnedParticipantId === focusedParticipantForDisplay.identity
+																	? 'bg-[#3b82f6] text-white hover:bg-[#2563eb] border-[#3b82f6]'
+																	: 'bg-black/60 text-white hover:bg-black/80 border-white/10 backdrop-blur-sm'
+																}`}
+															title={pinnedParticipantId === focusedParticipantForDisplay.identity ? 'Unpin' : 'Pin this video'}
+														>
+															{pinnedParticipantId === focusedParticipantForDisplay.identity ? (
+																<>
+																	<PinOff className="h-4 w-4 mr-1.5" /> Unpin
+																</>
+															) : (
+																<>
+																	<Pin className="h-4 w-4 mr-1.5" /> Pin
+																</>
+															)}
+														</Button>
 													</div>
 												)}
-											</div>
-											
-											{/* Pin/Unpin button overlay - Top Left */}
-											{!isScreenShareFocused && (
-												<div className="absolute top-4 left-4 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+
+												{/* Expand/Collapse button - Bottom Right */}
+												<div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity z-20">
 													<Button
 														variant="ghost"
 														size="sm"
-														onClick={togglePinFocused}
-														className={`h-9 px-4 rounded-lg border ${
-															pinnedParticipantId === focusedParticipantForDisplay.identity
-																? 'bg-[#3b82f6] text-white hover:bg-[#2563eb] border-[#3b82f6]'
-																: 'bg-black/60 text-white hover:bg-black/80 border-white/10 backdrop-blur-sm'
-														}`}
-														title={pinnedParticipantId === focusedParticipantForDisplay.identity ? 'Unpin' : 'Pin this video'}
+														onClick={() => setIsExpandedView(!isExpandedView)}
+														className="h-10 w-10 rounded-xl bg-black/60 text-white hover:bg-black/80 border border-white/10 backdrop-blur-sm flex items-center justify-center"
+														title={isExpandedView ? 'Show participants' : 'Expand video'}
 													>
-														{pinnedParticipantId === focusedParticipantForDisplay.identity ? (
-															<>
-																<PinOff className="h-4 w-4 mr-1.5" /> Unpin
-															</>
-														) : (
-															<>
-																<Pin className="h-4 w-4 mr-1.5" /> Pin
-															</>
-														)}
+														{isExpandedView ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
 													</Button>
 												</div>
-											)}
-											
-											{/* Expand/Collapse button - Bottom Right */}
-											<div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity z-20">
-												<Button
-													variant="ghost"
-													size="sm"
-													onClick={() => setIsExpandedView(!isExpandedView)}
-													className="h-10 w-10 rounded-xl bg-black/60 text-white hover:bg-black/80 border border-white/10 backdrop-blur-sm flex items-center justify-center"
-													title={isExpandedView ? 'Show participants' : 'Expand video'}
-												>
-													{isExpandedView ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
-												</Button>
+
+												{/* Screen share zoom — bottom-left of same stage as expand (absolute; shifts with main column / md:mr-96) */}
+												{isScreenShareFocused && showScreenShareInMain && (
+													<div
+														className="pointer-events-auto absolute bottom-4 left-4 z-20 flex items-center gap-0.5 rounded-xl border border-white/10 bg-black/60 px-1 py-1 shadow-lg backdrop-blur-sm"
+														role="toolbar"
+														aria-label="Screen share zoom"
+													>
+														<button
+															type="button"
+															onClick={() => adjustScreenShareZoom(-0.25)}
+															disabled={screenShareZoom <= 0.5}
+															className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white transition-colors hover:bg-white/10 disabled:pointer-events-none disabled:opacity-30"
+															title="Zoom out"
+														>
+															<ZoomOut className="h-4 w-4" />
+														</button>
+														<span className="min-w-[2.25rem] shrink-0 text-center text-[10px] font-semibold tabular-nums text-white/90">
+															{Math.round(screenShareZoom * 100)}%
+														</span>
+														<button
+															type="button"
+															onClick={() => adjustScreenShareZoom(0.25)}
+															disabled={screenShareZoom >= 2}
+															className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white transition-colors hover:bg-white/10 disabled:pointer-events-none disabled:opacity-30"
+															title="Zoom in"
+														>
+															<ZoomIn className="h-4 w-4" />
+														</button>
+													</div>
+												)}
 											</div>
 
-											{/* Screen share zoom — bottom-left of same stage as expand (absolute; shifts with main column / md:mr-96) */}
-											{isScreenShareFocused && showScreenShareInMain && (
-												<div
-													className="pointer-events-auto absolute bottom-4 left-4 z-20 flex items-center gap-0.5 rounded-xl border border-white/10 bg-black/60 px-1 py-1 shadow-lg backdrop-blur-sm"
-													role="toolbar"
-													aria-label="Screen share zoom"
-												>
-													<button
-														type="button"
-														onClick={() => adjustScreenShareZoom(-0.25)}
-														disabled={screenShareZoom <= 0.5}
-														className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white transition-colors hover:bg-white/10 disabled:pointer-events-none disabled:opacity-30"
-														title="Zoom out"
-													>
-														<ZoomOut className="h-4 w-4" />
-													</button>
-													<span className="min-w-[2.25rem] shrink-0 text-center text-[10px] font-semibold tabular-nums text-white/90">
-														{Math.round(screenShareZoom * 100)}%
+											{/* Participant name bar below video */}
+											<div className="h-10 shrink-0 flex items-center justify-between px-2 pt-1.5">
+												<div className="flex items-center gap-2">
+													<span className="text-white text-sm font-medium">
+														{focusedParticipantForDisplay.isLocal ? 'You' : (focusedParticipantForDisplay.name || focusedParticipantForDisplay.identity)}
 													</span>
-													<button
-														type="button"
-														onClick={() => adjustScreenShareZoom(0.25)}
-														disabled={screenShareZoom >= 2}
-														className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white transition-colors hover:bg-white/10 disabled:pointer-events-none disabled:opacity-30"
-														title="Zoom in"
-													>
-														<ZoomIn className="h-4 w-4" />
-													</button>
-												</div>
-											)}
-										</div>
-										
-										{/* Participant name bar below video */}
-										<div className="h-10 shrink-0 flex items-center justify-between px-2 pt-1.5">
-											<div className="flex items-center gap-2">
-												<span className="text-white text-sm font-medium">
-													{focusedParticipantForDisplay.isLocal ? 'You' : (focusedParticipantForDisplay.name || focusedParticipantForDisplay.identity)}
-												</span>
-												{focusedParticipantForDisplay.isSpeaking && (
-													<div className="flex items-center gap-1.5 ml-1">
-														<div className="w-1.5 h-1.5 rounded-full bg-[#00DC6E] animate-pulse" />
-													</div>
-												)}
-												{isScreenShareFocused && (
-													<span className="text-white/60 text-xs ml-1">(Screen)</span>
-												)}
-											</div>
-										</div>
-									</div>
-								) : (
-									<div className="focus-main-video flex items-center justify-center">
-										<div className="flex flex-col items-center gap-6 animate-in fade-in duration-700">
-											<div className="relative">
-												<div className="absolute inset-0 bg-[#00DC6E]/20 rounded-full blur-xl animate-pulse" />
-												<div className="w-24 h-24 rounded-full bg-gradient-to-b from-[#3a3a3a] to-[#2a2a2a] flex items-center justify-center shadow-2xl relative border border-white/5">
-													<User className="w-10 h-10 text-white/40" />
-												</div>
-												{/* Decorative rings */}
-												<div className="absolute inset-[-12px] border border-white/5 rounded-full animate-[spin_8s_linear_infinite]" style={{ borderTopColor: 'rgba(255,255,255,0.1)' }} />
-												<div className="absolute inset-[-24px] border border-white/5 rounded-full animate-[spin_12s_linear_infinite_reverse]" style={{ borderBottomColor: 'rgba(255,255,255,0.05)' }} />
-											</div>
-											<div className="text-center space-y-2">
-												<h3 className="text-white font-medium text-lg">Waiting for others</h3>
-												<p className="text-white/40 text-sm max-w-[200px]">You are the only one here. Invite others to join the session.</p>
-											</div>
-										</div>
-									</div>
-								)}
-							</div>
-						</div>
-					) : (
-						<div className="grid-mode h-full w-full">
-							{/* Custom Grid layout with pin buttons */}
-							<div className="custom-grid" data-count={Math.min(sortedParticipants.length, 9)}>
-								{sortedParticipants.map((participant) => {
-									const isLocal = participant.isLocal
-									const participantCameraTrack = cameraTrackByParticipantId.get(participant.identity)
-									const isVideoTrackRef = !!participantCameraTrack && isTrackReference(participantCameraTrack)
-									const hasVideo = isVideoTrackRef && !!participantCameraTrack.publication?.track
-									const isMuted = !participant.isMicrophoneEnabled
-									const isVideoOff = !participant.isCameraEnabled
-									const avatarUrl = getParticipantAvatar(participant)
-									return (
-										<div 
-											key={`grid-${participant.identity}`}
-											className={`custom-grid-tile group`}
-										>
-											<div className={`custom-grid-tile-content ${participant.isSpeaking ? 'speaking' : ''}`}>
-												{/* Avatar background layer - always visible */}
-												<div className="absolute inset-0 flex items-center justify-center bg-gradient-to-b from-[#252525] to-[#1a1a1a] z-[1]">
-													{avatarUrl ? (
-														<Image
-															src={avatarUrl}
-															alt={participant.name || 'Participant'}
-															width={80}
-															height={80}
-															className="w-20 h-20 rounded-full object-cover shadow-lg"
-														/>
-													) : (
-														<div className="w-20 h-20 rounded-full bg-gradient-to-b from-[#3a3a3a] to-[#2a2a2a] flex items-center justify-center shadow-lg">
-															<User className="w-10 h-10 text-[#666]" />
+													{focusedParticipantForDisplay.isSpeaking && (
+														<div className="flex items-center gap-1.5 ml-1">
+															<div className="w-1.5 h-1.5 rounded-full bg-[#00DC6E] animate-pulse" />
 														</div>
 													)}
-												</div>
-												{/* Video layer on top - ONLY render when there's actual video track */}
-												{hasVideo && isVideoTrackRef && (
-													<div className="absolute inset-0 z-[2] flex items-center justify-center">
-														<VideoTrack 
-															trackRef={participantCameraTrack} 
-															className={`w-full h-full object-contain ${isLocal ? 'scale-x-[-1]' : ''}`} 
-														/>
-													</div>
-												)}
-												{/* Pin button overlay */}
-												<button
-													onClick={(e) => {
-														e.stopPropagation()
-														pinAndSwitchToPresenter(participant.identity)
-													}}
-													className="absolute top-3 right-3 w-8 h-8 bg-black/60 hover:bg-black/80 backdrop-blur-sm rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all z-20 border border-white/10"
-													title="Pin and switch to speaker view"
-												>
-													<Pin className="h-4 w-4 text-white" />
-												</button>
-												{/* Speaking indicator */}
-												{participant.isSpeaking && (
-													<div className="absolute top-3 left-3 flex items-center gap-1.5 bg-[#00DC6E]/90 backdrop-blur-sm px-2 py-1 rounded-full z-20">
-														<div className="w-2 h-2 rounded-full bg-white animate-pulse" />
-														<span className="text-white text-[10px] font-medium">Speaking</span>
-													</div>
-												)}
-											</div>
-											
-											{/* Bottom bar with name and audio/video status - NOW BELOW THE VIDEO */}
-											<div className="flex items-center justify-between px-2 pt-1 h-8 md:h-8 shrink-0">
-												<span className="text-white text-xs md:text-sm font-medium truncate max-w-[65%]">
-													{isLocal ? 'You' : (participant.name || participant.identity)}
-												</span>
-												<div className="flex items-center gap-1 md:gap-1.5">
-													{/* Mic status icon */}
-													{isMuted ? (
-														<div className="w-6 h-6 md:w-6 md:h-6 rounded-full bg-sky-500 flex items-center justify-center" title="Muted">
-															<MicOff className="h-3 w-3 md:h-3.5 md:w-3.5 text-white" />
-														</div>
-													) : (
-														<div className="w-6 h-6 md:w-6 md:h-6 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center" title="Unmuted">
-															<Mic className="h-3 w-3 md:h-3.5 md:w-3.5 text-white" />
-														</div>
-													)}
-													{/* Video status icon */}
-													{isVideoOff && (
-														<div className="w-6 h-6 md:w-6 md:h-6 rounded-full bg-sky-500 flex items-center justify-center" title="Camera off">
-															<VideoOff className="h-3 w-3 md:h-3.5 md:w-3.5 text-white" />
-														</div>
+													{isScreenShareFocused && (
+														<span className="text-white/60 text-xs ml-1">(Screen)</span>
 													)}
 												</div>
 											</div>
 										</div>
-									)
-								})}
-							</div>
-						</div>
-					)}
-					{/* Screen share: small floating preview (minimized) */}
-					{isScreenShareFocused &&
-						screenShareMinimized &&
-						!screenShareMaximized &&
-						isTrackReference(focusedTrack) && (
-							<div className="fixed bottom-28 right-4 z-[260] w-[min(calc(100vw-2rem),22rem)] overflow-hidden rounded-xl border border-white/15 bg-[#141414] shadow-2xl">
-								<div className="flex items-center justify-between gap-2 border-b border-white/10 bg-black/60 px-2 py-1.5">
-									<span className="flex min-w-0 items-center gap-1.5 truncate text-xs font-medium text-white">
-										<MonitorUp className="h-3 w-3 shrink-0 text-sky-400" />
-										<span className="truncate">Screen share</span>
-									</span>
-									<div className="flex shrink-0 items-center gap-0.5">
-										<button
-											type="button"
-											onClick={() => adjustScreenShareZoom(-0.25)}
-											disabled={screenShareZoom <= 0.5}
-											className="rounded p-1.5 text-white/80 hover:bg-white/10 disabled:opacity-30"
-											title="Zoom out"
-										>
-											<ZoomOut className="h-3.5 w-3.5" />
-										</button>
-										<button
-											type="button"
-											onClick={() => adjustScreenShareZoom(0.25)}
-											disabled={screenShareZoom >= 2}
-											className="rounded p-1.5 text-white/80 hover:bg-white/10 disabled:opacity-30"
-											title="Zoom in"
-										>
-											<ZoomIn className="h-3.5 w-3.5" />
-										</button>
-										<button
-											type="button"
-											onClick={() => {
-												setScreenShareMinimized(false)
-												setScreenShareMaximized(true)
-											}}
-											className="rounded p-1.5 text-white/80 hover:bg-white/10"
-											title="Full workspace"
-										>
-											<Maximize2 className="h-3.5 w-3.5" />
-										</button>
-										<button
-											type="button"
-											onClick={() => setScreenShareMinimized(false)}
-											className="rounded p-1.5 text-white/80 hover:bg-white/10"
-											title="Restore to meeting layout"
-										>
-											<PictureInPicture2 className="h-3.5 w-3.5" />
-										</button>
-									</div>
+									) : (
+										<div className="focus-main-video flex items-center justify-center">
+											<div className="flex flex-col items-center gap-6 animate-in fade-in duration-700">
+												<div className="relative">
+													<div className="absolute inset-0 bg-[#00DC6E]/20 rounded-full blur-xl animate-pulse" />
+													<div className="w-24 h-24 rounded-full bg-gradient-to-b from-[#3a3a3a] to-[#2a2a2a] flex items-center justify-center shadow-2xl relative border border-white/5">
+														<User className="w-10 h-10 text-white/40" />
+													</div>
+													{/* Decorative rings */}
+													<div className="absolute inset-[-12px] border border-white/5 rounded-full animate-[spin_8s_linear_infinite]" style={{ borderTopColor: 'rgba(255,255,255,0.1)' }} />
+													<div className="absolute inset-[-24px] border border-white/5 rounded-full animate-[spin_12s_linear_infinite_reverse]" style={{ borderBottomColor: 'rgba(255,255,255,0.05)' }} />
+												</div>
+												<div className="text-center space-y-2">
+													<h3 className="text-white font-medium text-lg">Waiting for others</h3>
+													<p className="text-white/40 text-sm max-w-[200px]">You are the only one here. Invite others to join the session.</p>
+												</div>
+											</div>
+										</div>
+									)}
 								</div>
-								<div className="relative aspect-video bg-black overflow-auto">
-									<div
-										className="flex min-h-full min-w-full items-center justify-center p-2"
-										style={{
-											transform: `scale(${screenShareZoom})`,
-											transformOrigin: 'center center',
-											transition: 'transform 0.12s ease-out',
-										}}
-									>
-										<VideoTrack
-											trackRef={focusedTrack}
-											className="h-full w-full object-contain"
-										/>
-									</div>
+							</div>
+						) : (
+							<div className="grid-mode h-full w-full">
+								{/* Custom Grid layout with pin buttons */}
+								<div className="custom-grid" data-count={Math.min(sortedParticipants.length, 9)}>
+									{sortedParticipants.map((participant) => {
+										const isLocal = participant.isLocal
+										const participantCameraTrack = cameraTrackByParticipantId.get(participant.identity)
+										const isVideoTrackRef = !!participantCameraTrack && isTrackReference(participantCameraTrack)
+										const hasVideo = isVideoTrackRef && !!participantCameraTrack.publication?.track
+										const isMuted = !participant.isMicrophoneEnabled
+										const isVideoOff = !participant.isCameraEnabled
+										const avatarUrl = getParticipantAvatar(participant)
+										return (
+											<div
+												key={`grid-${participant.identity}`}
+												className={`custom-grid-tile group`}
+											>
+												<div className={`custom-grid-tile-content ${participant.isSpeaking ? 'speaking' : ''}`}>
+													{/* Avatar background layer - always visible */}
+													<div className="absolute inset-0 flex items-center justify-center bg-gradient-to-b from-[#252525] to-[#1a1a1a] z-[1]">
+														{avatarUrl ? (
+															<Image
+																src={avatarUrl}
+																alt={participant.name || 'Participant'}
+																width={80}
+																height={80}
+																className="w-20 h-20 rounded-full object-cover shadow-lg"
+															/>
+														) : (
+															<div className="w-20 h-20 rounded-full bg-gradient-to-b from-[#3a3a3a] to-[#2a2a2a] flex items-center justify-center shadow-lg">
+																<User className="w-10 h-10 text-[#666]" />
+															</div>
+														)}
+													</div>
+													{/* Video layer on top - ONLY render when there's actual video track */}
+													{hasVideo && isVideoTrackRef && (
+														<div className="absolute inset-0 z-[2] flex items-center justify-center">
+															<VideoTrack
+																trackRef={participantCameraTrack}
+																className={`w-full h-full object-contain ${isLocal ? 'scale-x-[-1]' : ''}`}
+															/>
+														</div>
+													)}
+													{/* Pin button overlay */}
+													<button
+														onClick={(e) => {
+															e.stopPropagation()
+															pinAndSwitchToPresenter(participant.identity)
+														}}
+														className="absolute top-3 right-3 w-8 h-8 bg-black/60 hover:bg-black/80 backdrop-blur-sm rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all z-20 border border-white/10"
+														title="Pin and switch to speaker view"
+													>
+														<Pin className="h-4 w-4 text-white" />
+													</button>
+													{/* Speaking indicator */}
+													{participant.isSpeaking && (
+														<div className="absolute top-3 left-3 flex items-center gap-1.5 bg-[#00DC6E]/90 backdrop-blur-sm px-2 py-1 rounded-full z-20">
+															<div className="w-2 h-2 rounded-full bg-white animate-pulse" />
+															<span className="text-white text-[10px] font-medium">Speaking</span>
+														</div>
+													)}
+												</div>
+
+												{/* Bottom bar with name and audio/video status - NOW BELOW THE VIDEO */}
+												<div className="flex items-center justify-between px-2 pt-1 h-8 md:h-8 shrink-0">
+													<span className="text-white text-xs md:text-sm font-medium truncate max-w-[65%]">
+														{isLocal ? 'You' : (participant.name || participant.identity)}
+													</span>
+													<div className="flex items-center gap-1 md:gap-1.5">
+														{/* Mic status icon */}
+														{isMuted ? (
+															<div className="w-6 h-6 md:w-6 md:h-6 rounded-full bg-sky-500 flex items-center justify-center" title="Muted">
+																<MicOff className="h-3 w-3 md:h-3.5 md:w-3.5 text-white" />
+															</div>
+														) : (
+															<div className="w-6 h-6 md:w-6 md:h-6 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center" title="Unmuted">
+																<Mic className="h-3 w-3 md:h-3.5 md:w-3.5 text-white" />
+															</div>
+														)}
+														{/* Video status icon */}
+														{isVideoOff && (
+															<div className="w-6 h-6 md:w-6 md:h-6 rounded-full bg-sky-500 flex items-center justify-center" title="Camera off">
+																<VideoOff className="h-3 w-3 md:h-3.5 md:w-3.5 text-white" />
+															</div>
+														)}
+													</div>
+												</div>
+											</div>
+										)
+									})}
 								</div>
 							</div>
 						)}
+						{/* Screen share: small floating preview (minimized) */}
+						{isScreenShareFocused &&
+							screenShareMinimized &&
+							!screenShareMaximized &&
+							isTrackReference(focusedTrack) && (
+								<div className="fixed bottom-28 right-4 z-[260] w-[min(calc(100vw-2rem),22rem)] overflow-hidden rounded-xl border border-white/15 bg-[#141414] shadow-2xl">
+									<div className="flex items-center justify-between gap-2 border-b border-white/10 bg-black/60 px-2 py-1.5">
+										<span className="flex min-w-0 items-center gap-1.5 truncate text-xs font-medium text-white">
+											<MonitorUp className="h-3 w-3 shrink-0 text-sky-400" />
+											<span className="truncate">Screen share</span>
+										</span>
+										<div className="flex shrink-0 items-center gap-0.5">
+											<button
+												type="button"
+												onClick={() => adjustScreenShareZoom(-0.25)}
+												disabled={screenShareZoom <= 0.5}
+												className="rounded p-1.5 text-white/80 hover:bg-white/10 disabled:opacity-30"
+												title="Zoom out"
+											>
+												<ZoomOut className="h-3.5 w-3.5" />
+											</button>
+											<button
+												type="button"
+												onClick={() => adjustScreenShareZoom(0.25)}
+												disabled={screenShareZoom >= 2}
+												className="rounded p-1.5 text-white/80 hover:bg-white/10 disabled:opacity-30"
+												title="Zoom in"
+											>
+												<ZoomIn className="h-3.5 w-3.5" />
+											</button>
+											<button
+												type="button"
+												onClick={() => {
+													setScreenShareMinimized(false)
+													setScreenShareMaximized(true)
+												}}
+												className="rounded p-1.5 text-white/80 hover:bg-white/10"
+												title="Full workspace"
+											>
+												<Maximize2 className="h-3.5 w-3.5" />
+											</button>
+											<button
+												type="button"
+												onClick={() => setScreenShareMinimized(false)}
+												className="rounded p-1.5 text-white/80 hover:bg-white/10"
+												title="Restore to meeting layout"
+											>
+												<PictureInPicture2 className="h-3.5 w-3.5" />
+											</button>
+										</div>
+									</div>
+									<div className="relative aspect-video bg-black overflow-auto">
+										<div
+											className="flex min-h-full min-w-full items-center justify-center p-2"
+											style={{
+												transform: `scale(${screenShareZoom})`,
+												transformOrigin: 'center center',
+												transition: 'transform 0.12s ease-out',
+											}}
+										>
+											<VideoTrack
+												trackRef={focusedTrack}
+												className="h-full w-full object-contain"
+											/>
+										</div>
+									</div>
+								</div>
+							)}
 
 
 						{/* Screen share: full workspace overlay (maximized) */}
@@ -3684,7 +3955,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						<div className={`flex flex-col items-center justify-center group ${(!canViewParticipantList && !isGuest) ? 'hidden' : ''}`}>
 							<button
 								onClick={() => {
-									if (!showChat) { setShowParticipants(false); setShowFlashPanel(false) }
+									if (!showChat) { setShowParticipants(false); setShowFlashPanel(false); setShowScratchPad(false) }
 									setShowChat(!showChat)
 								}}
 								className={`h-11 w-11 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl hover:bg-sky-500/20 active:scale-95 transition-all relative ${showChat ? 'bg-sky-500/20 text-sky-400' : 'text-white/80 hover:text-sky-400'}`}
@@ -3696,10 +3967,10 @@ const VideoRoomContent = memo(function VideoRoomContent({
 
 						{/* Flash Messages (host only) */}
 						{isHost && (
-							<div className="flex flex-col items-center justify-center group">
+							<div className="flex flex-col items-center justify-center group text-center">
 								<button
 									onClick={() => {
-										if (!showFlashPanel) { setShowChat(false); setShowParticipants(false) }
+										if (!showFlashPanel) { setShowChat(false); setShowParticipants(false); setShowScratchPad(false) }
 										setShowFlashPanel((p) => !p)
 									}}
 									className={`h-11 w-11 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl hover:bg-yellow-500/20 active:scale-95 transition-all relative ${showFlashPanel ? 'bg-yellow-500/20 text-yellow-400' : 'text-white/80 hover:text-yellow-400'}`}
@@ -3713,13 +3984,27 @@ const VideoRoomContent = memo(function VideoRoomContent({
 							</div>
 						)}
 
+						{/* Scratch Pad */}
+						<div className="flex flex-col items-center justify-center group text-center">
+							<button
+								onClick={() => {
+									if (!showScratchPad) { setShowChat(false); setShowParticipants(false); setShowFlashPanel(false) }
+									setShowScratchPad(!showScratchPad)
+								}}
+								className={`h-11 w-11 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl hover:bg-purple-500/20 active:scale-95 transition-all relative ${showScratchPad ? 'bg-purple-500/20 text-purple-400' : 'text-white/80 hover:text-purple-400'}`}
+								title="Scratch Pad"
+							>
+								<PencilLine className="h-5 w-5 md:h-5 md:w-5" />
+							</button>
+						</div>
+
 						{!isGuest && (
 							<div className="flex flex-col items-center justify-center group">
 								{/* Participants */}
 								<button
 									onClick={() => {
 										if (!canViewParticipantList) return
-										if (!showParticipants) { setShowChat(false); setShowFlashPanel(false) }
+										if (!showParticipants) { setShowChat(false); setShowFlashPanel(false); setShowScratchPad(false) }
 										setShowParticipants(!showParticipants)
 									}}
 									disabled={!canViewParticipantList}
@@ -3735,6 +4020,20 @@ const VideoRoomContent = memo(function VideoRoomContent({
 								</button>
 							</div>
 						)}
+
+						{/* Scratch Pad */}
+						<div className="flex flex-col items-center justify-center group">
+							<button
+								onClick={() => {
+									if (!showScratchPad) { setShowChat(false); setShowParticipants(false); setShowFlashPanel(false) }
+									setShowScratchPad(!showScratchPad)
+								}}
+								className={`h-11 w-11 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl hover:bg-purple-500/20 active:scale-95 transition-all relative ${showScratchPad ? 'bg-purple-500/20 text-purple-400' : 'text-white/80 hover:text-purple-400'}`}
+								title="Scratch Pad"
+							>
+								<PencilLine className="h-5 w-5 md:h-5 md:w-5" />
+							</button>
+						</div>
 
 						{/* PiP */}
 						<div className="hidden md:flex flex-col items-center justify-center group">
@@ -3856,6 +4155,35 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						</div>
 					</div>
 				</div>
+
+
+				{/* Collaborative Scratch Pad Overlay */}
+				{showScratchPad && (
+					<div className={`fixed md:absolute inset-0 z-[55] bg-black/40 backdrop-blur-sm flex flex-col transition-all duration-300 ${(showChat || showParticipants) ? 'md:right-96' : ''
+						}`}>
+						<div className="absolute top-4 right-4 z-[60] flex items-center gap-2">
+							<Button
+								variant="ghost"
+								size="sm"
+								onClick={() => setShowScratchPad(false)}
+								className="h-9 rounded-lg bg-black/60 text-white hover:bg-black/80 border border-white/10 backdrop-blur-sm"
+							>
+								<X className="h-4 w-4 mr-1.5" /> Close Pad
+							</Button>
+						</div>
+						<div className="flex-1 p-2 md:p-6 pb-20 md:pb-6">
+							<ScratchPad
+								roomId={params.room as string}
+								room={room}
+								isHost={isHost}
+								canEdit={allowScratchPadEdit}
+								// eslint-disable-next-line @typescript-eslint/no-explicit-any
+								roomTitle={(sessionData as any)?.title}
+								enabled={showScratchPad}
+							/>
+						</div>
+					</div>
+				)}
 
 				{/* Unified Sidebar - Tabbed Interface */}
 				<>
@@ -4362,6 +4690,10 @@ const VideoRoomContent = memo(function VideoRoomContent({
 					</div>
 				</div>
 			)}
+
+			{/* Hidden elements for Canvas Bridge PiP */}
+			<canvas ref={bridgeCanvasRef} className="hidden" aria-hidden="true" />
+			<video ref={bridgeVideoRef} className="hidden" aria-hidden="true" muted playsInline />
 		</>
 	)
 })
@@ -4705,7 +5037,7 @@ function PermissionRequestModal({
 				await localParticipant?.setCameraEnabled(true)
 			}
 			onAccept()
-		} catch (err) {
+		} catch (_err) {
 			onDeny()
 		}
 	}
