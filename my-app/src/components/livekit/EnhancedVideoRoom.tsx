@@ -1080,6 +1080,10 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	allowScratchPadEdit: boolean
 	setAllowScratchPadEdit: (allow: boolean) => void
 }) {
+	const params = useParams<{ room: string }>()
+	const room = useRoomContext()
+	const { showWarning, showSuccess, showInfo, showError } = useToast()
+
 	const {
 		isControlling,
 		isRequestPending,
