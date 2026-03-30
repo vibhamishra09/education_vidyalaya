@@ -16,7 +16,8 @@ import {
   ChevronRight,
   BookOpen,
   ArrowRight,
-  Eye
+  Eye,
+  Pencil
 } from "lucide-react";
 import { LucideIcon } from "lucide-react";
 import { SessionSummaryModal } from "./session-summary-modal";
@@ -33,6 +34,11 @@ interface Session {
   requestedBy?: unknown;
   hostName?: string;
   description?: string;
+  /** Peer/group: show after host-details update (any participant). */
+  detailsEditedForViewer?: boolean;
+  /** Peer session: show Edit on the card (both requester and receiver when session is still editable). */
+  peerSessionEditable?: boolean;
+  slug?: string | null;
 }
 
 interface SessionListProps {
@@ -119,6 +125,14 @@ export function SessionList({
                   <Badge variant="outline" className="text-xs flex-shrink-0">
                     {isPeerSession ? "1-on-1" : "Group"}
                   </Badge>
+                  {session.detailsEditedForViewer ? (
+                    <Badge
+                      variant="secondary"
+                      className="text-[10px] px-2 py-0 font-semibold uppercase tracking-wide flex-shrink-0"
+                    >
+                      Edited
+                    </Badge>
+                  ) : null}
                   {activeTab === "ongoing" && (
                     <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-xs flex-shrink-0">
                       Ongoing
@@ -147,7 +161,15 @@ export function SessionList({
                 </div>
               </div>
 
-              {/* Expand Button */}
+              <div className="flex items-center gap-1 flex-shrink-0">
+              {isPeerSession && session.peerSessionEditable && (
+                <Link href={`/sessions/${session.id}`}>
+                  <Button variant="outline" size="sm" className="h-8 gap-1 px-2">
+                    <Pencil className="h-3.5 w-3.5" />
+                    Edit
+                  </Button>
+                </Link>
+              )}
               <Button
                 variant="ghost"
                 size="sm"
@@ -160,6 +182,7 @@ export function SessionList({
                   <ChevronDown className="h-4 w-4" />
                 )}
               </Button>
+              </div>
             </div>
 
             {/* Skills - Always visible */}
@@ -205,14 +228,22 @@ export function SessionList({
                     <Link
                       href={
                         isPeerSession
-                          ? `/sessions/${session.id}`
-                          : `/studyroom/${session.id}`
+                         ? `/sessions/${session.id}`
+                         : `/studyroom/${session.slug || session.id}`
                       }
                       className="flex-1"
                     >
-                      <Button className="w-full" size="sm">
-                        <BookOpen className="h-4 w-4 mr-2" />
-                        View Details
+                      <Button className="w-full gap-2" size="sm">
+                        <BookOpen className="h-4 w-4 shrink-0" />
+                        <span className="flex-1 text-center sm:text-left">View details</span>
+                        {session.detailsEditedForViewer ? (
+                          <Badge
+                            variant="secondary"
+                            className="shrink-0 text-[10px] px-2 py-0 font-semibold uppercase tracking-wide"
+                          >
+                            Edited
+                          </Badge>
+                        ) : null}
                       </Button>
                     </Link>
                   </div>

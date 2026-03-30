@@ -36,7 +36,7 @@ export function useDebateMicControl({
   onNotification,
 }: UseDebateMicControlOptions): UseDebateMicControlReturn {
   const { localParticipant } = useLocalParticipant();
-  const room = useRoomContext();
+  const _room = useRoomContext();
   const isModerator = userRole === 'host' || userRole === 'moderator';
   const isCurrentSpeaker = currentSpeakerId === userId;
   const micControlRef = useRef<{ enabled: boolean; disabled: boolean }>({ enabled: false, disabled: false });
@@ -140,8 +140,8 @@ export function useDebateMicControl({
       micControlRef.current.disabled = true;
       micControlRef.current.enabled = false;
 
-      localParticipant.setMicrophoneEnabled(false).catch((err) => {
-        console.error('[useDebateMicControl] Failed to disable mic:', err);
+      localParticipant.setMicrophoneEnabled(false).catch((_err) => {
+        console.error('[useDebateMicControl] Failed to disable mic:', _err);
       });
 
       setTimeout(() => {
@@ -153,7 +153,7 @@ export function useDebateMicControl({
   // Intercept callbacks to also apply mic state
   useEffect(() => {
     if (onMicEnabled) {
-      const original = onMicEnabled;
+      const _original = onMicEnabled;
       // We can't modify the callback, so we'll call our handler when the callback is invoked
       // The parent needs to call both the original callback and our handler
       // For now, we'll rely on the parent calling handleMicEnabledInternal
@@ -178,7 +178,7 @@ export function useDebateMicControl({
     
     // Check if user just became the current speaker
     const justBecameSpeaker = isCurrentSpeaker && !prevIsCurrentSpeakerRef.current;
-    const wasCurrentSpeaker = prevIsCurrentSpeakerRef.current;
+    const _wasCurrentSpeaker = prevIsCurrentSpeakerRef.current;
     prevIsCurrentSpeakerRef.current = isCurrentSpeaker;
     
     // If user just became the current speaker and mic is muted, show notification
@@ -200,8 +200,8 @@ export function useDebateMicControl({
     // If mic is locked (not user's turn), ensure mic is muted
     if (isMicLocked && localParticipant.isMicrophoneEnabled) {
       console.log('[useDebateMicControl] Auto-muting because mic is locked (not your turn)');
-      localParticipant.setMicrophoneEnabled(false).catch((err) => {
-        console.error('[useDebateMicControl] Failed to auto-mute:', err);
+      localParticipant.setMicrophoneEnabled(false).catch((_err) => {
+        console.error('[useDebateMicControl] Failed to auto-mute:', _err);
       });
     }
   }, [isMicLocked, localParticipant]);
@@ -217,8 +217,8 @@ export function useDebateMicControl({
     // If user manually tried to unmute while locked, mute them again
     if (isMicLocked && currentMicEnabled && wasEnabled === false) {
       console.log('[useDebateMicControl] User tried to unmute while locked, muting again');
-      localParticipant.setMicrophoneEnabled(false).catch((err) => {
-        console.error('[useDebateMicControl] Failed to enforce mute:', err);
+      localParticipant.setMicrophoneEnabled(false).catch((_err) => {
+        console.error('[useDebateMicControl] Failed to enforce mute:', _err);
       });
       if (shouldNotify('mic-locked', 5000)) {
         onNotification?.('🔒 Microphone Locked', micLockReason || 'You cannot unmute during this phase.', 'warning');
@@ -226,7 +226,7 @@ export function useDebateMicControl({
     }
     
     prevMicEnabledRef.current = currentMicEnabled;
-  }, [localParticipant?.isMicrophoneEnabled, isMicLocked, micLockReason, onNotification, shouldNotify]);
+  }, [localParticipant, isMicLocked, micLockReason, onNotification, shouldNotify]);
 
   return {
     isMicLocked,

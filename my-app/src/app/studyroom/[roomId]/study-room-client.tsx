@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Navigation } from "@/components/layout/navigation";
 import { Footer } from "@/components/layout/footer";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -8,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Input } from "@/components/ui/input";
+import RecurringActionModal from "@/components/modals/recurring-action-modal";
 import {
   ArrowLeft,
   Users,
@@ -17,57 +18,65 @@ import {
   Coins,
   Loader2,
   Check,
+  Pencil,
 } from "lucide-react";
 import {
   useStudyRoomDetails,
   useJoinStudyRoom,
   useCancelStudyRoom,
-  useExternalJoinRequests,
-  useResolveExternalJoinRequest,
-  useToggleExternalAutoAccept,
+  useUnenrollRoom,
+  useJoinRecurringStudyRoom,
 } from "@/hooks/use-study-rooms";
-import { useAuth, useUser } from "@clerk/nextjs";
+import { useAuth } from "@clerk/nextjs";
+import { AuthPromptButtons } from "@/components/auth/auth-prompt-buttons";
 import { setAuthToken } from "@/lib/api-client";
 import { useToast } from "@/contexts/toast-context";
 import Link from "next/link";
 import { SessionStatus } from "@/types";
 import { StudyRoomEditScope } from "@/types/api.types";
-import { ReviewsSection } from "@/components/reviews/reviews-section";
 import { formatCoins } from "@/lib/utils/coin-format";
 import { ShareButton } from "@/components/share/share-button";
-import { studyRoomsApi } from "@/lib/api/study-rooms.api";
+import { useCurrentUser } from "@/hooks/use-users";
+import { canStudyRoomHostEditFromCard } from "@/lib/utils/study-room-edit";
+import { StudyRoomHostEditDialog } from "@/components/study-room/study-room-host-edit-dialog";
+import {
+  getStudyRoomPagePath,
+  getStudyRoomShareUrl,
+  STUDY_ROOM_JOIN_PARAM,
+  STUDY_ROOM_JOIN_VALUE,
+} from "@/lib/utils/study-room-share";
 
 interface StudyRoomClientProps {
   roomId: string;
 }
 
 export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
-  const { getToken } = useAuth();
-  const { isSignedIn } = useUser();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const joinIntentRef = useRef(false);
+  const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
+  const { mutateAsync: unenroll, isPending: isUnenrolling } = useUnenrollRoom();
+  const { mutateAsync: joinRecurring, isPending: _isJoiningRecurring } =
+    useJoinRecurringStudyRoom();
+  const [recurringRoom, setRecurringRoom] = useState<{
+    id: string;
+    seriesId?: string | null;
+  } | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const { getToken, isSignedIn, isLoaded: authLoaded } = useAuth();
   const { showSuccess, showError } = useToast();
   const [isJoining, setIsJoining] = useState(false);
   const [canJoinVideoCall, setCanJoinVideoCall] = useState(false);
   
   const { data: room, isLoading, error } = useStudyRoomDetails(roomId);
-  console.log(room);
   const joinStudyRoom = useJoinStudyRoom();
   const cancelStudyRoom = useCancelStudyRoom(roomId);
-  const { data: externalRequests } = useExternalJoinRequests(roomId, !!isSignedIn);
-  const resolveExternalJoin = useResolveExternalJoinRequest(roomId);
-  const toggleAutoAccept = useToggleExternalAutoAccept(roomId);
-  const [guestEmail, setGuestEmail] = useState("");
-  const [guestPasscode, setGuestPasscode] = useState("");
-  const [pendingGuestApproval, setPendingGuestApproval] = useState<{
-    name: string;
-    email: string;
-    passcode: string;
-  } | null>(null);
-  const [isPasscodeCopied, setIsPasscodeCopied] = useState(false);
+  const [hostEditOpen, setHostEditOpen] = useState(false);
+  const { data: currentUserData } = useCurrentUser();
 
-  // Check if video call can be joined (within 5 minutes of start time)
+  // Video join: hosts can enter anytime while upcoming; learners within 5 min of start
   useEffect(() => {
     if (!room || room.sessionStatus === SessionStatus.ONGOING) {
-      // If session is ongoing, always allow joining
       setCanJoinVideoCall(true);
       return;
     }
@@ -77,129 +86,118 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
       return;
     }
 
+    const role = room.role || "empty";
+    if (role === "teacher") {
+      setCanJoinVideoCall(true);
+      return;
+    }
+
     const checkVideoCallAvailability = () => {
       const now = new Date();
       const scheduledStart = new Date(room.date);
-      const fiveMinutesBefore = new Date(scheduledStart.getTime() - 5 * 60 * 1000); // 5 minutes in milliseconds
-      
-      // Enable if current time is >= 5 minutes before start time
-      setCanJoinVideoCall(now >= fiveMinutesBefore);
+      const startMs = scheduledStart.getTime();
+      if (Number.isNaN(startMs)) {
+        setCanJoinVideoCall(false);
+        return;
+      }
+      const fiveMinutesBefore = startMs - 5 * 60 * 1000;
+      setCanJoinVideoCall(now.getTime() >= fiveMinutesBefore);
     };
 
-    // Check immediately
     checkVideoCallAvailability();
-
-    // Update every minute to handle the 5-minute window
     const interval = setInterval(checkVideoCallAvailability, 60000);
-
     return () => clearInterval(interval);
   }, [room]);
 
-  useEffect(() => {
-    if (!pendingGuestApproval) return;
-
-    let stopped = false;
-    const pollForApproval = async () => {
-      try {
-        const result = await studyRoomsApi.requestExternalJoin(roomId, {
-          name: pendingGuestApproval.name,
-          email: pendingGuestApproval.email,
-          passcode: pendingGuestApproval.passcode,
-        });
-        if (stopped) return;
-        if (result.status === "APPROVED") {
-          setPendingGuestApproval(null);
-          showSuccess("Approved", "Host approved your request. Joining now...");
-          const guestUrl = `/rooms/studyroom/studyroom-${roomId}?guestAccessToken=${encodeURIComponent(result.guestAccessToken)}&guestName=${encodeURIComponent(pendingGuestApproval.name)}`;
-          window.location.href = guestUrl;
-        }
-      } catch {
-        // Keep polling quietly while waiting for approval.
-      }
-    };
-
-    pollForApproval();
-    const interval = setInterval(pollForApproval, 3000);
-    return () => {
-      stopped = true;
-      clearInterval(interval);
-    };
-  }, [pendingGuestApproval, roomId, showSuccess]);
-
-  // Handle joining study room
-  const handleJoinRoom = async () => {
+  const handleJoinRoom = useCallback(async () => {
     if (!room) return;
-    
+
+    if (room.seriesId) {
+      setRecurringRoom(room);
+      setIsModalOpen(true);
+      return;
+    }
+
     try {
       setIsJoining(true);
-      
-      // Get token and set it for API calls
+
       const token = await getToken();
       if (token) {
         setAuthToken(token);
       }
-      
+
       await joinStudyRoom.mutateAsync(roomId);
-      
-      showSuccess("Successfully Joined!", `You have joined "${room.title}" successfully!`);
-      
+
+      showSuccess(
+        "Successfully Joined!",
+        `You have joined "${room.title}" successfully!`,
+      );
     } catch (error: unknown) {
-      console.error('Error joining study room:', error);
-      
-      // Handle specific error cases
-      if (error && typeof error === 'object' && 'response' in error) {
-        const apiError = error as { response: { data: { code: string; message: string } } };
-        if (apiError.response?.data?.code === 'INSUFFICIENT_COINS') {
+      console.error("Error joining study room:", error);
+
+      if (error && typeof error === "object" && "response" in error) {
+        const apiError = error as {
+          response: { data: { code: string; message: string } };
+        };
+        if (apiError.response?.data?.code === "INSUFFICIENT_COINS") {
           showError("Insufficient Coins", apiError.response.data.message);
-        } else if (apiError.response?.data?.code === 'ROOM_FULL') {
+        } else if (apiError.response?.data?.code === "ROOM_FULL") {
           showError("Room Full", apiError.response.data.message);
         } else {
-          showError("Failed to Join", "Failed to join study room. Please try again.");
+          showError(
+            "Failed to Join",
+            "Failed to join study room. Please try again.",
+          );
         }
       } else {
-        showError("Failed to Join", "Failed to join study room. Please try again.");
+        showError(
+          "Failed to Join",
+          "Failed to join study room. Please try again.",
+        );
       }
     } finally {
       setIsJoining(false);
     }
-  };
+  }, [room, roomId, getToken, joinStudyRoom, showSuccess, showError]);
 
-  const handleGuestJoin = async () => {
-    if (!room) return;
-    if (!guestEmail.trim() || !guestPasscode.trim()) {
-      showError("Missing details", "Email and passcode are required.");
+  useEffect(() => {
+    if (searchParams.get(STUDY_ROOM_JOIN_PARAM) !== STUDY_ROOM_JOIN_VALUE) {
+      joinIntentRef.current = false;
+    }
+  }, [searchParams]);
+
+  /** Shared link (?join=1): after login, join once without an extra click. */
+  useEffect(() => {
+    if (!room || !authLoaded || !isSignedIn) return;
+    if (searchParams.get(STUDY_ROOM_JOIN_PARAM) !== STUDY_ROOM_JOIN_VALUE)
+      return;
+    if (joinIntentRef.current) return;
+
+    const role = room.role || "empty";
+    const full = room.participantCount >= room.maxParticipants;
+
+    if (role !== "empty" || full) {
+      router.replace(getStudyRoomPagePath(roomId), { scroll: false });
       return;
     }
-    try {
-      setIsJoining(true);
-      const derivedGuestName =
-        guestEmail
-          .trim()
-          .split("@")[0]
-          ?.replace(/[._-]+/g, " ")
-          .trim() || "Guest";
-      const result = await studyRoomsApi.requestExternalJoin(roomId, {
-        name: derivedGuestName,
-        email: guestEmail.trim(),
-        passcode: guestPasscode.trim(),
-      });
-      if (result.status === "PENDING") {
-        setPendingGuestApproval({
-          name: derivedGuestName,
-          email: guestEmail.trim(),
-          passcode: guestPasscode.trim(),
-        });
-        showSuccess("Request sent", "Waiting for host approval...");
-        return;
+
+    joinIntentRef.current = true;
+    void (async () => {
+      try {
+        await handleJoinRoom();
+      } finally {
+        router.replace(getStudyRoomPagePath(roomId), { scroll: false });
       }
-      const guestUrl = `/rooms/studyroom/studyroom-${roomId}?guestAccessToken=${encodeURIComponent(result.guestAccessToken)}&guestName=${encodeURIComponent(derivedGuestName)}&guestEmail=${encodeURIComponent(guestEmail.trim())}`;
-      window.location.href = guestUrl;
-    } catch {
-      showError("Join failed", "Could not submit external join request.");
-    } finally {
-      setIsJoining(false);
-    }
-  };
+    })();
+  }, [
+    room,
+    authLoaded,
+    isSignedIn,
+    searchParams,
+    roomId,
+    router,
+    handleJoinRoom,
+  ]);
 
   const handleCancelRoom = async () => {
     if (!room) return;
@@ -220,18 +218,6 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
       showSuccess("Cancelled", "Study room cancellation applied successfully.");
     } catch {
       showError("Cancel Failed", "Could not cancel this study room.");
-    }
-  };
-
-  const handleCopyPasscode = async () => {
-    if (!room?.externalPasscode) return;
-    try {
-      await navigator.clipboard.writeText(room.externalPasscode);
-      setIsPasscodeCopied(true);
-      setTimeout(() => setIsPasscodeCopied(false), 1500);
-      showSuccess("Copied", "Guest passcode copied to clipboard.");
-    } catch {
-      showError("Copy failed", "Could not copy passcode.");
     }
   };
 
@@ -278,8 +264,6 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
   // Use the role from the API response directly
   const role = room.role || "empty";
   const isFull = room.participantCount >= room.maxParticipants;
-  const pendingRequests = externalRequests?.requests || [];
-
 
   const formattedDate = new Date(room.date).toLocaleDateString("en-US", {
     weekday: "long",
@@ -294,6 +278,89 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
   });
 
   const liveRoomName = `studyroom-${roomId}`;
+
+  const hostEditSkillNames = (room.skills || [])
+    .map(
+      (skill: string | { name?: string; skill?: { name?: string } }) =>
+        typeof skill === "string"
+          ? skill
+          : skill.name || skill.skill?.name || "",
+    )
+    .filter(Boolean) as string[];
+
+  const showHostDetailMenu =
+    role === "teacher" &&
+    canStudyRoomHostEditFromCard({
+      currentUserId: currentUserData?.user?.id ?? null,
+      hostUserId: room.createdBy?.id ?? "",
+      sessionStatus: room.sessionStatus,
+    });
+
+
+  const handleConfirmRecurring = async (scope: "ALL" | "THIS") => {
+    if (!recurringRoom) return;
+    setIsModalOpen(false);
+    setIsJoining(true);
+
+    const apiScope: "THIS" | "FOLLOWING" =
+      scope === "ALL" ? "FOLLOWING" : "THIS";
+
+    try {
+      await joinRecurring({ roomId: recurringRoom.id, scope: apiScope });
+      showSuccess("Joined Room successfully!");
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { message?: string } } };
+      const errorMessage =
+        err.response?.data?.message || "Failed to join series";
+      showError(errorMessage);
+    } finally {
+      setIsJoining(false);
+      setRecurringRoom(null);
+    }
+  };
+
+  const handleUnenroll = async () => {
+    if (room.seriesId) {
+      setIsLeaveModalOpen(true);
+      setRecurringRoom(room)
+    } else {
+      try {
+        await unenroll({ roomId: room.id, scope: "THIS" });
+        showSuccess("Successfully Unenrolled from room")
+      }
+      catch(e){
+        showError("Failed to Unenroll")
+      }
+    }
+  };
+
+  const handleConfirmLeave = async (scope: "ALL" | "THIS") => {
+    setIsLeaveModalOpen(false);
+    
+    if (scope === "ALL") {
+      try {
+        await unenroll({ roomId: room.seriesId!, scope: "ALL" });
+        showSuccess("Successfully Unenrolled from series")
+      }
+      catch(e){
+        showError("Failed to Unenroll")
+      }
+      finally{
+        setRecurringRoom(null)
+      }
+    } else {
+      try {
+        await unenroll({ roomId: room.id, scope: "THIS" });
+        showSuccess("Successfully Unenrolled from room")
+      }
+      catch(e){
+        showError("Failed to Unenroll")
+      }
+      finally {
+        setRecurringRoom(null)
+      }
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-background selection:bg-primary/10 selection:text-primary">
@@ -311,7 +378,8 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
             <div className="lg:col-span-2 space-y-5">
                 {/* Header Section */}
                 <div className="space-y-4">
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex flex-wrap items-center gap-2 min-w-0">
                         <Badge
                             variant={room.sessionStatus === SessionStatus.ONGOING ? "destructive" : "secondary"}
                             className="rounded-full px-2.5 py-0.5 text-xs font-medium shadow-none border-transparent bg-primary/10 text-primary hover:bg-primary/20"
@@ -335,6 +403,27 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
                         {role === "learner" && (
                             <Badge className="rounded-full px-2.5 py-0.5 text-xs bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 shadow-none border-transparent">Enrolled</Badge>
                         )}
+                        {role !== "teacher" && room.hostDetailsUpdatedAt && (
+                          <Badge
+                            variant="outline"
+                            className="rounded-full px-2.5 py-0.5 text-xs font-semibold border-amber-500/40 text-amber-800 dark:text-amber-200 bg-amber-500/10"
+                          >
+                            Edited
+                          </Badge>
+                        )}
+                      </div>
+                      {showHostDetailMenu && (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="shrink-0 inline-flex items-center rounded-full px-2.5 py-0.5 h-auto min-h-0 text-xs font-medium shadow-none border-transparent bg-primary/10 text-primary hover:bg-primary/20 gap-1.5"
+                          aria-label="Edit study room (host)"
+                          onClick={() => setHostEditOpen(true)}
+                        >
+                          <Pencil className="h-3 w-3 shrink-0" aria-hidden />
+                          Edit
+                        </Button>
+                      )}
                     </div>
 
                     <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground leading-tight">
@@ -437,7 +526,7 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
                             </div>
 
                             <div className="pt-1 space-y-2.5">
-                                {role === "empty" && !isFull && isSignedIn && (
+                                {role === "empty" && !isFull && authLoaded && isSignedIn && (
                                     <Button 
                                         size="default" 
                                         className="w-full font-semibold text-sm h-10 shadow-md shadow-primary/20 transition-all hover:scale-[1.01] active:scale-[0.99] rounded-lg bg-green-600 hover:bg-green-700 text-white"
@@ -455,42 +544,26 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
                                     </Button>
                                 )}
 
-                                {role === "empty" &&
-                                  !isFull &&
-                                  !isSignedIn &&
-                                  room.allowExternalUsers && (
-                                    <div className="space-y-2 rounded-lg border p-3">
-                                      <Input
-                                        placeholder="Your email"
-                                        value={guestEmail}
-                                        onChange={(e) => setGuestEmail(e.target.value)}
-                                      />
-                                      <Input
-                                        type="password"
-                                        placeholder="Meeting password"
-                                        value={guestPasscode}
-                                        onChange={(e) => setGuestPasscode(e.target.value)}
-                                      />
-                                      <Button
-                                        size="default"
-                                        className="w-full bg-green-600 hover:bg-green-700 text-white"
-                                        onClick={handleGuestJoin}
-                                        disabled={isJoining || !!pendingGuestApproval}
-                                      >
-                                        {isJoining
-                                          ? "Requesting..."
-                                          : pendingGuestApproval
-                                            ? "Waiting for approval..."
-                                            : "Join as Guest"}
-                                      </Button>
-                                      {pendingGuestApproval && (
-                                        <p className="text-[11px] text-muted-foreground">
-                                          Your request is pending. You will be joined automatically once the host approves.
+                                {role === "empty" && !isFull && authLoaded && !isSignedIn && (
+                                    <div className="rounded-xl border border-amber-200 bg-amber-50/90 dark:bg-amber-950/40 dark:border-amber-800 px-3 py-3 space-y-3">
+                                        <p className="text-sm font-semibold text-foreground text-center sm:text-left">
+                                            Sign in to join
                                         </p>
-                                      )}
+                                        <p className="text-xs text-muted-foreground text-center sm:text-left leading-relaxed">
+                                          Use Sign in or Sign up—then you’ll join automatically from this link.
+                                        </p>
+                                        <Button
+                                            size="default"
+                                            type="button"
+                                            disabled
+                                            className="w-full font-semibold text-sm h-10 rounded-lg bg-muted text-muted-foreground cursor-not-allowed opacity-90"
+                                        >
+                                            Join Session
+                                        </Button>
+                                        <AuthPromptButtons className="w-full justify-center flex-wrap" />
                                     </div>
-                                  )}
-                                
+                                )}
+
                                 {isFull && role === "empty" && (
                                     <Button size="default" disabled variant="secondary" className="w-full h-10 rounded-lg opacity-80 text-sm">
                                         Room Full
@@ -505,13 +578,26 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
                                 )}
 
                                 <ShareButton
-                                    url={`${typeof window !== "undefined" ? window.location.origin : process.env.NEXT_PUBLIC_BASE_URL || ""}/studyroom/${roomId}`}
+                                    url={getStudyRoomShareUrl(roomId)}
                                     title={room.title}
                                     description={room.description || ""}
                                     image={room.imageUrl}
                                     variant="outline"
                                     className="w-full rounded-lg h-9 hover:bg-primary/5 text-xs text-green-600 border-green-200/50 hover:text-green-700"
                                 />
+                                
+                                {(role !== "empty" && role !== 'teacher')  && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="w-full h-9 rounded-lg text-xs border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                                      onClick={handleUnenroll}
+                                      disabled={isUnenrolling}
+                                    >
+                                      {isUnenrolling ? "Unenrolling..." : "Unenroll Session"}
+                                    </Button>
+                                )}
+
                                 {role === "teacher" &&
                                   (room.sessionStatus === SessionStatus.UPCOMING ||
                                     room.sessionStatus === SessionStatus.ONGOING) && (
@@ -526,87 +612,6 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
                                     </Button>
                                   )}
 
-                                {role === "teacher" && room.allowExternalUsers && (
-                                  <div className="space-y-2 rounded-lg border border-blue-200/40 bg-blue-50/40 p-3">
-                                    {room.externalPasscode && (
-                                      <div className="rounded-md border bg-white p-2">
-                                        <p className="text-[11px] font-semibold text-muted-foreground">
-                                          Guest Passcode
-                                        </p>
-                                        <div className="mt-1 flex items-center justify-between gap-2">
-                                          <code className="rounded bg-muted px-2 py-1 text-xs font-semibold tracking-wide">
-                                            {room.externalPasscode}
-                                          </code>
-                                          <Button
-                                            size="sm"
-                                            variant="outline"
-                                            className="h-7 text-[11px]"
-                                            onClick={handleCopyPasscode}
-                                          >
-                                            {isPasscodeCopied ? "Copied" : "Copy"}
-                                          </Button>
-                                        </div>
-                                      </div>
-                                    )}
-                                    <div className="flex items-center justify-between">
-                                      <span className="text-xs font-semibold text-blue-700">
-                                        External Join Requests: {pendingRequests.length}
-                                      </span>
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="h-7 text-[11px]"
-                                        onClick={() =>
-                                          toggleAutoAccept.mutate(
-                                            !room.externalAutoAccept,
-                                          )
-                                        }
-                                      >
-                                        Auto Accept: {room.externalAutoAccept ? "On" : "Off"}
-                                      </Button>
-                                    </div>
-                                    {pendingRequests.slice(0, 2).map((request) => (
-                                      <div
-                                        key={request.id}
-                                        className="rounded-md border bg-white p-2"
-                                      >
-                                        <p className="text-xs font-medium">
-                                          {request.name}
-                                        </p>
-                                        <p className="text-[11px] text-muted-foreground">
-                                          {request.email}
-                                        </p>
-                                        <div className="mt-2 flex gap-2">
-                                          <Button
-                                            size="sm"
-                                            className="h-7 bg-green-600 text-white hover:bg-green-700"
-                                            onClick={() =>
-                                              resolveExternalJoin.mutate({
-                                                requestId: request.id,
-                                                approve: true,
-                                              })
-                                            }
-                                          >
-                                            Accept
-                                          </Button>
-                                          <Button
-                                            size="sm"
-                                            variant="outline"
-                                            className="h-7"
-                                            onClick={() =>
-                                              resolveExternalJoin.mutate({
-                                                requestId: request.id,
-                                                approve: false,
-                                              })
-                                            }
-                                          >
-                                            Reject
-                                          </Button>
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
                             </div>
                         </CardContent>
                     </Card>
@@ -639,12 +644,36 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
                             </div>
                             
                             {canJoinVideoCall ? (
-                              <Link href={`/rooms/studyroom/${liveRoomName}`} className="block w-full">
-                                <Button size="sm" className="w-full h-9 rounded-lg bg-green-600 text-white hover:bg-green-700 shadow-sm transition-all text-xs">
-                                  Enter Classroom
-                                  <ArrowLeft className="h-3 w-3 ml-2 rotate-180" />
+                              !authLoaded ? (
+                                <Button disabled size="sm" variant="outline" className="w-full h-9 rounded-lg text-xs">
+                                  <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                                  Loading…
                                 </Button>
-                              </Link>
+                              ) : isSignedIn ? (
+                                <Link href={`/rooms/studyroom/${liveRoomName}`} className="block w-full">
+                                  <Button size="sm" className="w-full h-9 rounded-lg bg-green-600 text-white hover:bg-green-700 shadow-sm transition-all text-xs">
+                                    Enter Classroom
+                                    <ArrowLeft className="h-3 w-3 ml-2 rotate-180" />
+                                  </Button>
+                                </Link>
+                              ) : (
+                                <div className="rounded-xl border border-amber-200 bg-amber-50/90 dark:bg-amber-950/40 dark:border-amber-800 px-3 py-3 space-y-2">
+                                  <p className="text-xs font-semibold text-foreground text-center sm:text-left">
+                                    Sign in to enter
+                                  </p>
+                                  <p className="text-[10px] text-muted-foreground text-center sm:text-left leading-relaxed">
+                                    Sign in or sign up, then open Enter Classroom again (or refresh this page).
+                                  </p>
+                                  <Button
+                                    size="sm"
+                                    disabled
+                                    className="w-full h-9 rounded-lg opacity-80 cursor-not-allowed text-xs"
+                                  >
+                                    Enter Classroom
+                                  </Button>
+                                  <AuthPromptButtons className="w-full justify-center flex-wrap" />
+                                </div>
+                              )
                             ) : (
                               <Button disabled size="sm" variant="outline" className="w-full h-9 rounded-lg bg-background/50 border-dashed text-xs">
                                 Opens Soon
@@ -689,8 +718,41 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
             />
         </div> */}
 
+          <RecurringActionModal 
+                    isOpen={isModalOpen}
+                    onClose={() => setIsModalOpen(false)}
+                    onConfirm={handleConfirmRecurring}
+                    actionType="join"
+                  />
+
+          <RecurringActionModal
+              isOpen={isLeaveModalOpen}
+              actionType="leave"
+              title="Unenrollment Options"
+              onClose={() => setIsLeaveModalOpen(false)}
+              onConfirm={handleConfirmLeave}
+        />
+
       </main>
       <Footer />
+
+      {showHostDetailMenu && (
+        <StudyRoomHostEditDialog
+          open={hostEditOpen}
+          onOpenChange={setHostEditOpen}
+          roomId={roomId}
+          initialTitle={room.title}
+          initialDescription={room.description}
+          initialDate={room.date}
+          initialDuration={room.duration}
+          initialMaxParticipants={room.maxParticipants}
+          initialJoiningFee={Number(room.joiningFee ?? 0)}
+          initialSkillNames={hostEditSkillNames}
+          initialTimezone={room.timezone ?? null}
+          initialImageUrl={room.imageUrl ?? null}
+          seriesId={room.seriesId ?? null}
+        />
+      )}
     </div>
   );
 }

@@ -38,13 +38,13 @@ async function withRetry<T>(
   initialDelayMs: number,
   errorMessage: string
 ): Promise<T> {
-  let lastError: Error | null = null;
+  let _lastError: Error | null = null;
   
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       return await fn();
-    } catch (err) {
-      lastError = err instanceof Error ? err : new Error(String(err));
+    } catch (_err) {
+      _lastError = _err instanceof Error ? _err : new Error(String(_err));
       // console.log(`⚠️ Attempt ${attempt + 1}/${maxRetries + 1} failed:`, lastError.message);
       
       if (attempt < maxRetries) {
@@ -79,8 +79,8 @@ export function usePushNotifications(): UsePushNotificationsReturn {
       const hasSubscription = subscription !== null;
       setIsSubscribed(hasSubscription);
       // console.log('✅ Subscription check complete:', hasSubscription ? 'Subscribed' : 'Not subscribed');
-    } catch (err) {
-      // console.error('❌ Error checking subscription:', err);
+    } catch (_err) {
+      // console.error('❌ Error checking subscription:', _err);
       setIsSubscribed(false);
     }
   }, [isSupported]);
@@ -214,9 +214,9 @@ export function usePushNotifications(): UsePushNotificationsReturn {
       setError(null);
       // console.log('🎉 Successfully subscribed to push notifications!');
       return true;
-    } catch (err: unknown) {
-      // console.error('❌ Subscription error:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Failed to enable notifications. Please try again.';
+    } catch (_err: unknown) {
+      // console.error('❌ Subscription error:', _err);
+      const errorMessage = _err instanceof Error ? _err.message : 'Failed to enable notifications. Please try again.';
       setError(errorMessage);
       setIsSubscribed(false);
       return false;
@@ -276,9 +276,9 @@ export function usePushNotifications(): UsePushNotificationsReturn {
       setError(null);
       // console.log('✅ Successfully unsubscribed from push notifications');
       return true;
-    } catch (err: unknown) {
-      // console.error('❌ Unsubscribe error:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Failed to disable notifications';
+    } catch (_err: unknown) {
+      // console.error('❌ Unsubscribe error:', _err);
+      const errorMessage = _err instanceof Error ? _err.message : 'Failed to disable notifications';
       setError(errorMessage);
       return false;
     } finally {

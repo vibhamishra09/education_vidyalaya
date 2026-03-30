@@ -22,6 +22,28 @@ export class ReviewsService {
     private readonly cacheService: CacheService,
   ) {}
 
+  private async resolveUserIdentity(userIdOrClerkId: string) {
+    const byId = await this.prisma.user.findUnique({
+      where: { id: userIdOrClerkId },
+      select: { id: true },
+    });
+
+    if (byId) {
+      return byId;
+    }
+
+    const byClerkId = await this.prisma.user.findUnique({
+      where: { clerkId: userIdOrClerkId },
+      select: { id: true },
+    });
+
+    if (byClerkId) {
+      return byClerkId;
+    }
+
+    throw new NotFoundException('User not found');
+  }
+
   async getReviews(
     userId?: string,
     sessionId?: string,
@@ -45,61 +67,61 @@ export class ReviewsService {
         try {
           const where: any = {};
 
-        if (userId) {
-          // Check if userId is a clerkId or database ID
-          // If it's a clerkId, convert to database ID
-          const user = await this.prisma.user.findUnique({
-            where: { clerkId: userId },
-            select: { id: true },
-          });
+          if (userId) {
+            // Check if userId is a clerkId or database ID
+            // If it's a clerkId, convert to database ID
+            const user = await this.prisma.user.findUnique({
+              where: { clerkId: userId },
+              select: { id: true },
+            });
 
-          if (user) {
-            where.revieweeId = user.id;
-          } else {
-            // If not found by clerkId, assume it's already a database ID
-            where.revieweeId = userId;
+            if (user) {
+              where.revieweeId = user.id;
+            } else {
+              // If not found by clerkId, assume it's already a database ID
+              where.revieweeId = userId;
+            }
           }
-        }
-        if (sessionId) {
-          if (sessionType === 'studyRoom') {
-            where.studyRoomId = sessionId;
-          } else if (sessionType === 'peerSession') {
-            where.peerSessionId = sessionId;
+          if (sessionId) {
+            if (sessionType === 'studyRoom') {
+              where.studyRoomId = sessionId;
+            } else if (sessionType === 'peerSession') {
+              where.peerSessionId = sessionId;
+            }
           }
-        }
 
-        const skip = (page - 1) * limit;
+          const skip = (page - 1) * limit;
 
-        const [reviews, total] = await Promise.all([
-          this.prisma.review.findMany({
-            where,
-            skip,
-            take: limit,
-            include: {
-              reviewer: { select: { id: true, name: true, avatar: true } },
-              reviewee: { select: { id: true, name: true, avatar: true } },
+          const [reviews, total] = await Promise.all([
+            this.prisma.review.findMany({
+              where,
+              skip,
+              take: limit,
+              include: {
+                reviewer: { select: { id: true, name: true, avatar: true } },
+                reviewee: { select: { id: true, name: true, avatar: true } },
+              },
+              orderBy: { id: 'desc' },
+            }),
+            this.prisma.review.count({ where }),
+          ]);
+
+          return {
+            reviews: reviews.map((r) => ({
+              id: r.id,
+              rating: r.rating,
+              review: r.review,
+              reviewer: r.reviewer,
+              reviewee: r.reviewee,
+            })),
+            pagination: {
+              total,
+              page,
+              limit,
+              totalPages: Math.ceil(total / limit),
+              hasMore: skip + limit < total,
             },
-            orderBy: { id: 'desc' },
-          }),
-          this.prisma.review.count({ where }),
-        ]);
-
-        return {
-          reviews: reviews.map((r) => ({
-            id: r.id,
-            rating: r.rating,
-            review: r.review,
-            reviewer: r.reviewer,
-            reviewee: r.reviewee,
-          })),
-          pagination: {
-            total,
-            page,
-            limit,
-            totalPages: Math.ceil(total / limit),
-            hasMore: skip + limit < total,
-          },
-        };
+          };
         } catch (error) {
           // Handle database connection errors
           if (isConnectionError(error)) {
@@ -107,7 +129,7 @@ export class ReviewsService {
               `Database connection error in getReviews:`,
               error instanceof Error ? error.message : String(error),
             );
-            
+
             // Return empty reviews as fallback
             return {
               reviews: [],
@@ -120,7 +142,7 @@ export class ReviewsService {
               },
             };
           }
-          
+
           // Re-throw other errors
           throw error;
         }
@@ -130,19 +152,12 @@ export class ReviewsService {
   }
 
   async createReview(userId: string, createDto: CreateReviewDto) {
-    // userId is actually clerkId, so we need to find the user by clerkId first
-    const user = await this.prisma.user.findUnique({
-      where: { clerkId: userId },
-      select: { id: true },
-    });
-
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
+    const actor = await this.resolveUserIdentity(userId);
+    const actorUserId = actor.id;
 
     // Check if already reviewed
     const whereClause: any = {
-      reviewerId: user.id, // Use the database ID, not clerkId
+      reviewerId: actorUserId,
     };
 
     if (createDto.sessionType === 'studyRoom') {
@@ -197,14 +212,14 @@ export class ReviewsService {
         });
       }
 
-      if (studyRoom.createdById === user.id) {
+      if (studyRoom.createdById === actorUserId) {
         throw new ForbiddenException(
           'Creators cannot review their own study rooms',
         );
       }
 
       const isLearner = studyRoom.learners.some(
-        (learner) => learner.userId === user.id,
+        (learner) => learner.userId === actorUserId,
       );
       if (!isLearner) {
         throw new ForbiddenException(
@@ -246,7 +261,7 @@ export class ReviewsService {
       }
 
       revieweeId =
-        peerSession.requestedById === user.id
+        peerSession.requestedById === actorUserId
           ? peerSession.requestedToId
           : peerSession.requestedById;
     }
@@ -254,7 +269,7 @@ export class ReviewsService {
     const reviewData: any = {
       rating: createDto.rating,
       review: createDto.review?.trim() ?? '',
-      reviewerId: user.id, // Use the database ID, not clerkId
+      reviewerId: actorUserId,
       revieweeId,
     };
 
@@ -294,12 +309,14 @@ export class ReviewsService {
     await this.checkAndReleaseEscrowPayment(
       createDto.sessionId,
       createDto.sessionType,
-      user.id,
+      actorUserId,
     );
 
     // Invalidate reviews cache
     await this.cacheService.deletePattern(`reviews:list*`);
-    await this.cacheService.deletePattern(`reviews:session:*${createDto.sessionId}*`);
+    await this.cacheService.deletePattern(
+      `reviews:session:*${createDto.sessionId}*`,
+    );
     // Invalidate user profile cache (reviews affect user stats)
     await this.cacheService.deletePattern(`user:*${revieweeId}*`);
 
@@ -334,47 +351,47 @@ export class ReviewsService {
           const skip = (page - 1) * limit;
 
           const whereClause: any = {};
-        if (sessionType === 'studyRoom') {
-          whereClause.studyRoomId = sessionId;
-        } else {
-          whereClause.peerSessionId = sessionId;
-        }
+          if (sessionType === 'studyRoom') {
+            whereClause.studyRoomId = sessionId;
+          } else {
+            whereClause.peerSessionId = sessionId;
+          }
 
-        const [reviews, total] = await Promise.all([
-          this.prisma.review.findMany({
-            where: whereClause,
-            skip,
-            take: limit,
-            include: {
-              reviewer: { select: { id: true, name: true, avatar: true } },
+          const [reviews, total] = await Promise.all([
+            this.prisma.review.findMany({
+              where: whereClause,
+              skip,
+              take: limit,
+              include: {
+                reviewer: { select: { id: true, name: true, avatar: true } },
+              },
+              orderBy: { id: 'desc' },
+            }),
+            this.prisma.review.count({ where: whereClause }),
+          ]);
+
+          const avgRating =
+            reviews.length > 0
+              ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
+              : 0;
+
+          return {
+            reviews: reviews.map((r) => ({
+              id: r.id,
+              rating: r.rating,
+              review: r.review,
+              reviewer: r.reviewer,
+            })),
+            avgRating: Math.round(avgRating * 10) / 10,
+            totalCount: total,
+            pagination: {
+              total,
+              page,
+              limit,
+              totalPages: Math.ceil(total / limit),
+              hasMore: skip + limit < total,
             },
-            orderBy: { id: 'desc' },
-          }),
-          this.prisma.review.count({ where: whereClause }),
-        ]);
-
-        const avgRating =
-          reviews.length > 0
-            ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
-            : 0;
-
-        return {
-          reviews: reviews.map((r) => ({
-            id: r.id,
-            rating: r.rating,
-            review: r.review,
-            reviewer: r.reviewer,
-          })),
-          avgRating: Math.round(avgRating * 10) / 10,
-          totalCount: total,
-          pagination: {
-            total,
-            page,
-            limit,
-            totalPages: Math.ceil(total / limit),
-            hasMore: skip + limit < total,
-          },
-        };
+          };
         } catch (error) {
           // Handle database connection errors
           if (isConnectionError(error)) {
@@ -382,7 +399,7 @@ export class ReviewsService {
               `Database connection error in getSessionReviews for session ${sessionId}:`,
               error instanceof Error ? error.message : String(error),
             );
-            
+
             // Return empty reviews as fallback
             return {
               reviews: [],
@@ -397,7 +414,7 @@ export class ReviewsService {
               },
             };
           }
-          
+
           // Re-throw other errors
           throw error;
         }

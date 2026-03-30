@@ -21,7 +21,19 @@ import { useFormPersistence } from "@/hooks/use-local-storage";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatCoins } from "@/lib/utils/coin-format";
+import { extractHttpErrorMessage } from "@/lib/utils/error-handling";
 import { toast } from "sonner";
+
+function getApiErrorCode(err: unknown): string | undefined {
+  if (!err || typeof err !== "object") return undefined;
+  const o = err as Record<string, unknown>;
+  if (typeof o.code === "string") return o.code;
+  const data = (o.response as { data?: Record<string, unknown> } | undefined)?.data;
+  if (data && typeof data === "object" && typeof data.code === "string") {
+    return data.code;
+  }
+  return undefined;
+}
 
 interface SessionFormData {
   skills: string[];
@@ -289,27 +301,36 @@ export default function RequestSessionPage({
       // Success - redirect to dashboard
       router.push("/dashboard");
     } catch (err: unknown) {
-      console.error('Error requesting session:', err);
-      // Handle specific error codes
-      if (err && typeof err === 'object' && 'response' in err) {
-        const apiError = err as { response: { data: { code: string; message: string } } };
-        if (apiError.response?.data?.code === 'CANNOT_REQUEST_SELF') {
-          setError(apiError.response.data.message || 'You cannot request a session to yourself.');
-          toast.error("Cannot request session", { description: "You cannot request a session to yourself." });
-        } else if (apiError.response?.data?.code === 'TIME_SLOT_UNAVAILABLE') {
-          setError(apiError.response.data.message || 'The selected time slot is not available.');
-          toast.error("Time slot unavailable", { description: "The selected time slot is not available." });
-        } else if (apiError.response?.data?.code === 'INSUFFICIENT_FUNDS') {
-          setError('You do not have enough Coins to book this session. Please add funds to your wallet.');
-          toast.error("Insufficient funds", { description: "You do not have enough Webya tokens." });
-        } else {
-          setError(apiError.response?.data?.message || 'Failed to send session request');
-          toast.error("Request failed", { description: apiError.response?.data?.message || 'Failed to send session request' });
-        }
+      console.error("Error requesting session:", err);
+      const code = getApiErrorCode(err);
+      const msg = extractHttpErrorMessage(err, "Failed to send session request");
+
+      if (code === "CANNOT_REQUEST_SELF") {
+        setError(msg);
+        toast.error("Cannot request session", { description: msg });
+      } else if (code === "TIME_SLOT_UNAVAILABLE") {
+        setError(msg);
+        toast.error("Time slot unavailable", { description: msg });
+      } else if (code === "INSUFFICIENT_FUNDS") {
+        setError(
+          "You do not have enough Coins to book this session. Please add funds to your wallet.",
+        );
+        toast.error("Insufficient funds", { description: "You do not have enough Webya tokens." });
+      } else if (code === "PAST_TIME_NOT_ALLOWED") {
+        setError(msg);
+        toast.error("Invalid time", { description: msg });
+      } else if (code === "API_HIT_NEXT") {
+        setError(msg);
+        toast.error("Something went wrong", { description: msg });
+      } else if (code === "NETWORK_ERROR") {
+        setError(msg);
+        toast.error("Connection failed", { description: msg });
+      } else if (code === "UNAUTHORIZED") {
+        setError(msg);
+        toast.error("Sign in required", { description: msg });
       } else {
-        const errorMessage = err instanceof Error ? err.message : 'Failed to send session request';
-        setError(errorMessage);
-        toast.error("Request failed", { description: errorMessage });
+        setError(msg);
+        toast.error("Request failed", { description: msg });
       }
     } finally {
       setSubmitting(false);

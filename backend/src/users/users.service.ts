@@ -1,22 +1,211 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  BadRequestException,
+  Logger,
+} from '@nestjs/common';
+import { createClerkClient } from '@clerk/backend';
 import { Prisma, SessionStatus } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+
+/** Generated Prisma `User` / `UserFindUniqueArgs` are unreliable here; infer delegate args instead. */
+type PrismaUserDelegate = InstanceType<typeof PrismaService>['user'];
+type UserFindUniqueArgsRoot = NonNullable<
+  Parameters<PrismaUserDelegate['findUnique']>[0]
+>;
+type UserFindUniqueArgsWithoutWhere = Omit<UserFindUniqueArgsRoot, 'where'>;
+
+/** Shape after `findUnique` with `userSkills` + `skill` includes (public / current profile). */
+type UserWithSkillsForProfile = {
+  id: string;
+  name: string | null;
+  username: string | null;
+  email: string;
+  avatar: string | null;
+  bio: string | null;
+  location: string | null;
+  school: string | null;
+  coins: Prisma.Decimal;
+  hourlyRate: Prisma.Decimal | null;
+  socialLinks: unknown;
+  userSkills: Array<{
+    type: string;
+    skill: { name: string };
+  }>;
+};
+
+type UserOnboardingResult = {
+  id: string;
+  clerkId: string;
+  name: string | null;
+  email: string;
+  avatar: string | null;
+  bio: string | null;
+  hourlyRate: Prisma.Decimal | null;
+  coins: Prisma.Decimal;
+  onboarded: boolean;
+};
 import { UpdateUserDto } from './dto/user.dto';
 import { CacheService } from '../redis/cache.service';
-import { isConnectionError, withQueryTimeout } from '../common/db-error-handler';
+import {
+  isConnectionError,
+  withQueryTimeout,
+} from '../common/db-error-handler';
 
 @Injectable()
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
+  private readonly clerkClient = createClerkClient({
+    secretKey: process.env.CLERK_SECRET_KEY,
+    publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
+  });
 
   constructor(
     private prisma: PrismaService,
     private readonly cacheService: CacheService,
   ) {}
 
-  async getCurrentUser(clerkUserId: string) {
+  private buildClerkDisplayName(clerkUser: any): string {
+    const firstName = typeof clerkUser?.firstName === 'string' ? clerkUser.firstName.trim() : '';
+    const lastName = typeof clerkUser?.lastName === 'string' ? clerkUser.lastName.trim() : '';
+    const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
+    if (fullName) return fullName;
+    if (typeof clerkUser?.username === 'string' && clerkUser.username.trim()) {
+      return clerkUser.username.trim();
+    }
+    const primaryEmail = clerkUser?.emailAddresses?.find(
+      (email: any) => email.id === clerkUser?.primaryEmailAddressId,
+    )?.emailAddress || clerkUser?.emailAddresses?.[0]?.emailAddress;
+    if (typeof primaryEmail === 'string' && primaryEmail.includes('@')) {
+      return primaryEmail.split('@')[0];
+    }
+    return clerkUser?.id || 'User';
+  }
+
+  async ensureUserFromClerk(clerkId: string) {
+    const existingByClerkId = await this.prisma.user.findUnique({
+      where: { clerkId },
+      select: {
+        id: true,
+        clerkId: true,
+        name: true,
+        email: true,
+        avatar: true,
+        onboarded: true,
+      },
+    });
+
+    if (existingByClerkId) {
+      return existingByClerkId;
+    }
+
+    const clerkUser = await this.clerkClient.users.getUser(clerkId);
+    const primaryEmail =
+      clerkUser.emailAddresses.find(
+        (email) => email.id === clerkUser.primaryEmailAddressId,
+      )?.emailAddress || clerkUser.emailAddresses[0]?.emailAddress;
+
+    if (!primaryEmail) {
+      throw new BadRequestException('Clerk user does not have an email address');
+    }
+
+    const displayName = this.buildClerkDisplayName(clerkUser);
+    const normalizedEmail = primaryEmail.trim().toLowerCase();
+    const avatar = clerkUser.imageUrl || null;
+
+    const existingByEmail = await this.prisma.user.findUnique({
+      where: { email: normalizedEmail },
+      select: {
+        id: true,
+        clerkId: true,
+        name: true,
+        email: true,
+        avatar: true,
+        onboarded: true,
+      },
+    });
+
+    const user = existingByEmail
+      ? await this.prisma.user.update({
+          where: { id: existingByEmail.id },
+          data: {
+            clerkId,
+            name: existingByEmail.name || displayName,
+            avatar: existingByEmail.avatar || avatar,
+          },
+          select: {
+            id: true,
+            clerkId: true,
+            name: true,
+            email: true,
+            avatar: true,
+            onboarded: true,
+          },
+        })
+      : await this.prisma.user.create({
+          data: {
+            clerkId,
+            email: normalizedEmail,
+            name: displayName,
+            avatar,
+            onboarded: false,
+          },
+          select: {
+            id: true,
+            clerkId: true,
+            name: true,
+            email: true,
+            avatar: true,
+            onboarded: true,
+          },
+        });
+
+    await this.syncClerkMetadata(clerkId, user.id);
+    return user;
+  }
+
+  private async findUserByIdOrClerkId(
+    userIdOrClerkId: string,
+    args?: UserFindUniqueArgsWithoutWhere,
+  ): Promise<any | null> {
+    const userById = await this.prisma.user.findUnique({
+      ...(args || {}),
+      where: { id: userIdOrClerkId },
+    });
+
+    if (userById) {
+      return userById;
+    }
+
+    return this.prisma.user.findUnique({
+      ...(args || {}),
+      where: { clerkId: userIdOrClerkId },
+    });
+  }
+
+  private async syncClerkMetadata(clerkId: string, dbUserId: string) {
+    try {
+      const clerkUser = await this.clerkClient.users.getUser(clerkId);
+      await this.clerkClient.users.updateUser(clerkId, {
+        publicMetadata: {
+          ...(clerkUser.publicMetadata || {}),
+          onboardingComplete: true,
+          dbUserId,
+        },
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Failed to sync Clerk metadata for ${clerkId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  async getCurrentUser(userIdOrClerkId: string) {
     // Cache for 60 seconds - user profile changes infrequently
-    const cacheKey = this.cacheService.createKey('user:current', { clerkUserId });
+    const cacheKey = this.cacheService.createKey('user:current', {
+      userIdOrClerkId,
+    });
     const cacheTTL = 60;
 
     return this.cacheService.getOrSet(
@@ -24,8 +213,7 @@ export class UsersService {
       async () => {
         try {
           const user = await withQueryTimeout(
-            this.prisma.user.findUnique({
-              where: { clerkId: clerkUserId },
+            this.findUserByIdOrClerkId(userIdOrClerkId, {
               include: {
                 userSkills: {
                   include: {
@@ -35,31 +223,33 @@ export class UsersService {
               },
             }),
             25000, // 25 second timeout
-            `getCurrentUser - findUnique user ${clerkUserId}`,
+            `getCurrentUser - findUnique user ${userIdOrClerkId}`,
           );
 
-        const isNewUser = !user;
+          const isNewUser = !user;
 
-        if (!user) {
-          throw new NotFoundException(
-            'User not found. Please complete onboarding first.',
-          );
-        }
+          if (!user) {
+            throw new NotFoundException(
+              'User not found. Please complete onboarding first.',
+            );
+          }
 
-        const hasSkills = user.userSkills
-          .filter((us) => us.type === 'HAS')
-          .map((us) => us.skill.name);
+          const profile = user as UserWithSkillsForProfile;
 
-        const wantSkills = user.userSkills
-          .filter((us) => us.type === 'WANTS')
-          .map((us) => us.skill.name);
+          const hasSkills = profile.userSkills
+            .filter((us) => us.type === 'HAS')
+            .map((us) => us.skill.name);
 
-        // Fetch public stats for the current user
-        const acceptedStatuses = [
-          SessionStatus.UPCOMING,
-          SessionStatus.ONGOING,
-          SessionStatus.DONE,
-        ];
+          const wantSkills = profile.userSkills
+            .filter((us) => us.type === 'WANTS')
+            .map((us) => us.skill.name);
+
+          // Fetch public stats for the current user
+          const acceptedStatuses = [
+            SessionStatus.UPCOMING,
+            SessionStatus.ONGOING,
+            SessionStatus.DONE,
+          ];
 
           const [
             peerSessionsTaught,
@@ -71,111 +261,114 @@ export class UsersService {
             studyRoomsAsLearner,
           ] = await withQueryTimeout(
             Promise.all([
-          // Count peer sessions where user is the teacher (received)
-          this.prisma.peerSession.count({
-            where: {
-              requestedToId: user.id,
-              sessionStatus: SessionStatus.DONE,
-            },
-          }),
-          // Count study rooms where user is the creator/host
-          this.prisma.studyRoom.count({
-            where: {
-              createdById: user.id,
-              sessionStatus: SessionStatus.DONE,
-            },
-          }),
-          this.prisma.peerSession.count({
-            where: { requestedToId: user.id },
-          }),
-          this.prisma.peerSession.count({
-            where: {
-              requestedToId: user.id,
-              sessionStatus: {
-                in: acceptedStatuses,
-              },
-            },
-          }),
-          this.prisma.review.aggregate({
-            where: { revieweeId: user.id },
-            _avg: { rating: true },
-            _count: { rating: true },
-          }),
-          // Count peer sessions where user is the learner (requester)
-          this.prisma.peerSession.count({
-            where: {
-              requestedById: user.id,
-              sessionStatus: SessionStatus.DONE,
-            },
-          }),
-          // Count study rooms where user is a participant (not creator)
-          this.prisma.studyRoomParticipant.count({
-            where: {
-              userId: user.id,
-              studyRoom: {
-                sessionStatus: SessionStatus.DONE,
-                createdById: { not: user.id }, // Exclude rooms user created (taught)
-              },
-            },
-          }),
+              // Count peer sessions where user is the teacher (received)
+              this.prisma.peerSession.count({
+                where: {
+                  requestedToId: profile.id,
+                  sessionStatus: SessionStatus.DONE,
+                },
+              }),
+              // Count study rooms where user is the creator/host
+              this.prisma.studyRoom.count({
+                where: {
+                  createdById: profile.id,
+                  sessionStatus: SessionStatus.DONE,
+                },
+              }),
+              this.prisma.peerSession.count({
+                where: { requestedToId: profile.id },
+              }),
+              this.prisma.peerSession.count({
+                where: {
+                  requestedToId: profile.id,
+                  sessionStatus: {
+                    in: acceptedStatuses,
+                  },
+                },
+              }),
+              this.prisma.review.aggregate({
+                where: { revieweeId: profile.id },
+                _avg: { rating: true },
+                _count: { rating: true },
+              }),
+              // Count peer sessions where user is the learner (requester)
+              this.prisma.peerSession.count({
+                where: {
+                  requestedById: profile.id,
+                  sessionStatus: SessionStatus.DONE,
+                },
+              }),
+              // Count study rooms where user is a participant (not creator)
+              this.prisma.studyRoomParticipant.count({
+                where: {
+                  userId: profile.id,
+                  studyRoom: {
+                    sessionStatus: SessionStatus.DONE,
+                    createdById: { not: profile.id }, // Exclude rooms user created (taught)
+                  },
+                },
+              }),
             ]),
             25000, // 25 second timeout
-            `getCurrentUser - Promise.all stats for user ${clerkUserId}`,
+            `getCurrentUser - Promise.all stats for user ${userIdOrClerkId}`,
           );
 
           // Total sessions taught includes both peer sessions and study rooms hosted
           const sessionsTaught = peerSessionsTaught + studyRoomsHosted;
-        const sessionsAttendedAsLearner = peerSessionsAsLearner + studyRoomsAsLearner;
+          const sessionsAttendedAsLearner =
+            peerSessionsAsLearner + studyRoomsAsLearner;
 
-        const acceptanceRate =
-          totalSessionRequests > 0 ? acceptedSessions / totalSessionRequests : 0;
+          const acceptanceRate =
+            totalSessionRequests > 0
+              ? acceptedSessions / totalSessionRequests
+              : 0;
 
-        return {
-          user: {
-            id: user.id,
-            name: user.name,
-            username: user.username,
-            email: user.email,
-            avatar: user.avatar,
-            bio: user.bio,
-            location: user.location,
-            school: user.school,
-            coins: user.coins,
-            hourlyRate: user.hourlyRate,
-            hasSkills,
-            wantSkills,
-            socialLinks: user.socialLinks as any[] || [],
-            publicStats: {
-              sessionsTaught,
-              sessionsAttendedAsLearner,
-              totalSessionRequests,
-              acceptedSessions,
-              acceptanceRate,
-              avgRating: reviewStats._avg.rating ?? 0,
-              reviewCount: reviewStats._count.rating ?? 0,
+          return {
+            user: {
+              id: profile.id,
+              name: profile.name,
+              username: profile.username,
+              email: profile.email,
+              avatar: profile.avatar,
+              bio: profile.bio,
+              location: profile.location,
+              school: profile.school,
+              coins: profile.coins,
+              hourlyRate: profile.hourlyRate,
+              hasSkills,
+              wantSkills,
+              socialLinks: (profile.socialLinks as any[]) || [],
+              publicStats: {
+                sessionsTaught,
+                sessionsAttendedAsLearner,
+                totalSessionRequests,
+                acceptedSessions,
+                acceptanceRate,
+                avgRating: reviewStats._avg.rating ?? 0,
+                reviewCount: reviewStats._count.rating ?? 0,
+              },
             },
-          },
-          isNewUser,
-        };
+            isNewUser,
+          };
         } catch (error) {
           // Handle database connection errors
           if (isConnectionError(error)) {
             this.logger.error(
-              `Database connection error in getCurrentUser for ${clerkUserId}:`,
+              `Database connection error in getCurrentUser for ${userIdOrClerkId}:`,
               error instanceof Error ? error.message : String(error),
             );
-            
+
             // Re-throw NotFoundException (user not found is a valid case)
             if (error instanceof NotFoundException) {
               throw error;
             }
-            
+
             // For connection errors, throw a more user-friendly error
             throw new NotFoundException(
               'Unable to fetch user data. Please try again later.',
             );
           }
-          
+
           // Re-throw other errors
           throw error;
         }
@@ -199,10 +392,11 @@ export class UsersService {
     } = updateDto;
 
     // Get current user to check existing username
-    const currentUser = await this.prisma.user.findUnique({
-      where: { clerkId: userId },
-      select: { id: true, username: true },
-    });
+    const currentUser = (await this.findUserByIdOrClerkId(userId, {
+      select: { id: true, clerkId: true, username: true },
+    })) as
+      | { id: string; clerkId: string; username: string | null }
+      | null;
 
     if (!currentUser) {
       throw new NotFoundException('User not found');
@@ -226,8 +420,8 @@ export class UsersService {
     }
 
     // Update user name, bio, avatar, location, school, username, hourly rate, and social links
-    const user = await this.prisma.user.update({
-      where: { clerkId: userId },
+    const user = (await this.prisma.user.update({
+      where: { id: currentUser.id },
       data: {
         name: name !== undefined ? name : undefined,
         bio,
@@ -236,11 +430,12 @@ export class UsersService {
         school,
         username: username !== undefined ? username : undefined,
         hourlyRate: hourlyRate !== undefined ? hourlyRate : undefined,
-        socialLinks: socialLinks !== undefined 
-          ? (socialLinks as unknown as Prisma.InputJsonValue) 
-          : undefined,
+        socialLinks:
+          socialLinks !== undefined
+            ? (socialLinks as unknown as Prisma.InputJsonValue)
+            : undefined,
       },
-    });
+    })) as { id: string };
 
     // Update skills if provided
     if (hasSkills !== undefined) {
@@ -292,11 +487,13 @@ export class UsersService {
     }
 
     // Invalidate cache for this user
-    await this.cacheService.delete(this.cacheService.createKey('user:current', { clerkUserId: userId }));
+    await this.cacheService.delete(
+      this.cacheService.createKey('user:current', { clerkUserId: userId }),
+    );
     await this.cacheService.deletePattern(`user:public:${userId}*`);
 
     // Return updated user with skills
-    return this.getCurrentUser(userId);
+    return this.getCurrentUser(currentUser.id);
   }
 
   async getPublicUserProfile(userId: string) {
@@ -327,11 +524,13 @@ export class UsersService {
             throw new NotFoundException('User not found');
           }
 
-          const hasSkills = user.userSkills
+          const profile = user as UserWithSkillsForProfile;
+
+          const hasSkills = profile.userSkills
             .filter((us) => us.type === 'HAS')
             .map((us) => us.skill.name);
 
-          const wantSkills = user.userSkills
+          const wantSkills = profile.userSkills
             .filter((us) => us.type === 'WANTS')
             .map((us) => us.skill.name);
 
@@ -350,79 +549,82 @@ export class UsersService {
             studyRoomsAsLearner,
           ] = await withQueryTimeout(
             Promise.all([
-          this.prisma.peerSession.count({
-            where: {
-              requestedToId: user.id,
-              sessionStatus: SessionStatus.DONE,
-            },
-          }),
-          this.prisma.peerSession.count({
-            where: { requestedToId: user.id },
-          }),
-          this.prisma.peerSession.count({
-            where: {
-              requestedToId: user.id,
-              sessionStatus: {
-                in: acceptedStatuses,
-              },
-            },
-          }),
-          this.prisma.review.aggregate({
-            where: { revieweeId: user.id },
-            _avg: { rating: true },
-            _count: { rating: true },
-          }),
-          // Count peer sessions where user is the learner (requester)
-          this.prisma.peerSession.count({
-            where: {
-              requestedById: user.id,
-              sessionStatus: SessionStatus.DONE,
-            },
-          }),
-          // Count study rooms where user is a participant (not creator)
-          this.prisma.studyRoomParticipant.count({
-            where: {
-              userId: user.id,
-              studyRoom: {
-                sessionStatus: SessionStatus.DONE,
-                createdById: { not: user.id }, // Exclude rooms user created (taught)
-              },
-            },
-          }),
+              this.prisma.peerSession.count({
+                where: {
+                  requestedToId: profile.id,
+                  sessionStatus: SessionStatus.DONE,
+                },
+              }),
+              this.prisma.peerSession.count({
+                where: { requestedToId: profile.id },
+              }),
+              this.prisma.peerSession.count({
+                where: {
+                  requestedToId: profile.id,
+                  sessionStatus: {
+                    in: acceptedStatuses,
+                  },
+                },
+              }),
+              this.prisma.review.aggregate({
+                where: { revieweeId: profile.id },
+                _avg: { rating: true },
+                _count: { rating: true },
+              }),
+              // Count peer sessions where user is the learner (requester)
+              this.prisma.peerSession.count({
+                where: {
+                  requestedById: profile.id,
+                  sessionStatus: SessionStatus.DONE,
+                },
+              }),
+              // Count study rooms where user is a participant (not creator)
+              this.prisma.studyRoomParticipant.count({
+                where: {
+                  userId: profile.id,
+                  studyRoom: {
+                    sessionStatus: SessionStatus.DONE,
+                    createdById: { not: profile.id }, // Exclude rooms user created (taught)
+                  },
+                },
+              }),
             ]),
             25000, // 25 second timeout
             `getPublicUserProfile - Promise.all stats for user ${userId}`,
           );
 
-          const sessionsAttendedAsLearner = peerSessionsAsLearner + studyRoomsAsLearner;
+          const sessionsAttendedAsLearner =
+            peerSessionsAsLearner + studyRoomsAsLearner;
 
-        const acceptanceRate =
-          totalSessionRequests > 0 ? acceptedSessions / totalSessionRequests : 0;
+          const acceptanceRate =
+            totalSessionRequests > 0
+              ? acceptedSessions / totalSessionRequests
+              : 0;
 
-        return {
-          id: user.id,
-          name: user.name,
-          username: user.username,
-          email: user.email,
-          avatar: user.avatar,
-          bio: user.bio,
-          location: user.location,
-          school: user.school,
-          coins: user.coins,
-          hourlyRate: user.hourlyRate,
-          hasSkills,
-          wantSkills,
-          socialLinks: user.socialLinks as any[] || [],
-          publicStats: {
-            sessionsTaught,
-            sessionsAttendedAsLearner,
-            totalSessionRequests,
-            acceptedSessions,
-            acceptanceRate,
-            avgRating: reviewStats._avg.rating ?? 0,
-            reviewCount: reviewStats._count.rating ?? 0,
-          },
-        };
+          return {
+            id: profile.id,
+            name: profile.name,
+            username: profile.username,
+            email: profile.email,
+            avatar: profile.avatar,
+            bio: profile.bio,
+            location: profile.location,
+            school: profile.school,
+            coins: profile.coins,
+            hourlyRate: profile.hourlyRate,
+            hasSkills,
+            wantSkills,
+            socialLinks: (profile.socialLinks as any[]) || [],
+            publicStats: {
+              sessionsTaught,
+              sessionsAttendedAsLearner,
+              totalSessionRequests,
+              acceptedSessions,
+              acceptanceRate,
+              avgRating: reviewStats._avg.rating ?? 0,
+              reviewCount: reviewStats._count.rating ?? 0,
+            },
+          };
         } catch (error) {
           // Handle database connection errors
           if (isConnectionError(error)) {
@@ -430,18 +632,18 @@ export class UsersService {
               `Database connection error in getPublicUserProfile for user ${userId}:`,
               error instanceof Error ? error.message : String(error),
             );
-            
+
             // Re-throw NotFoundException (user not found is a valid case)
             if (error instanceof NotFoundException) {
               throw error;
             }
-            
+
             // For connection errors, throw a more user-friendly error
             throw new NotFoundException(
               'Unable to fetch user profile. Please try again later.',
             );
           }
-          
+
           // Re-throw other errors
           throw error;
         }
@@ -472,10 +674,12 @@ export class UsersService {
       // If checking for current user, allow if it's their own username
       if (currentUserId) {
         try {
-          const currentUser = await this.prisma.user.findUnique({
-            where: { clerkId: currentUserId },
-            select: { id: true, username: true },
-          });
+          const currentUser = (await this.findUserByIdOrClerkId(
+            currentUserId,
+            {
+              select: { id: true, username: true },
+            },
+          )) as { id: string; username: string | null } | null;
 
           // If it's the current user's own username, it's available
           if (currentUser && existingUser.id === currentUser.id) {
@@ -498,9 +702,9 @@ export class UsersService {
 
   async getUserSkills(userId: string, type?: 'HAS' | 'WANTS') {
     // First get the user to get the internal ID
-    const user = await this.prisma.user.findUnique({
-      where: { clerkId: userId },
-    });
+    const user = (await this.findUserByIdOrClerkId(userId, {
+      select: { id: true },
+    })) as { id: string } | null;
 
     if (!user) {
       throw new NotFoundException('User not found');
@@ -571,7 +775,7 @@ export class UsersService {
           select: { id: true },
         });
 
-    const user = existingByClerkId
+    const user = (existingByClerkId
       ? await this.prisma.user.update({
           where: { clerkId },
           data: userPayload,
@@ -589,9 +793,11 @@ export class UsersService {
               clerkId,
               ...userPayload,
             },
-          });
+          })) as UserOnboardingResult;
 
     this.logger.debug('🔍 User created:', user);
+
+    await this.syncClerkMetadata(clerkId, user.id);
 
     // Process skills - first ensure they exist in the Skill table
     const allSkills = [...data.skillsIHave, ...data.skillsIWant];

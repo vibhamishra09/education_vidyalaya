@@ -146,7 +146,7 @@ export function TestimonialsSlider() {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [isAutoPlaying]);
+  }, [isAutoPlaying, testimonials.length]);
 
   const goToPrevious = () => {
     if (!testimonials.length) return;

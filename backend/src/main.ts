@@ -20,48 +20,31 @@ import { AppModule } from './app.module';
 import { redisClient } from './redis/redis.provider';
 import { SentryInterceptor, SentryExceptionFilter } from './common/sentry';
 import { LoggerService } from './common/logger';
+import { corsOriginDelegate, getAllowedOrigins } from './common/cors';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     bufferLogs: true,
   });
 
+  // So req.ip / protocol / host respect X-Forwarded-* when behind Next.js rewrites or a proxy.
+  // Clerk's authenticateRequest builds a URL from these; wrong host can break Bearer validation.
+  const expressApp = app.getHttpAdapter().getInstance() as {
+    set?: (key: string, value: unknown) => void;
+  };
+  if (typeof expressApp?.set === 'function') {
+    expressApp.set('trust proxy', 1);
+  }
+
   const logger = app.get(LoggerService);
   logger.setContext('Bootstrap');
 
-  // Enable CORS
-  // Merge environment variable URLs with hardcoded defaults
-  const envUrls =
-    process.env.FRONTEND_URLS?.split(',')
-      .map((url) => url.trim())
-      .filter(Boolean) || [];
-  const defaultUrls = [
-    'https://webyalaya-main-3pav6whkp-debanshu-ghoshs-projects.vercel.app',
-    'https://www.webyalaya.com',
-    'https://webyalaya.com',
-    'https://webyalaya-next.vercel.app',
-    'https://test.webyalaya.com',
-    'https://test2.webyalaya.com',
-    'https://webyalaya-next-test.vercel.app',
-    'https://dev.webyalaya.com',
-    'https://dev2.webyalaya.com',
-    'https://hedera.webyalaya.com',
-    'https://webyalaya-green.vercel.app',
-    'https://webyalaya-purple.vercel.app',
-    'http://localhost:3000',
-    'http://localhost:3002',
-    'http://localhost:3007',
-    'http://localhost:8081',
-    'http://127.0.0.1:8081',
-    'http://localhost:19006',
-    'http://127.0.0.1:19006',
-  ];
-  // Combine and deduplicate
-  const allowedOrigins = [...new Set([...envUrls, ...defaultUrls])];
+  const allowedOrigins = getAllowedOrigins();
 
   app.enableCors({
-    origin: allowedOrigins,
+    origin: corsOriginDelegate,
     credentials: true,
+    optionsSuccessStatus: 204,
   });
 
   logger.log(`🌐 CORS enabled for origins: ${JSON.stringify(allowedOrigins)}`);

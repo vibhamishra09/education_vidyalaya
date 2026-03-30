@@ -284,7 +284,12 @@ export interface StudyRoomCard {
   seriesRootId?: string | null;
   occurrenceIndex?: number | null;
   timezone?: string | null;
+  slug?: string;
+  /** Public registration path segment for webinars (`/webinar/register/[slug]`). */
+  webinarRegistrationSlug?: string | null;
 }
+
+export type StudyRoomSessionMode = 'STANDARD' | 'WEBINAR';
 
 export interface StudyRoom extends StudyRoomCard {
   participants: (PublicUser & { role?: 'PARTICIPANT' | 'COHOST'; clerkId?: string })[];
@@ -296,27 +301,18 @@ export interface StudyRoom extends StudyRoomCard {
     livekitIdentity: string;
   }>;
   role: 'teacher' | 'learner' | 'empty';
-  allowExternalUsers?: boolean;
-  externalAutoAccept?: boolean;
-  externalPasscode?: string | null;
-  externalInvites?: Array<{ email: string; role: 'PARTICIPANT' | 'COHOST' }>;
-  pendingExternalJoinRequests?: number;
   cohostCount?: number;
-  emailDelivery?: {
-    attempted: number;
-    sent: number;
-    failed: number;
-    failures: Array<{
-      email: string;
-      role: 'PARTICIPANT' | 'COHOST';
-      errorCode?: string;
-      errorMessage?: string;
-    }>;
-  };
   reviews: ReviewCard[];
   summary?: string;
   chatChannelId?: string | null;
   occurrencesCreated?: number;
+  hostDetailsUpdatedAt?: string | null;
+  sessionMode?: StudyRoomSessionMode;
+  webinarConfig?: unknown;
+  webinarRegistrationSlug?: string | null;
+  webinarRegistrationUrl?: string | null;
+  /** Stable URL segment when set (browse / links); falls back to id in routes. */
+  slug?: string;
 }
 
 export enum StudyRoomRecurrenceMode {
@@ -351,10 +347,8 @@ export interface CreateStudyRoomDto {
   joiningFee?: number;
   timezone: string;
   recurrence?: StudyRoomRecurrenceDto;
-  allowExternalUsers?: boolean;
-  externalAutoAccept?: boolean;
-  externalPasscode?: string;
-  externalInvites?: Array<{ email: string; role: 'PARTICIPANT' | 'COHOST' }>;
+  sessionMode?: StudyRoomSessionMode;
+  webinarConfig?: Record<string, unknown>;
 }
 
 export interface UpdateStudyRoomDto {
@@ -371,10 +365,6 @@ export interface UpdateStudyRoomDto {
   timezone?: string;
   editScope?: StudyRoomEditScope;
   recurrence?: StudyRoomRecurrenceDto;
-  allowExternalUsers?: boolean;
-  externalAutoAccept?: boolean;
-  externalPasscode?: string;
-  externalInvites?: Array<{ email: string; role: 'PARTICIPANT' | 'COHOST' }>;
 }
 
 // Peer Session Types
@@ -392,6 +382,10 @@ export interface PeerSession {
   summary?: string;
   chatChannelId?: string | null;
   role?: 'requester' | 'requestedTo' | 'empty';
+  /** ISO time when someone last saved meeting details. */
+  hostDetailsUpdatedAt?: string | null;
+  /** Internal user id of who last saved details (other party sees “Edited” / banner). */
+  lastDetailsEditedById?: string | null;
 }
 
 export interface RequestSessionDto {
@@ -408,6 +402,17 @@ export interface RequestSessionDto {
 
 export interface UpdateSessionStatusDto {
   status: SessionStatus;
+}
+
+/** PATCH /api/peer-sessions/:id — either participant; `scheduledAt` as ISO string. */
+export interface UpdatePeerSessionDto {
+  title?: string;
+  description?: string;
+  duration?: number;
+  /** Omit to leave unchanged; empty string clears the link. */
+  gmeetLink?: string;
+  scheduledAt?: string;
+  skills?: string[];
 }
 
 // Review Types
@@ -487,6 +492,7 @@ export interface BrowseResponse {
   counts: {
     peers: number;
     studyRooms: number;
+    webinars?: number;
   };
   pagination: Pagination;
 }
@@ -519,6 +525,8 @@ export interface UpcomingSession {
   description?: string;
   requestedBy?: PublicUser;
   sessionStatus?: SessionStatus;
+  hostDetailsUpdatedAt?: string | null;
+  lastDetailsEditedById?: string | null;
 }
 
 export interface PastSession {
@@ -530,6 +538,9 @@ export interface PastSession {
   skills?: Array<{ id: string; name: string } | string>;
   description?: string;
   requestedBy?: PublicUser;
+  sessionStatus?: SessionStatus;
+  hostDetailsUpdatedAt?: string | null;
+  lastDetailsEditedById?: string | null;
 }
 
 export interface UpcomingStudyRoom {
@@ -543,6 +554,8 @@ export interface UpcomingStudyRoom {
   skills?: Array<{ id: string; name: string } | string>;
   description?: string;
   sessionStatus?: SessionStatus;
+  hostDetailsUpdatedAt?: string | null;
+  slug: string //guyz plz dont remove this,
 }
 
 export interface PastStudyRoom {
@@ -555,6 +568,8 @@ export interface PastStudyRoom {
   createdBy: PublicUser;
   skills?: Array<{ id: string; name: string } | string>;
   description?: string;
+  hostDetailsUpdatedAt?: string | null;
+  slug: string
 }
 
 export interface DashboardData {
@@ -665,11 +680,11 @@ export interface NotificationFilters extends PaginationQuery {
 }
 
 export interface BrowseFilters extends PaginationQuery {
-  tab: 'peers' | 'studyRooms';
+  tab: 'peers' | 'studyRooms' | 'webinars';
   search?: string;
   skills?: string[];
   peerHasSocialLinks?: boolean;
-  studyStatus?: SessionStatus.UPCOMING | SessionStatus.ONGOING;
+  studyStatus?: SessionStatus;
   studyFreeOnly?: boolean;
   includeTrendingStudyRooms?: boolean;
   trendingLimit?: number;

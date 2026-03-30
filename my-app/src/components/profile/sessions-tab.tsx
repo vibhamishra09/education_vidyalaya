@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useMemo, useState } from "react";
+import { memo, useMemo, useState, useCallback } from "react";
 import { Calendar, Clock, Users, TrendingUp, Inbox } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +15,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { peerSessionsApi } from "@/lib/api";
 import { setAuthToken } from "@/lib/api-client";
 import { peerSessionKeys } from "@/hooks/use-peer-sessions";
+import { useCurrentUser } from "@/hooks/use-users";
 import type {
   PendingRequest,
   PastSession,
@@ -36,6 +37,9 @@ export const SessionsTab = memo(function SessionsTab({ publicStats, isLoading = 
   const [processingRequests, setProcessingRequests] = useState<Set<string>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
   const sessionsPerPage = 10;
+
+  const { data: currentUserData } = useCurrentUser();
+  const myUserId = currentUserData?.user?.id;
 
   const {
     data: dashboardData,
@@ -104,7 +108,8 @@ export const SessionsTab = memo(function SessionsTab({ publicStats, isLoading = 
     [dashboardData?.upcomingStudyRooms]
   );
 
-  const formatPeerSession = (session: UpcomingSession | PastSession) => ({
+  const formatPeerSession = useCallback((session: UpcomingSession | PastSession) => ({
+    ...session,
     id: session.id,
     title: session.title,
     date: session.date,
@@ -113,9 +118,15 @@ export const SessionsTab = memo(function SessionsTab({ publicStats, isLoading = 
     description: session.description,
     requestedBy: session.requestedBy,
     hostName: session.peer?.name,
-  });
+    detailsEditedForViewer:
+      !!session.hostDetailsUpdatedAt &&
+      !!session.lastDetailsEditedById &&
+      !!myUserId &&
+      session.lastDetailsEditedById !== myUserId,
+  }), [myUserId]);
 
-  const formatStudyRoom = (room: UpcomingStudyRoom | PastStudyRoom) => ({
+  const formatStudyRoom = useCallback((room: UpcomingStudyRoom | PastStudyRoom) => ({
+    ...room,
     id: room.id,
     title: room.title,
     date: room.date,
@@ -125,14 +136,18 @@ export const SessionsTab = memo(function SessionsTab({ publicStats, isLoading = 
     participantCount: room.participantCount,
     maxParticipants: room.maxParticipants,
     hostName: room.createdBy?.name,
-  });
+    detailsEditedForViewer:
+      !!room.hostDetailsUpdatedAt &&
+      !!myUserId &&
+      room.createdBy?.id !== myUserId,
+  }), [myUserId]);
 
   const upcomingList = useMemo(
     () => [
       ...futurePeerSessions.map(formatPeerSession),
       ...futureStudyRooms.map(formatStudyRoom),
     ],
-    [futurePeerSessions, futureStudyRooms]
+    [futurePeerSessions, futureStudyRooms, formatPeerSession, formatStudyRoom]
   );
 
   const ongoingList = useMemo(
@@ -140,7 +155,7 @@ export const SessionsTab = memo(function SessionsTab({ publicStats, isLoading = 
       ...todayPeerSessions.map(formatPeerSession),
       ...todayStudyRooms.map(formatStudyRoom),
     ],
-    [todayPeerSessions, todayStudyRooms]
+    [todayPeerSessions, todayStudyRooms, formatPeerSession, formatStudyRoom]
   );
 
   const pastList = useMemo(() => {
@@ -154,9 +169,10 @@ export const SessionsTab = memo(function SessionsTab({ publicStats, isLoading = 
     ];
     console.log('📊 [Sessions] Combined past sessions:', combined.length);
     return combined.sort(
-      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+      (a: { date: string | Date }, b: { date: string | Date }) => 
+        new Date(b.date).getTime() - new Date(a.date).getTime()
     );
-  }, [dashboardData?.pastSessions, dashboardData?.pastStudyRooms]);
+  }, [dashboardData, formatPeerSession, formatStudyRoom]);
 
   // Use backend pagination data
   const totalPastSessions = 

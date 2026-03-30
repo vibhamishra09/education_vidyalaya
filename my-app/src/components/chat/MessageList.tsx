@@ -4,11 +4,13 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 
 type Message = { 
 	id: string
-	senderId: string
+	senderId: string | null
 	audienceType?: 'EVERYONE' | 'HOST' | 'USER'
 	targetUserId?: string | null
 	content: string
 	createdAt: string
+	guestEmail?: string | null
+	guestSenderId?: string | null
 	sender?: {
 		id: string
 		name: string
@@ -25,10 +27,14 @@ export function MessageList({
 	messages,
 	currentUserId,
 	hostUserId,
+	viewerIsGuest = false,
+	viewerGuestEmail,
 }: {
 	messages: Message[]
 	currentUserId?: string
 	hostUserId?: string | null
+	viewerIsGuest?: boolean
+	viewerGuestEmail?: string
 }) {
 	const bottomRef = useRef<HTMLDivElement | null>(null)
 	const containerRef = useRef<HTMLDivElement | null>(null)
@@ -42,15 +48,23 @@ export function MessageList({
 
 	const formatTime = (dateString: string) => {
 		const date = new Date(dateString)
+		if (Number.isNaN(date.getTime())) return '—'
 		const now = new Date()
-		const diffMs = now.getTime() - date.getTime()
-		const diffMins = Math.floor(diffMs / 60000)
-		
-		if (diffMins < 1) return 'Just now'
-		if (diffMins < 60) return `${diffMins}m ago`
-		if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h ago`
-		
-		return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+		const isSameDay = now.toDateString() === date.toDateString()
+
+		if (isSameDay) {
+			return date.toLocaleTimeString('en-US', {
+				hour: '2-digit',
+				minute: '2-digit',
+			})
+		}
+
+		return date.toLocaleString('en-US', {
+			month: 'short',
+			day: 'numeric',
+			hour: '2-digit',
+			minute: '2-digit',
+		})
 	}
 
 	return (
@@ -61,9 +75,16 @@ export function MessageList({
 				</div>
 			) : (
 				messages.map((m) => {
-					const senderName = m.sender?.name || 'Unknown User'
+					const fromGuestSelf =
+						viewerIsGuest &&
+						!!viewerGuestEmail &&
+						!!m.guestEmail &&
+						m.guestEmail === viewerGuestEmail
+					const senderName =
+						m.sender?.name ||
+						(m.guestEmail ? m.guestEmail.split('@')[0] || 'Guest' : 'Guest')
 					const senderAvatar = m.sender?.avatar
-					const initials = senderName.charAt(0).toUpperCase()
+					const initials = (senderName.charAt(0) || '?').toUpperCase()
 					const audienceType = m.audienceType || 'EVERYONE'
 					const targetLabel =
 						audienceType === 'EVERYONE'
@@ -73,7 +94,9 @@ export function MessageList({
 								: m.targetUser?.name || 'User'
 					const isPrivateToCurrentUser =
 						audienceType !== 'EVERYONE' &&
-						(currentUserId === m.senderId || currentUserId === m.targetUserId)
+						(currentUserId === m.senderId ||
+							currentUserId === m.targetUserId ||
+							fromGuestSelf)
 
 					return (
 						<div key={m.id} className="flex gap-3 hover:bg-white/5 rounded-lg p-2 transition-colors group">
@@ -87,7 +110,7 @@ export function MessageList({
 								<div className="flex items-baseline gap-2 mb-1">
 									<span className="font-semibold text-sm text-white/95 truncate">
 										{senderName}
-										{hostUserId && m.senderId === hostUserId ? ' (Host)' : ''}
+										{hostUserId && m.senderId && m.senderId === hostUserId ? ' (Host)' : ''}
 									</span>
 									<span className="text-[10px] text-white/50 flex-shrink-0">{formatTime(m.createdAt)}</span>
 								</div>

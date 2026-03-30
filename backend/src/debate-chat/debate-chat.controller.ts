@@ -30,7 +30,8 @@ export class DebateChatController {
   @Post()
   async sendMessage(
     @Param('roomId') roomId: string,
-    @Body() body: {
+    @Body()
+    body: {
       content: string;
       userRole: 'host' | 'moderator' | 'participant';
       userSide: 'FOR' | 'AGAINST' | null;
@@ -82,10 +83,7 @@ export class DebateChatController {
    * GET /debate-rooms/:roomId/messages
    */
   @Get()
-  async getMessages(
-    @Param('roomId') roomId: string,
-    @Req() req: any,
-  ) {
+  async getMessages(@Param('roomId') roomId: string, @Req() req: any) {
     const clerkId = req.userId; // From ClerkAuthGuard
     const userRole = req.query?.userRole || 'participant';
     const userSideStr = req.query?.userSide;

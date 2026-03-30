@@ -5,7 +5,10 @@ import {
   NotFoundException,
   Logger,
 } from '@nestjs/common';
-import { MessageAudienceType } from '../generated/prisma/client';
+import {
+  MessageAudienceType,
+  StudyRoomSessionMode,
+} from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { isConnectionError } from '../common/db-error-handler';
 
@@ -50,38 +53,69 @@ export class ChatService {
     });
   }
 
+  // async getOrCreateChannelForStudyRoom(
+  //   studyRoomId: string,
+  //   memberUserIds: string[],
+  // ) {
+  //   const existing = await this.prisma.channel.findFirst({
+  //     where: { externalType: 'studyRoom', externalId: studyRoomId } as any,
+  //   });
+  //   if (existing) {
+  //     // Ensure all members are added to the channel
+  //     for (const userId of memberUserIds) {
+  //       const memberExists = await this.prisma.channelMember.findFirst({
+  //         where: { channelId: existing.id, userId },
+  //       });
+  //       if (!memberExists) {
+  //         await this.prisma.channelMember.create({
+  //           data: { channelId: existing.id, userId },
+  //         });
+  //       }
+  //     }
+  //     return existing;
+  //   }
+  //   return this.prisma.channel.create({
+  //     data: {
+  //       name: `studyRoom:${studyRoomId}`,
+  //       isDirect: false,
+  //       externalType: 'studyRoom',
+  //       externalId: studyRoomId,
+  //       members: {
+  //         create: memberUserIds.map((userId) => ({ userId })),
+  //       },
+  //     } as any,
+  //   });
+  // }
+
   async getOrCreateChannelForStudyRoom(
     studyRoomId: string,
     memberUserIds: string[],
   ) {
-    const existing = await this.prisma.channel.findFirst({
-      where: { externalType: 'studyRoom', externalId: studyRoomId } as any,
-    });
-    if (existing) {
-      // Ensure all members are added to the channel
-      for (const userId of memberUserIds) {
-        const memberExists = await this.prisma.channelMember.findFirst({
-          where: { channelId: existing.id, userId },
-        });
-        if (!memberExists) {
-          await this.prisma.channelMember.create({
-            data: { channelId: existing.id, userId },
-          });
-        }
-      }
-      return existing;
-    }
-    return this.prisma.channel.create({
-      data: {
+    const channel = await this.prisma.channel.upsert({
+      where: {
+        externalType_externalId: {
+          externalType: 'studyRoom',
+          externalId: studyRoomId,
+        },
+      },
+      update: {},
+      create: {
         name: `studyRoom:${studyRoomId}`,
         isDirect: false,
         externalType: 'studyRoom',
         externalId: studyRoomId,
-        members: {
-          create: memberUserIds.map((userId) => ({ userId })),
-        },
-      } as any,
+      },
     });
+
+    await this.prisma.channelMember.createMany({
+      data: memberUserIds.map((userId) => ({
+        channelId: channel.id,
+        userId,
+      })),
+      skipDuplicates: true,
+    });
+
+    return channel;
   }
 
   async listChannels(userId: string) {
@@ -97,17 +131,25 @@ export class ChatService {
           `Database connection error in listChannels for user ${userId}:`,
           error instanceof Error ? error.message : String(error),
         );
-        
+
         // Return empty channels as fallback
         return [];
       }
-      
+
       // Re-throw other errors
       throw error;
     }
   }
 
   async addMember(channelId: string, userId: string) {
+    const existingMember = await this.prisma.channelMember.findFirst({
+      where: { channelId, userId },
+    });
+
+    if (existingMember) {
+      return existingMember;
+    }
+
     return this.prisma.channelMember.create({
       data: { channelId, userId },
     });
@@ -123,7 +165,7 @@ export class ChatService {
     try {
       // Build where clause based on viewer type
       let where: any = { channelId };
-      
+
       if (guestEmail) {
         // Guest user: show EVERYONE messages + their own messages (by email)
         where = {
@@ -150,31 +192,31 @@ export class ChatService {
           audienceType: MessageAudienceType.EVERYONE,
         };
       }
-      
+
       const messages = await this.prisma.message.findMany({
-      where,
-      include: {
-        sender: {
-          select: {
-            id: true,
-            name: true,
-            avatar: true,
+        where,
+        include: {
+          sender: {
+            select: {
+              id: true,
+              name: true,
+              avatar: true,
+            },
+          },
+          targetUser: {
+            select: {
+              id: true,
+              name: true,
+              avatar: true,
+            },
           },
         },
-        targetUser: {
-          select: {
-            id: true,
-            name: true,
-            avatar: true,
-          },
-        },
-      },
-      orderBy: { createdAt: 'asc' }, // Changed to 'asc' to get oldest first, then we'll reverse
-      take: limit,
-      skip: cursor ? 1 : 0,
+        orderBy: { createdAt: 'asc' },
+        take: limit,
+        skip: cursor ? 1 : 0,
         cursor: cursor ? { id: cursor } : undefined,
       });
-      
+
       // Transform guest messages to include guest info in sender field
       return messages.map((msg) => {
         if (msg.guestSenderId && !msg.sender) {
@@ -199,11 +241,11 @@ export class ChatService {
           `Database connection error in getMessages for channel ${channelId}:`,
           error instanceof Error ? error.message : String(error),
         );
-        
+
         // Return empty messages as fallback
         return [];
       }
-      
+
       // Re-throw other errors
       throw error;
     }
@@ -215,6 +257,14 @@ export class ChatService {
       select: { id: true },
     });
     return !!member;
+  }
+
+  async getChannelMemberUserIds(channelId: string): Promise<string[]> {
+    const members = await this.prisma.channelMember.findMany({
+      where: { channelId },
+      select: { userId: true },
+    });
+    return members.map((member) => member.userId);
   }
 
   async getChannelHostUserId(channelId: string): Promise<string | null> {
@@ -258,12 +308,16 @@ export class ChatService {
     }
 
     if (!targetUserId) {
-      throw new BadRequestException('targetUserId is required for USER audience');
+      throw new BadRequestException(
+        'targetUserId is required for USER audience',
+      );
     }
 
     const targetIsMember = await this.isChannelMember(channelId, targetUserId);
     if (!targetIsMember) {
-      throw new ForbiddenException('Target user is not a member of this channel');
+      throw new ForbiddenException(
+        'Target user is not a member of this channel',
+      );
     }
 
     return targetUserId;
@@ -404,10 +458,12 @@ export class ChatService {
    * Get session info from a channel ID.
    * Returns the externalType (studyRoom/peerSession) and externalId (sessionId).
    */
-  async getSessionInfoFromChannelId(channelId: string): Promise<{ externalType: string; externalId: string } | null> {
-    const channel = await this.prisma.channel.findUnique({
+  async getSessionInfoFromChannelId(
+    channelId: string,
+  ): Promise<{ externalType: string; externalId: string } | null> {
+    const channel = (await this.prisma.channel.findUnique({
       where: { id: channelId },
-    }) as { externalType?: string | null; externalId?: string | null } | null;
+    })) as { externalType?: string | null; externalId?: string | null } | null;
 
     if (!channel || !channel.externalType || !channel.externalId) {
       return null;
@@ -425,18 +481,27 @@ export class ChatService {
    */
   async validateGuestToken(token: string): Promise<{
     studyRoomId: string;
-    guestParticipant: { 
+    guestParticipant: {
       id: string;
-      name: string; 
+      name: string;
       livekitIdentity: string;
       email: string;
     };
   } | null> {
     const record = await this.prisma.studyRoomGuestAccessToken.findUnique({
       where: { token },
-      include: { guestParticipant: true },
+      include: {
+        guestParticipant: true,
+        studyRoom: { select: { sessionMode: true } },
+      },
     });
     if (!record || record.expiresAt < new Date()) return null;
+    if (
+      record.studyRoom.sessionMode === StudyRoomSessionMode.WEBINAR &&
+      !record.guestParticipant.approvedBy
+    ) {
+      return null;
+    }
     return {
       studyRoomId: record.studyRoomId,
       guestParticipant: {

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import Image from "next/image";
 import { Navigation } from "@/components/layout/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,22 +21,35 @@ import {
   ArrowLeft, Users, Loader2, Coins, CheckCircle2, AlertCircle,
   RotateCcw, Sparkles, Calendar, Layers, 
   Banknote, Plus,
-  Clock, Upload, X, Image as ImageIcon
+  Clock, Upload, X, Image as ImageIcon, Trash2,
 } from "lucide-react";
 import {
   CreateStudyRoomDto,
   StudyRoom,
   StudyRoomRecurrenceMode,
+  StudyRoomSessionMode,
 } from "@/types/api.types";
 import { ShareButton } from "@/components/share/share-button";
 import { useFormPersistence } from "@/hooks/use-local-storage";
-import { useCreateStudyRoom } from "@/hooks/use-study-rooms";
+import { useCreateRecurringRoom, useCreateStudyRoom } from "@/hooks/use-study-rooms";
 import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { uploadFile, validateImageFile } from "@/lib/upload";
 import { setAuthToken } from "@/lib/api-client";
+import {
+  getStudyRoomPagePath,
+  getStudyRoomShareUrl,
+} from "@/lib/utils/study-room-share";
+import { toAbsoluteAppUrl } from "@/lib/utils/public-url";
 
 interface StudyRoomFormData {
   title: string;
@@ -53,10 +67,6 @@ interface StudyRoomFormData {
   recurrenceWeekdays: number[];
   recurrenceCustomDates: string;
   recurrenceRepeatUntil: string;
-  allowExternalUsers: boolean;
-  externalAutoAccept: boolean;
-  externalPasscode: string;
-  externalInviteList: string;
 }
 
 const initialFormData: StudyRoomFormData = {
@@ -74,10 +84,6 @@ const initialFormData: StudyRoomFormData = {
   recurrenceWeekdays: [],
   recurrenceCustomDates: "",
   recurrenceRepeatUntil: "",
-  allowExternalUsers: false,
-  externalAutoAccept: false,
-  externalPasscode: "",
-  externalInviteList: "",
 };
 
 const weekdayOptions = [
@@ -95,6 +101,23 @@ function parseDateOnly(value: string): Date | null {
   const [year, month, day] = value.split("-").map(Number);
   if (!year || !month || !day) return null;
   return new Date(Date.UTC(year, month - 1, day));
+}
+
+/**
+ * Public page where attendees register for a webinar. Same URL for the success dialog, copy, and Share.
+ */
+function getWebinarRegistrationAbsUrl(room: StudyRoom): string | null {
+  const slug = room.webinarRegistrationSlug;
+  const raw = room.webinarRegistrationUrl?.trim();
+
+  if (raw) {
+    if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;
+    if (raw.startsWith("/")) return toAbsoluteAppUrl(raw);
+  }
+  if (slug) {
+    return toAbsoluteAppUrl(`/webinar/register/${encodeURIComponent(slug)}`);
+  }
+  return null;
 }
 
 function estimateOccurrences(formData: StudyRoomFormData): number {
@@ -146,8 +169,10 @@ function estimateOccurrences(formData: StudyRoomFormData): number {
 
 export function CreateStudyRoomClient() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { isLoaded: isAuthLoaded, getToken } = useAuth();
   const createStudyRoomMutation = useCreateStudyRoom();
+  const createRecurringRoomMutation = useCreateRecurringRoom()
 
   const { formData, setFormData, updateField, clearForm, hasStoredData } = useFormPersistence<StudyRoomFormData>(
     "create_study_room",
@@ -160,6 +185,33 @@ export function CreateStudyRoomClient() {
   );
 
   const [isInstantRoom, setIsInstantRoom] = useState(false);
+  const [sessionMode, setSessionMode] = useState<StudyRoomSessionMode>("STANDARD");
+
+  useEffect(() => {
+    const mode = searchParams.get("mode");
+    if (mode === "webinar" || mode === "WEBINAR") {
+      setSessionMode("WEBINAR");
+    }
+  }, [searchParams]);
+
+  type WebinarRegField = {
+    id: string;
+    label: string;
+    type: "text" | "textarea" | "email" | "number";
+    required: boolean;
+  };
+  const [webinarCustomFields, setWebinarCustomFields] = useState<
+    WebinarRegField[]
+  >([]);
+  const [webinarPerms, setWebinarPerms] = useState({
+    mic: "disabled" as "disabled" | "enabled",
+    video: "disabled" as "disabled" | "enabled",
+    chat: "host_only" as "host_only" | "everyone" | "disabled",
+    screenShare: "host_only" as "host_only" | "everyone",
+  });
+  /** When false, registrants are auto-approved; host panel hides Admit. */
+  const [webinarWaitingRoomEnabled, setWebinarWaitingRoomEnabled] =
+    useState(true);
   const [error, setError] = useState<string | null>(null);
   const [createdRoom, setCreatedRoom] = useState<StudyRoom | null>(null);
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
@@ -263,19 +315,24 @@ export function CreateStudyRoomClient() {
       return;
     }
 
-    if (!formData.title) {
-        setError('Please enter a room name');
+    if (!formData.title?.trim()) {
+        setError("Please add a room name");
         return;
     }
 
     if (formData.skills.length === 0) {
-        setError('Please add at least one skill');
+        setError("Please add at least one skill");
         return;
     }
 
     if (!isInstantRoom && (!formData.date || !formData.time)) {
         setError('Please select date and time');
         return;
+    }
+
+    if (sessionMode === "WEBINAR" && formData.recurrenceEnabled) {
+      setError("Turn off recurrence for webinar mode, or switch to study room mode.");
+      return;
     }
 
     if (!isInstantRoom && formData.recurrenceEnabled) {
@@ -316,37 +373,55 @@ export function CreateStudyRoomClient() {
       date: formData.date,
       time: formData.time,
       duration: parseInt(formData.duration),
-      maxParticipants: parseInt(formData.maxParticipants),
-      joiningFee: parseFloat(formData.joiningFee),
+      maxParticipants: Math.min(
+        100,
+        Math.max(2, parseInt(formData.maxParticipants, 10) || 2),
+      ),
+      joiningFee:
+        sessionMode === "WEBINAR" ? 0 : parseFloat(formData.joiningFee),
       timezone: userTimezone,
-      allowExternalUsers: formData.allowExternalUsers,
-      externalAutoAccept: formData.allowExternalUsers
-        ? formData.externalAutoAccept
-        : false,
-      externalPasscode:
-        formData.allowExternalUsers && formData.externalPasscode.trim()
-          ? formData.externalPasscode.trim()
-          : undefined,
+      ...(sessionMode === "WEBINAR"
+        ? { sessionMode: "WEBINAR" as const }
+        : { sessionMode: "STANDARD" as const }),
+      ...(sessionMode === "WEBINAR"
+        ? {
+            webinarConfig: {
+              registrationFields: [
+                {
+                  id: "name",
+                  label: "Full name",
+                  required: true,
+                  type: "text",
+                },
+                {
+                  id: "email",
+                  label: "Email",
+                  required: true,
+                  type: "email",
+                },
+                ...webinarCustomFields.map((f) => ({
+                  id: f.id,
+                  label: f.label.trim() || "Field",
+                  required: f.required,
+                  type: f.type,
+                })),
+              ],
+              permissions: {
+                mic: webinarPerms.mic,
+                video: webinarPerms.video,
+                chat: webinarPerms.chat,
+                screenShare: webinarPerms.screenShare,
+              },
+              runtime: {
+                chatEnabled: true,
+                waitingRoomEnabled: webinarWaitingRoomEnabled,
+              },
+            },
+          }
+        : {}),
     };
 
-    if (formData.allowExternalUsers && formData.externalInviteList.trim()) {
-      const parsedInvites = formData.externalInviteList
-        .split("\n")
-        .map((line) => line.trim())
-        .filter(Boolean)
-        .map((line) => {
-          return {
-            email: line,
-            role: "PARTICIPANT",
-          } as { email: string; role: "PARTICIPANT" | "COHOST" };
-        })
-        .filter((invite) => invite.email.includes("@"));
-      if (parsedInvites.length > 0) {
-        createData.externalInvites = parsedInvites;
-      }
-    }
-
-    if (!isInstantRoom && formData.recurrenceEnabled) {
+    if (!isInstantRoom && formData.recurrenceEnabled && sessionMode !== "WEBINAR") {
       createData.recurrence = {
         mode: formData.recurrenceMode,
         interval: Math.max(1, parseInt(formData.recurrenceInterval || "1")),
@@ -379,7 +454,13 @@ export function CreateStudyRoomClient() {
       createData.time = `${hours}:${minutes}`;
     }
 
-    createStudyRoomMutation.mutate(createData, {
+    const isRecurring = !isInstantRoom && formData.recurrenceEnabled;
+
+    console.log("MUTATION :: ", isRecurring);
+    
+    const mutation = isRecurring ? createRecurringRoomMutation : createStudyRoomMutation;    
+
+    mutation.mutate(createData, {
       onSuccess: (room) => {
         clearForm();
         setCreatedRoom(room);
@@ -394,7 +475,15 @@ export function CreateStudyRoomClient() {
     });
   };
 
-  const potentialEarnings = (parseInt(formData.maxParticipants) || 0) * (parseInt(formData.joiningFee) || 0);
+  const maxParticipantsClamped = Math.min(
+    100,
+    Math.max(2, parseInt(formData.maxParticipants, 10) || 2),
+  );
+
+  const potentialEarnings =
+    sessionMode === "WEBINAR"
+      ? 0
+      : maxParticipantsClamped * (parseInt(formData.joiningFee, 10) || 0);
 
   return (
     <div className="flex flex-col min-h-screen bg-muted/5 selection:bg-primary/10">
@@ -418,6 +507,39 @@ export function CreateStudyRoomClient() {
               <p className="text-muted-foreground text-lg">
                 Share your expertise, host a session, and earn crypto.
               </p>
+              <div className="flex flex-wrap gap-2 pt-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSessionMode("STANDARD");
+                  }}
+                  className={`rounded-full px-4 py-2 text-sm font-medium border transition-colors ${
+                    sessionMode === "STANDARD"
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-muted/50 text-muted-foreground border-transparent hover:bg-muted"
+                  }`}
+                >
+                  Study room
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSessionMode("WEBINAR");
+                    setFormData((prev) => ({
+                      ...prev,
+                      maxParticipants: "100",
+                      joiningFee: "0",
+                    }));
+                  }}
+                  className={`rounded-full px-4 py-2 text-sm font-medium border transition-colors ${
+                    sessionMode === "WEBINAR"
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-muted/50 text-muted-foreground border-transparent hover:bg-muted"
+                  }`}
+                >
+                  Webinar mode
+                </button>
+              </div>
             </div>
           </div>
 
@@ -435,40 +557,253 @@ export function CreateStudyRoomClient() {
         </div>
 
         <form onSubmit={handleSubmit} className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
-            
-            {/* LEFT COLUMN: Main Content (7 cols) */}
-            <div className="lg:col-span-7 space-y-8">
-              
-              {/* Section 1: Room Details */}
-              <section className="space-y-6">
-                
-                {/* Modified Title Input with Box/Attraction Driver */}
-                <div className="space-y-2">
-                  <Label htmlFor="title" className="text-xs font-bold text-muted-foreground uppercase tracking-widest ml-1">
-                    Room Name
-                  </Label>
-                  <div className="relative group transition-all duration-200">
-                    <div className="absolute -inset-0.5 bg-gradient-to-r from-primary/20 to-primary/0 rounded-xl blur opacity-0 group-focus-within:opacity-100 transition duration-500" />
-                    <div className="relative bg-card border-2 border-dashed border-muted group-hover:border-primary/30 group-focus-within:border-primary/50 group-focus-within:border-solid rounded-xl transition-all duration-200 flex items-center">
-                       <Input
-                         id="title"
-                         placeholder="Enter a catchy title..."
-                         value={formData.title}
-                         onChange={(e) => updateField("title", e.target.value)}
-                         className="h-auto py-4 px-4 text-2xl md:text-3xl font-bold border-none shadow-none focus-visible:ring-0 bg-transparent text-foreground placeholder:text-muted-foreground/30 w-full"
-                         required
-                         autoFocus
-                       />
-                       {/* Visual hint that disappears on type/focus */}
-                       <div className="absolute right-4 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                          <span className="text-[10px] uppercase font-semibold text-muted-foreground bg-muted/50 px-2 py-1 rounded border">
-                            Edit
-                          </span>
-                       </div>
-                    </div>
+          {/* Stack title above the 2-col grid — avoids grid col-span quirks on small breakpoints */}
+          <div className="flex flex-col gap-8 lg:gap-12">
+            <div className="w-full space-y-2 shrink-0">
+              <Label htmlFor="title" className="text-xs font-bold text-muted-foreground uppercase tracking-widest ml-1">
+                Room Name
+              </Label>
+              <div className="relative group transition-all duration-200">
+                <div className="absolute -inset-0.5 bg-gradient-to-r from-primary/20 to-primary/0 rounded-xl blur opacity-0 group-focus-within:opacity-100 transition duration-500" />
+                <div className="relative bg-card border-2 border-dashed border-muted group-hover:border-primary/30 group-focus-within:border-primary/50 group-focus-within:border-solid rounded-xl transition-all duration-200 flex items-center">
+                  <Input
+                    id="title"
+                    placeholder="Enter a catchy title..."
+                    value={formData.title}
+                    onChange={(e) => updateField("title", e.target.value)}
+                    className="h-auto py-4 px-4 text-2xl md:text-3xl font-bold border-none shadow-none focus-visible:ring-0 bg-transparent text-foreground placeholder:text-muted-foreground/30 w-full"
+                    autoFocus
+                  />
+                  <div className="absolute right-4 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                    <span className="text-[10px] uppercase font-semibold text-muted-foreground bg-muted/50 px-2 py-1 rounded border">
+                      Edit
+                    </span>
                   </div>
                 </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
+            {/* LEFT COLUMN: Main Content (7 cols) */}
+            <div className="lg:col-span-7 space-y-8">
+              {/* Section 1: webinar (webinar mode) then topic */}
+              <section className="space-y-6">
+                {sessionMode === "WEBINAR" && (
+                <Card className="border-primary/20 bg-primary/5">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base">
+                      Webinar registration & permissions
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div className="space-y-3">
+                      <Label className="text-sm font-medium">
+                        Extra registration fields
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        Name and email are always required. Add optional or
+                        required questions below.
+                      </p>
+                      {webinarCustomFields.map((field, idx) => (
+                        <div
+                          key={field.id}
+                          className="flex flex-wrap gap-2 items-end rounded-lg border bg-background p-3"
+                        >
+                          <div className="flex-1 min-w-[140px] space-y-1">
+                            <Label className="text-xs">Label</Label>
+                            <Input
+                              value={field.label}
+                              onChange={(e) =>
+                                setWebinarCustomFields((prev) =>
+                                  prev.map((f, i) =>
+                                    i === idx
+                                      ? { ...f, label: e.target.value }
+                                      : f,
+                                  ),
+                                )
+                              }
+                            />
+                          </div>
+                          <div className="w-[130px] space-y-1">
+                            <Label className="text-xs">Type</Label>
+                            <Select
+                              value={field.type}
+                              onValueChange={(
+                                v: "text" | "textarea" | "email" | "number",
+                              ) =>
+                                setWebinarCustomFields((prev) =>
+                                  prev.map((f, i) =>
+                                    i === idx ? { ...f, type: v } : f,
+                                  ),
+                                )
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="text">Short text</SelectItem>
+                                <SelectItem value="textarea">Long text</SelectItem>
+                                <SelectItem value="email">Email</SelectItem>
+                                <SelectItem value="number">Number</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <label className="flex items-center gap-2 text-sm pb-2">
+                            <input
+                              type="checkbox"
+                              checked={field.required}
+                              onChange={(e) =>
+                                setWebinarCustomFields((prev) =>
+                                  prev.map((f, i) =>
+                                    i === idx
+                                      ? { ...f, required: e.target.checked }
+                                      : f,
+                                  ),
+                                )
+                              }
+                            />
+                            Required
+                          </label>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="shrink-0"
+                            onClick={() =>
+                              setWebinarCustomFields((prev) =>
+                                prev.filter((_, i) => i !== idx),
+                              )
+                            }
+                            aria-label="Remove field"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          setWebinarCustomFields((prev) => [
+                            ...prev,
+                            {
+                              id: `f_${Date.now()}`,
+                              label: "Custom question",
+                              type: "text",
+                              required: false,
+                            },
+                          ])
+                        }
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add field
+                      </Button>
+                    </div>
+
+                    <div className="space-y-3 border-t pt-4">
+                      <Label className="text-sm font-medium">
+                        Waiting room
+                      </Label>
+                      <p className="text-xs text-muted-foreground max-w-xl">
+                        When on, you admit attendees from the webinar panel and
+                        get notified when someone registers. When off, attendees
+                        are approved automatically.
+                      </p>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border bg-muted/20 px-3 py-3">
+                        <span className="text-sm text-foreground">
+                          Require host to admit guests before they join
+                        </span>
+                        <Switch
+                          checked={webinarWaitingRoomEnabled}
+                          onCheckedChange={setWebinarWaitingRoomEnabled}
+                          className="shrink-0"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-3 border-t pt-4">
+                      <Label className="text-sm font-medium">
+                        Participant capabilities
+                      </Label>
+                      <div className="grid sm:grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <Label className="text-xs">Microphone</Label>
+                          <Select
+                            value={webinarPerms.mic}
+                            onValueChange={(v: "disabled" | "enabled") =>
+                              setWebinarPerms((p) => ({ ...p, mic: v }))
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="disabled">Disabled</SelectItem>
+                              <SelectItem value="enabled">Enabled</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Camera</Label>
+                          <Select
+                            value={webinarPerms.video}
+                            onValueChange={(v: "disabled" | "enabled") =>
+                              setWebinarPerms((p) => ({ ...p, video: v }))
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="disabled">Disabled</SelectItem>
+                              <SelectItem value="enabled">Enabled</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Chat</Label>
+                          <Select
+                            value={webinarPerms.chat}
+                            onValueChange={(
+                              v: "host_only" | "everyone" | "disabled",
+                            ) =>
+                              setWebinarPerms((p) => ({ ...p, chat: v }))
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="host_only">Host only</SelectItem>
+                              <SelectItem value="everyone">Everyone</SelectItem>
+                              <SelectItem value="disabled">Disabled</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Screen share</Label>
+                          <Select
+                            value={webinarPerms.screenShare}
+                            onValueChange={(v: "host_only" | "everyone") =>
+                              setWebinarPerms((p) => ({ ...p, screenShare: v }))
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="host_only">Host only</SelectItem>
+                              <SelectItem value="everyone">Everyone</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+                )}
 
                 <Card className="border-muted bg-card/50 backdrop-blur-sm shadow-sm hover:shadow-md transition-shadow">
                   <CardHeader className="pb-3">
@@ -481,7 +816,10 @@ export function CreateStudyRoomClient() {
                   </CardHeader>
                   <CardContent className="space-y-5">
                     <div className="space-y-2">
-                      <Label htmlFor="description" className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Description</Label>
+                      <Label htmlFor="description" className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
+                        Description{" "}
+                        <span className="text-[10px] normal-case bg-muted px-1.5 rounded-sm">Optional</span>
+                      </Label>
                       <Textarea
                         id="description"
                         placeholder="Provide a brief agenda or learning outcomes..."
@@ -501,10 +839,12 @@ export function CreateStudyRoomClient() {
                         {imagePreview || formData.imageUrl ? (
                           <div className="relative group">
                             <div className="relative w-full h-48 rounded-lg overflow-hidden border-2 border-border bg-muted/50">
-                              <img
-                                src={imagePreview || formData.imageUrl}
+                              <Image
+                                src={imagePreview || formData.imageUrl!}
                                 alt="Study room preview"
-                                className="w-full h-full object-cover"
+                                fill
+                                className="object-cover"
+                                unoptimized
                               />
                               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
                               <Button
@@ -819,10 +1159,21 @@ export function CreateStudyRoomClient() {
 
                   {/* Participants */}
                   <div className="space-y-4">
-                    <div className="flex justify-between items-center">
-                      <Label className="text-sm font-medium">Max Participants</Label>
-                      <span className="text-sm font-bold bg-muted px-2.5 py-0.5 rounded-md min-w-[2rem] text-center">
-                        {formData.maxParticipants}
+                    <div className="flex justify-between items-center gap-2">
+                      <div>
+                        <Label className="text-sm font-medium">Max participants</Label>
+                        {sessionMode === "WEBINAR" ? (
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            Webinar: 2–100 attendees (required range)
+                          </p>
+                        ) : (
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            Up to 100 per session
+                          </p>
+                        )}
+                      </div>
+                      <span className="text-sm font-bold bg-muted px-2.5 py-0.5 rounded-md min-w-[2rem] text-center shrink-0">
+                        {maxParticipantsClamped}
                       </span>
                     </div>
                     <div className="pt-2 px-1">
@@ -831,8 +1182,10 @@ export function CreateStudyRoomClient() {
                         min="2"
                         max="100"
                         step="1"
-                        value={formData.maxParticipants}
-                        onChange={(e) => updateField("maxParticipants", e.target.value)}
+                        value={maxParticipantsClamped}
+                        onChange={(e) =>
+                          updateField("maxParticipants", e.target.value)
+                        }
                         // Modified: Modern Slider Styling
                         className={cn(
                           "w-full h-2 rounded-lg appearance-none cursor-pointer outline-none",
@@ -872,122 +1225,67 @@ export function CreateStudyRoomClient() {
                     </div>
                   </div>
 
-                  {/* Fee Input */}
+                  {/* Fee Input — webinars are always free */}
                   <div className="space-y-3 pt-2">
                     <Label className="flex items-center justify-between text-sm font-medium">
-                      Entry Fee
+                      Entry fee
                       <span className="text-xs font-normal bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 px-2 py-0.5 rounded-full flex items-center gap-1">
                         <Coins className="h-3 w-3" /> Coins
                       </span>
                     </Label>
-                    <div className="relative group flex items-center gap-2">
-                       <Button
-                          type="button"
-                          variant="outline"
-                          size="icon"
-                          className="h-11 w-11 rounded-lg border-input bg-background hover:bg-muted hover:text-foreground shrink-0"
-                          onClick={() => {
-                            const val = parseInt(formData.joiningFee) || 0;
-                            if (val > 0) updateField("joiningFee", (val - 5).toString());
-                          }}
-                        >
-                          <span className="text-xl font-bold leading-none mb-0.5">−</span>
-                        </Button>
+                    {sessionMode === "WEBINAR" ? (
+                      <p className="text-xs text-muted-foreground">
+                        Set to 0 for a free webinar.
+                      </p>
+                    ) : (
+                      <>
+                        <div className="relative group flex items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className="h-11 w-11 rounded-lg border-input bg-background hover:bg-muted hover:text-foreground shrink-0"
+                            onClick={() => {
+                              const val = parseInt(formData.joiningFee) || 0;
+                              if (val > 0)
+                                updateField("joiningFee", (val - 5).toString());
+                            }}
+                          >
+                            <span className="text-xl font-bold leading-none mb-0.5">
+                              −
+                            </span>
+                          </Button>
 
-                      <div className="relative flex-1">
-                        <Banknote className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                        <Input
-                          type="number"
-                          min="0"
-                          value={formData.joiningFee}
-                          onChange={(e) => updateField("joiningFee", e.target.value)}
-                          className="pl-9 h-11 text-lg font-medium bg-background transition-all focus:ring-2 ring-primary/20 text-center"
-                        />
-                      </div>
-
-                       <Button
-                          type="button"
-                          variant="outline"
-                          size="icon"
-                          className="h-11 w-11 rounded-lg border-input bg-background hover:bg-muted hover:text-foreground shrink-0"
-                          onClick={() => {
-                             const val = parseInt(formData.joiningFee) || 0;
-                             updateField("joiningFee", (val + 5).toString());
-                          }}
-                        >
-                          <Plus className="h-4 w-4" />
-                        </Button>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Set to 0 for a free session.
-                    </p>
-                  </div>
-
-                  <div className="space-y-4 border-t border-dashed pt-4">
-                    <div className="flex items-center justify-between rounded-lg border bg-muted/20 p-3">
-                      <div className="space-y-0.5">
-                        <Label className="text-sm font-semibold">
-                          Allow External Users
-                        </Label>
-                        <p className="text-xs text-muted-foreground">
-                          Guests can join with passcode without login
-                        </p>
-                      </div>
-                      <Switch
-                        checked={formData.allowExternalUsers}
-                        onCheckedChange={(checked) =>
-                          updateField("allowExternalUsers", checked)
-                        }
-                      />
-                    </div>
-
-                    {formData.allowExternalUsers && (
-                      <div className="space-y-3 rounded-lg border bg-background/50 p-3">
-                        <div className="space-y-1">
-                          <Label className="text-xs font-semibold uppercase text-muted-foreground">
-                            Passcode (optional)
-                          </Label>
-                          <Input
-                            placeholder="Leave blank to auto-generate"
-                            value={formData.externalPasscode}
-                            onChange={(e) =>
-                              updateField("externalPasscode", e.target.value)
-                            }
-                          />
-                        </div>
-
-                        <div className="flex items-center justify-between rounded-lg border bg-muted/20 p-2.5">
-                          <div>
-                            <Label className="text-xs font-semibold">
-                              Auto Accept Guests
-                            </Label>
-                            <p className="text-[11px] text-muted-foreground">
-                              Directly admit non-invited users with valid passcode
-                            </p>
+                          <div className="relative flex-1">
+                            <Banknote className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                            <Input
+                              type="number"
+                              min="0"
+                              value={formData.joiningFee}
+                              onChange={(e) =>
+                                updateField("joiningFee", e.target.value)
+                              }
+                              className="pl-9 h-11 text-lg font-medium bg-background transition-all focus:ring-2 ring-primary/20 text-center"
+                            />
                           </div>
-                          <Switch
-                            checked={formData.externalAutoAccept}
-                            onCheckedChange={(checked) =>
-                              updateField("externalAutoAccept", checked)
-                            }
-                          />
-                        </div>
 
-                        <div className="space-y-1">
-                          <Label className="text-xs font-semibold uppercase text-muted-foreground">
-                            Invite Emails (one per line)
-                          </Label>
-                          <Textarea
-                            rows={5}
-                            placeholder={"alice@mail.com\nbob@mail.com"}
-                            value={formData.externalInviteList}
-                            onChange={(e) =>
-                              updateField("externalInviteList", e.target.value)
-                            }
-                            className="font-mono text-xs"
-                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className="h-11 w-11 rounded-lg border-input bg-background hover:bg-muted hover:text-foreground shrink-0"
+                            onClick={() => {
+                              const val = parseInt(formData.joiningFee) || 0;
+                              updateField("joiningFee", (val + 5).toString());
+                            }}
+                          >
+                            <Plus className="h-4 w-4" />
+                          </Button>
                         </div>
-                      </div>
+                        <p className="text-xs text-muted-foreground">
+                          Set to 0 for a free session.
+                        </p>
+                      </>
                     )}
                   </div>
                 </CardContent>
@@ -1006,11 +1304,21 @@ export function CreateStudyRoomClient() {
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                             <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
                           </div>
-                          <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Est. Earnings</span>
+                          <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                            {sessionMode === "WEBINAR"
+                              ? "Entry fee"
+                              : "Est. earnings"}
+                          </span>
                         </div>
-                        <div className="flex items-baseline gap-1">
-                          <span className="text-4xl font-black tracking-tight tabular-nums">{potentialEarnings}</span>
-                          <span className="text-lg font-bold text-amber-500">Coins</span>
+                        <div className="flex flex-col items-end gap-0.5">
+                          <div className="flex items-baseline gap-1">
+                            <span className="text-4xl font-black tracking-tight tabular-nums">
+                              {potentialEarnings}
+                            </span>
+                            <span className="text-lg font-bold text-amber-500">
+                              Coins
+                            </span>
+                          </div>
                         </div>
                     </div>
 
@@ -1032,11 +1340,11 @@ export function CreateStudyRoomClient() {
                         size="lg"
                         className="w-full h-14 text-base font-bold shadow-sm hover:shadow-md transition-all rounded-lg bg-green-100 text-green-800 hover:bg-green-200 border border-green-300 dark:bg-green-900/40 dark:text-green-300 dark:border-green-800 dark:hover:bg-green-900/60"
                         disabled={
-                          createStudyRoomMutation.isPending ||
+                          createStudyRoomMutation.isPending || createRecurringRoomMutation.isPending ||
                           !isAuthLoaded
                         }
                       >
-                        {createStudyRoomMutation.isPending ? (
+                        {(createStudyRoomMutation.isPending || createRecurringRoomMutation.isPending) ? (
                           <>
                             <Loader2 className="h-5 w-5 mr-2 animate-spin" />
                             Creating Room...
@@ -1059,6 +1367,7 @@ export function CreateStudyRoomClient() {
               </div>
 
             </div>
+          </div>
           </div>
         </form>
       </main>
@@ -1093,61 +1402,96 @@ export function CreateStudyRoomClient() {
               </DialogDescription>
             </div>
             
-            {createdRoom && (
+                {createdRoom &&
+              (() => {
+                const webinarRegUrl = getWebinarRegistrationAbsUrl(createdRoom);
+                const isWebinarRoom =
+                  createdRoom.sessionMode === "WEBINAR" ||
+                  !!createdRoom.webinarRegistrationSlug;
+                const studyRoomPageUrl = getStudyRoomShareUrl(createdRoom.id);
+                /** Webinars: Share must use the registration URL only (not /studyroom/?join=). */
+                const shareUrl = isWebinarRoom
+                  ? webinarRegUrl ?? studyRoomPageUrl
+                  : studyRoomPageUrl;
+                return (
               <div className="w-full space-y-3 sm:space-y-4">
-                {createdRoom.emailDelivery && createdRoom.emailDelivery.failed > 0 && (
-                  <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-left">
-                    <p className="text-sm font-semibold text-red-700">
-                      Invite email delivery failed for {createdRoom.emailDelivery.failed} of {createdRoom.emailDelivery.attempted} recipients.
+                {isWebinarRoom && webinarRegUrl && (
+                  <div className="w-full space-y-1">
+                    <p className="text-xs font-semibold text-left">
+                      Registration link (attendees sign up here)
                     </p>
-                    <p className="mt-1 text-xs text-red-600">
-                      Failed: {createdRoom.emailDelivery.failures.map((f) => f.email).join(", ")}
-                    </p>
+                    <div className="w-full relative flex items-center justify-between gap-1.5 p-1 pl-2 sm:p-1.5 sm:pl-3 rounded-lg sm:rounded-xl border border-primary/30 bg-primary/5">
+                      <span className="text-[10px] sm:text-xs text-foreground/80 truncate flex-1 font-mono text-left select-all break-all">
+                        {webinarRegUrl}
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        type="button"
+                        className="h-7 px-2 shrink-0 text-[10px]"
+                        onClick={() => {
+                          navigator.clipboard.writeText(webinarRegUrl);
+                          setIsCopied(true);
+                          setTimeout(() => setIsCopied(false), 2000);
+                        }}
+                      >
+                        {isCopied ? "Copied" : "Copy"}
+                      </Button>
+                    </div>
                   </div>
                 )}
-                {createdRoom.emailDelivery && createdRoom.emailDelivery.failed === 0 && createdRoom.emailDelivery.attempted > 0 && (
-                  <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-left">
-                    <p className="text-sm font-semibold text-green-700">
-                      Invite emails sent successfully to {createdRoom.emailDelivery.sent} recipients.
+                {/* Standard rooms only: public study room URL (webinars use registration link above). */}
+                {!isWebinarRoom && (
+                  <div className="w-full space-y-1">
+                    <p className="text-xs font-semibold text-left text-muted-foreground">
+                      Share link (sign in to join)
                     </p>
+                    <div className="w-full relative flex items-center justify-between gap-1.5 p-1 pl-2 sm:p-1.5 sm:pl-3 rounded-lg sm:rounded-xl border border-input bg-muted/40 hover:bg-muted/60 transition-colors">
+                    <span className="text-[10px] sm:text-xs text-foreground/70 truncate flex-1 font-mono text-center select-all">
+                      {studyRoomPageUrl}
+                    </span>
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      className="h-7 px-2 sm:h-8 sm:px-3 text-[9px] sm:text-[10px] uppercase tracking-wider font-bold rounded-md sm:rounded-lg bg-background shadow-sm border-border/60 hover:bg-accent hover:text-accent-foreground shrink-0"
+                      onClick={() => {
+                         navigator.clipboard.writeText(studyRoomPageUrl);
+                         setIsCopied(true);
+                         setTimeout(() => setIsCopied(false), 2000);
+                      }}
+                    >
+                      {isCopied ? "Copied" : "Copy"}
+                    </Button>
+                  </div>
                   </div>
                 )}
-                {/* Copy Link Section */}
-                <div className="w-full relative flex items-center justify-between gap-1.5 p-1 pl-2 sm:p-1.5 sm:pl-3 rounded-lg sm:rounded-xl border border-input bg-muted/40 hover:bg-muted/60 transition-colors">
-                  <span className="text-[10px] sm:text-xs text-foreground/70 truncate flex-1 font-mono text-center select-all">
-                    {`${typeof window !== "undefined" ? window.location.host : ""}/studyroom/${createdRoom.id}`}
-                  </span>
-                  <Button 
-                    size="sm" 
-                    variant="outline"
-                    className="h-7 px-2 sm:h-8 sm:px-3 text-[9px] sm:text-[10px] uppercase tracking-wider font-bold rounded-md sm:rounded-lg bg-background shadow-sm border-border/60 hover:bg-accent hover:text-accent-foreground shrink-0"
-                    onClick={() => {
-                       navigator.clipboard.writeText(`${window.location.origin}/studyroom/${createdRoom.id}`);
-                       setIsCopied(true);
-                       setTimeout(() => setIsCopied(false), 2000);
-                    }}
-                  >
-                    {isCopied ? "Copied" : "Copy"}
-                  </Button>
-                </div>
                 
                 {/* Action Buttons */}
                 <div className="flex flex-col gap-2 w-full sm:grid sm:grid-cols-2 sm:gap-3">
                   <ShareButton
-                    url={`${typeof window !== "undefined" ? window.location.origin : ""}/studyroom/${createdRoom.id}`}
+                    url={shareUrl}
                     title={createdRoom.title}
-                    description={createdRoom.description || ""}
+                    description={
+                      isWebinarRoom
+                        ? "Register for this webinar"
+                        : createdRoom.description || ""
+                    }
                     className="w-full h-10 sm:h-11 text-xs sm:text-sm rounded-lg sm:rounded-xl border-dashed border-2 hover:border-primary/50 hover:bg-primary/5 justify-center px-2 sm:px-3"
                   />
                   <Button
-                    onClick={() => router.push(`/studyroom/${createdRoom.id}`)}
+                    onClick={() =>
+                      router.push(
+                        `/studyroom/${createdRoom.slug || createdRoom.id}`,
+                      )
+                    }
                     className="w-full h-10 sm:h-11 text-xs sm:text-sm rounded-lg sm:rounded-xl font-bold shadow-sm hover:shadow-md transition-all bg-green-100 text-green-800 hover:bg-green-200 border border-green-300 dark:bg-green-900/40 dark:text-green-300 dark:border-green-800 dark:hover:bg-green-900/60 px-2 sm:px-3"
                   >
                     Enter Room
                   </Button>
                 </div>
               </div>
-            )}
+                );
+              })()}
             
              <Button variant="ghost" onClick={() => router.push("/dashboard")} className="text-muted-foreground hover:text-foreground text-xs hover:bg-transparent pt-2">
                 Return to Dashboard

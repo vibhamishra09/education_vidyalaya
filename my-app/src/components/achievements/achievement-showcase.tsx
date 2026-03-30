@@ -1,10 +1,10 @@
 "use client";
 
 import { Achievement } from "@/types/achievements.types";
-import { AchievementBadge } from "./achievement-badge";
+import { AchievementBadge as _AchievementBadge } from "./achievement-badge";
 import { AchievementProgress } from "./achievement-progress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Tabs as _Tabs, TabsList as _TabsList, TabsTrigger as _TabsTrigger, TabsContent as _TabsContent } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -12,7 +12,7 @@ import { useMemo, useState } from "react";
 import {
   Trophy,
   Target,
-  Lock,
+  Lock as _Lock,
   GraduationCap,
   Users,
   Medal,
@@ -77,7 +77,7 @@ const categoryConfig: Record<Achievement["category"], CategoryConfig> = {
 
 export function AchievementShowcase({
   achievements,
-  showProgress = true,
+  showProgress,
 }: AchievementShowcaseProps) {
   const [activeTab, setActiveTab] = useState<"all" | "unlocked" | "progress" | "locked">("all");
   const [activeCategory, setActiveCategory] = useState<CategoryFilter>("all");

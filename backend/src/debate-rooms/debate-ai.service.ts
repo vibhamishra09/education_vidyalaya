@@ -49,7 +49,8 @@ export interface ParticipantEvaluation {
 export class DebateAiService {
   private genAI: GoogleGenAI | null = null;
 
-  constructor(private configService: ConfigService,
+  constructor(
+    private configService: ConfigService,
     private readonly logger: LoggerService,
   ) {
     this.logger.setContext(DebateAiService.name);
@@ -78,10 +79,13 @@ export class DebateAiService {
     }
 
     // Group transcripts by participant
-    const participantTranscripts = new Map<string, {
-      participant: TranscriptWithParticipant['participant'];
-      texts: string[];
-    }>();
+    const participantTranscripts = new Map<
+      string,
+      {
+        participant: TranscriptWithParticipant['participant'];
+        texts: string[];
+      }
+    >();
 
     for (const transcript of transcripts) {
       const existing = participantTranscripts.get(transcript.participantId);
@@ -117,8 +121,10 @@ export class DebateAiService {
 
       // Parse AI response
       const evaluations = this.parseAIResponse(responseText, teams);
-      
-      this.logger.log(`Generated evaluations for ${evaluations.length} participants`);
+
+      this.logger.log(
+        `Generated evaluations for ${evaluations.length} participants`,
+      );
       return evaluations;
     } catch (error) {
       this.logger.error('AI evaluation failed:', error);
@@ -129,9 +135,13 @@ export class DebateAiService {
   /**
    * Format transcripts for AI consumption
    */
-  private formatTranscriptForAI(transcripts: TranscriptWithParticipant[]): string {
-    const sortedTranscripts = [...transcripts].sort((a, b) => a.turnNumber - b.turnNumber);
-    
+  private formatTranscriptForAI(
+    transcripts: TranscriptWithParticipant[],
+  ): string {
+    const sortedTranscripts = [...transcripts].sort(
+      (a, b) => a.turnNumber - b.turnNumber,
+    );
+
     return sortedTranscripts
       .map((t) => {
         const speaker = t.participant.user.name;
@@ -146,14 +156,14 @@ export class DebateAiService {
    */
   private formatParticipantList(teams: TeamWithParticipants[]): string {
     const lines: string[] = [];
-    
+
     for (const team of teams) {
       lines.push(`\nTeam ${team.side}:`);
       for (const p of team.participants) {
         lines.push(`  - ${p.user.name} (ID: ${p.id})`);
       }
     }
-    
+
     return lines.join('\n');
   }
 
@@ -229,7 +239,7 @@ Respond ONLY with the JSON array, no additional text:`;
     try {
       // Extract JSON from response (handle markdown code blocks)
       let jsonStr = responseText;
-      
+
       const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)```/);
       if (jsonMatch) {
         jsonStr = jsonMatch[1].trim();
@@ -242,7 +252,7 @@ Respond ONLY with the JSON array, no additional text:`;
       }
 
       const parsed = JSON.parse(jsonStr);
-      
+
       if (!Array.isArray(parsed)) {
         throw new Error('Response is not an array');
       }
@@ -302,7 +312,8 @@ Respond ONLY with the JSON array, no additional text:`;
           strengths: ['Participated in the debate'],
           weaknesses: ['AI evaluation was unavailable'],
           suggestions: ['Please request manual review'],
-          summary: 'Automated evaluation was not available. Default scores assigned.',
+          summary:
+            'Automated evaluation was not available. Default scores assigned.',
         });
       }
     }

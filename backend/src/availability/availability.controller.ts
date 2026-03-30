@@ -1,4 +1,15 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, Logger } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+  Logger,
+} from '@nestjs/common';
 import { AvailabilityService } from './availability.service';
 import { ClerkAuthGuard } from '../common/guards/clerk-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -22,7 +33,7 @@ export class AvailabilityController {
    */
   @Get('preferences')
   @UseGuards(ClerkAuthGuard)
-  async getMyPreferences(@CurrentUser() userId: string) {
+  async getMyPreferences(@CurrentUser('dbUserId') userId: string) {
     return this.availabilityService.getUserPreferences(userId);
   }
 
@@ -33,7 +44,7 @@ export class AvailabilityController {
   @Patch('preferences')
   @UseGuards(ClerkAuthGuard)
   async updatePreferences(
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string,
     @Body() data: UpdateUserPreferencesDto,
   ) {
     this.logger.debug(data);
@@ -46,8 +57,8 @@ export class AvailabilityController {
    */
   @Get('blocked/slots')
   @UseGuards(ClerkAuthGuard)
-  async getBlockedSlots(@CurrentUser() userId: string) {
-    return this.availabilityService.getBlockedSlots(userId);
+  async getBlockedSlots(@CurrentUser('dbUserId') userId: string) {
+    return this.availabilityService.getBlockedSlotsForUser(userId);
   }
 
   /**
@@ -64,7 +75,7 @@ export class AvailabilityController {
   @Post('blocked')
   @UseGuards(ClerkAuthGuard)
   async createBlockedSlot(
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string,
     @Body() data: CreateBlockedSlotDto,
   ) {
     return this.availabilityService.createBlockedSlot(userId, data);
@@ -76,7 +87,7 @@ export class AvailabilityController {
   @Delete('blocked/:blockedSlotId')
   @UseGuards(ClerkAuthGuard)
   async deleteBlockedSlot(
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string,
     @Param('blockedSlotId') blockedSlotId: string,
   ) {
     return this.availabilityService.deleteBlockedSlot(userId, blockedSlotId);
@@ -88,7 +99,7 @@ export class AvailabilityController {
   @Post('day')
   @UseGuards(ClerkAuthGuard)
   async setDayAvailability(
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string,
     @Body() data: UserAvailabilityDto,
   ) {
     return this.availabilityService.setDayAvailability(userId, data);
@@ -100,7 +111,7 @@ export class AvailabilityController {
   @Post('bulk')
   @UseGuards(ClerkAuthGuard)
   async setMultipleDaysAvailability(
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string,
     @Body() data: SetAvailabilityDto,
   ) {
     return this.availabilityService.setMultipleDaysAvailability(userId, data);
@@ -206,8 +217,8 @@ export class AvailabilityController {
    */
   @Get()
   @UseGuards(ClerkAuthGuard)
-  async getMyAvailability(@CurrentUser() userId: string) {
-    return this.availabilityService.getUserAvailability(userId);
+  async getMyAvailability(@CurrentUser('dbUserId') userId: string) {
+    return this.availabilityService.getUserAvailabilityForUser(userId);
   }
 
   /**
@@ -224,7 +235,7 @@ export class AvailabilityController {
   @Patch(':availabilityId')
   @UseGuards(ClerkAuthGuard)
   async updateDayAvailability(
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string,
     @Param('availabilityId') availabilityId: string,
     @Body() data: UpdateAvailabilityDto,
   ) {
@@ -241,7 +252,7 @@ export class AvailabilityController {
   @Delete(':availabilityId')
   @UseGuards(ClerkAuthGuard)
   async deleteDayAvailability(
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string,
     @Param('availabilityId') availabilityId: string,
   ) {
     return this.availabilityService.deleteDayAvailability(

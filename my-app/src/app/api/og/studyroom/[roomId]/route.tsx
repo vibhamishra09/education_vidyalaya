@@ -25,6 +25,7 @@ interface StudyRoomData {
     avatar?: string;
   };
   skills?: SkillData[];
+  slug: string
 }
 
 export async function GET(

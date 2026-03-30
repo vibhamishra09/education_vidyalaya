@@ -7,7 +7,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import {
   DebateState,
   DebateStatus,
-  DebateSide,
   TurnStartedEvent,
   TurnEndedEvent,
   PrepStartedEvent,
@@ -156,14 +155,14 @@ export function useDebateSocket({
           }
         });
 
-        newSocket.on('disconnect', (reason) => {
+        newSocket.on('disconnect', (_reason) => {
           if (mounted) {
             setIsConnected(false);
           }
         });
 
-        newSocket.on('connect_error', (err) => {
-          callbacksRef.current.onError?.(`Connection failed: ${err.message}`);
+        newSocket.on('connect_error', (_err) => {
+          callbacksRef.current.onError?.(`Connection failed: ${_err.message}`);
         });
 
         // Debate events
@@ -314,7 +313,7 @@ export function useDebateSocket({
           callbacksRef.current.onMicDisabled?.(event);
         });
 
-      } catch (err) {
+      } catch (_err) {
         // Connection failed
       } finally {
         connectingRef.current = false;

@@ -1,9 +1,9 @@
 /* eslint-disable prettier/prettier */
 /* eslint-disable @typescript-eslint/no-unsafe-return */
-/* eslint-disable @typescript-eslint/no-unused-vars */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+ 
+ 
+ 
+ 
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SessionStatus } from '../generated/prisma/client';
@@ -42,6 +42,7 @@ export class DashboardService {
 
   async getDashboardData(
     userId: string,
+    clerkUserId: string,
     includeMetrics: boolean = true,
     includeRequests: boolean = true,
     includeSessions: boolean = true,
@@ -72,18 +73,6 @@ export class DashboardService {
           const startTime = Date.now();
           this.logger.debug(`[Dashboard] Fetching dashboard data for user: ${userId}`);
 
-          // userId is actually clerkId, so we need to find the user by clerkId first
-          const user = await this.prisma.user.findUnique({
-            where: { clerkId: userId },
-            select: { id: true, clerkId: true },
-          });
-
-          if (!user) {
-            throw new NotFoundException(
-              'User not found. Please complete onboarding first.',
-            );
-          }
-
           // Helper functions for each data block
           const getMetrics = async () => {
             if (!includeMetrics) return null;
@@ -99,34 +88,34 @@ export class DashboardService {
               // Peer sessions (as learner or teacher)
               this.prisma.peerSession.count({
                 where: {
-                  OR: [{ requestedById: user.id }, { requestedToId: user.id }],
+                  OR: [{ requestedById: userId }, { requestedToId: userId }],
                   sessionStatus: SessionStatus.DONE,
                 },
               }),
               // Study rooms created by user (as host)
               this.prisma.studyRoom.count({
                 where: {
-                  createdById: user.id,
+                  createdById: userId,
                   sessionStatus: SessionStatus.DONE,
                 },
               }),
               // Study rooms user participated in (as learner)
               this.prisma.studyRoomParticipant.count({
                 where: {
-                  userId: user.id,
+                  userId,
                   studyRoom: {
                     sessionStatus: SessionStatus.DONE,
-                    createdById: { not: user.id },
+                    createdById: { not: userId },
                   },
                 },
               }),
               this.prisma.payment.aggregate({
-                where: { receivedById: user.id, paymentStatus: 'RECEIVED' },
+                where: { receivedById: userId, paymentStatus: 'RECEIVED' },
                 _sum: { amountReceived: true },
               }),
               // Use aggregation instead of fetching all reviews
               this.prisma.review.aggregate({
-                where: { revieweeId: user.id },
+                where: { revieweeId: userId },
                 _avg: { rating: true },
                 _count: true,
               }),
@@ -168,7 +157,7 @@ export class DashboardService {
             const [pendingRequests, sentRequests] = await Promise.all([
               this.prisma.peerSession.findMany({
                 where: {
-                  requestedToId: user.id,
+                  requestedToId: userId,
                   sessionStatus: SessionStatus.PENDING,
                 },
                 include: {
@@ -180,7 +169,7 @@ export class DashboardService {
               }),
               this.prisma.peerSession.findMany({
                 where: {
-                  requestedById: user.id,
+                  requestedById: userId,
                   sessionStatus: SessionStatus.PENDING,
                 },
                 include: {
@@ -238,7 +227,7 @@ export class DashboardService {
               // Upcoming peer sessions (including ONGOING)
               this.prisma.peerSession.findMany({
                 where: {
-                  OR: [{ requestedById: user.id }, { requestedToId: user.id }],
+                  OR: [{ requestedById: userId }, { requestedToId: userId }],
                   sessionStatus: { in: [SessionStatus.UPCOMING, SessionStatus.ONGOING] },
                 },
                 include: {
@@ -255,7 +244,7 @@ export class DashboardService {
               // Past peer sessions
               this.prisma.peerSession.findMany({
                 where: {
-                  OR: [{ requestedById: user.id }, { requestedToId: user.id }],
+                  OR: [{ requestedById: userId }, { requestedToId: userId }],
                   sessionStatus: SessionStatus.DONE,
                 },
                 include: {
@@ -273,8 +262,8 @@ export class DashboardService {
               this.prisma.studyRoom.findMany({
                 where: {
                   OR: [
-                    { createdById: user.id },
-                    { learners: { some: { userId: user.id } } },
+                    { createdById: userId },
+                    { learners: { some: { userId } } },
                   ],
                   sessionStatus: { in: [SessionStatus.UPCOMING, SessionStatus.ONGOING] },
                 },
@@ -293,8 +282,8 @@ export class DashboardService {
               this.prisma.studyRoom.findMany({
                 where: {
                   OR: [
-                    { createdById: user.id },
-                    { learners: { some: { userId: user.id } } },
+                    { createdById: userId },
+                    { learners: { some: { userId } } },
                   ],
                   sessionStatus: SessionStatus.DONE,
                 },
@@ -312,21 +301,21 @@ export class DashboardService {
               // Counts for pagination
               this.prisma.peerSession.count({
                 where: {
-                  OR: [{ requestedById: user.id }, { requestedToId: user.id }],
+                  OR: [{ requestedById: userId }, { requestedToId: userId }],
                   sessionStatus: { in: [SessionStatus.UPCOMING, SessionStatus.ONGOING] },
                 },
               }),
               this.prisma.peerSession.count({
                 where: {
-                  OR: [{ requestedById: user.id }, { requestedToId: user.id }],
+                  OR: [{ requestedById: userId }, { requestedToId: userId }],
                   sessionStatus: SessionStatus.DONE,
                 },
               }),
               this.prisma.studyRoom.count({
                 where: {
                   OR: [
-                    { createdById: user.id },
-                    { learners: { some: { userId: user.id } } },
+                    { createdById: userId },
+                    { learners: { some: { userId } } },
                   ],
                   sessionStatus: { in: [SessionStatus.UPCOMING, SessionStatus.ONGOING] },
                 },
@@ -334,8 +323,8 @@ export class DashboardService {
               this.prisma.studyRoom.count({
                 where: {
                   OR: [
-                    { createdById: user.id },
-                    { learners: { some: { userId: user.id } } },
+                    { createdById: userId },
+                    { learners: { some: { userId } } },
                   ],
                   sessionStatus: SessionStatus.DONE,
                 },
@@ -343,9 +332,9 @@ export class DashboardService {
               // Pending reviews count
               this.prisma.peerSession.count({
                 where: {
-                  OR: [{ requestedById: user.id }, { requestedToId: user.id }],
+                  OR: [{ requestedById: userId }, { requestedToId: userId }],
                   sessionStatus: SessionStatus.DONE,
-                  reviews: { none: { reviewerId: user.id } },
+                  reviews: { none: { reviewerId: userId } },
                 },
               }),
             ]);
@@ -359,22 +348,30 @@ export class DashboardService {
                 title: ps.title,
                 date: ps.date,
                 duration: ps.duration,
-                peer: ps.requestedById === user.id ? ps.requestedTo : ps.requestedBy,
+                peer: ps.requestedById === userId ? ps.requestedTo : ps.requestedBy,
                 skills: ps.skills.map((s) => s.skill),
                 description: ps.description,
                 requestedBy: ps.requestedBy,
                 sessionStatus: ps.sessionStatus,
+                hostDetailsUpdatedAt: ps.hostDetailsUpdatedAt
+                  ? ps.hostDetailsUpdatedAt.toISOString()
+                  : null,
+                lastDetailsEditedById: ps.lastDetailsEditedById ?? null,
               })),
               pastSessions: pastSessions.map((ps) => ({
                 id: ps.id,
                 title: ps.title,
                 date: ps.date,
                 duration: ps.duration,
-                peer: ps.requestedById === user.id ? ps.requestedTo : ps.requestedBy,
+                peer: ps.requestedById === userId ? ps.requestedTo : ps.requestedBy,
                 skills: ps.skills.map((s) => s.skill),
                 description: ps.description,
                 requestedBy: ps.requestedBy,
                 sessionStatus: ps.sessionStatus,
+                hostDetailsUpdatedAt: ps.hostDetailsUpdatedAt
+                  ? ps.hostDetailsUpdatedAt.toISOString()
+                  : null,
+                lastDetailsEditedById: ps.lastDetailsEditedById ?? null,
               })),
               upcomingStudyRooms: upcomingStudyRooms.map((sr) => ({
                 id: sr.id,
@@ -387,6 +384,10 @@ export class DashboardService {
                 skills: sr.skills.map((s) => s.skill),
                 description: sr.description,
                 sessionStatus: sr.sessionStatus,
+                hostDetailsUpdatedAt: sr.hostDetailsUpdatedAt
+                  ? sr.hostDetailsUpdatedAt.toISOString()
+                  : null,
+                slug: sr.slug
               })),
               pastStudyRooms: pastStudyRooms.map((sr) => ({
                 id: sr.id,
@@ -399,6 +400,9 @@ export class DashboardService {
                 skills: sr.skills.map((s) => s.skill),
                 description: sr.description,
                 sessionStatus: sr.sessionStatus,
+                hostDetailsUpdatedAt: sr.hostDetailsUpdatedAt
+                  ? sr.hostDetailsUpdatedAt.toISOString()
+                  : null,
               })),
               sessionsPagination: {
                 upcomingSessions: {
@@ -439,7 +443,7 @@ export class DashboardService {
             const blockStart = Date.now();
 
             const notifications = await this.prisma.notification.findMany({
-              where: { userId: user.id },
+              where: { userId },
               orderBy: { createdAt: 'desc' },
               take: 5,
             });
@@ -455,7 +459,7 @@ export class DashboardService {
             const blockStart = Date.now();
 
             // Pass user.id directly to avoid redundant lookup
-            const streak = await this.streaksService.getUserStreak(user.id);
+            const streak = await this.streaksService.getUserStreak(userId);
 
             const blockDuration = Date.now() - blockStart;
             this.logger.debug(`[Dashboard] Streaks block completed in ${blockDuration}ms`);
@@ -469,8 +473,8 @@ export class DashboardService {
 
             // Pass user object to avoid redundant lookup
             const achievements = await this.achievementsService.getUserAchievements(
-              user.clerkId,
-              user.id, // Pass dbUserId to avoid lookup
+              clerkUserId,
+              userId,
             );
 
             const blockDuration = Date.now() - blockStart;
@@ -516,7 +520,7 @@ export class DashboardService {
           const totalDuration = Date.now() - startTime;
           this.logger.log({
             message: `[Dashboard] Dashboard data fetched successfully`,
-            userId: user.id,
+            userId,
             duration: `${totalDuration}ms`,
             includes: {
               metrics: includeMetrics,
@@ -574,17 +578,6 @@ export class DashboardService {
       cacheKey,
       async () => {
         try {
-          const user = await this.prisma.user.findUnique({
-            where: { clerkId: userId },
-            select: { id: true },
-          });
-
-          if (!user) {
-            throw new NotFoundException(
-              'User not found. Please complete onboarding first.',
-            );
-          }
-
           const endDate = new Date();
           const startDate = new Date();
           startDate.setDate(startDate.getDate() - days + 1);
@@ -593,7 +586,7 @@ export class DashboardService {
           // Get all completed peer sessions in the date range
           const peerSessions = await this.prisma.peerSession.findMany({
             where: {
-              OR: [{ requestedById: user.id }, { requestedToId: user.id }],
+              OR: [{ requestedById: userId }, { requestedToId: userId }],
               sessionStatus: SessionStatus.DONE,
               date: {
                 gte: startDate,
@@ -611,8 +604,8 @@ export class DashboardService {
           const studyRoomParticipations = await this.prisma.studyRoom.findMany({
             where: {
               OR: [
-                { createdById: user.id },
-                { learners: { some: { userId: user.id } } },
+                { createdById: userId },
+                { learners: { some: { userId } } },
               ],
               sessionStatus: SessionStatus.DONE,
               date: {
@@ -654,7 +647,7 @@ export class DashboardService {
             const dayData = activityMap.get(dateStr);
             if (dayData) {
               // requestedBy = learner, requestedTo = teacher
-              if (session.requestedById === user.id) {
+              if (session.requestedById === userId) {
                 dayData.learned++;
               } else {
                 dayData.taught++;
@@ -671,7 +664,7 @@ export class DashboardService {
             const dayData = activityMap.get(dateStr);
             if (dayData) {
               // Count study rooms as taught (creator) or learned (participant)
-              if (room.createdById === user.id) {
+              if (room.createdById === userId) {
                 dayData.taught++;
               } else {
                 dayData.learned++;
@@ -719,17 +712,6 @@ export class DashboardService {
       cacheKey,
       async () => {
         try {
-          const user = await this.prisma.user.findUnique({
-            where: { clerkId: userId },
-            select: { id: true },
-          });
-
-          if (!user) {
-            throw new NotFoundException(
-              'User not found. Please complete onboarding first.',
-            );
-          }
-
           const endDate = new Date();
           const startDate = new Date();
           startDate.setMonth(startDate.getMonth() - months + 1);
@@ -739,7 +721,7 @@ export class DashboardService {
           // Get all payments in the date range
           const payments = await this.prisma.payment.findMany({
             where: {
-              OR: [{ madeById: user.id }, { receivedById: user.id }],
+              OR: [{ madeById: userId }, { receivedById: userId }],
               createdAt: {
                 gte: startDate,
                 lte: endDate,
@@ -791,12 +773,12 @@ export class DashboardService {
             const monthData = activityMap.get(monthStr);
             if (monthData) {
               if (
-                payment.receivedById === user.id &&
+                payment.receivedById === userId &&
                 payment.paymentStatus === 'RECEIVED'
               ) {
                 monthData.earned += Number(payment.amountReceived) || 0;
               }
-              if (payment.madeById === user.id) {
+              if (payment.madeById === userId) {
                 monthData.spent += Number(payment.amountMade) || 0;
               }
             }

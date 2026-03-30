@@ -15,10 +15,15 @@ export class SentryModule {
           provide: 'SENTRY_INIT',
           useFactory: (configService: ConfigService) => {
             const dsn = configService.get<string>('SENTRY_DSN');
-            const environment = configService.get<string>('NODE_ENV', 'development');
-            
+            const environment = configService.get<string>(
+              'NODE_ENV',
+              'development',
+            );
+
             if (!dsn) {
-              SentryModule.logger.debug('⚠️  SENTRY_DSN not configured. Sentry will not be initialized.');
+              SentryModule.logger.debug(
+                '⚠️  SENTRY_DSN not configured. Sentry will not be initialized.',
+              );
               return null;
             }
 
@@ -27,14 +32,17 @@ export class SentryModule {
               environment,
               // Performance Monitoring
               tracesSampleRate: environment === 'production' ? 0.1 : 1.0, // 10% in production, 100% in dev
-              
+
               // Profiling
               profilesSampleRate: 0,
               integrations: [],
-              
+
               // Release tracking
-              release: configService.get<string>('SENTRY_RELEASE', 'webyalaya-backend@1.0.0'),
-              
+              release: configService.get<string>(
+                'SENTRY_RELEASE',
+                'webyalaya-backend@1.0.0',
+              ),
+
               // Additional options
               beforeSend(event, hint) {
                 // Filter out sensitive data
@@ -44,26 +52,34 @@ export class SentryModule {
                     delete event.request.headers['authorization'];
                     delete event.request.headers['cookie'];
                   }
-                  
+
                   // Remove sensitive query parameters
-                  if (event.request.query_string && typeof event.request.query_string === 'string') {
-                    const sensitiveParams = ['token', 'password', 'api_key', 'secret'];
+                  if (
+                    event.request.query_string &&
+                    typeof event.request.query_string === 'string'
+                  ) {
+                    const sensitiveParams = [
+                      'token',
+                      'password',
+                      'api_key',
+                      'secret',
+                    ];
                     let queryString = event.request.query_string;
-                    sensitiveParams.forEach(param => {
+                    sensitiveParams.forEach((param) => {
                       if (queryString.includes(param)) {
                         queryString = queryString.replace(
                           new RegExp(`${param}=[^&]*`, 'gi'),
-                          `${param}=[REDACTED]`
+                          `${param}=[REDACTED]`,
                         );
                       }
                     });
                     event.request.query_string = queryString;
                   }
                 }
-                
+
                 return event;
               },
-              
+
               // Ignore certain errors
               ignoreErrors: [
                 // Browser errors
@@ -78,7 +94,9 @@ export class SentryModule {
               ],
             });
 
-            SentryModule.logger.debug(`✅ Sentry initialized for environment: ${environment}`);
+            SentryModule.logger.debug(
+              `✅ Sentry initialized for environment: ${environment}`,
+            );
             return Sentry;
           },
           inject: [ConfigService],

@@ -10,6 +10,23 @@ import {
 } from '@/types/api.types';
 import { cleanQueryParams } from '../utils/api-utils';
 
+/** Public webinar registration page metadata (GET /api/study-rooms/webinar/public/:slug). */
+export type WebinarPublicMetadata = {
+  id: string;
+  title: string;
+  description: string | null;
+  startsAt: string;
+  duration: number;
+  sessionStatus: string;
+  hostName: string;
+  registrationFields: Array<{
+    id: string;
+    label: string;
+    required?: boolean;
+    type?: string;
+  }>;
+};
+
 export const studyRoomsApi = {
   // Get study rooms
   getStudyRooms: async (filters?: StudyRoomFilters): Promise<StudyRoomsResponse> => {
@@ -31,6 +48,119 @@ export const studyRoomsApi = {
     return response.data;
   },
 
+  async createRecurringRoom(data: CreateStudyRoomDto) {
+    const res = await apiClient.post('/api/study-rooms/recurring', data);
+    return res.data;
+  },
+  
+  getWebinarPublic: async (slug: string): Promise<WebinarPublicMetadata> => {
+    const response = await apiClient.get(
+      `/api/study-rooms/webinar/public/${encodeURIComponent(slug)}`,
+      { skipClerkAuth: true },
+    );
+    return response.data as WebinarPublicMetadata;
+  },
+
+  registerWebinar: async (
+    slug: string,
+    data: { name: string; email: string; responses?: Record<string, string> },
+  ) => {
+    const response = await apiClient.post(
+      `/api/study-rooms/webinar/register/${encodeURIComponent(slug)}`,
+      data,
+      { skipClerkAuth: true },
+    );
+    return response.data as {
+      success: boolean;
+      /** True when this email was already registered; no new email is sent. */
+      alreadyRegistered?: boolean;
+      approvalPending?: boolean;
+      /** False when SES failed to send confirmation. Passcode is only in email—never returned by the API. */
+      emailSent?: boolean;
+      joinUrlManual?: string;
+      roomId: string;
+      title: string;
+      message: string;
+      /** Only when backend runs in development or WEBINAR_EXPOSE_EMAIL_PREVIEW_IN_API=true — for DevTools console. */
+      debugEmailPreview?: { to: string; subject: string; html: string };
+    };
+  },
+
+  joinWebinarWithPasscode: async (data: {
+    studyRoomId: string;
+    passcode: string;
+    /** From `?token=` on the emailed join link */
+    joinToken: string;
+  }) => {
+    const response = await apiClient.post(`/api/study-rooms/webinar/join`, data, {
+      skipClerkAuth: true,
+    });
+    return response.data as {
+      success: boolean;
+      guestAccessToken: string;
+      joinUrl: string;
+      roomId: string;
+    };
+  },
+
+  /** Poll whether the host has approved this registration (same token as join link). */
+  getWebinarApprovalStatus: async (studyRoomId: string, joinToken: string) => {
+    const response = await apiClient.get(`/api/study-rooms/webinar/approval-status`, {
+      params: { room: studyRoomId, token: joinToken },
+      skipClerkAuth: true,
+    });
+    return response.data as {
+      waitingRoomEnabled: boolean;
+      canJoin: boolean;
+    };
+  },
+
+  listWebinarRegistrations: async (studyRoomId: string) => {
+    const response = await apiClient.get(
+      `/api/study-rooms/webinar/${encodeURIComponent(studyRoomId)}/registrations`,
+    );
+    return response.data as {
+      waitingRoomEnabled: boolean;
+      registrations: Array<{
+        id: string;
+        name: string;
+        email: string;
+        createdAt: string;
+        responses: unknown;
+        guestParticipantId: string | null;
+        approvalStatus: "pending" | "approved";
+      }>;
+    };
+  },
+
+  approveWebinarRegistration: async (
+    studyRoomId: string,
+    registrationId: string
+  ) => {
+    const response = await apiClient.post(
+      `/api/study-rooms/webinar/${encodeURIComponent(studyRoomId)}/registrations/${encodeURIComponent(registrationId)}/approve`
+    );
+    return response.data as {
+      success: boolean;
+      alreadyApproved?: boolean;
+    };
+  },
+
+  removeWebinarGuest: async (studyRoomId: string, guestId: string) => {
+    const response = await apiClient.delete(
+      `/api/study-rooms/webinar/${encodeURIComponent(studyRoomId)}/guests/${encodeURIComponent(guestId)}`,
+    );
+    return response.data as { success: boolean };
+  },
+
+  setWebinarChatEnabled: async (studyRoomId: string, enabled: boolean) => {
+    const response = await apiClient.patch(
+      `/api/study-rooms/webinar/${encodeURIComponent(studyRoomId)}/chat-enabled`,
+      { enabled },
+    );
+    return response.data as { success: boolean; chatEnabled: boolean };
+  },
+
   // Update study room
   updateStudyRoom: async (
     studyRoomId: string,
@@ -48,6 +178,26 @@ export const studyRoomsApi = {
     const response = await apiClient.post(`/api/study-rooms/${studyRoomId}/join`);
     return response.data;
   },
+
+  joinRecurringRooms: async (
+    roomId: string,
+    scope: 'THIS' | 'FOLLOWING',
+  ): Promise<unknown> => {
+    const response = await apiClient.post(
+      `/api/study-rooms/${roomId}/join-recurring`,
+      { scope },
+    );
+
+    return response.data;
+  },
+
+    unenroll : async(roomId: string , scope: 'THIS'| "ALL" | 'FOLLOWING') : Promise<unknown> => {
+      const response = await apiClient.post(`/api/study-rooms/${roomId}/unenroll`, {
+        scope
+      });
+
+      return response.data;
+    },
 
   requestExternalJoin: async (
     studyRoomId: string,

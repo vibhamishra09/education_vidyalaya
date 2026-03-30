@@ -5,11 +5,11 @@ import { LoggerService } from '../common/logger';
 
 /**
  * Redis-based permissions service for session moderation
- * 
+ *
  * Redis Data Structure:
  * - Global Room Settings: room:{sessionId}:settings (Hash)
  *   Fields: lockAudio (string "true"/"false"), lockVideo, chatDisabled, hideParticipantList, chatRestrictToHostOnly
- * 
+ *
  * - Individual Overrides: room:{sessionId}:permissions:{userId} (Hash)
  *   Fields: canAudio, canVideo, canChat, canChatEveryone, canChatHost, canChatUser (string "true"/"false")
  */
@@ -44,7 +44,7 @@ export interface ComputedPermissions {
 export interface FlashQuestion {
   id: string;
   text: string;
-  duration?: number;      // seconds (0 = manual dismiss)
+  duration?: number; // seconds (0 = manual dismiss)
   position?: 'top' | 'center' | 'bottom';
   fontSize?: 'sm' | 'md' | 'lg' | 'xl';
   bgColor?: string;
@@ -55,7 +55,7 @@ export class PermissionsService {
   constructor(private readonly logger: LoggerService) {
     this.logger.setContext(PermissionsService.name);
   }
-  
+
   // TTL for room permissions (24 hours - should be longer than any session)
   private readonly PERMISSIONS_TTL = 24 * 60 * 60;
 
@@ -80,7 +80,7 @@ export class PermissionsService {
     try {
       const key = this.getRoomSettingsKey(sessionId);
       const settings = await redisClient.hGetAll(key);
-      
+
       // Default values if not set
       return {
         lockAudio: settings.lockAudio === 'true',
@@ -105,11 +105,14 @@ export class PermissionsService {
   /**
    * Set global room settings in Redis
    */
-  async setRoomSettings(sessionId: string, settings: Partial<RoomSettings>): Promise<void> {
+  async setRoomSettings(
+    sessionId: string,
+    settings: Partial<RoomSettings>,
+  ): Promise<void> {
     try {
       const key = this.getRoomSettingsKey(sessionId);
       const updates: Record<string, string> = {};
-      
+
       if (settings.lockAudio !== undefined) {
         updates.lockAudio = settings.lockAudio.toString();
       }
@@ -123,14 +126,15 @@ export class PermissionsService {
         updates.hideParticipantList = settings.hideParticipantList.toString();
       }
       if (settings.chatRestrictToHostOnly !== undefined) {
-        updates.chatRestrictToHostOnly = settings.chatRestrictToHostOnly.toString();
+        updates.chatRestrictToHostOnly =
+          settings.chatRestrictToHostOnly.toString();
       }
-      
+
       if (Object.keys(updates).length > 0) {
         await redisClient.hSet(key, updates);
         await redisClient.expire(key, this.PERMISSIONS_TTL);
       }
-      
+
       this.logger.debug(`Room settings updated for ${sessionId}:`, updates);
     } catch (error) {
       this.logger.error(`Error setting room settings for ${sessionId}:`, error);
@@ -142,15 +146,18 @@ export class PermissionsService {
    * Get individual user permissions (overrides) from Redis
    * Returns null if no override exists
    */
-  async getUserPermissions(sessionId: string, userId: string): Promise<Partial<UserPermissions> | null> {
+  async getUserPermissions(
+    sessionId: string,
+    userId: string,
+  ): Promise<Partial<UserPermissions> | null> {
     try {
       const key = this.getUserPermissionsKey(sessionId, userId);
       const permissions = await redisClient.hGetAll(key);
-      
+
       if (Object.keys(permissions).length === 0) {
         return null; // No override set
       }
-      
+
       const result: Partial<UserPermissions> = {};
       if (permissions.canAudio !== undefined) {
         result.canAudio = permissions.canAudio === 'true';
@@ -170,10 +177,13 @@ export class PermissionsService {
       if (permissions.canChatUser !== undefined) {
         result.canChatUser = permissions.canChatUser === 'true';
       }
-      
+
       return result;
     } catch (error) {
-      this.logger.error(`Error getting user permissions for ${sessionId}/${userId}:`, error);
+      this.logger.error(
+        `Error getting user permissions for ${sessionId}/${userId}:`,
+        error,
+      );
       return null;
     }
   }
@@ -181,11 +191,15 @@ export class PermissionsService {
   /**
    * Set individual user permissions (overrides) in Redis
    */
-  async setUserPermissions(sessionId: string, userId: string, permissions: Partial<UserPermissions>): Promise<void> {
+  async setUserPermissions(
+    sessionId: string,
+    userId: string,
+    permissions: Partial<UserPermissions>,
+  ): Promise<void> {
     try {
       const key = this.getUserPermissionsKey(sessionId, userId);
       const updates: Record<string, string> = {};
-      
+
       if (permissions.canAudio !== undefined) {
         updates.canAudio = permissions.canAudio.toString();
       }
@@ -204,15 +218,52 @@ export class PermissionsService {
       if (permissions.canChatUser !== undefined) {
         updates.canChatUser = permissions.canChatUser.toString();
       }
-      
+
       if (Object.keys(updates).length > 0) {
         await redisClient.hSet(key, updates);
         await redisClient.expire(key, this.PERMISSIONS_TTL);
       }
-      
-      this.logger.debug(`User permissions updated for ${sessionId}/${userId}:`, updates);
+
+      this.logger.debug(
+        `User permissions updated for ${sessionId}/${userId}:`,
+        updates,
+      );
     } catch (error) {
-      this.logger.error(`Error setting user permissions for ${sessionId}/${userId}:`, error);
+      this.logger.error(
+        `Error setting user permissions for ${sessionId}/${userId}:`,
+        error,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Remove specific fields from a user's permission hash so they fall back to room defaults.
+   */
+  async removeUserPermissionFields(
+    sessionId: string,
+    userId: string,
+    fields: Array<'canAudio' | 'canVideo' | 'canChat' | 'canChatEveryone' | 'canChatHost' | 'canChatUser'>,
+  ): Promise<void> {
+    if (fields.length === 0) return;
+    try {
+      const key = this.getUserPermissionsKey(sessionId, userId);
+      for (const field of fields) {
+        await redisClient.hDel(key, field);
+      }
+      const remaining = await redisClient.hKeys(key);
+      if (remaining.length === 0) {
+        await redisClient.del(key);
+      }
+      this.logger.debug(
+        `Removed permission fields for ${sessionId}/${userId}:`,
+        fields,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Error removing permission fields for ${sessionId}/${userId}:`,
+        error,
+      );
       throw error;
     }
   }
@@ -226,7 +277,10 @@ export class PermissionsService {
       await redisClient.del(key);
       this.logger.debug(`User permissions cleared for ${sessionId}/${userId}`);
     } catch (error) {
-      this.logger.error(`Error clearing user permissions for ${sessionId}/${userId}:`, error);
+      this.logger.error(
+        `Error clearing user permissions for ${sessionId}/${userId}:`,
+        error,
+      );
       throw error;
     }
   }
@@ -239,7 +293,11 @@ export class PermissionsService {
    * - Otherwise, fall back to global room settings
    * - Global lockAudio=true means user canAudio=false (unless overridden to canAudio=true)
    */
-  async getComputedPermissions(sessionId: string, userId: string, isHost: boolean = false): Promise<ComputedPermissions> {
+  async getComputedPermissions(
+    sessionId: string,
+    userId: string,
+    isHost: boolean = false,
+  ): Promise<ComputedPermissions> {
     try {
       // Host is NEVER restricted by room settings or individual locks
       if (isHost) {
@@ -253,12 +311,12 @@ export class PermissionsService {
           allowParticipantList: true,
         };
       }
-      
+
       const [roomSettings, userOverrides] = await Promise.all([
         this.getRoomSettings(sessionId),
         this.getUserPermissions(sessionId, userId),
       ]);
-      
+
       // Compute effective permissions
       // Priority: User override > Global setting
       // Note: lockAudio=true means audio is NOT allowed (inverted logic)
@@ -268,7 +326,8 @@ export class PermissionsService {
           : !roomSettings.chatDisabled;
 
       // If chat is restricted to host only, non-host users can only send to host
-      let allowChatEveryone = allowChat && (userOverrides?.canChatEveryone ?? true);
+      let allowChatEveryone =
+        allowChat && (userOverrides?.canChatEveryone ?? true);
       let allowChatHost = allowChat && (userOverrides?.canChatHost ?? true);
       let allowChatUser = allowChat && (userOverrides?.canChatUser ?? true);
 
@@ -281,12 +340,14 @@ export class PermissionsService {
       }
 
       return {
-        allowAudio: userOverrides?.canAudio !== undefined 
-          ? userOverrides.canAudio 
-          : !roomSettings.lockAudio,
-        allowVideo: userOverrides?.canVideo !== undefined 
-          ? userOverrides.canVideo 
-          : !roomSettings.lockVideo,
+        allowAudio:
+          userOverrides?.canAudio !== undefined
+            ? userOverrides.canAudio
+            : !roomSettings.lockAudio,
+        allowVideo:
+          userOverrides?.canVideo !== undefined
+            ? userOverrides.canVideo
+            : !roomSettings.lockVideo,
         allowChat,
         allowChatEveryone,
         allowChatHost,
@@ -294,7 +355,10 @@ export class PermissionsService {
         allowParticipantList: !roomSettings.hideParticipantList,
       };
     } catch (error) {
-      this.logger.error(`Error computing permissions for ${sessionId}/${userId}:`, error);
+      this.logger.error(
+        `Error computing permissions for ${sessionId}/${userId}:`,
+        error,
+      );
       // Return all allowed on error (fail open for better UX)
       return {
         allowAudio: true,
@@ -312,13 +376,22 @@ export class PermissionsService {
    * Check if a specific permission is allowed for a user
    * Host is always allowed all permissions
    */
-  async hasPermission(sessionId: string, userId: string, type: 'audio' | 'video' | 'chat', isHost: boolean = false): Promise<boolean> {
+  async hasPermission(
+    sessionId: string,
+    userId: string,
+    type: 'audio' | 'video' | 'chat',
+    isHost: boolean = false,
+  ): Promise<boolean> {
     // Host is NEVER restricted
     if (isHost) {
       return true;
     }
-    
-    const computed = await this.getComputedPermissions(sessionId, userId, false);
+
+    const computed = await this.getComputedPermissions(
+      sessionId,
+      userId,
+      false,
+    );
     switch (type) {
       case 'audio':
         return computed.allowAudio;
@@ -335,7 +408,11 @@ export class PermissionsService {
     audienceType: MessageAudienceType,
     isHost: boolean = false,
   ): Promise<boolean> {
-    const computed = await this.getComputedPermissions(sessionId, userId, isHost);
+    const computed = await this.getComputedPermissions(
+      sessionId,
+      userId,
+      isHost,
+    );
     if (!computed.allowChat) {
       return false;
     }
@@ -361,13 +438,24 @@ export class PermissionsService {
   /**
    * Persist a host's question list to Redis.
    */
-  async setFlashQuestions(sessionId: string, hostId: string, questions: FlashQuestion[]): Promise<void> {
+  async setFlashQuestions(
+    sessionId: string,
+    hostId: string,
+    questions: FlashQuestion[],
+  ): Promise<void> {
     try {
       const key = this.getFlashQuestionsKey(sessionId, hostId);
-      await redisClient.set(key, JSON.stringify(questions), { EX: this.PERMISSIONS_TTL });
-      this.logger.debug(`Flash questions saved for ${sessionId}/${hostId}: ${questions.length} items`);
+      await redisClient.set(key, JSON.stringify(questions), {
+        EX: this.PERMISSIONS_TTL,
+      });
+      this.logger.debug(
+        `Flash questions saved for ${sessionId}/${hostId}: ${questions.length} items`,
+      );
     } catch (error) {
-      this.logger.error(`Error saving flash questions for ${sessionId}/${hostId}:`, error);
+      this.logger.error(
+        `Error saving flash questions for ${sessionId}/${hostId}:`,
+        error,
+      );
       throw error;
     }
   }
@@ -375,14 +463,20 @@ export class PermissionsService {
   /**
    * Retrieve a host's question list from Redis. Returns [] if nothing stored.
    */
-  async getFlashQuestions(sessionId: string, hostId: string): Promise<FlashQuestion[]> {
+  async getFlashQuestions(
+    sessionId: string,
+    hostId: string,
+  ): Promise<FlashQuestion[]> {
     try {
       const key = this.getFlashQuestionsKey(sessionId, hostId);
       const raw = await redisClient.get(key);
       if (!raw) return [];
       return JSON.parse(raw) as FlashQuestion[];
     } catch (error) {
-      this.logger.error(`Error getting flash questions for ${sessionId}/${hostId}:`, error);
+      this.logger.error(
+        `Error getting flash questions for ${sessionId}/${hostId}:`,
+        error,
+      );
       return [];
     }
   }
@@ -403,7 +497,9 @@ export class PermissionsService {
 
       if (allKeys.length > 0) {
         await redisClient.del(allKeys);
-        this.logger.debug(`Cleaned up ${allKeys.length} keys for session ${sessionId}`);
+        this.logger.debug(
+          `Cleaned up ${allKeys.length} keys for session ${sessionId}`,
+        );
       }
     } catch (error) {
       this.logger.error(`Error cleaning up session ${sessionId}:`, error);

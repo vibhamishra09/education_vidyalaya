@@ -12,7 +12,7 @@ export class BrowseController {
   async getBrowseData(@Query() query: BrowseQueryDto) {
     // Ensure tab has a valid default value for mobile browsers
     const tab = query.tab || 'peers';
-    
+
     return this.browseService.getBrowseData(
       tab,
       query.search,
@@ -34,11 +34,12 @@ export class BrowseController {
   @Get('recommendations')
   @UseGuards(ClerkAuthGuard)
   async getRecommendations(
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
     @Query('limit') limit?: string,
   ) {
     return this.browseService.getRecommendations(
-      userId,
+      dbUserId ?? clerkUserId,
       limit ? parseInt(limit, 10) : 8,
     );
   }

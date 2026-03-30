@@ -1,12 +1,24 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+  Logger,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import {
   RequestSessionDto,
   UpdateSessionStatusDto,
+  UpdatePeerSessionDto,
 } from './dto/peer-session.dto';
 import { SessionFeedbackDto } from '../common/dto/session-feedback.dto';
-import { SessionStatus, PaymentStatus, NotifType, Prisma } from '../generated/prisma/client';
+import {
+  SessionStatus,
+  PaymentStatus,
+  NotifType,
+  Prisma,
+} from '../generated/prisma/client';
 import {
   normalizeGoogleMeetLink,
   isValidGoogleMeetLink,
@@ -61,122 +73,142 @@ export class PeerSessionsService {
           this.logger.debug('userId', userId);
           // userId is actually clerkId, so we need to find the user by clerkId first
           const user = await this.prisma.user.findUnique({
-          where: { clerkId: userId },
-          select: { id: true },
-        });
-
-        if (!user) {
-          throw new BadRequestException({
-            code: 'USER_NOT_FOUND',
-            message: 'User not found',
-          });
-        }
-
-        const where: any = {
-          OR: [{ requestedById: user.id }, { requestedToId: user.id }],
-        };
-
-        if (status) where.sessionStatus = status;
-        if (requestedBy) where.requestedById = requestedBy;
-        if (requestedTo) where.requestedToId = requestedTo;
-
-        const skip = (page - 1) * limit;
-
-        // Sort by scheduled time (date) - ascending: earliest scheduled time first
-        const orderBy = { date: 'asc' as const };
-
-        const [peerSessions, total] = await Promise.all([
-          this.prisma.peerSession.findMany({
-            where,
-            skip,
-            take: limit,
-            include: {
-              requestedBy: { select: { id: true, name: true, avatar: true } },
-              requestedTo: { select: { id: true, name: true, avatar: true } },
-              skills: { include: { skill: { select: { id: true, name: true } } } },
-            },
-            orderBy,
-          }),
-          this.prisma.peerSession.count({ where }),
-        ]);
-
-        // Auto-expire sessions that have passed their scheduled end time
-        const now = new Date();
-        const expiredSessions = peerSessions.filter((ps) => {
-          const sessionEndTime = new Date(ps.date.getTime() + ps.duration * 60000);
-          const isExpired = sessionEndTime < now;
-          const isNotInTerminalState = !['DONE', 'CANCELLED', 'NOT_COMPLETED'].includes(ps.sessionStatus);
-          return isExpired && isNotInTerminalState;
-        });
-
-        // Process expired sessions (no payment processing - payments are only processed after reviews)
-        for (const session of expiredSessions) {
-          this.logger.debug('⏰ [getPeerSessions] Auto-expiring session:', {
-            sessionId: session.id,
-            scheduledEnd: new Date(session.date.getTime() + session.duration * 60000).toISOString(),
-            currentStatus: session.sessionStatus,
+            where: { clerkId: userId },
+            select: { id: true },
           });
 
-          // Update status to NOT_COMPLETED
-          await this.prisma.peerSession.update({
-            where: { id: session.id },
-            data: { sessionStatus: SessionStatus.NOT_COMPLETED },
+          if (!user) {
+            throw new BadRequestException({
+              code: 'USER_NOT_FOUND',
+              message: 'User not found',
+            });
+          }
+
+          const where: any = {
+            OR: [{ requestedById: user.id }, { requestedToId: user.id }],
+          };
+
+          if (status) where.sessionStatus = status;
+          if (requestedBy) where.requestedById = requestedBy;
+          if (requestedTo) where.requestedToId = requestedTo;
+
+          const skip = (page - 1) * limit;
+
+          // Sort by scheduled time (date) - ascending: earliest scheduled time first
+          const orderBy = { date: 'asc' as const };
+
+          const [peerSessions, total] = await Promise.all([
+            this.prisma.peerSession.findMany({
+              where,
+              skip,
+              take: limit,
+              include: {
+                requestedBy: { select: { id: true, name: true, avatar: true } },
+                requestedTo: { select: { id: true, name: true, avatar: true } },
+                skills: {
+                  include: { skill: { select: { id: true, name: true } } },
+                },
+              },
+              orderBy,
+            }),
+            this.prisma.peerSession.count({ where }),
+          ]);
+
+          // Auto-expire sessions that have passed their scheduled end time
+          const now = new Date();
+          const expiredSessions = peerSessions.filter((ps) => {
+            const sessionEndTime = new Date(
+              ps.date.getTime() + ps.duration * 60000,
+            );
+            const isExpired = sessionEndTime < now;
+            const isNotInTerminalState = ![
+              'DONE',
+              'CANCELLED',
+              'NOT_COMPLETED',
+            ].includes(ps.sessionStatus);
+            return isExpired && isNotInTerminalState;
           });
 
-          // Invalidate cache for both users' session lists
-          await this.cacheService.deletePattern(`peer-sessions:list:*${session.requestedById}*`);
-          await this.cacheService.deletePattern(`peer-sessions:list:*${session.requestedToId}*`);
+          // Process expired sessions (no payment processing - payments are only processed after reviews)
+          for (const session of expiredSessions) {
+            this.logger.debug('⏰ [getPeerSessions] Auto-expiring session:', {
+              sessionId: session.id,
+              scheduledEnd: new Date(
+                session.date.getTime() + session.duration * 60000,
+              ).toISOString(),
+              currentStatus: session.sessionStatus,
+            });
 
-          // Notify both parties
-          await this.notificationsService.createAndPushNotification(
-            session.requestedById,
-            `Your session with ${session.requestedTo.name} has expired and was not completed.`,
-            'Session Expired',
-            NotifType.NORMAL,
-            {
-              actionType: 'SESSION_EXPIRED',
-              peerSessionId: session.id,
-              actionData: { sessionId: session.id, sessionType: 'peerSession' },
+            // Update status to NOT_COMPLETED
+            await this.prisma.peerSession.update({
+              where: { id: session.id },
+              data: { sessionStatus: SessionStatus.NOT_COMPLETED },
+            });
+
+            // Invalidate cache for both users' session lists
+            await this.cacheService.deletePattern(
+              `peer-sessions:list:*${session.requestedById}*`,
+            );
+            await this.cacheService.deletePattern(
+              `peer-sessions:list:*${session.requestedToId}*`,
+            );
+
+            // Notify both parties
+            await this.notificationsService.createAndPushNotification(
+              session.requestedById,
+              `Your session with ${session.requestedTo.name} has expired and was not completed.`,
+              'Session Expired',
+              NotifType.NORMAL,
+              {
+                actionType: 'SESSION_EXPIRED',
+                peerSessionId: session.id,
+                actionData: {
+                  sessionId: session.id,
+                  sessionType: 'peerSession',
+                },
+              },
+            );
+
+            await this.notificationsService.createAndPushNotification(
+              session.requestedToId,
+              `Your session with ${session.requestedBy.name} has expired and was not completed.`,
+              'Session Expired',
+              NotifType.NORMAL,
+              {
+                actionType: 'SESSION_EXPIRED',
+                peerSessionId: session.id,
+                actionData: {
+                  sessionId: session.id,
+                  sessionType: 'peerSession',
+                },
+              },
+            );
+
+            // Update the status in the returned list
+            session.sessionStatus = SessionStatus.NOT_COMPLETED;
+          }
+
+          return {
+            peerSessions: peerSessions.map((ps) => ({
+              id: ps.id,
+              title: ps.title,
+              description: ps.description,
+              sessionStatus: ps.sessionStatus,
+              date: ps.date,
+              duration: ps.duration,
+              gmeetLink: ps.gmeetLink,
+              requestedBy: ps.requestedBy,
+              requestedTo: ps.requestedTo,
+              skills: ps.skills.map((s) => s.skill),
+            })),
+            pagination: {
+              total,
+              page,
+              limit,
+              totalPages: Math.ceil(total / limit),
+              hasMore: skip + limit < total,
             },
-          );
-
-          await this.notificationsService.createAndPushNotification(
-            session.requestedToId,
-            `Your session with ${session.requestedBy.name} has expired and was not completed.`,
-            'Session Expired',
-            NotifType.NORMAL,
-            {
-              actionType: 'SESSION_EXPIRED',
-              peerSessionId: session.id,
-              actionData: { sessionId: session.id, sessionType: 'peerSession' },
-            },
-          );
-
-        // Update the status in the returned list
-        session.sessionStatus = SessionStatus.NOT_COMPLETED;
-      }
-
-      return {
-        peerSessions: peerSessions.map((ps) => ({
-          id: ps.id,
-          title: ps.title,
-          description: ps.description,
-          sessionStatus: ps.sessionStatus,
-          date: ps.date,
-          duration: ps.duration,
-          gmeetLink: ps.gmeetLink,
-          requestedBy: ps.requestedBy,
-          requestedTo: ps.requestedTo,
-          skills: ps.skills.map((s) => s.skill),
-        })),
-        pagination: {
-          total,
-          page,
-          limit,
-          totalPages: Math.ceil(total / limit),
-          hasMore: skip + limit < total,
-        },
-      };
+          };
         } catch (error) {
           // Handle database connection errors
           if (isConnectionError(error)) {
@@ -184,12 +216,12 @@ export class PeerSessionsService {
               `Database connection error in getPeerSessions for user ${userId}:`,
               error instanceof Error ? error.message : String(error),
             );
-            
+
             // Re-throw BadRequestException (user not found is a valid case)
             if (error instanceof BadRequestException) {
               throw error;
             }
-            
+
             // Return empty sessions as fallback
             return {
               peerSessions: [],
@@ -202,7 +234,7 @@ export class PeerSessionsService {
               },
             };
           }
-          
+
           // Re-throw other errors
           throw error;
         }
@@ -214,40 +246,7 @@ export class PeerSessionsService {
   async getPeerSessionDetails(peerSessionId: string, userId?: string) {
     try {
       let peerSession = await this.prisma.peerSession.findUnique({
-      where: { id: peerSessionId },
-      include: {
-        requestedBy: {
-          select: { id: true, name: true, avatar: true, clerkId: true },
-        },
-        requestedTo: {
-          select: { id: true, name: true, avatar: true, clerkId: true },
-        },
-        skills: { include: { skill: { select: { id: true, name: true } } } },
-      },
-    });
-
-    if (!peerSession) {
-      throw new NotFoundException('Peer session not found');
-    }
-
-    // Auto-mark as NOT_COMPLETED if session time has passed and not in terminal state
-    const now = new Date();
-    const sessionEndTime = new Date(peerSession.date.getTime() + peerSession.duration * 60000);
-    const isExpired = sessionEndTime < now;
-    const isNotInTerminalState = !['DONE', 'CANCELLED', 'NOT_COMPLETED'].includes(peerSession.sessionStatus);
-
-    if (isExpired && isNotInTerminalState) {
-      this.logger.debug('⏰ [getPeerSessionDetails] Session expired, marking as NOT_COMPLETED:', {
-        sessionId: peerSessionId,
-        scheduledEnd: sessionEndTime.toISOString(),
-        currentTime: now.toISOString(),
-        currentStatus: peerSession.sessionStatus,
-      });
-
-      // Update session status to NOT_COMPLETED
-      peerSession = await this.prisma.peerSession.update({
         where: { id: peerSessionId },
-        data: { sessionStatus: SessionStatus.NOT_COMPLETED },
         include: {
           requestedBy: {
             select: { id: true, name: true, avatar: true, clerkId: true },
@@ -259,80 +258,137 @@ export class PeerSessionsService {
         },
       });
 
-      // Notify both parties (no payment processing since payments are only processed after reviews)
-      await this.notificationsService.createAndPushNotification(
-        peerSession.requestedById,
-        `Your session with ${peerSession.requestedTo.name} has expired and was not completed.`,
-        'Session Expired',
-        NotifType.NORMAL,
-        {
-          actionType: 'SESSION_EXPIRED',
-          peerSessionId: peerSession.id,
-          actionData: { sessionId: peerSession.id, sessionType: 'peerSession' },
-        },
-      );
-
-      await this.notificationsService.createAndPushNotification(
-        peerSession.requestedToId,
-        `Your session with ${peerSession.requestedBy.name} has expired and was not completed.`,
-        'Session Expired',
-        NotifType.NORMAL,
-        {
-          actionType: 'SESSION_EXPIRED',
-          peerSessionId: peerSession.id,
-          actionData: { sessionId: peerSession.id, sessionType: 'peerSession' },
-        },
-      );
-    }
-
-    // Determine user role in the session
-    let role: 'requester' | 'requestedTo' | 'empty' = 'empty';
-    if (userId) {
-      // userId is actually clerkId
-      if (peerSession.requestedBy.clerkId === userId) {
-        role = 'requester';
-      } else if (peerSession.requestedTo.clerkId === userId) {
-        role = 'requestedTo';
+      if (!peerSession) {
+        throw new NotFoundException('Peer session not found');
       }
-    }
 
-    // find existing chat channel if any
-    const channel = await this.prisma.channel.findFirst({
-      where: { externalType: 'peerSession', externalId: peerSession.id } as any,
-      select: { id: true },
-    });
+      // Auto-mark as NOT_COMPLETED if session time has passed and not in terminal state
+      const now = new Date();
+      const sessionEndTime = new Date(
+        peerSession.date.getTime() + peerSession.duration * 60000,
+      );
+      const isExpired = sessionEndTime < now;
+      const isNotInTerminalState = ![
+        'DONE',
+        'CANCELLED',
+        'NOT_COMPLETED',
+      ].includes(peerSession.sessionStatus);
 
-    this.logger.debug('📊 [getPeerSessionDetails] Returning session data:', {
-      id: peerSession.id,
-      date: peerSession.date,
-      dateISO: peerSession.date.toISOString(),
-      duration: peerSession.duration,
-      sessionStatus: peerSession.sessionStatus,
-    });
+      if (isExpired && isNotInTerminalState) {
+        this.logger.debug(
+          '⏰ [getPeerSessionDetails] Session expired, marking as NOT_COMPLETED:',
+          {
+            sessionId: peerSessionId,
+            scheduledEnd: sessionEndTime.toISOString(),
+            currentTime: now.toISOString(),
+            currentStatus: peerSession.sessionStatus,
+          },
+        );
 
-    return {
-      id: peerSession.id,
-      title: peerSession.title,
-      description: peerSession.description,
-      sessionStatus: peerSession.sessionStatus,
-      date: peerSession.date.toISOString(), // Ensure ISO string format
-      duration: peerSession.duration,
-      gmeetLink: peerSession.gmeetLink,
-      summary: peerSession.summary,
-      requestedBy: {
-        id: peerSession.requestedBy.id,
-        name: peerSession.requestedBy.name,
-        avatar: peerSession.requestedBy.avatar,
-      },
-      requestedTo: {
-        id: peerSession.requestedTo.id,
-        name: peerSession.requestedTo.name,
-        avatar: peerSession.requestedTo.avatar,
-      },
-      skills: peerSession.skills.map((s) => s.skill),
-      chatChannelId: channel?.id ?? null,
-      role,
-    };
+        // Update session status to NOT_COMPLETED
+        peerSession = await this.prisma.peerSession.update({
+          where: { id: peerSessionId },
+          data: { sessionStatus: SessionStatus.NOT_COMPLETED },
+          include: {
+            requestedBy: {
+              select: { id: true, name: true, avatar: true, clerkId: true },
+            },
+            requestedTo: {
+              select: { id: true, name: true, avatar: true, clerkId: true },
+            },
+            skills: {
+              include: { skill: { select: { id: true, name: true } } },
+            },
+          },
+        });
+
+        // Notify both parties (no payment processing since payments are only processed after reviews)
+        await this.notificationsService.createAndPushNotification(
+          peerSession.requestedById,
+          `Your session with ${peerSession.requestedTo.name} has expired and was not completed.`,
+          'Session Expired',
+          NotifType.NORMAL,
+          {
+            actionType: 'SESSION_EXPIRED',
+            peerSessionId: peerSession.id,
+            actionData: {
+              sessionId: peerSession.id,
+              sessionType: 'peerSession',
+            },
+          },
+        );
+
+        await this.notificationsService.createAndPushNotification(
+          peerSession.requestedToId,
+          `Your session with ${peerSession.requestedBy.name} has expired and was not completed.`,
+          'Session Expired',
+          NotifType.NORMAL,
+          {
+            actionType: 'SESSION_EXPIRED',
+            peerSessionId: peerSession.id,
+            actionData: {
+              sessionId: peerSession.id,
+              sessionType: 'peerSession',
+            },
+          },
+        );
+      }
+
+      // Determine user role in the session
+      let role: 'requester' | 'requestedTo' | 'empty' = 'empty';
+      if (userId) {
+        // userId is actually clerkId
+        if (peerSession.requestedBy.clerkId === userId) {
+          role = 'requester';
+        } else if (peerSession.requestedTo.clerkId === userId) {
+          role = 'requestedTo';
+        }
+      }
+
+      // find existing chat channel if any
+      const channel = await this.prisma.channel.findFirst({
+        where: {
+          externalType: 'peerSession',
+          externalId: peerSession.id,
+        } as any,
+        select: { id: true },
+      });
+
+      this.logger.debug('📊 [getPeerSessionDetails] Returning session data:', {
+        id: peerSession.id,
+        date: peerSession.date,
+        dateISO: peerSession.date.toISOString(),
+        duration: peerSession.duration,
+        sessionStatus: peerSession.sessionStatus,
+      });
+
+      return {
+        id: peerSession.id,
+        title: peerSession.title,
+        description: peerSession.description,
+        sessionStatus: peerSession.sessionStatus,
+        date: peerSession.date.toISOString(), // Ensure ISO string format
+        duration: peerSession.duration,
+        gmeetLink: peerSession.gmeetLink,
+        summary: peerSession.summary,
+        requestedBy: {
+          id: peerSession.requestedBy.id,
+          name: peerSession.requestedBy.name,
+          avatar: peerSession.requestedBy.avatar,
+        },
+        requestedTo: {
+          id: peerSession.requestedTo.id,
+          name: peerSession.requestedTo.name,
+          avatar: peerSession.requestedTo.avatar,
+        },
+        skills: peerSession.skills.map((s) => s.skill),
+        chatChannelId: channel?.id ?? null,
+        role,
+        hostDetailsUpdatedAt: peerSession.hostDetailsUpdatedAt
+          ? peerSession.hostDetailsUpdatedAt.toISOString()
+          : null,
+        lastDetailsEditedById: peerSession.lastDetailsEditedById ?? null,
+      };
     } catch (error) {
       // Handle database connection errors
       if (isConnectionError(error)) {
@@ -340,27 +396,26 @@ export class PeerSessionsService {
           `Database connection error in getPeerSessionDetails for session ${peerSessionId}:`,
           error instanceof Error ? error.message : String(error),
         );
-        
+
         // Re-throw NotFoundException (session not found is a valid case)
         if (error instanceof NotFoundException) {
           throw error;
         }
-        
+
         // For connection errors, throw a more user-friendly error
         throw new NotFoundException(
           'Unable to fetch session details. Please try again later.',
         );
       }
-      
+
       // Re-throw other errors
       throw error;
     }
   }
 
   async requestPeerSession(userId: string, requestDto: RequestSessionDto) {
-    // userId is actually clerkId, so we need to find the user by clerkId
     const user = await this.prisma.user.findUnique({
-      where: { clerkId: userId },
+      where: { id: userId },
     });
 
     if (!user) {
@@ -512,19 +567,6 @@ export class PeerSessionsService {
     userId: string,
     updateDto: UpdateSessionStatusDto,
   ) {
-    // userId is actually clerkId, so we need to find the user by clerkId first
-    const user = await this.prisma.user.findUnique({
-      where: { clerkId: userId },
-      select: { id: true },
-    });
-
-    if (!user) {
-      throw new BadRequestException({
-        code: 'USER_NOT_FOUND',
-        message: 'User not found',
-      });
-    }
-
     const peerSession = await this.prisma.peerSession.findUnique({
       where: { id: peerSessionId },
       include: {
@@ -542,7 +584,7 @@ export class PeerSessionsService {
     this.validateStatusTransition(
       peerSession.sessionStatus,
       updateDto.status,
-      user.id,
+      userId,
       peerSession,
     );
 
@@ -552,8 +594,12 @@ export class PeerSessionsService {
     });
 
     // Invalidate cache for both users' session lists
-    await this.cacheService.deletePattern(`peer-sessions:list:*${peerSession.requestedById}*`);
-    await this.cacheService.deletePattern(`peer-sessions:list:*${peerSession.requestedToId}*`);
+    await this.cacheService.deletePattern(
+      `peer-sessions:list:*${peerSession.requestedById}*`,
+    );
+    await this.cacheService.deletePattern(
+      `peer-sessions:list:*${peerSession.requestedToId}*`,
+    );
 
     // Handle payment based on status
     if (
@@ -687,11 +733,11 @@ export class PeerSessionsService {
 
       // Notify the other party about cancellation
       const otherPartyId =
-        user.id === peerSession.requestedById
+        userId === peerSession.requestedById
           ? peerSession.requestedToId
           : peerSession.requestedById;
       const otherPartyName =
-        user.id === peerSession.requestedById
+        userId === peerSession.requestedById
           ? peerSession.requestedTo.name
           : peerSession.requestedBy.name;
 
@@ -755,8 +801,11 @@ export class PeerSessionsService {
   // Mark session as not completed (time expired without proper completion)
   // This refunds payment and doesn't trigger review prompts
   async markNotCompleted(peerSessionId: string, userId: string) {
-    this.logger.debug('⏱️ [markNotCompleted] Marking session as NOT_COMPLETED:', { peerSessionId, userId });
-    
+    this.logger.debug(
+      '⏱️ [markNotCompleted] Marking session as NOT_COMPLETED:',
+      { peerSessionId, userId },
+    );
+
     // userId is actually clerkId
     const user = await this.prisma.user.findUnique({
       where: { clerkId: userId },
@@ -784,8 +833,13 @@ export class PeerSessionsService {
     }
 
     // Only participants can mark as not completed
-    if (peerSession.requestedById !== user.id && peerSession.requestedToId !== user.id) {
-      throw new ForbiddenException('Only session participants can mark session as not completed');
+    if (
+      peerSession.requestedById !== user.id &&
+      peerSession.requestedToId !== user.id
+    ) {
+      throw new ForbiddenException(
+        'Only session participants can mark session as not completed',
+      );
     }
 
     // Update session status
@@ -807,7 +861,10 @@ export class PeerSessionsService {
         data: { coins: { increment: payment.amountMade } },
       });
 
-      this.logger.debug('💰 [markNotCompleted] Payment refunded:', payment.amountMade.toString());
+      this.logger.debug(
+        '💰 [markNotCompleted] Payment refunded:',
+        payment.amountMade.toString(),
+      );
     }
 
     // Notify both parties (no review prompt)
@@ -851,7 +908,11 @@ export class PeerSessionsService {
         SessionStatus.UPCOMING,
         SessionStatus.CANCELLED,
       ],
-      [SessionStatus.UPCOMING]: [SessionStatus.DONE, SessionStatus.CANCELLED, SessionStatus.NOT_COMPLETED],
+      [SessionStatus.UPCOMING]: [
+        SessionStatus.DONE,
+        SessionStatus.CANCELLED,
+        SessionStatus.NOT_COMPLETED,
+      ],
       [SessionStatus.DONE]: [], // No transitions from DONE
       [SessionStatus.CANCELLED]: [], // No transitions from CANCELLED
       [SessionStatus.NOT_COMPLETED]: [], // No transitions from NOT_COMPLETED
@@ -893,19 +954,6 @@ export class PeerSessionsService {
   }
 
   async checkIsHost(peerSessionId: string, userId: string) {
-    // userId is actually clerkId, so we need to find the user by clerkId first
-    const user = await this.prisma.user.findUnique({
-      where: { clerkId: userId },
-      select: { id: true },
-    });
-
-    if (!user) {
-      throw new BadRequestException({
-        code: 'USER_NOT_FOUND',
-        message: 'User not found',
-      });
-    }
-
     const peerSession = await this.prisma.peerSession.findUnique({
       where: { id: peerSessionId },
       select: { requestedToId: true },
@@ -916,7 +964,7 @@ export class PeerSessionsService {
     }
 
     // For peer sessions, the host is the tutor (requestedToId)
-    const isHost = peerSession.requestedToId === user.id;
+    const isHost = peerSession.requestedToId === userId;
 
     return { isHost };
   }
@@ -926,16 +974,6 @@ export class PeerSessionsService {
     userId: string,
     feedbackDto: SessionFeedbackDto,
   ) {
-    // userId is actually clerkId, so we need to find the user by clerkId first
-    const user = await this.prisma.user.findUnique({
-      where: { clerkId: userId },
-      select: { id: true, name: true },
-    });
-
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
     const peerSession = await this.prisma.peerSession.findUnique({
       where: { id: peerSessionId },
       select: {
@@ -950,8 +988,8 @@ export class PeerSessionsService {
     }
 
     // Check if user is either the requester or the requested tutor
-    const isRequester = peerSession.requestedById === user.id;
-    const isTutor = peerSession.requestedToId === user.id;
+    const isRequester = peerSession.requestedById === userId;
+    const isTutor = peerSession.requestedToId === userId;
 
     if (!isRequester && !isTutor) {
       throw new ForbiddenException(
@@ -962,13 +1000,14 @@ export class PeerSessionsService {
     // Check if user has already submitted feedback for this session
     const existingFeedback = await this.prisma.sessionFeedback.findFirst({
       where: {
-        userId: user.id,
+        userId,
         peerSessionId: peerSessionId,
       },
     });
 
     // Store all answers as JSON (cast to Prisma's InputJsonValue type)
-    const answersJson = (feedbackDto.answers || {}) as unknown as Prisma.InputJsonValue;
+    const answersJson = (feedbackDto.answers ||
+      {}) as unknown as Prisma.InputJsonValue;
 
     if (existingFeedback) {
       // Update existing feedback
@@ -988,7 +1027,7 @@ export class PeerSessionsService {
       // Create new feedback entry
       await this.prisma.sessionFeedback.create({
         data: {
-          userId: user.id,
+          userId,
           peerSessionId: peerSessionId,
           isHost: feedbackDto.isHost,
           answers: answersJson,
@@ -1006,5 +1045,194 @@ export class PeerSessionsService {
       message: 'Feedback submitted successfully',
       peerSessionId,
     };
+  }
+
+  async updatePeerSession(
+    peerSessionId: string,
+    clerkUserId: string,
+    dto: UpdatePeerSessionDto,
+  ) {
+    const user = await this.prisma.user.findUnique({
+      where: { clerkId: clerkUserId },
+      select: { id: true },
+    });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const peerSession = await this.prisma.peerSession.findUnique({
+      where: { id: peerSessionId },
+      select: {
+        id: true,
+        requestedById: true,
+        requestedToId: true,
+        sessionStatus: true,
+      },
+    });
+
+    if (!peerSession) {
+      throw new NotFoundException('Peer session not found');
+    }
+
+    const isRequester = peerSession.requestedById === user.id;
+    const isReceiver = peerSession.requestedToId === user.id;
+    if (!isRequester && !isReceiver) {
+      throw new ForbiddenException(
+        'Only the two people in this session can update these details.',
+      );
+    }
+
+    const closed: SessionStatus[] = [
+      SessionStatus.DONE,
+      SessionStatus.CANCELLED,
+      SessionStatus.NOT_COMPLETED,
+    ];
+    if (closed.includes(peerSession.sessionStatus)) {
+      throw new BadRequestException(
+        'Cannot edit a session that is completed, cancelled, or marked not completed.',
+      );
+    }
+
+    const hasScalar =
+      dto.title !== undefined ||
+      dto.description !== undefined ||
+      dto.duration !== undefined ||
+      dto.gmeetLink !== undefined ||
+      dto.scheduledAt !== undefined;
+    const hasSkills = dto.skills !== undefined;
+
+    if (!hasScalar && !hasSkills) {
+      throw new BadRequestException('No changes to apply');
+    }
+
+    const data: Prisma.PeerSessionUpdateInput = {};
+
+    if (dto.title !== undefined) {
+      const t = dto.title.trim();
+      if (!t) {
+        throw new BadRequestException('Title cannot be empty');
+      }
+      data.title = t;
+    }
+
+    if (dto.description !== undefined) {
+      data.description = dto.description?.trim() || null;
+    }
+
+    if (dto.duration !== undefined) {
+      data.duration = dto.duration;
+    }
+
+    if (dto.gmeetLink !== undefined) {
+      const raw = dto.gmeetLink.trim();
+      if (!raw) {
+        data.gmeetLink = null;
+      } else {
+        const normalized = normalizeGoogleMeetLink(raw);
+        if (!isValidGoogleMeetLink(normalized)) {
+          throw new BadRequestException(
+            'Invalid Google Meet link. Use a meet.google.com URL or meeting code.',
+          );
+        }
+        data.gmeetLink = normalized;
+      }
+    }
+
+    if (dto.scheduledAt !== undefined) {
+      const next = new Date(dto.scheduledAt);
+      if (Number.isNaN(next.getTime())) {
+        throw new BadRequestException('Invalid scheduled time');
+      }
+      if (next.getTime() < Date.now()) {
+        throw new BadRequestException({
+          code: 'PAST_TIME_NOT_ALLOWED',
+          message: 'Sessions cannot be scheduled in the past',
+        });
+      }
+      data.date = next;
+    }
+
+    const detailsMarkedAt = new Date();
+
+    await this.prisma.$transaction(async (tx) => {
+      if (hasSkills) {
+        const skillNames =
+          dto.skills!.length > 0 ? dto.skills! : ['Communication'];
+        await tx.peerSessionSkill.deleteMany({
+          where: { peerSessionId },
+        });
+        for (const skillName of skillNames) {
+          const skill = await tx.skill.findUnique({
+            where: { name: skillName },
+          });
+          if (skill) {
+            await tx.peerSessionSkill.create({
+              data: { peerSessionId, skillId: skill.id },
+            });
+          }
+        }
+      }
+
+      await tx.peerSession.update({
+        where: { id: peerSessionId },
+        data: {
+          ...(hasScalar
+            ? (data as Prisma.PeerSessionUncheckedUpdateInput)
+            : {}),
+          hostDetailsUpdatedAt: detailsMarkedAt,
+          lastDetailsEditedById: user.id,
+        },
+      });
+    });
+
+    const timeLabel = new Intl.DateTimeFormat('en-US', {
+      dateStyle: 'medium',
+      timeStyle: 'medium',
+    }).format(detailsMarkedAt);
+
+    const notifyUserId =
+      peerSession.requestedToId === user.id
+        ? peerSession.requestedById
+        : peerSession.requestedToId;
+
+    try {
+      await this.notificationsService.createAndPushNotification(
+        notifyUserId,
+        `Meeting details have been changed (${timeLabel}).`,
+        'Peer session',
+        NotifType.NORMAL,
+        {
+          actionType: 'PEER_SESSION_DETAILS_UPDATED',
+          peerSessionId,
+          actionData: { sessionId: peerSessionId, sessionType: 'peerSession' },
+        },
+      );
+    } catch (notifyErr) {
+      this.logger.error(
+        `Failed to notify user ${notifyUserId} of peer session details update (${peerSessionId})`,
+        notifyErr instanceof Error ? notifyErr.message : String(notifyErr),
+      );
+    }
+
+    await this.cacheService.deletePattern(
+      `peer-sessions:list:*${peerSession.requestedById}*`,
+    );
+    await this.cacheService.deletePattern(
+      `peer-sessions:list:*${peerSession.requestedToId}*`,
+    );
+
+    const dashboardUsers = await this.prisma.user.findMany({
+      where: {
+        id: { in: [peerSession.requestedById, peerSession.requestedToId] },
+      },
+      select: { clerkId: true },
+    });
+    for (const u of dashboardUsers) {
+      await this.cacheService.deletePattern(
+        `dashboard:data:*userId:${u.clerkId}*`,
+      );
+    }
+
+    return this.getPeerSessionDetails(peerSessionId, clerkUserId);
   }
 }

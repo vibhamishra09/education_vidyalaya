@@ -24,7 +24,7 @@ export class LoggingInterceptor implements NestInterceptor {
     const { method, route, originalUrl } = request;
     // Use the route path if available (from route handler), otherwise use originalUrl
     const path = route?.path || originalUrl || 'unknown';
-    
+
     const start = Date.now();
 
     return next.handle().pipe(

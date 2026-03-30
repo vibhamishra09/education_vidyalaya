@@ -63,6 +63,7 @@ model User {
   debateModeratorRoles  DebateModerator[]      @relation("DebateModerator")
   debateChatMessages    DebateChatMessage[]    @relation("DebateChatMessages")
   debateModeratorEvaluations DebateModeratorEvaluation[] @relation("DebateModeratorEvaluations")
+  peerSessionsLastEdited      PeerSession[]          @relation("PeerSessionLastEditor")
 }
 
 model StudyRoom {
@@ -79,9 +80,12 @@ model StudyRoom {
   recurrenceEndDate DateTime?
   occurrenceDateLocal DateTime?
   timezone        String?
-  allowExternalUsers Boolean             @default(false)
-  externalPasscode   String?
-  externalAutoAccept Boolean             @default(false)
+  /// STANDARD = interactive study room; WEBINAR = host-led, large audience, restricted attendee A/V
+  sessionMode             StudyRoomSessionMode @default(STANDARD)
+  /// Host-defined registration fields, chat/mic/video/screen defaults (JSON)
+  webinarConfig           Json?
+  /// Public URL segment for `/webinar/register/[slug]` (unique per room)
+  webinarRegistrationSlug String?                @unique
   date            DateTime
   duration        Int
   maxParticipants Int
@@ -91,25 +95,28 @@ model StudyRoom {
   reminder24hSent Boolean                @default(false)
   reminder1hSent  Boolean                @default(false)
   reminder5mSent  Boolean                @default(false)
+  slug String? 
   gmeetLink       String?
   summary         String?                @db.Text
+  /// Host saved participant-visible details — enrollees see “Edited” + get a notification.
+  hostDetailsUpdatedAt DateTime?
   payments        Payment[]              @relation("StudyRoomPayments")
   reviews         Review[]               @relation("StudyRoomReviews")
   notifications   Notification[]
   createdBy       User                   @relation("UserOwnsStudyRooms", fields: [createdById], references: [id])
   learners        StudyRoomParticipant[]
-  externalInvites StudyRoomExternalInvite[]
-  externalJoinRequests StudyRoomExternalJoinRequest[]
   guestParticipants StudyRoomGuestParticipant[]
   guestAccessTokens StudyRoomGuestAccessToken[]
   skills          StudyRoomSkill[]
   feedbacks       SessionFeedback[]
+  webinarRegistrations WebinarRegistration[]
 
   @@index([createdById])
   @@index([sessionStatus, date])
   @@index([seriesId, date])
   @@index([seriesId, occurrenceIndex])
   @@index([seriesId, sessionStatus, date])
+  @@index([slug])
 }
 
 model PeerSession {
@@ -127,6 +134,10 @@ model PeerSession {
   reminder5mSent  Boolean          @default(false)
   gmeetLink     String?
   summary       String?            @db.Text
+  /// Last time either party saved meeting details; other party sees banner + notification.
+  hostDetailsUpdatedAt DateTime?
+  lastDetailsEditedById String?
+  lastDetailsEditedBy   User?              @relation("PeerSessionLastEditor", fields: [lastDetailsEditedById], references: [id], onDelete: SetNull)
   payments      Payment[]          @relation("PeerSessionPayments")
   notifications Notification[]
   requestedBy   User               @relation("RequestedBy", fields: [requestedById], references: [id])
@@ -239,34 +250,6 @@ model StudyRoomParticipant {
   @@index([studyRoomId])
 }
 
-model StudyRoomExternalInvite {
-  id          String    @id @default(cuid())
-  studyRoomId String
-  email       String
-  role        ExternalInviteRole @default(PARTICIPANT)
-  createdAt   DateTime @default(now())
-  studyRoom   StudyRoom @relation(fields: [studyRoomId], references: [id], onDelete: Cascade)
-
-  @@unique([studyRoomId, email])
-  @@index([studyRoomId])
-}
-
-model StudyRoomExternalJoinRequest {
-  id          String    @id @default(cuid())
-  studyRoomId String
-  name        String
-  email       String
-  status      ExternalJoinRequestStatus @default(PENDING)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  decidedAt   DateTime?
-  decidedBy   String?
-  studyRoom   StudyRoom @relation(fields: [studyRoomId], references: [id], onDelete: Cascade)
-
-  @@index([studyRoomId, status])
-  @@index([email])
-}
-
 model StudyRoomGuestParticipant {
   id          String    @id @default(cuid())
   studyRoomId String
@@ -296,6 +279,24 @@ model StudyRoomGuestAccessToken {
 
   @@index([studyRoomId])
   @@index([guestParticipantId])
+}
+
+/// Attendee registration for webinar-mode study rooms (email + custom answers)
+model WebinarRegistration {
+  id            String   @id @default(cuid())
+  studyRoomId   String
+  studyRoom     StudyRoom @relation(fields: [studyRoomId], references: [id], onDelete: Cascade)
+  email         String
+  name          String
+  responses     Json?
+  /// Human-readable code emailed to the attendee (with join link) for manual entry
+  joinPasscode  String?
+  /// Opaque token in the emailed join URL (identifies this registration; passcode required to join)
+  joinLinkToken String   @unique
+  createdAt     DateTime @default(now())
+
+  @@unique([studyRoomId, email])
+  @@index([studyRoomId])
 }
 
 model Notification {
@@ -354,20 +355,14 @@ enum StudyRoomRecurrenceMode {
   CUSTOM_DATES
 }
 
+enum StudyRoomSessionMode {
+  STANDARD
+  WEBINAR
+}
+
 enum StudyRoomParticipantRole {
   PARTICIPANT
   COHOST
-}
-
-enum ExternalInviteRole {
-  PARTICIPANT
-  COHOST
-}
-
-enum ExternalJoinRequestStatus {
-  PENDING
-  APPROVED
-  REJECTED
 }
 
 enum MessageAudienceType {
@@ -546,6 +541,8 @@ model DebateRoom {
   turnDurationSeconds Int                 @default(120) // Default 2 minutes per turn
   prepTimeSeconds     Int                 @default(30) // Prep time before debate starts
   turnOrder           TurnOrderType       @default(FIFO) // FIFO or RANDOM
+  debateDurationMinutes Int               @default(60) // Total planned session length (minutes); with scheduledAt sets lobby expiry
+  debateSlotEndsAt    DateTime?           // scheduledAt + debateDurationMinutes — listing/join window end
   scheduledAt         DateTime?           // Scheduled start time for the debate
   startTime           DateTime?           // When debate actually starts (after prep)
   endTime             DateTime?           // When debate ends
@@ -561,7 +558,9 @@ model DebateRoom {
   
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
-  
+  /// Host saved lobby settings — members see “Edited” + get a notification.
+  hostDetailsUpdatedAt DateTime?
+
   // Relations
   host                User                @relation("DebateRoomHost", fields: [hostId], references: [id])
   teams               DebateTeam[]

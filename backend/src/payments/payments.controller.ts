@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards, Query } from '@nestjs/common';
+import { Controller, Get, UseGuards, Query, NotFoundException } from '@nestjs/common';
 import { PaymentsService } from './payments.service';
 import { ClerkAuthGuard } from '../common/guards/clerk-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -10,10 +10,14 @@ export class PaymentsController {
   @Get('payments/history')
   @UseGuards(ClerkAuthGuard)
   async getTransactionHistory(
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string | undefined,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
+    if (!userId) {
+      throw new NotFoundException('Authenticated user ID missing from token');
+    }
+
     const pageNum = page ? parseInt(page, 10) : 1;
     const limitNum = limit ? parseInt(limit, 10) : 20;
 

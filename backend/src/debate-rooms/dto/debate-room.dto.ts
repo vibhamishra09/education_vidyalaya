@@ -9,6 +9,8 @@ import {
   IsBoolean,
   IsDateString,
   IsObject,
+  Matches,
+  MaxLength,
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 
@@ -73,6 +75,13 @@ export class CreateDebateRoomDto {
   @IsOptional()
   @IsDateString()
   scheduledAt?: string; // ISO 8601 date string
+
+  /** Total planned session length (minutes). Required on create. */
+  @IsInt()
+  @Min(5)
+  @Max(24 * 60)
+  @Type(() => Number)
+  debateDurationMinutes: number;
 }
 
 export class UpdateDebateRoomDto {
@@ -108,6 +117,23 @@ export class UpdateDebateRoomDto {
   @IsOptional()
   @IsEnum(TurnOrderTypeDto)
   turnOrder?: TurnOrderTypeDto;
+
+  /** Set or change the lobby’s scheduled start (WAITING only). ISO 8601. */
+  @IsOptional()
+  @IsDateString()
+  scheduledAt?: string;
+
+  /** Clear a previously set scheduled start so the lobby has no fixed time (WAITING only). */
+  @IsOptional()
+  @IsBoolean()
+  clearScheduledAt?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  @Min(5)
+  @Max(24 * 60)
+  @Type(() => Number)
+  debateDurationMinutes?: number;
 }
 
 export class JoinDebateRoomDto {
@@ -133,6 +159,10 @@ export class BanParticipantDto {
 export class DebateRoomQueryDto {
   @IsOptional()
   @IsString()
+  @MaxLength(100)
+  @Matches(/^[a-zA-Z0-9 '\-.,\/]*$/, {
+    message: 'Search may only contain letters, numbers, spaces, hyphens, apostrophes, dots, commas, and slashes.',
+  })
   search?: string;
 
   @IsOptional()
@@ -232,6 +262,8 @@ export class DebateRoomResponse {
   turnDurationSeconds: number;
   prepTimeSeconds: number;
   turnOrder: TurnOrderTypeDto;
+  debateDurationMinutes: number;
+  debateSlotEndsAt?: Date | null;
   currentTurnIndex: number;
   currentSpeakerId?: string | null;
   turnStartedAt?: Date | null;
@@ -247,6 +279,7 @@ export class DebateRoomResponse {
   moderators: DebateModeratorResponse[];
   livekitRoomName?: string | null;
   createdAt: Date;
+  hostDetailsUpdatedAt?: string | null;
 }
 
 export class DebateReportResponse {

@@ -18,17 +18,21 @@ interface RateLimitEntry {
 @Injectable()
 export class TranscriptsService {
   private genAI: GoogleGenAI;
-  
+
   // Rate limiting: max 10 summary requests per call ID per hour
   private summaryRateLimits = new Map<string, RateLimitEntry>();
   private readonly MAX_SUMMARIES_PER_HOUR = 10;
   private readonly RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
-  
+
   // Cache for recent summaries to prevent duplicate API calls
-  private summaryCache = new Map<string, { summary: string; timestamp: number }>();
+  private summaryCache = new Map<
+    string,
+    { summary: string; timestamp: number }
+  >();
   private readonly CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
-  constructor(private configService: ConfigService,
+  constructor(
+    private configService: ConfigService,
     private readonly logger: LoggerService,
   ) {
     this.logger.setContext(TranscriptsService.name);
@@ -52,18 +56,22 @@ export class TranscriptsService {
     timestamp: number,
   ): Promise<void> {
     const key = `call:${callId}:transcripts`;
-    
+
     // Format timestamp as readable time
     const timeStr = new Date(timestamp).toLocaleTimeString('en-US', {
       hour12: false,
       hour: '2-digit',
       minute: '2-digit',
-      second: '2-digit'
+      second: '2-digit',
     });
-    
+
     // Format as: "timestamp: username: transcription"
     const formattedEntry = `${timeStr}: ${userName}: ${text}`;
-    const entry: TranscriptEntry = { user: userName, text: formattedEntry, timestamp };
+    const entry: TranscriptEntry = {
+      user: userName,
+      text: formattedEntry,
+      timestamp,
+    };
 
     // Push JSON string to Redis list
     await redisClient.rPush(key, JSON.stringify(entry));
@@ -253,7 +261,7 @@ Transcript:\n${transcript}`;
       }
 
       let summary = rawText.trim();
-      
+
       // Clean up any markdown code blocks if present
       if (summary.startsWith('```')) {
         summary = summary.replace(/^```(?:markdown)?\\s*|```$/g, '').trim();
@@ -294,7 +302,9 @@ Transcript:\n${transcript}`;
       }
 
       // Log the complete transcript for the meeting
-      this.logger.log(`\n📝 COMPLETE TRANSCRIPT FOR CALL ${callId}:\n${transcript}\n`);
+      this.logger.log(
+        `\n📝 COMPLETE TRANSCRIPT FOR CALL ${callId}:\n${transcript}\n`,
+      );
 
       // Generate AI summary with rate limiting
       const summary = await this.generateSummary(transcript, callId);

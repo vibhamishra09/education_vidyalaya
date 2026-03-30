@@ -27,6 +27,13 @@ import { useToast } from "@/contexts/toast-context";
 import { useTabPersistence } from "@/hooks/use-local-storage";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import {
+  isDashboardOngoingSlot,
+  isDashboardUpcomingSlot,
+  ongoingDashboardCard,
+  peerDashboardCard,
+  studyRoomDashboardCard,
+} from "@/lib/utils/dashboard-session-cards";
 
 const REQUEST_TABS = ["received", "sent"] as const;
 type RequestTab = typeof REQUEST_TABS[number];
@@ -62,7 +69,8 @@ export function DashboardClient() {
   const { data: currentUserData, isLoading: userLoading } = useCurrentUser();
 
   const currentUser = currentUserData?.user;
-  
+  const myUserId = currentUser?.id;
+
   // Create default/fallback metrics if actual metrics are missing
   const defaultMetrics = [
     {
@@ -99,33 +107,13 @@ export function DashboardClient() {
 
 
   // Filter ongoing sessions (sessions currently happening)
-  const ongoingSessions = useMemo(() => {
-    const now = new Date();
-
-    const ongoingPeerSessions = upcomingSessions.filter(s => {
-      // Check if session status is ONGOING
-      if (s.sessionStatus === 'ONGOING') {
-        return true;
-      }
-      // Fallback: check if current time is between start and end
-      const sessionStart = new Date(s.date);
-      const sessionEnd = new Date(sessionStart.getTime() + s.duration * 60 * 1000);
-      return now >= sessionStart && now <= sessionEnd;
-    });
-
-    const ongoingRooms = upcomingStudyRooms.filter(sr => {
-      // Check if room status is ONGOING
-      if (sr.sessionStatus === 'ONGOING') {
-        return true;
-      }
-      // Fallback: check if current time is between start and end
-      const roomStart = new Date(sr.date);
-      const roomEnd = new Date(roomStart.getTime() + sr.duration * 60 * 1000);
-      return now >= roomStart && now <= roomEnd;
-    });
-
-    return [...ongoingPeerSessions, ...ongoingRooms];
-  }, [upcomingSessions, upcomingStudyRooms]);
+  const ongoingSessions = useMemo(
+    () => [
+      ...upcomingSessions.filter(isDashboardOngoingSlot),
+      ...upcomingStudyRooms.filter(isDashboardOngoingSlot),
+    ],
+    [upcomingSessions, upcomingStudyRooms],
+  );
 
   // Extract user skill IDs from currentUser (hasSkills is array of skill IDs)
   const userSkillIds = useMemo(() => {
@@ -322,77 +310,18 @@ export function DashboardClient() {
                 onPageChange={setCurrentPage}
                 upcomingSessions={[
                   ...upcomingSessions
-                    .filter(s => {
-                      if (s.sessionStatus === 'ONGOING') return false;
-                      const now = new Date();
-                      const sessionStart = new Date(s.date);
-                      const sessionEnd = new Date(sessionStart.getTime() + s.duration * 60 * 1000);
-                      return !(now >= sessionStart && now <= sessionEnd);
-                    })
-                    .map(s => ({
-                      id: s.id,
-                      title: s.title,
-                      date: s.date,
-                      duration: s.duration,
-                      skills: s.skills,
-                      description: s.description,
-                      requestedBy: s.requestedBy,
-                      hostName: s.peer?.name,
-                    })),
+                    .filter(isDashboardUpcomingSlot)
+                    .map((s) => peerDashboardCard(s, myUserId, true)),
                   ...upcomingStudyRooms
-                    .filter(sr => {
-                      if (sr.sessionStatus === 'ONGOING') return false;
-                      const now = new Date();
-                      const roomStart = new Date(sr.date);
-                      const roomEnd = new Date(roomStart.getTime() + sr.duration * 60 * 1000);
-                      return !(now >= roomStart && now <= roomEnd);
-                    })
-                    .map(sr => ({
-                      id: sr.id,
-                      title: sr.title,
-                      date: sr.date,
-                      duration: sr.duration,
-                      skills: sr.skills,
-                      description: sr.description,
-                      hostName: sr.createdBy?.name,
-                      participantCount: sr.participantCount,
-                      maxParticipants: sr.maxParticipants,
-                    })),
+                    .filter(isDashboardUpcomingSlot)
+                    .map((sr) => studyRoomDashboardCard(sr, myUserId)),
                 ]}
-                ongoingSessions={ongoingSessions.map(session => ({
-                  id: session.id,
-                  title: session.title,
-                  date: session.date,
-                  duration: session.duration,
-                  skills: session.skills,
-                  description: session.description,
-                  hostName: 'peer' in session ? session.peer?.name : session.createdBy?.name,
-                  participantCount: 'participantCount' in session ? session.participantCount : undefined,
-                  maxParticipants: 'maxParticipants' in session ? session.maxParticipants : undefined,
-                  requestedBy: 'requestedBy' in session ? session.requestedBy : undefined,
-                }))}
+                ongoingSessions={ongoingSessions.map((session) =>
+                  ongoingDashboardCard(session, myUserId),
+                )}
                 pastSessions={[
-                  ...pastSessions.map(s => ({
-                    id: s.id,
-                    title: s.title,
-                    date: s.date,
-                    duration: s.duration,
-                    skills: s.skills,
-                    description: s.description,
-                    requestedBy: s.requestedBy,
-                    hostName: s.peer?.name,
-                  })),
-                  ...pastStudyRooms.map(sr => ({
-                    id: sr.id,
-                    title: sr.title,
-                    date: sr.date,
-                    duration: sr.duration,
-                    skills: sr.skills,
-                    description: sr.description,
-                    hostName: sr.createdBy?.name,
-                    participantCount: sr.participantCount,
-                    maxParticipants: sr.maxParticipants,
-                  })),
+                  ...pastSessions.map((s) => peerDashboardCard(s, myUserId, true)),
+                  ...pastStudyRooms.map((sr) => studyRoomDashboardCard(sr, myUserId)),
                 ]}
                 isLoading={dashboardLoading}
               />
