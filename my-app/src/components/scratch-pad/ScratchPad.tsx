@@ -42,31 +42,12 @@ export const ScratchPad = memo(function ScratchPad({ roomId, room, isHost, canEd
 
 	return (
 		<div className="h-full w-full bg-zinc-950/50 backdrop-blur-md rounded-xl overflow-hidden border border-zinc-800 shadow-2xl relative flex flex-col">
-            {/* Mode Toggle Header */}
-            <div className="h-12 bg-white/5 border-b border-white/5 flex items-center justify-center gap-1 z-[9999]">
-                <button
-                    onClick={() => setMode('personal')}
-                    className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                        mode === 'personal' 
-                            ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' 
-                            : 'text-white/40 hover:text-white/60 hover:bg-white/5 border border-transparent'
-                    }`}
-                >
+            {/* Header with Title (Toggle hidden for now) */}
+            <div className="h-12 bg-white/5 border-b border-white/5 flex items-center justify-between px-6 z-[9999]">
+                <div className="flex items-center gap-2 text-xs font-semibold text-white/60">
                     <User className="h-3.5 w-3.5" />
-                    Personal Page
-                </button>
-                <div className="w-px h-4 bg-white/10 mx-1" />
-                <button
-                    onClick={() => setMode('shared')}
-                    className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                        mode === 'shared' 
-                            ? 'bg-sky-500/20 text-sky-400 border border-sky-500/30' 
-                            : 'text-white/40 hover:text-white/60 hover:bg-white/5 border border-transparent'
-                    }`}
-                >
-                    <Share2 className="h-3.5 w-3.5" />
-                    {isHost ? 'Shared Page (Host)' : 'Shared Page'}
-                </button>
+                    Personal Scratchpad
+                </div>
             </div>
             
             <div className="flex-1 relative">

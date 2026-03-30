@@ -17,7 +17,7 @@ export type ScratchPadMode = 'shared' | 'personal'
 export function useScratchPad({ roomId, room, isHost, canEdit = true, roomTitle, enabled }: UseScratchPadOptions) {
 	const [sharedStore] = useState(() => createTLStore({ shapeUtils: defaultShapeUtils }))
 	const [personalStore] = useState(() => createTLStore({ shapeUtils: defaultShapeUtils }))
-	const [mode, setMode] = useState<ScratchPadMode>('shared')
+	const [mode, setMode] = useState<ScratchPadMode>('personal')
 	
 	const [loading, setLoading] = useState(true)
 	const [error, setError] = useState<string | null>(null)
