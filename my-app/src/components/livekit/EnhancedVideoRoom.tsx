@@ -4355,7 +4355,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 									<h2 className="text-white font-bold text-sm md:text-base tracking-tight">Open Whiteboard</h2>
 									<p className="text-[10px] text-white/40 uppercase tracking-widest font-semibold flex items-center gap-1.5">
 										<span className="w-1.5 h-1.5 bg-[#00DC6E] rounded-full animate-pulse" />
-										Live Collaboration
+										 .
 									</p>
 								</div>
 							</div>
