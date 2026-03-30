@@ -1,8 +1,4 @@
-import path from "path";
-import { fileURLToPath } from "url";
 import type { NextConfig } from "next";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /**
  * Nest API target for same-origin /api/* rewrites (when the browser hits localhost:3000/api/...).
@@ -14,8 +10,6 @@ const backendOrigin =
   "http://127.0.0.1:3001";
 
 const nextConfig: NextConfig = {
-  /** Monorepo: repo root + my-app both have lockfiles; trace deps from repo root. */
-  outputFileTracingRoot: path.join(__dirname, ".."),
   /**
    * Forward /api/* to Nest so browser calls like PATCH /api/peer-sessions/:id work when
    * NEXT_PUBLIC_API_URL is empty or matches the site origin (same-origin + Bearer token).
