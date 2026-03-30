@@ -61,7 +61,7 @@ export interface ParticipantPermissionRequest {
   timestamp: number;
 }
 
-export function useSessionModeration({ sessionId, sessionType, isHost, token, userId, enabled = true } : { sessionId: string | null; sessionType: 'studyRoom' | 'peerSession' | null; isHost: boolean; token: string | null; userId?: string | null; enabled?: boolean }) {
+export function useSessionModeration({ sessionId, sessionType, isHost: _isHost, token, userId, enabled = true } : { sessionId: string | null; sessionType: 'studyRoom' | 'peerSession' | null; isHost: boolean; token: string | null; userId?: string | null; enabled?: boolean }) {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [meetingEnded, setMeetingEnded] = useState(false);
@@ -188,8 +188,8 @@ export function useSessionModeration({ sessionId, sessionType, isHost, token, us
       }
     });
 
-    s.on('meeting-ended', (data: { reason?: string }) => {
-      console.log('[moderation] meeting-ended', data);
+    s.on('meeting-ended', (_data: { reason?: string }) => {
+      console.log('[moderation] meeting-ended', _data);
       setMeetingEnded(true);
     });
 

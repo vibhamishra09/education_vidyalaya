@@ -12,7 +12,7 @@ import {
   isTrackReference,
   useSpeakingParticipants,
 } from '@livekit/components-react';
-import { Track, RoomOptions, VideoPresets, RemoteParticipant } from 'livekit-client';
+import { Track, RoomOptions, VideoPresets, RemoteParticipant as _RemoteParticipant } from 'livekit-client';
 import { io, Socket } from 'socket.io-client';
 import type { TrackReferenceOrPlaceholder } from '@livekit/components-react';
 import '@livekit/components-styles';
@@ -44,7 +44,7 @@ import {
   Grid2X2,
   Focus,
   Send,
-  Bell,
+  Bell as _Bell,
   Zap,
   Play,
   Loader2,
@@ -71,9 +71,9 @@ import {
 import {
   SimpleTimer,
   PrepCountdown,
-  DebateBuzzer,
-  DebateTeamChat,
-  CompactTeamsDisplay,
+  DebateBuzzer as _DebateBuzzer,
+  DebateTeamChat as _DebateTeamChat,
+  CompactTeamsDisplay as _CompactTeamsDisplay,
   ModeratorEvaluationPanel,
 } from '@/components/debate';
 import { useDebateMicControl } from '@/hooks/use-debate-mic-control';
@@ -154,7 +154,7 @@ export function DebateLiveRoom({
       return '';
     };
 
-    const handlePopState = (e: PopStateEvent) => {
+    const handlePopState = (_e: PopStateEvent) => {
       if (isNavigatingRef.current || debateStatusRef.current === DebateStatus.ENDED) return;
       if (window.confirm('Are you sure you want to leave the room? Your progress might be lost.')) {
         isNavigatingRef.current = true;
@@ -359,7 +359,7 @@ function DebateLiveContent({
   userSide,
   userId,
   debateState,
-  teamChatMessages,
+  teamChatMessages: _teamChatMessages,
   buzzerQueue,
   prepCountdown,
   onPressBuzzer,
@@ -390,13 +390,13 @@ function DebateLiveContent({
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
-  const isHost = userRole === 'host';
+  const _isHost = userRole === 'host';
 
   // Remote Control Hook
   const {
     isControlling,
     isRequestPending,
-    targetScreenShareId,
+    targetScreenShareId: _targetScreenShareId,
     requestControl,
     stopControl,
     sendInputEvent,
@@ -503,7 +503,7 @@ function DebateLiveContent({
       });
       socket.close();
     };
-  }, [debateRoom.id, userId, userRole, userSide]);
+  }, [debateRoom.id, userId, userRole, userSide, API_URL]);
 
   // Load chat history from API
   useEffect(() => {
@@ -561,7 +561,7 @@ function DebateLiveContent({
     };
 
     loadMessages();
-  }, [debateRoom.id, userRole, userSide, getToken]);
+  }, [debateRoom.id, userRole, userSide, getToken, API_URL]);
 
   // LiveKit hooks
   const room = useRoomContext();
@@ -643,7 +643,7 @@ function DebateLiveContent({
     try {
       const metadata = JSON.parse(participant.metadata);
       return metadata.avatar || null;
-    } catch (e) {
+    } catch (_e) {
       return null;
     }
   }, []);
@@ -702,7 +702,7 @@ function DebateLiveContent({
     } catch (err) {
       console.error('[DebateRoom] Failed to send chat message:', err);
     }
-  }, [chatInput, userRole, userSide, isModeratorOnly, debateRoom.id, getToken]);
+  }, [chatInput, userRole, userSide, isModeratorOnly, debateRoom.id, getToken, API_URL]);
 
   // Clear chat history (moderators only)
   const clearChatHistory = useCallback(async () => {
@@ -745,13 +745,13 @@ function DebateLiveContent({
       } else {
         console.error('[DebateRoom] Failed to clear chat history:', response.status, response.statusText);
       }
-    } catch (err) {
-      console.error('[DebateRoom] Failed to clear chat history:', err);
+    } catch (_e) {
+      console.error('[DebateRoom] Failed to clear chat history:', _e);
     }
-  }, [userRole, debateRoom.id, getToken]);
+  }, [userRole, debateRoom.id, getToken, API_URL]);
 
   // Toggle camera with proper error handling
-  const toggleCamera = useCallback(async () => {
+  const _toggleCamera = useCallback(async () => {
     if (!localParticipant) return;
 
     try {

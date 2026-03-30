@@ -72,7 +72,7 @@ export function RemoteControlSync() {
               target.dispatchEvent(new MouseEvent('mouseup', { view: window, bubbles: true, cancelable: true, clientX: targetX, clientY: targetY, button: button || 0 }));
               target.dispatchEvent(new MouseEvent('click', { view: window, bubbles: true, cancelable: true, clientX: targetX, clientY: targetY, button: button || 0 }));
               
-              try { target.focus(); } catch(e) {}
+              try { target.focus(); } catch(_e) {}
               if (target instanceof HTMLButtonElement || target instanceof HTMLAnchorElement || target instanceof HTMLInputElement) {
                 setTimeout(() => target.click(), 0);
               }
@@ -98,7 +98,7 @@ export function RemoteControlSync() {
             if (sTarget === document.body) window.scrollBy(0, deltaY || 0);
             break;
         }
-      } catch (e) {
+      } catch (_e) {
         // Fail silently
       }
     };
