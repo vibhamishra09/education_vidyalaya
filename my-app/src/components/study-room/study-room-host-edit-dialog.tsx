@@ -79,8 +79,6 @@ export function StudyRoomHostEditDialog({
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [timezone, setTimezone] = useState("UTC");
-  const [endDate, setEndDate] = useState("");
-  const [endTime, setEndTime] = useState("");
   const [duration, setDuration] = useState("");
   const [maxParticipants, setMaxParticipants] = useState("");
   const [joiningFee, setJoiningFee] = useState("");
@@ -92,9 +90,22 @@ export function StudyRoomHostEditDialog({
   const [uploadingImage, setUploadingImage] = useState(false);
   const [titleError, setTitleError] = useState("");
   const replaceInputRef = useRef<HTMLInputElement>(null);
+  /** Cleared when dialog closes; while open, blocks full re-sync from props (refetch was resetting the textarea). */
+  const formSyncedForRoomIdRef = useRef<string | null>(null);
+  /** Last server `initialDescription` we applied to the textarea (for merge-only updates). */
+  const prevInitialDescriptionRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      formSyncedForRoomIdRef.current = null;
+      prevInitialDescriptionRef.current = undefined;
+      return;
+    }
+    if (formSyncedForRoomIdRef.current === roomId) {
+      return;
+    }
+    formSyncedForRoomIdRef.current = roomId;
+
     const tz =
       initialTimezone ||
       Intl.DateTimeFormat().resolvedOptions().timeZone ||
@@ -103,9 +114,11 @@ export function StudyRoomHostEditDialog({
       initialDate,
       tz,
     );
+    const desc = initialDescription ?? "";
     setEditScope(StudyRoomEditScope.SINGLE);
     setTitle(initialTitle);
-    setDescription(initialDescription ?? "");
+    setDescription(desc);
+    prevInitialDescriptionRef.current = desc;
     setDate(d);
     setTime(t);
     setTimezone(tz);
@@ -131,6 +144,20 @@ export function StudyRoomHostEditDialog({
     initialTimezone,
     initialImageUrl,
   ]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (formSyncedForRoomIdRef.current !== roomId) return;
+    const incoming = initialDescription ?? "";
+    if (incoming === prevInitialDescriptionRef.current) return;
+    setDescription((current) => {
+      if (current !== prevInitialDescriptionRef.current) {
+        return current;
+      }
+      prevInitialDescriptionRef.current = incoming;
+      return incoming;
+    });
+  }, [open, roomId, initialDescription]);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
