@@ -140,6 +140,7 @@ export class ScratchPadService {
         return {
           roomId: roomId,
           roomTitle: meta.roomTitle || 'Unknown Session',
+          lastUpdated: meta.updatedAt || 'Unknown', // Frontend expects lastUpdated
           updatedAt: meta.updatedAt || 'Unknown',
           isPersonal: isPersonal,
         };
