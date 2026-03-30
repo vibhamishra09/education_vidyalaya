@@ -40,7 +40,7 @@
     "livekit-client": "^2.4.1",
     "lucide-react": "^0.545.0",
     "motion": "^12.23.22",
-    "next": "15.5.7",
+    "next": "16.2.1",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-markdown": "^10.1.0",
@@ -68,7 +68,9 @@
   },
   "pnpm": {
     "peerDependencyRules": {
-      "ignoreMissing": ["@livekit/krisp-noise-filter"]
+      "ignoreMissing": [
+        "@livekit/krisp-noise-filter"
+      ]
     }
   }
 }
