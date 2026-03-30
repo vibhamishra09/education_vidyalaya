@@ -9,7 +9,12 @@ import { Users, Play, Calendar, Star, Clock } from "lucide-react";
 import { motion } from "framer-motion";
 import { StudyRoomCard, SessionStatus } from "@/types/api.types";
 import { formatDate } from "@/lib/utils/date-time";
+import { studyRoomCardDisplayLive } from "@/lib/utils/study-room-edit";
 import { ShareButton } from "@/components/share/share-button";
+import {
+  getStudyRoomPagePathWithJoinIntent,
+  getStudyRoomShareUrl,
+} from "@/lib/utils/study-room-share";
 
 interface StudyRoomCardBrowseProps {
   studyRoom: StudyRoomCard;
@@ -17,9 +22,17 @@ interface StudyRoomCardBrowseProps {
 
 export function StudyRoomCardBrowse({ studyRoom }: StudyRoomCardBrowseProps) {
   const router = useRouter();
-  const isLive = studyRoom.sessionStatus === SessionStatus.ONGOING;
-  const isUpcoming = studyRoom.sessionStatus === SessionStatus.UPCOMING;
+  const isLive = studyRoomCardDisplayLive(
+    studyRoom.sessionStatus,
+    studyRoom.date,
+  );
   const isDone = studyRoom.sessionStatus === SessionStatus.DONE;
+  const isUpcoming =
+    !isDone &&
+    !isLive &&
+    (studyRoom.sessionStatus === SessionStatus.UPCOMING ||
+      studyRoom.sessionStatus === SessionStatus.PENDING ||
+      studyRoom.sessionStatus === SessionStatus.ONGOING);
 
   // Get timezone-aware formatted time
   const formattedDateTime = formatDate(studyRoom.date, "datetime");
@@ -62,7 +75,9 @@ export function StudyRoomCardBrowse({ studyRoom }: StudyRoomCardBrowseProps) {
             <div className="space-y-2">
               <h3
                 className="font-semibold text-lg leading-tight line-clamp-2 cursor-pointer"
-                onClick={() => router.push(`/studyroom/${studyRoom.id}`)}
+                onClick={() =>
+                  router.push(getStudyRoomPagePathWithJoinIntent(studyRoom.id))
+                }
               >
                 {studyRoom.title}
               </h3>
@@ -138,7 +153,7 @@ export function StudyRoomCardBrowse({ studyRoom }: StudyRoomCardBrowseProps) {
 
             <div className="flex gap-2">
               <ShareButton
-                url={`${typeof window !== "undefined" ? window.location.origin : process.env.NEXT_PUBLIC_BASE_URL || ""}/studyroom/${studyRoom.id}`}
+                url={getStudyRoomShareUrl(studyRoom.id)}
                 title={studyRoom.title}
                 description={studyRoom.description || ""}
                 image={studyRoom.imageUrl}
@@ -149,7 +164,9 @@ export function StudyRoomCardBrowse({ studyRoom }: StudyRoomCardBrowseProps) {
               <Button
                 className="flex-1"
                 variant={isLive ? "default" : "outline"}
-                onClick={() => router.push(`/studyroom/${studyRoom.id}`)}
+                onClick={() =>
+                  router.push(getStudyRoomPagePathWithJoinIntent(studyRoom.id))
+                }
               >
                 {isLive ? (
                   <>

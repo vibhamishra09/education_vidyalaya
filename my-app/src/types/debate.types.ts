@@ -36,6 +36,8 @@ export interface CreateDebateRoomDto {
   prepTimeSeconds?: number;
   turnOrder?: TurnOrderType;
   scheduledAt?: string; // ISO 8601 date string
+  /** Total planned session (minutes); required when creating a room. */
+  debateDurationMinutes: number;
 }
 
 export interface UpdateDebateRoomDto {
@@ -45,6 +47,11 @@ export interface UpdateDebateRoomDto {
   turnDurationSeconds?: number;
   prepTimeSeconds?: number;
   turnOrder?: TurnOrderType;
+  /** ISO 8601 — only while status is WAITING */
+  scheduledAt?: string;
+  /** Remove fixed start time (WAITING only) */
+  clearScheduledAt?: boolean;
+  debateDurationMinutes?: number;
 }
 
 export interface JoinDebateRoomDto {
@@ -102,6 +109,8 @@ export interface DebateRoom {
   turnDurationSeconds: number;
   prepTimeSeconds: number;
   turnOrder: TurnOrderType;
+  debateDurationMinutes?: number;
+  debateSlotEndsAt?: string | null;
   currentTurnIndex: number;
   currentSpeakerId?: string | null;
   turnStartedAt?: string | null;
@@ -118,6 +127,18 @@ export interface DebateRoom {
   moderators: DebateModerator[];
   livekitRoomName?: string | null;
   createdAt: string;
+  hostDetailsUpdatedAt?: string | null;
+}
+
+/** Rough upper bound if everyone on both teams takes one full turn (for UI hints only). */
+export function estimateDebateSessionMinutes(
+  turnDurationSeconds: number,
+  maxParticipantsPerTeam: number,
+): number {
+  return Math.max(
+    1,
+    Math.round((turnDurationSeconds * maxParticipantsPerTeam * 2) / 60),
+  );
 }
 
 export interface DebateRoomsResponse {
@@ -326,6 +347,24 @@ export interface DebateLivekitTokenResponse {
 
 // User Role in Debate
 export type DebateUserRole = 'host' | 'moderator' | 'participant' | 'spectator' | null;
+
+const DEBATE_HOST_EDIT_BLOCKED: DebateStatus[] = [
+  DebateStatus.ENDED,
+  DebateStatus.PROCESSED,
+  DebateStatus.CANCELLED,
+];
+
+/** Host may edit from list cards; uses internal user id (same as API current user). */
+export function canDebateHostEditFromCard(opts: {
+  currentUserId?: string | null;
+  hostUserId: string;
+  status: DebateStatus;
+}): boolean {
+  if (!opts.currentUserId || opts.currentUserId !== opts.hostUserId) {
+    return false;
+  }
+  return !DEBATE_HOST_EDIT_BLOCKED.includes(opts.status);
+}
 
 // Computed helper to get user's role in debate
 export function getUserDebateRole(

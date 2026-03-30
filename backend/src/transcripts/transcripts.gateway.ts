@@ -11,21 +11,11 @@ import { TranscriptsService } from './transcripts.service';
 import { createClerkClient } from '@clerk/backend';
 import { PrismaService } from '../prisma/prisma.service';
 import { LoggerService } from '../common/logger';
+import { corsOriginDelegate } from '../common/cors';
 
 @WebSocketGateway({
   cors: {
-    origin: process.env.FRONTEND_URLS?.split(',')
-      .map((url) => url.trim())
-      .filter(Boolean)
-      .concat([
-        'http://localhost:3000',
-        'http://localhost:3002',
-        'http://localhost:3007',
-      ]) || [
-      'http://localhost:3000',
-      'http://localhost:3002',
-      'http://localhost:3007',
-    ],
+    origin: corsOriginDelegate,
     credentials: true,
   },
 })
@@ -48,7 +38,8 @@ export class TranscriptsGateway
     private prismaService: PrismaService,
     private readonly logger: LoggerService,
   ) {
-    this.logger.setContext(TranscriptsGateway.name);}
+    this.logger.setContext(TranscriptsGateway.name);
+  }
 
   async handleConnection(client: Socket) {
     try {
@@ -64,7 +55,8 @@ export class TranscriptsGateway
 
       try {
         // Use environment variable or construct from PORT
-        const baseUrl = process.env.API_URL || `http://localhost:${process.env.PORT || 3001}`;
+        const baseUrl =
+          process.env.API_URL || `http://localhost:${process.env.PORT || 3001}`;
         const clerkRequest = new Request(baseUrl, {
           method: 'GET',
           headers: {
@@ -113,7 +105,9 @@ export class TranscriptsGateway
 
   handleDisconnect(client: Socket) {
     const userId = client.data?.userId || 'unknown';
-    this.logger.log(`🔌 Transcript WebSocket disconnected - User: ${userId}, Client: ${client.id}`);
+    this.logger.log(
+      `🔌 Transcript WebSocket disconnected - User: ${userId}, Client: ${client.id}`,
+    );
   }
 
   /**
@@ -157,10 +151,18 @@ export class TranscriptsGateway
   @SubscribeMessage('transcript-chunk')
   async handleTranscriptChunk(
     client: Socket,
-    payload: { user: string; text: string; timestamp: number; callId: string; isFinal?: boolean },
+    payload: {
+      user: string;
+      text: string;
+      timestamp: number;
+      callId: string;
+      isFinal?: boolean;
+    },
   ) {
     if (!client.data.userId) {
-      this.logger.warn(`Transcript chunk rejected - not authenticated: ${client.id}`);
+      this.logger.warn(
+        `Transcript chunk rejected - not authenticated: ${client.id}`,
+      );
       client.emit('transcript-error', { message: 'Not authenticated' });
       return;
     }
@@ -173,8 +175,13 @@ export class TranscriptsGateway
         !payload.timestamp ||
         !payload.callId
       ) {
-        this.logger.warn('Invalid transcript chunk payload:', JSON.stringify(payload));
-        client.emit('transcript-error', { message: 'Invalid payload - missing required fields' });
+        this.logger.warn(
+          'Invalid transcript chunk payload:',
+          JSON.stringify(payload),
+        );
+        client.emit('transcript-error', {
+          message: 'Invalid payload - missing required fields',
+        });
         return;
       }
 
@@ -182,29 +189,38 @@ export class TranscriptsGateway
       if (payload.isFinal) {
         // Get user name for better transcript formatting
         const userName = await this.getUserName(payload.user);
-        
+
         await this.transcriptsService.storeTranscriptChunk(
           payload.callId,
           userName,
           payload.text,
           payload.timestamp,
         );
-        this.logger.log(`✅ Stored FINAL transcript for call ${payload.callId} from ${userName}: "${payload.text.substring(0, 50)}${payload.text.length > 50 ? '...' : ''}"`);
+        this.logger.log(
+          `✅ Stored FINAL transcript for call ${payload.callId} from ${userName}: "${payload.text.substring(0, 50)}${payload.text.length > 50 ? '...' : ''}"`,
+        );
       } else {
-        this.logger.debug(`📝 Received interim transcript for call ${payload.callId}: "${payload.text.substring(0, 30)}${payload.text.length > 30 ? '...' : ''}"`);
+        this.logger.debug(
+          `📝 Received interim transcript for call ${payload.callId}: "${payload.text.substring(0, 30)}${payload.text.length > 30 ? '...' : ''}"`,
+        );
       }
-      
+
       // Send acknowledgment back to client for all transcripts
-      client.emit('transcript-received', { 
+      client.emit('transcript-received', {
         text: payload.text,
         timestamp: payload.timestamp,
         callId: payload.callId,
-        isFinal: payload.isFinal || false
+        isFinal: payload.isFinal || false,
       });
-
     } catch (error) {
-      this.logger.error(`❌ Error processing transcript chunk for call ${payload.callId}:`, error);
-      client.emit('transcript-error', { message: 'Failed to process transcript', error: error.message });
+      this.logger.error(
+        `❌ Error processing transcript chunk for call ${payload.callId}:`,
+        error,
+      );
+      client.emit('transcript-error', {
+        message: 'Failed to process transcript',
+        error: error.message,
+      });
     }
   }
 }

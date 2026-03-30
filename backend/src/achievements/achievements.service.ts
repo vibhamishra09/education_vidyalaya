@@ -1,13 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { AchievementCategory, AchievementRarity, Prisma } from '../generated/prisma/client';
+import {
+  AchievementCategory,
+  AchievementRarity,
+  Prisma,
+} from '../generated/prisma/client';
 import { LoggerService } from '../common/logger';
 import { CacheService } from '../redis/cache.service';
 import { isConnectionError } from '../common/db-error-handler';
 
 @Injectable()
 export class AchievementsService {
-
   constructor(
     private prisma: PrismaService,
     private readonly logger: LoggerService,
@@ -35,83 +38,83 @@ export class AchievementsService {
       async () => {
         try {
           let dbUserIdFinal: string;
-          
+
           // If dbUserId is provided, use it directly to avoid lookup
           if (dbUserId) {
             dbUserIdFinal = dbUserId;
           } else {
             // userId is actually Clerk ID, convert to database ID
             const user = await this.prisma.user.findUnique({
-            where: { clerkId: userId },
-            select: { id: true, name: true },
-          });
+              where: { clerkId: userId },
+              select: { id: true, name: true },
+            });
 
-          if (!user) {
-            this.logger.warn(`User not found for clerkId: ${userId}`);
-            throw new Error('User not found');
+            if (!user) {
+              this.logger.warn(`User not found for clerkId: ${userId}`);
+              throw new Error('User not found');
+            }
+
+            dbUserIdFinal = user.id;
           }
 
-          dbUserIdFinal = user.id;
-        }
-        
-        // Get all achievements and user's achievement progress in parallel
-        const [allAchievements, userAchievements] = await Promise.all([
-          this.prisma.achievement.findMany({
-            orderBy: [{ category: 'asc' }, { rarity: 'asc' }],
-          }),
-          this.prisma.userAchievement.findMany({
-            where: { userId: dbUserIdFinal },
-            include: { achievement: true },
-          }),
-        ]);
+          // Get all achievements and user's achievement progress in parallel
+          const [allAchievements, userAchievements] = await Promise.all([
+            this.prisma.achievement.findMany({
+              orderBy: [{ category: 'asc' }, { rarity: 'asc' }],
+            }),
+            this.prisma.userAchievement.findMany({
+              where: { userId: dbUserIdFinal },
+              include: { achievement: true },
+            }),
+          ]);
 
-    // Create a map for quick lookup
-    const userAchievementMap = new Map(
-      userAchievements.map((ua) => [ua.achievementId, ua]),
-    );
+          // Create a map for quick lookup
+          const userAchievementMap = new Map(
+            userAchievements.map((ua) => [ua.achievementId, ua]),
+          );
 
-    // Categorize achievements
-    type AchievementData = {
-      id: string;
-      title: string;
-      description: string;
-      icon: string;
-      category: AchievementCategory;
-      rarity: AchievementRarity;
-      maxProgress: number;
-      coinReward: number;
-      progress: number;
-      unlockedAt: Date | null | undefined;
-    };
+          // Categorize achievements
+          type AchievementData = {
+            id: string;
+            title: string;
+            description: string;
+            icon: string;
+            category: AchievementCategory;
+            rarity: AchievementRarity;
+            maxProgress: number;
+            coinReward: number;
+            progress: number;
+            unlockedAt: Date | null | undefined;
+          };
 
-    const unlocked: AchievementData[] = [];
-    const inProgress: AchievementData[] = [];
-    const locked: AchievementData[] = [];
+          const unlocked: AchievementData[] = [];
+          const inProgress: AchievementData[] = [];
+          const locked: AchievementData[] = [];
 
-    for (const achievement of allAchievements) {
-      const userProgress = userAchievementMap.get(achievement.id);
+          for (const achievement of allAchievements) {
+            const userProgress = userAchievementMap.get(achievement.id);
 
-      const achievementData: AchievementData = {
-        id: achievement.id,
-        title: achievement.title,
-        description: achievement.description,
-        icon: achievement.icon,
-        category: achievement.category,
-        rarity: achievement.rarity,
-        maxProgress: achievement.maxProgress,
-        coinReward: achievement.coinReward,
-        progress: userProgress?.progress || 0,
-        unlockedAt: userProgress?.unlockedAt,
-      };
+            const achievementData: AchievementData = {
+              id: achievement.id,
+              title: achievement.title,
+              description: achievement.description,
+              icon: achievement.icon,
+              category: achievement.category,
+              rarity: achievement.rarity,
+              maxProgress: achievement.maxProgress,
+              coinReward: achievement.coinReward,
+              progress: userProgress?.progress || 0,
+              unlockedAt: userProgress?.unlockedAt,
+            };
 
-      if (userProgress?.unlockedAt) {
-        unlocked.push(achievementData);
-      } else if (userProgress && userProgress.progress > 0) {
-        inProgress.push(achievementData);
-      } else {
-        locked.push(achievementData);
-      }
-    }
+            if (userProgress?.unlockedAt) {
+              unlocked.push(achievementData);
+            } else if (userProgress && userProgress.progress > 0) {
+              inProgress.push(achievementData);
+            } else {
+              locked.push(achievementData);
+            }
+          }
 
           return {
             unlocked,
@@ -127,7 +130,7 @@ export class AchievementsService {
               `Database connection error in getUserAchievements for user ${userId}:`,
               error instanceof Error ? error.message : String(error),
             );
-            
+
             // Return empty achievements as fallback
             return {
               unlocked: [],
@@ -137,7 +140,7 @@ export class AchievementsService {
               totalAvailable: 0,
             };
           }
-          
+
           // Re-throw other errors
           throw error;
         }
@@ -164,7 +167,9 @@ export class AchievementsService {
     });
 
     if (!achievement) {
-      this.logger.warn(`Achievement ${achievementId} not found - skipping progress update`);
+      this.logger.warn(
+        `Achievement ${achievementId} not found - skipping progress update`,
+      );
       return null;
     }
 
@@ -318,7 +323,10 @@ export class AchievementsService {
             await this.updateProgress(userId, milestone.id, totalSessions);
           }
         } catch (error) {
-          this.logger.error(`Failed to update progress for achievement ${milestone.id}:`, error);
+          this.logger.error(
+            `Failed to update progress for achievement ${milestone.id}:`,
+            error,
+          );
           // Continue processing other achievements
         }
       }
@@ -334,14 +342,15 @@ export class AchievementsService {
       for (const milestone of teachingMilestones) {
         if (totalTeacherSessions >= milestone.count) {
           try {
-            const userAchievement = await this.prisma.userAchievement.findUnique({
-              where: {
-                userId_achievementId: {
-                  userId,
-                  achievementId: milestone.id,
+            const userAchievement =
+              await this.prisma.userAchievement.findUnique({
+                where: {
+                  userId_achievementId: {
+                    userId,
+                    achievementId: milestone.id,
+                  },
                 },
-              },
-            });
+              });
 
             if (!userAchievement?.unlockedAt) {
               await this.updateProgress(
@@ -351,7 +360,10 @@ export class AchievementsService {
               );
             }
           } catch (error) {
-            this.logger.error(`Failed to update progress for teaching achievement ${milestone.id}:`, error);
+            this.logger.error(
+              `Failed to update progress for teaching achievement ${milestone.id}:`,
+              error,
+            );
             // Continue processing other achievements
           }
         }
@@ -423,7 +435,10 @@ export class AchievementsService {
           }
         }
       } catch (error) {
-        this.logger.error('Failed to check social butterfly achievement:', error);
+        this.logger.error(
+          'Failed to check social butterfly achievement:',
+          error,
+        );
         // Continue processing
       }
     }
@@ -461,7 +476,10 @@ export class AchievementsService {
             await this.updateProgress(userId, milestone.id, currentStreak);
           }
         } catch (error) {
-          this.logger.error(`Failed to update progress for streak achievement ${milestone.id}:`, error);
+          this.logger.error(
+            `Failed to update progress for streak achievement ${milestone.id}:`,
+            error,
+          );
           // Continue processing other achievements
         }
       }

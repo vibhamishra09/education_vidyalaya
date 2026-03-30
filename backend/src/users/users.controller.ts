@@ -19,37 +19,48 @@ import { CompleteOnboardingDto, UpdateUserDto } from './dto/user.dto';
 export class UsersController {
   private readonly logger = new Logger(UsersController.name);
 
-  constructor(private usersService: UsersService) {}
+  constructor(private usersService: UsersService) { }
 
   @Get('users/me')
   @UseGuards(ClerkAuthGuard)
-  async getCurrentUser(@CurrentUser() userId: string) {
-    return this.usersService.getCurrentUser(userId);
+  async getCurrentUser(
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
+  ) {
+    return this.usersService.getCurrentUser(dbUserId ?? clerkUserId);
   }
 
   @Patch('users/me')
   @UseGuards(ClerkAuthGuard)
   async updateUserProfile(
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
     @Body() updateDto: UpdateUserDto,
   ) {
-    return this.usersService.updateUserProfile(userId, updateDto);
+    return this.usersService.updateUserProfile(dbUserId ?? clerkUserId, updateDto);
   }
 
   @Get('users/check-username')
   @UseGuards(ClerkAuthGuard)
   async checkUsernameAvailability(
     @Query('username') username: string,
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
   ) {
     if (!username) {
       return { available: false };
     }
 
     try {
-      return await this.usersService.checkUsernameAvailability(username, userId);
+      return await this.usersService.checkUsernameAvailability(
+        username,
+        dbUserId ?? clerkUserId,
+      );
     } catch (error) {
-      this.logger.debug('Error in checkUsernameAvailability controller:', error);
+      this.logger.debug(
+        'Error in checkUsernameAvailability controller:',
+        error,
+      );
       return { available: false };
     }
   }

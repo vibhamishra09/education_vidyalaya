@@ -26,7 +26,10 @@ describe('StudyRoomsService.cancelStudyRoom', () => {
     {} as any,
     {} as any,
     {} as any,
+    {} as any,
     logger,
+    {} as any,
+    {} as any,
   );
 
   beforeEach(() => {
@@ -69,7 +72,11 @@ describe('StudyRoomsService.cancelStudyRoom', () => {
     });
 
     await expect(
-      service.cancelStudyRoom('room-1', 'clerk-user', StudyRoomEditScope.SINGLE),
+      service.cancelStudyRoom(
+        'room-1',
+        'clerk-user',
+        StudyRoomEditScope.SINGLE,
+      ),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 });

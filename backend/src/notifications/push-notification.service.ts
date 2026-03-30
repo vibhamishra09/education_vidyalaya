@@ -15,7 +15,6 @@ export interface PushSubscriptionDto {
 
 @Injectable()
 export class PushNotificationService {
-
   // Redis client available for caching, rate-limiting, etc.
   private redis = redisClient;
 
@@ -99,12 +98,15 @@ export class PushNotificationService {
     data?: Record<string, any>,
   ) {
     try {
-      this.logger.debug('🔔 [PushNotificationService] Sending push notification:', {
-        userId,
-        title,
-        body,
-        data,
-      });
+      this.logger.debug(
+        '🔔 [PushNotificationService] Sending push notification:',
+        {
+          userId,
+          title,
+          body,
+          data,
+        },
+      );
 
       const subscriptions = await this.prisma.pushSubscription.findMany({
         where: { userId },

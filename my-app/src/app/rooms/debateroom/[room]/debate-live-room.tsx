@@ -12,8 +12,7 @@ import {
   isTrackReference,
   useSpeakingParticipants,
 } from '@livekit/components-react';
-import { Track, RoomOptions, VideoPresets, RemoteParticipant } from 'livekit-client';
-import { KrispNoiseFilter, isKrispNoiseFilterSupported } from '@livekit/krisp-noise-filter';
+import { Track, RoomOptions, VideoPresets, RemoteParticipant as _RemoteParticipant } from 'livekit-client';
 import { io, Socket } from 'socket.io-client';
 import type { TrackReferenceOrPlaceholder } from '@livekit/components-react';
 import '@livekit/components-styles';
@@ -46,7 +45,7 @@ import {
   Grid2X2,
   Focus,
   Send,
-  Bell,
+  Bell as _Bell,
   Zap,
   Play,
   Loader2,
@@ -69,13 +68,15 @@ import {
   TeamChatMessage,
   BuzzerPressedEvent,
   DebateUserRole,
+  DebateParticipant,
+  estimateDebateSessionMinutes,
 } from '@/types/debate.types';
 import {
   SimpleTimer,
   PrepCountdown,
-  DebateBuzzer,
-  DebateTeamChat,
-  CompactTeamsDisplay,
+  DebateBuzzer as _DebateBuzzer,
+  DebateTeamChat as _DebateTeamChat,
+  CompactTeamsDisplay as _CompactTeamsDisplay,
   ModeratorEvaluationPanel,
 } from '@/components/debate';
 import { useDebateMicControl } from '@/hooks/use-debate-mic-control';
@@ -144,6 +145,40 @@ export function DebateLiveRoom({
   const router = useRouter();
   const [isMobileViewport, setIsMobileViewport] = useState(false);
 
+  const isNavigatingRef = useRef(false);
+  const debateStatusRef = useRef(debateState?.status);
+  useEffect(() => { debateStatusRef.current = debateState?.status; }, [debateState?.status]);
+
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isNavigatingRef.current || debateStatusRef.current === DebateStatus.ENDED) return;
+      e.preventDefault();
+      e.returnValue = '';
+      return '';
+    };
+
+    const handlePopState = (_e: PopStateEvent) => {
+      if (isNavigatingRef.current || debateStatusRef.current === DebateStatus.ENDED) return;
+      if (window.confirm('Are you sure you want to leave the room? Your progress might be lost.')) {
+        isNavigatingRef.current = true;
+        router.replace('/debateroom');
+      } else {
+        window.history.pushState(null, '', window.location.href);
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('popstate', handlePopState);
+
+    // Push an extra state so the first back button press triggers popstate
+    window.history.pushState(null, '', window.location.href);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [router]);
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -155,6 +190,7 @@ export function DebateLiveRoom({
   }, []);
 
   const handleLeave = useCallback(async () => {
+    isNavigatingRef.current = true;
     router.push('/debateroom');
   }, [router]);
 
@@ -326,7 +362,7 @@ function DebateLiveContent({
   userSide,
   userId,
   debateState,
-  teamChatMessages,
+  teamChatMessages: _teamChatMessages,
   buzzerQueue,
   prepCountdown,
   onPressBuzzer,
@@ -364,7 +400,7 @@ function DebateLiveContent({
   const {
     isControlling,
     isRequestPending,
-    targetScreenShareId,
+    targetScreenShareId: _targetScreenShareId,
     requestControl,
     stopControl,
     sendInputEvent,
@@ -471,7 +507,7 @@ function DebateLiveContent({
       });
       socket.close();
     };
-  }, [debateRoom.id, userId, userRole, userSide]);
+  }, [debateRoom.id, userId, userRole, userSide, API_URL]);
 
   // Load chat history from API
   useEffect(() => {
@@ -529,7 +565,7 @@ function DebateLiveContent({
     };
 
     loadMessages();
-  }, [debateRoom.id, userRole, userSide, getToken]);
+  }, [debateRoom.id, userRole, userSide, getToken, API_URL]);
 
   // LiveKit hooks
   const room = useRoomContext();
@@ -587,19 +623,6 @@ function DebateLiveContent({
     };
   }, [room]);
 
-  // Apply Krisp AI noise suppression to microphone track
-  useEffect(() => {
-    if (!localParticipant || !isKrispNoiseFilterSupported()) return;
-    const micPublication = localParticipant.getTrackPublication(Track.Source.Microphone);
-    const micTrack = micPublication?.audioTrack;
-    if (!micTrack) return;
-    const filter = KrispNoiseFilter();
-    micTrack.setProcessor(filter).catch(() => {});
-    return () => {
-      micTrack.stopProcessor().catch(() => {});
-    };
-  }, [localParticipant]);
-
   // Log a concise connection snapshot in development only.
   useEffect(() => {
     if (process.env.NODE_ENV !== 'development' || !room || !localParticipant) return;
@@ -624,7 +647,7 @@ function DebateLiveContent({
     try {
       const metadata = JSON.parse(participant.metadata);
       return metadata.avatar || null;
-    } catch (e) {
+    } catch (_e) {
       return null;
     }
   }, []);
@@ -683,7 +706,7 @@ function DebateLiveContent({
     } catch (err) {
       console.error('[DebateRoom] Failed to send chat message:', err);
     }
-  }, [chatInput, userRole, userSide, isModeratorOnly, debateRoom.id, getToken]);
+  }, [chatInput, userRole, userSide, isModeratorOnly, debateRoom.id, getToken, API_URL]);
 
   // Clear chat history (moderators only)
   const clearChatHistory = useCallback(async () => {
@@ -726,13 +749,13 @@ function DebateLiveContent({
       } else {
         console.error('[DebateRoom] Failed to clear chat history:', response.status, response.statusText);
       }
-    } catch (err) {
-      console.error('[DebateRoom] Failed to clear chat history:', err);
+    } catch (_e) {
+      console.error('[DebateRoom] Failed to clear chat history:', _e);
     }
-  }, [userRole, debateRoom.id, getToken]);
+  }, [userRole, debateRoom.id, getToken, API_URL]);
 
   // Toggle camera with proper error handling
-  const toggleCamera = useCallback(async () => {
+  const _toggleCamera = useCallback(async () => {
     if (!localParticipant) return;
 
     try {
@@ -768,6 +791,14 @@ function DebateLiveContent({
       return 'MODERATOR';
     }
 
+    // Host/moderator video is not placed in FOR or AGAINST columns (matches sidebar: team = debaters only)
+    const isModeratorUser = debateRoom.moderators.some(
+      (m) => m.user.id === identity || m.user.clerkId === identity,
+    );
+    if (isModeratorUser) {
+      return 'MODERATOR';
+    }
+
     const forTeam = debateRoom.teams.find(t => t.side === DebateSide.FOR);
     const againstTeam = debateRoom.teams.find(t => t.side === DebateSide.AGAINST);
 
@@ -777,7 +808,7 @@ function DebateLiveContent({
     
     // If no match found, return MODERATOR (includes host and unmatched participants)
     return 'MODERATOR';
-  }, [debateRoom.teams]);
+  }, [debateRoom.teams, debateRoom.moderators]);
 
   // Get moderators from debate room
   const moderators = useMemo(() => {
@@ -789,8 +820,8 @@ function DebateLiveContent({
     }));
   }, [debateRoom.moderators]);
 
-  // Filter tracks by team side - in grid mode, show ALL tracks in both panels
-  const { forTracks, againstTracks, moderatorTracks, allTracks } = useMemo(() => {
+  // Filter tracks by team side (moderator-only feeds stay out of FOR/AGAINST columns)
+  const { forTracks, againstTracks, allTracks } = useMemo(() => {
     const forTracks: TrackReferenceOrPlaceholder[] = [];
     const againstTracks: TrackReferenceOrPlaceholder[] = [];
     const moderatorTracks: TrackReferenceOrPlaceholder[] = [];
@@ -809,12 +840,12 @@ function DebateLiveContent({
 
     console.log('[DebateRoom] Filtered tracks - FOR:', forTracks.length, 'AGAINST:', againstTracks.length, 'MODERATOR:', moderatorTracks.length);
 
-    return { forTracks, againstTracks, moderatorTracks, allTracks: cameraTracks };
+    return { forTracks, againstTracks, allTracks: cameraTracks };
   }, [cameraTracks, getParticipantSide]);
 
   // Get visible tracks based on view mode
   // Presenter view: shows only the person speaking (or first person if none speaking)
-  // Grid view: shows all participants including moderators
+  // Grid view: shows all participants on that team
   const getVisibleTracks = useCallback((tracks: TrackReferenceOrPlaceholder[], mode: 'speaker' | 'grid') => {
     if (mode === 'grid') return tracks;
     
@@ -828,77 +859,50 @@ function DebateLiveContent({
     return tracks.length > 0 ? [tracks[0]] : [];
   }, [speakingParticipants]);
 
-  // For grid view, include moderators with teams
-  // For presenter view, show only active speaker or first participant
-  const getTracksForPanel = useCallback((
-    panelSide: 'FOR' | 'AGAINST',
-    teamTracks: TrackReferenceOrPlaceholder[],
-    moderatorTracks: TrackReferenceOrPlaceholder[],
-    allTracks: TrackReferenceOrPlaceholder[],
-    mode: 'speaker' | 'grid'
-  ): TrackReferenceOrPlaceholder[] => {
-    // In grid view, include moderators with team tracks
-    if (mode === 'grid') {
-      if (teamTracks.length > 0) {
-        // Show team members + half of moderators in each panel
-        const halfMods = Math.ceil(moderatorTracks.length / 2);
-        const modsForThisPanel = panelSide === 'FOR' 
-          ? moderatorTracks.slice(0, halfMods)
-          : moderatorTracks.slice(halfMods);
-        return [...teamTracks, ...modsForThisPanel];
-      }
-    } else {
-      // Presenter mode: show only team tracks
-      if (teamTracks.length > 0) {
-        return getVisibleTracks(teamTracks, mode);
-      }
-    }
-    
-    // No team-specific tracks - fall back to showing all tracks distributed
-    // This handles when participants haven't been assigned to teams yet
-    // or when team assignment doesn't match LiveKit identity
-    
-    if (allTracks.length === 0) return [];
-    
-    // In grid mode with no team assignments, split all tracks between panels
-    if (mode === 'grid') {
-      const halfIndex = Math.ceil(allTracks.length / 2);
-      if (panelSide === 'FOR') {
-        return allTracks.slice(0, halfIndex);
-      } else {
-        return allTracks.slice(halfIndex);
-      }
-    }
-    
-    // In speaker mode with no team assignments, show speaking participant or first
-    const speakingIds = speakingParticipants.map(p => p.identity);
-    const speaking = allTracks.find(t => speakingIds.includes(t.participant.identity) || t.participant.isSpeaking);
-    
-    if (speaking) {
-      const side = getParticipantSide(speaking.participant.identity);
-      // Show the speaker in the appropriate panel
-      if (side === DebateSide.FOR && panelSide === 'FOR') return [speaking];
-      if (side === DebateSide.AGAINST && panelSide === 'AGAINST') return [speaking];
-      // If speaker is moderator or side doesn't match, show in FOR panel only
-      if (panelSide === 'FOR') return [speaking];
-      return [];
-    }
-    
-    // Default: show first participant in FOR panel only (to avoid duplication)
-    if (panelSide === 'FOR') return [allTracks[0]];
-    return [];
-  }, [getVisibleTracks, getParticipantSide, speakingParticipants]);
-
-  // Memoize the tracks to display for each panel
-  const forPanelTracks = useMemo(() => 
-    getTracksForPanel('FOR', forTracks, moderatorTracks, allTracks, viewMode),
-    [getTracksForPanel, forTracks, moderatorTracks, allTracks, viewMode]
+  // FOR / AGAINST columns: only tracks for people assigned to that team (matches sidebar counts).
+  // Moderator-only video is not placed in either team column.
+  const getTeamPanelTracks = useCallback(
+    (teamTracks: TrackReferenceOrPlaceholder[], mode: 'speaker' | 'grid'): TrackReferenceOrPlaceholder[] => {
+      if (teamTracks.length === 0) return [];
+      if (mode === 'grid') return teamTracks;
+      return getVisibleTracks(teamTracks, mode);
+    },
+    [getVisibleTracks],
   );
 
-  const againstPanelTracks = useMemo(() => 
-    getTracksForPanel('AGAINST', againstTracks, moderatorTracks, allTracks, viewMode),
-    [getTracksForPanel, againstTracks, moderatorTracks, allTracks, viewMode]
+  const forPanelTracks = useMemo(
+    () => getTeamPanelTracks(forTracks, viewMode),
+    [getTeamPanelTracks, forTracks, viewMode],
   );
+
+  const againstPanelTracks = useMemo(
+    () => getTeamPanelTracks(againstTracks, viewMode),
+    [getTeamPanelTracks, againstTracks, viewMode],
+  );
+
+  /** Team column counts & sidebar rows = debaters only (moderators are separate; never in FOR/AGAINST columns) */
+  const {
+    forTeamParticipantCount,
+    againstTeamParticipantCount,
+    forTeamDebaters,
+    againstTeamDebaters,
+  } = useMemo(() => {
+    const modIds = new Set(
+      debateRoom.moderators.flatMap((m) => [m.user.id, m.user.clerkId].filter(Boolean) as string[]),
+    );
+    const forTeam = debateRoom.teams.find((t) => t.side === DebateSide.FOR);
+    const againstTeam = debateRoom.teams.find((t) => t.side === DebateSide.AGAINST);
+    const stripMods = (participants: DebateParticipant[] | undefined) =>
+      (participants ?? []).filter((p) => !modIds.has(p.user.id) && !modIds.has(p.user.clerkId));
+    const forTeamDebaters = stripMods(forTeam?.participants);
+    const againstTeamDebaters = stripMods(againstTeam?.participants);
+    return {
+      forTeamParticipantCount: forTeamDebaters.length,
+      againstTeamParticipantCount: againstTeamDebaters.length,
+      forTeamDebaters,
+      againstTeamDebaters,
+    };
+  }, [debateRoom.teams, debateRoom.moderators]);
 
   const isModerator = userRole === 'host' || userRole === 'moderator';
   const isPrepPhase = debateRoom.status === DebateStatus.PREP;
@@ -1014,7 +1018,7 @@ function DebateLiveContent({
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="h-12 sm:h-14 bg-[#1f1f1f] border-b border-white/10 flex items-center justify-between px-2 sm:px-4 flex-shrink-0">
+      <div className="h-12 sm:h-14 bg-[#1f1f1f] border-b border-white/10 flex items-center justify-between gap-4 sm:gap-6 px-2 sm:px-4 flex-shrink-0">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
           <div className="relative h-6 w-6 sm:h-8 sm:w-8 flex-shrink-0">
             <Image src="/webyalaya-main-logo.svg" alt="Webyalaya" fill className="object-contain" priority />
@@ -1036,22 +1040,30 @@ function DebateLiveContent({
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-3 flex-shrink-0">
-          {/* View Mode Toggle */}
+          {/* View Mode Toggle — label shows active layout; click switches to the other */}
           <Button
             variant="ghost"
             size="sm"
+            type="button"
             onClick={() => setViewMode(viewMode === 'speaker' ? 'grid' : 'speaker')}
-            className="text-white/70 hover:text-white hover:bg-white/10 h-8 w-8 sm:h-9 sm:w-auto sm:px-3 p-0"
+            title={viewMode === 'speaker' ? 'Switch to grid view' : 'Switch to presenter view'}
+            aria-label={viewMode === 'speaker' ? 'Presenter view active. Switch to grid view.' : 'Grid view active. Switch to presenter view.'}
+            className={cn(
+              'text-white/80 hover:text-white hover:bg-white/10 h-8 w-8 sm:h-9 sm:w-auto sm:px-3 p-0 border',
+              viewMode === 'speaker'
+                ? 'border-white/25 bg-white/5'
+                : 'border-green-500/35 bg-green-500/10',
+            )}
           >
             {viewMode === 'speaker' ? (
               <>
-                <Grid2X2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 sm:mr-2" />
-                <span className="hidden sm:inline">Grid View</span>
+                <Focus className="h-3.5 w-3.5 sm:h-4 sm:w-4 sm:mr-2 shrink-0" />
+                <span className="hidden sm:inline">Presenter</span>
               </>
             ) : (
               <>
-                <Focus className="h-3.5 w-3.5 sm:h-4 sm:w-4 sm:mr-2" />
-                <span className="hidden sm:inline">Presenter View</span>
+                <Grid2X2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 sm:mr-2 shrink-0" />
+                <span className="hidden sm:inline">Grid</span>
               </>
             )}
           </Button>
@@ -1329,7 +1341,7 @@ function DebateLiveContent({
                 <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-green-500 flex-shrink-0" />
                 <h3 className="text-green-400 font-bold text-sm sm:text-lg truncate">TEAM FOR</h3>
                 <Badge variant="outline" className="bg-green-500/20 border-green-500 text-green-300 text-xs flex-shrink-0">
-                  {forPanelTracks.length}
+                  {forTeamParticipantCount}
                 </Badge>
               </div>
               {userSide === DebateSide.FOR && (
@@ -1350,6 +1362,7 @@ function DebateLiveContent({
                 tracks={forPanelTracks} 
                 teamColor="green"
                 currentSpeakerId={debateState?.currentSpeakerId}
+                layoutMode={viewMode}
                 pinnedParticipantId={pinnedParticipantId}
                 onTogglePin={togglePin}
               />
@@ -1392,27 +1405,27 @@ function DebateLiveContent({
 
             {/* Start Debate Button (WAITING status) */}
             {isModerator && debateRoom.status === DebateStatus.WAITING && onStartDebate && (
-              <div className="mt-auto pb-2 sm:pb-4 flex flex-col gap-1.5 sm:gap-2">
+              <div className="mt-auto pb-2 sm:pb-4 flex w-full min-w-0 flex-col items-stretch gap-1.5 sm:gap-2 px-0.5">
                 <Button
                   onClick={onStartDebate}
                   size="sm"
                   disabled={!canStartDebate || isStartingDebate}
-                  className="text-[10px] sm:text-xs bg-green-600 hover:bg-green-700 text-white h-7 sm:h-8 px-2 sm:px-3"
+                  className="w-full min-w-0 max-w-full flex flex-row flex-nowrap items-center justify-center gap-0.5 bg-green-600 hover:bg-green-700 text-white h-auto min-h-0 py-1.5 px-0.5 leading-none tracking-tight whitespace-nowrap shrink"
                 >
                   {isStartingDebate ? (
                     <>
-                      <Loader2 className="h-3 w-3 sm:mr-1 animate-spin" />
-                      <span className="hidden sm:inline">Starting...</span>
+                      <Loader2 className="h-2.5 w-2.5 sm:h-3 sm:w-3 animate-spin shrink-0" />
+                      <span className="text-[6px] sm:text-[7px] md:text-[8px]">Starting…</span>
                     </>
                   ) : (
                     <>
-                      <Play className="h-3 w-3 sm:mr-1" />
-                      <span className="hidden sm:inline">Start Debate</span>
+                      <Play className="h-2.5 w-2.5 sm:h-3 sm:w-3 shrink-0" />
+                      <span className="text-[6px] sm:text-[7px] md:text-[8px]">Start Debate</span>
                     </>
                   )}
                 </Button>
                 {!canStartDebate && (
-                  <p className="text-[8px] sm:text-[10px] text-white/50 text-center px-1">
+                  <p className="text-[8px] sm:text-[10px] text-white/50 text-center px-0.5 leading-tight">
                     Need at least 1 participant per team
                   </p>
                 )}
@@ -1452,7 +1465,7 @@ function DebateLiveContent({
                 <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-red-500 flex-shrink-0" />
                 <h3 className="text-red-400 font-bold text-sm sm:text-lg truncate">TEAM AGAINST</h3>
                 <Badge variant="outline" className="bg-red-500/20 border-red-500 text-red-300 text-xs flex-shrink-0">
-                  {againstPanelTracks.length}
+                  {againstTeamParticipantCount}
                 </Badge>
               </div>
               {userSide === DebateSide.AGAINST && (
@@ -1473,6 +1486,7 @@ function DebateLiveContent({
                 tracks={againstPanelTracks} 
                 teamColor="red"
                 currentSpeakerId={debateState?.currentSpeakerId}
+                layoutMode={viewMode}
                 pinnedParticipantId={pinnedParticipantId}
                 onTogglePin={togglePin}
               />
@@ -1552,16 +1566,56 @@ function DebateLiveContent({
                         </div>
                       </div>
                     )}
+
+                    {/* Room settings (start + total session length) */}
+                    <div className="rounded-lg border border-white/10 bg-white/5 p-3 space-y-2">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Clock className="h-3.5 w-3.5 text-white/50" />
+                        <span className="text-xs font-semibold text-white/80 uppercase tracking-wide">
+                          Room settings
+                        </span>
+                      </div>
+                      <div className="flex justify-between gap-2 text-xs">
+                        <span className="text-white/50 shrink-0">Start time</span>
+                        <span className="text-white text-right max-w-[min(100%,14rem)]">
+                          {debateRoom.scheduledAt
+                            ? new Date(debateRoom.scheduledAt).toLocaleString()
+                            : debateRoom.startTime
+                              ? new Date(debateRoom.startTime).toLocaleString()
+                              : debateRoom.status === DebateStatus.WAITING
+                                ? 'Flexible'
+                                : '—'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between gap-2 text-xs">
+                        <span className="text-white/50">Debate duration</span>
+                        <span className="text-white font-medium text-right">
+                          {debateRoom.debateDurationMinutes != null ? (
+                            `${debateRoom.debateDurationMinutes} min`
+                          ) : (
+                            <>
+                              ~
+                              {estimateDebateSessionMinutes(
+                                debateRoom.turnDurationSeconds,
+                                debateRoom.maxParticipants,
+                              )}{' '}
+                              min
+                              <span className="text-white/50 font-normal"> (est.)</span>
+                            </>
+                          )}
+                        </span>
+                      </div>
+                    </div>
                     
                     {/* Team FOR Section */}
                     <div>
                       <div className="flex items-center gap-2 mb-3">
                         <div className="w-2 h-2 rounded-full bg-green-500" />
                         <span className="text-xs font-semibold text-green-400 uppercase tracking-wide">Team For</span>
-                        <span className="text-xs text-white/40">({debateRoom.teams.find(t => t.side === DebateSide.FOR)?.participants.length || 0})</span>
+                        <span className="text-xs text-white/40">({forTeamParticipantCount})</span>
                       </div>
                       <div className="space-y-2">
-                        {debateRoom.teams.find(t => t.side === DebateSide.FOR)?.participants.map((p) => (
+                        {forTeamDebaters.map((p) => (
                           <div 
                             key={p.id} 
                             className={cn(
@@ -1598,10 +1652,10 @@ function DebateLiveContent({
                       <div className="flex items-center gap-2 mb-3">
                         <div className="w-2 h-2 rounded-full bg-red-500" />
                         <span className="text-xs font-semibold text-red-400 uppercase tracking-wide">Team Against</span>
-                        <span className="text-xs text-white/40">({debateRoom.teams.find(t => t.side === DebateSide.AGAINST)?.participants.length || 0})</span>
+                        <span className="text-xs text-white/40">({againstTeamParticipantCount})</span>
                       </div>
                       <div className="space-y-2">
-                        {debateRoom.teams.find(t => t.side === DebateSide.AGAINST)?.participants.map((p) => (
+                        {againstTeamDebaters.map((p) => (
                           <div 
                             key={p.id} 
                             className={cn(
@@ -2020,13 +2074,23 @@ interface TeamVideoGridProps {
   tracks: TrackReferenceOrPlaceholder[];
   teamColor: 'green' | 'red';
   currentSpeakerId?: string | null;
-  pinnedParticipantId: string | null;
-  onTogglePin: (id: string) => void;
+  /** Presenter = one large tile per panel; grid = multi-tile layout */
+  layoutMode?: 'speaker' | 'grid';
+  pinnedParticipantId?: string | null;
+  onTogglePin?: (participantId: string) => void;
 }
 
-function TeamVideoGrid({ tracks, teamColor, currentSpeakerId, pinnedParticipantId, onTogglePin }: TeamVideoGridProps) {
+function TeamVideoGrid({
+  tracks,
+  teamColor,
+  currentSpeakerId,
+  layoutMode = 'grid',
+  pinnedParticipantId = null,
+  onTogglePin,
+}: TeamVideoGridProps) {
   const borderColor = teamColor === 'green' ? 'border-green-500' : 'border-red-500';
   const shadowColor = teamColor === 'green' ? 'shadow-green-500/30' : 'shadow-red-500/30';
+  const isPresenter = layoutMode === 'speaker';
 
   if (tracks.length === 0) {
     return (
@@ -2040,12 +2104,19 @@ function TeamVideoGrid({ tracks, teamColor, currentSpeakerId, pinnedParticipantI
   }
 
   return (
-    <div className={cn(
-      "grid gap-2 sm:gap-3 h-full",
-      tracks.length === 1 && "grid-cols-1",
-      tracks.length === 2 && "grid-cols-1 sm:grid-cols-2",
-      tracks.length >= 3 && "grid-cols-1 sm:grid-cols-2"
-    )}>
+    <div
+      className={cn(
+        'h-full min-h-0',
+        isPresenter
+          ? 'flex flex-col gap-2 sm:gap-3'
+          : cn(
+              'grid gap-2 sm:gap-3',
+              tracks.length === 1 && 'grid-cols-1',
+              tracks.length === 2 && 'grid-cols-1 sm:grid-cols-2',
+              tracks.length >= 3 && 'grid-cols-1 sm:grid-cols-2',
+            ),
+      )}
+    >
       {tracks.map((trackRef) => {
         const isLocal = trackRef.participant.isLocal;
         const hasVideo = isTrackReference(trackRef) && trackRef.publication?.track;
@@ -2067,7 +2138,8 @@ function TeamVideoGrid({ tracks, teamColor, currentSpeakerId, pinnedParticipantI
           <div
             key={trackRef.participant.identity}
             className={cn(
-              'relative rounded-xl overflow-hidden bg-gray-800 aspect-video',
+              'relative rounded-xl overflow-hidden bg-gray-800',
+              isPresenter ? 'flex-1 min-h-[180px] sm:min-h-[220px] w-full' : 'aspect-video',
               isSpeaking && `ring-2 ring-offset-2 ring-offset-gray-900 ${teamColor === 'green' ? 'ring-green-500' : 'ring-red-500'}`,
               isCurrentSpeaker && `border-2 ${borderColor} shadow-lg ${shadowColor}`
             )}
@@ -2100,7 +2172,7 @@ function TeamVideoGrid({ tracks, teamColor, currentSpeakerId, pinnedParticipantI
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => onTogglePin(trackRef.participant.identity)}
+                onClick={() => onTogglePin?.(trackRef.participant.identity)}
                 className={cn(
                   "h-7 w-7 p-0 rounded-full border backdrop-blur-md",
                   pinnedParticipantId === trackRef.participant.identity

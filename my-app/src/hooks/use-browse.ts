@@ -33,7 +33,7 @@ export function useBrowseRecommendations(
   return useQuery<RecommendationsHookResponse>({
     queryKey: browseKeys.recommendations(),
     queryFn: async () => {
-      const response = await browseApi.getRecommendations(8);
+      const response = await browseApi.getRecommendations(10);
       
       // Transform the response to match the expected format
       return {
@@ -52,6 +52,7 @@ export function useBrowseRecommendations(
           id: room.id,
           title: room.title,
           description: room.description,
+          imageUrl: room.imageUrl,
           sessionStatus: room.sessionStatus,
           date: room.date,
           duration: room.duration,
@@ -60,6 +61,8 @@ export function useBrowseRecommendations(
           participantCount: room.participantCount,
           createdBy: room.createdBy,
           skills: room.skills,
+          seriesId: room.seriesId,
+          timezone: room.timezone,
           hostAvgRating: room.hostAvgRating,
           hostReviewCount: room.hostReviewCount,
           hostTotalSessions: room.hostTotalSessions,

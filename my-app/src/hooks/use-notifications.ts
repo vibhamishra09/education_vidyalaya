@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@clerk/nextjs';
 import { notificationsApi } from '@/lib/api';
 import { setAuthToken } from '@/lib/api-client';
+import type { NotificationsResponse } from '@/types/api.types';
 
 // Query Keys
 export const notificationKeys = {
@@ -18,12 +19,28 @@ export function useNotifications(
   type?: string,
   viewed?: boolean
 ) {
-  const { isLoaded, isSignedIn } = useAuth();
+  const { isLoaded, isSignedIn, getToken } = useAuth();
 
   return useQuery({
     queryKey: notificationKeys.list(page, limit, type, viewed),
-    // Token is set by AuthTokenSync; interceptor handles auth header
-    queryFn: () => notificationsApi.getNotifications(page, limit, type, viewed),
+    queryFn: async (): Promise<NotificationsResponse> => {
+      const token = await getToken();
+      if (!token) {
+        return {
+          notifications: [],
+          unreadCount: 0,
+          pagination: {
+            total: 0,
+            page: page ?? 1,
+            limit: limit ?? 20,
+            totalPages: 0,
+            hasMore: false,
+          },
+        };
+      }
+      setAuthToken(token);
+      return notificationsApi.getNotifications(page, limit, type, viewed);
+    },
     enabled: isLoaded && !!isSignedIn,
     staleTime: 60 * 1000, // 1 minute
     refetchInterval: 2 * 60 * 1000, // 2 minutes

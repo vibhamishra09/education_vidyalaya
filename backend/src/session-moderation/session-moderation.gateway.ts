@@ -13,35 +13,17 @@ import { PeerSessionsService } from '../peer-sessions/peer-sessions.service';
 import { PermissionsService, FlashQuestion } from './permissions.service';
 import { LoggerService } from '../common/logger';
 import { PrismaService } from '../prisma/prisma.service';
+import { corsOriginDelegate } from '../common/cors';
 
 @WebSocketGateway({
   cors: {
-    origin: (() => {
-      const envUrls = process.env.FRONTEND_URLS?.split(',')
-        .map((url) => url.trim())
-        .filter(Boolean) || [];
-      const defaultUrls = [
-        'https://www.webyalaya.com',
-        'https://webyalaya.com',
-        'https://webyalaya-next.vercel.app',
-        'https://test.webyalaya.com',
-        'https://test2.webyalaya.com',
-        'https://webyalaya-next-test.vercel.app',
-        'https://dev.webyalaya.com',
-        'https://dev2.webyalaya.com',
-        'https://hedera.webyalaya.com',
-        'https://webyalaya-green.vercel.app',
-        'https://webyalaya-purple.vercel.app',
-        'http://localhost:3000',
-        'http://localhost:3002',
-        'http://localhost:3007',
-      ];
-      return [...new Set([...envUrls, ...defaultUrls])];
-    })(),
+    origin: corsOriginDelegate,
     credentials: true,
   },
 })
-export class SessionModerationGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class SessionModerationGateway
+  implements OnGatewayConnection, OnGatewayDisconnect
+{
   @WebSocketServer()
   server!: Server;
 
@@ -57,7 +39,8 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
     private prisma: PrismaService,
     private readonly logger: LoggerService,
   ) {
-    this.logger.setContext(SessionModerationGateway.name);}
+    this.logger.setContext(SessionModerationGateway.name);
+  }
 
   async handleConnection(client: Socket) {
     try {
@@ -73,7 +56,8 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
 
       try {
         // Use environment variable or construct from PORT
-        const baseUrl = process.env.API_URL || `http://localhost:${process.env.PORT || 3001}`;
+        const baseUrl =
+          process.env.API_URL || `http://localhost:${process.env.PORT || 3001}`;
         const clerkRequest = new Request(baseUrl, {
           method: 'GET',
           headers: {
@@ -81,7 +65,10 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
           },
         });
 
-        const requestState = await this.clerkClient.authenticateRequest(clerkRequest, { jwtKey: process.env.CLERK_JWT_KEY });
+        const requestState = await this.clerkClient.authenticateRequest(
+          clerkRequest,
+          { jwtKey: process.env.CLERK_JWT_KEY },
+        );
 
         if (!requestState.isSignedIn) {
           this.logger.warn('User is not authenticated');
@@ -97,16 +84,28 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
         }
 
         client.data.userId = auth.userId; // clerkId
-        this.logger.log(`🔌 Session Moderation Socket connected - User: ${auth.userId}, Client: ${client.id}`);
+        this.logger.log(
+          `🔌 Session Moderation Socket connected - User: ${auth.userId}, Client: ${client.id}`,
+        );
       } catch (verifyError: any) {
-        const guestAccess = await this.prisma.studyRoomGuestAccessToken.findUnique({
-          where: { token },
-          include: {
-            guestParticipant: true,
-          },
-        });
-        if (!guestAccess || guestAccess.expiresAt < new Date()) {
-          this.logger.error('Token verification failed:', verifyError.message || verifyError);
+        const guestAccess =
+          await this.prisma.studyRoomGuestAccessToken.findUnique({
+            where: { token },
+            include: {
+              guestParticipant: true,
+              studyRoom: { select: { sessionMode: true } },
+            },
+          });
+        if (
+          !guestAccess ||
+          guestAccess.expiresAt < new Date() ||
+          (guestAccess.studyRoom.sessionMode === 'WEBINAR' &&
+            !guestAccess.guestParticipant.approvedBy)
+        ) {
+          this.logger.error(
+            'Token verification failed:',
+            verifyError.message || verifyError,
+          );
           client.disconnect();
           return;
         }
@@ -124,11 +123,16 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
 
   handleDisconnect(client: Socket) {
     const userId = client.data?.userId || 'unknown';
-    this.logger.log(`🔌 Session Moderation Socket disconnected - User: ${userId}, Client: ${client.id}`);
+    this.logger.log(
+      `🔌 Session Moderation Socket disconnected - User: ${userId}, Client: ${client.id}`,
+    );
   }
 
   @SubscribeMessage('join-session')
-  async handleJoinSession(client: Socket, payload: { sessionId: string; sessionType?: 'studyRoom' | 'peerSession' }) {
+  async handleJoinSession(
+    client: Socket,
+    payload: { sessionId: string; sessionType?: 'studyRoom' | 'peerSession' },
+  ) {
     if (!client.data.userId) {
       client.emit('moderation-error', { message: 'Not authenticated' });
       return;
@@ -138,32 +142,41 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
       client.emit('moderation-error', { message: 'Invalid payload' });
       return;
     }
-    
+
     // Store session info on the client
     client.data.sessionId = sessionId;
     client.data.sessionType = sessionType;
     client.join(sessionId);
-    
+
     // Check if user is host FIRST (before fetching permissions)
     let isHost = false;
     if (sessionType) {
       try {
-        isHost = await this.verifyIsHost(sessionId, sessionType, client.data.userId);
+        isHost = await this.verifyIsHost(
+          sessionId,
+          sessionType,
+          client.data.userId,
+        );
       } catch (e) {
         // Non-critical error, user is not host
       }
     }
-    
+
     // Store host status on client
     client.data.isHost = isHost;
-    
+
     // Fetch computed permissions from Redis for this user
     // Pass isHost so hosts always get full permissions
-    const computedPerms = await this.permissionsService.getComputedPermissions(sessionId, client.data.userId, isHost);
-    const roomSettings = await this.permissionsService.getRoomSettings(sessionId);
-    
+    const computedPerms = await this.permissionsService.getComputedPermissions(
+      sessionId,
+      client.data.userId,
+      isHost,
+    );
+    const roomSettings =
+      await this.permissionsService.getRoomSettings(sessionId);
+
     // Emit sync-permissions with computed permissions for this user
-    client.emit('sync-permissions', { 
+    client.emit('sync-permissions', {
       sessionId,
       permissions: computedPerms,
       roomSettings: {
@@ -175,22 +188,25 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
       },
       isHost,
     });
-    
+
     // Also emit moderation-joined for backwards compatibility
-    client.emit('moderation-joined', { 
+    client.emit('moderation-joined', {
       sessionId,
       permissions: computedPerms,
     });
-    
-    this.logger.debug(`User ${client.data.userId} joined session ${sessionId} with permissions:`, computedPerms);
+
+    this.logger.debug(
+      `User ${client.data.userId} joined session ${sessionId} with permissions:`,
+      computedPerms,
+    );
   }
 
   // Host updates room-wide permissions (Lock system)
   @SubscribeMessage('update-permissions')
   async handleUpdatePermissions(
-    client: Socket, 
-    payload: { 
-      sessionId: string; 
+    client: Socket,
+    payload: {
+      sessionId: string;
       sessionType: 'studyRoom' | 'peerSession';
       permissions: {
         allowAudio?: boolean;
@@ -203,7 +219,7 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
         restrictChatToHostOnly?: boolean; // New: restrict all users to send to host only
       };
       targetUserId?: string; // If set, only update this user's permissions
-    }
+    },
   ) {
     if (!client.data.userId) {
       client.emit('moderation-error', { message: 'Not authenticated' });
@@ -217,9 +233,15 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
 
     try {
       // Verify the caller is the host
-      const isHost = await this.verifyIsHost(sessionId, sessionType, client.data.userId);
+      const isHost = await this.verifyIsHost(
+        sessionId,
+        sessionType,
+        client.data.userId,
+      );
       if (!isHost) {
-        client.emit('moderation-error', { message: 'Only the host can update permissions' });
+        client.emit('moderation-error', {
+          message: 'Only the host can update permissions',
+        });
         return;
       }
 
@@ -233,9 +255,12 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
           canChatHost?: boolean;
           canChatUser?: boolean;
         } = {};
-        if (permissions.allowAudio !== undefined) userPerms.canAudio = permissions.allowAudio;
-        if (permissions.allowVideo !== undefined) userPerms.canVideo = permissions.allowVideo;
-        if (permissions.allowChat !== undefined) userPerms.canChat = permissions.allowChat;
+        if (permissions.allowAudio !== undefined)
+          userPerms.canAudio = permissions.allowAudio;
+        if (permissions.allowVideo !== undefined)
+          userPerms.canVideo = permissions.allowVideo;
+        if (permissions.allowChat !== undefined)
+          userPerms.canChat = permissions.allowChat;
         if (permissions.allowChatEveryone !== undefined) {
           userPerms.canChatEveryone = permissions.allowChatEveryone;
         }
@@ -245,18 +270,26 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
         if (permissions.allowChatUser !== undefined) {
           userPerms.canChatUser = permissions.allowChatUser;
         }
-        
-        await this.permissionsService.setUserPermissions(sessionId, targetUserId, userPerms);
-        
+
+        await this.permissionsService.setUserPermissions(
+          sessionId,
+          targetUserId,
+          userPerms,
+        );
+
         // Get updated computed permissions for the target user
-        const computedPerms = await this.permissionsService.getComputedPermissions(sessionId, targetUserId);
-        
+        const computedPerms =
+          await this.permissionsService.getComputedPermissions(
+            sessionId,
+            targetUserId,
+          );
+
         // Notify the specific user and all clients in the room
         this.server.to(sessionId).emit('permissions-updated', {
           targetUserId,
           permissions: computedPerms,
         });
-        
+
         // Emit user-state-changed for UI updates
         this.server.to(sessionId).emit('user-state-changed', {
           userId: targetUserId,
@@ -271,40 +304,50 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
           hideParticipantList?: boolean;
           chatRestrictToHostOnly?: boolean;
         } = {};
-        if (permissions.allowAudio !== undefined) roomSettings.lockAudio = !permissions.allowAudio;
-        if (permissions.allowVideo !== undefined) roomSettings.lockVideo = !permissions.allowVideo;
-        if (permissions.allowChat !== undefined) roomSettings.chatDisabled = !permissions.allowChat;
+        if (permissions.allowAudio !== undefined)
+          roomSettings.lockAudio = !permissions.allowAudio;
+        if (permissions.allowVideo !== undefined)
+          roomSettings.lockVideo = !permissions.allowVideo;
+        if (permissions.allowChat !== undefined)
+          roomSettings.chatDisabled = !permissions.allowChat;
         if (permissions.allowParticipantList !== undefined) {
           roomSettings.hideParticipantList = !permissions.allowParticipantList;
         }
         if (permissions.restrictChatToHostOnly !== undefined) {
-          roomSettings.chatRestrictToHostOnly = permissions.restrictChatToHostOnly;
+          roomSettings.chatRestrictToHostOnly =
+            permissions.restrictChatToHostOnly;
         }
-        
+
         await this.permissionsService.setRoomSettings(sessionId, roomSettings);
-        
+
         // Get updated settings
-        const updatedSettings = await this.permissionsService.getRoomSettings(sessionId);
-        
+        const updatedSettings =
+          await this.permissionsService.getRoomSettings(sessionId);
+
         // Recompute permissions for all users in the room and broadcast
         const allClients = await this.server.in(sessionId).fetchSockets();
-        
+
         for (const socket of allClients) {
           if (socket.data.userId) {
-            const socketIsHost = await this.verifyIsHost(sessionId, sessionType, socket.data.userId);
-            const computedPerms = await this.permissionsService.getComputedPermissions(
+            const socketIsHost = await this.verifyIsHost(
               sessionId,
+              sessionType,
               socket.data.userId,
-              socketIsHost
             );
-            
+            const computedPerms =
+              await this.permissionsService.getComputedPermissions(
+                sessionId,
+                socket.data.userId,
+                socketIsHost,
+              );
+
             // Emit to specific user with their computed permissions
             socket.emit('permissions-updated', {
               permissions: computedPerms,
             });
           }
         }
-        
+
         // Also broadcast room-wide update with general permissions (for backwards compatibility)
         this.server.to(sessionId).emit('permissions-updated', {
           permissions: {
@@ -314,7 +357,7 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
             allowParticipantList: !updatedSettings.hideParticipantList,
           },
         });
-        
+
         // Also emit room-settings-updated for new frontend
         this.server.to(sessionId).emit('room-settings-updated', {
           settings: updatedSettings,
@@ -324,15 +367,17 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
       client.emit('update-permissions:ok', { message: 'Permissions updated' });
     } catch (error: any) {
       this.logger.error('Error updating permissions:', error);
-      client.emit('moderation-error', { message: error?.message || 'Failed to update permissions' });
+      client.emit('moderation-error', {
+        message: error?.message || 'Failed to update permissions',
+      });
     }
   }
 
   // Get current permissions for a user (called when they try to unmute/enable video)
   @SubscribeMessage('check-permission')
   async handleCheckPermission(
-    client: Socket, 
-    payload: { sessionId: string; type: 'audio' | 'video' | 'chat' }
+    client: Socket,
+    payload: { sessionId: string; type: 'audio' | 'video' | 'chat' },
   ) {
     if (!client.data.userId) {
       client.emit('moderation-error', { message: 'Not authenticated' });
@@ -344,13 +389,20 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
       return;
     }
 
-    const allowed = await this.permissionsService.hasPermission(sessionId, client.data.userId, type);
+    const allowed = await this.permissionsService.hasPermission(
+      sessionId,
+      client.data.userId,
+      type,
+    );
     client.emit('permission-check-result', { type, allowed });
   }
 
   // Host requests end meeting for all
   @SubscribeMessage('end-meeting')
-  async handleEndMeeting(client: Socket, payload: { sessionId: string; sessionType: 'studyRoom' | 'peerSession' }) {
+  async handleEndMeeting(
+    client: Socket,
+    payload: { sessionId: string; sessionType: 'studyRoom' | 'peerSession' },
+  ) {
     if (!client.data.userId) {
       client.emit('moderation-error', { message: 'Not authenticated' });
       return;
@@ -367,15 +419,28 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
 
       if (sessionType === 'studyRoom') {
         // Check if already completed to avoid duplicate completion
-        const roomDetails = await this.studyRoomsService.getStudyRoomDetails(sessionId);
-        if (roomDetails.sessionStatus !== 'DONE' && roomDetails.sessionStatus !== 'NOT_COMPLETED' && roomDetails.sessionStatus !== 'CANCELLED') {
+        const roomDetails =
+          await this.studyRoomsService.getStudyRoomDetails(sessionId);
+        if (
+          roomDetails.sessionStatus !== 'DONE' &&
+          roomDetails.sessionStatus !== 'NOT_COMPLETED' &&
+          roomDetails.sessionStatus !== 'CANCELLED'
+        ) {
           await this.studyRoomsService.completeStudyRoom(sessionId, clerkId);
         }
       } else {
         // Check if already completed to avoid duplicate completion
-        const sessionDetails = await this.peerSessionsService.getPeerSessionDetails(sessionId);
-        if (sessionDetails.sessionStatus !== 'DONE' && sessionDetails.sessionStatus !== 'NOT_COMPLETED' && sessionDetails.sessionStatus !== 'CANCELLED') {
-          await this.peerSessionsService.completePeerSession(sessionId, clerkId);
+        const sessionDetails =
+          await this.peerSessionsService.getPeerSessionDetails(sessionId);
+        if (
+          sessionDetails.sessionStatus !== 'DONE' &&
+          sessionDetails.sessionStatus !== 'NOT_COMPLETED' &&
+          sessionDetails.sessionStatus !== 'CANCELLED'
+        ) {
+          await this.peerSessionsService.completePeerSession(
+            sessionId,
+            clerkId,
+          );
         }
       }
 
@@ -383,23 +448,38 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
       await this.permissionsService.cleanupSession(sessionId);
 
       // Broadcast meeting ended to all in the room
-      this.server.to(sessionId).emit('meeting-ended', { sessionId, sessionType, endedBy: clerkId });
+      this.server
+        .to(sessionId)
+        .emit('meeting-ended', { sessionId, sessionType, endedBy: clerkId });
 
       client.emit('end-meeting:ok', { message: 'Meeting ended' });
     } catch (error: any) {
       this.logger.error('Error ending meeting:', error);
-      client.emit('moderation-error', { message: error?.message || 'Failed to end meeting' });
+      client.emit('moderation-error', {
+        message: error?.message || 'Failed to end meeting',
+      });
     }
   }
 
   // Helper to verify if a user is the host of a session
-  private async verifyIsHost(sessionId: string, sessionType: 'studyRoom' | 'peerSession', clerkId: string): Promise<boolean> {
+  private async verifyIsHost(
+    sessionId: string,
+    sessionType: 'studyRoom' | 'peerSession',
+    clerkId: string,
+  ): Promise<boolean> {
     try {
       if (sessionType === 'studyRoom') {
-        const result = await this.studyRoomsService.checkIsHost(sessionId, clerkId);
+        const result = await this.studyRoomsService.checkIsHost(
+          sessionId,
+          undefined,
+          clerkId,
+        );
         return result.isHost;
       } else {
-        const result = await this.peerSessionsService.checkIsHost(sessionId, clerkId);
+        const result = await this.peerSessionsService.checkIsHost(
+          sessionId,
+          clerkId,
+        );
         return result.isHost;
       }
     } catch (error) {
@@ -410,7 +490,15 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
 
   // Moderation actions (mute/unmute, video enable/disable)
   @SubscribeMessage('moderation-mute')
-  async handleModerationMute(client: Socket, payload: { sessionId: string; sessionType: 'studyRoom' | 'peerSession'; action: 'mute' | 'unmute'; targetUserId?: string }) {
+  async handleModerationMute(
+    client: Socket,
+    payload: {
+      sessionId: string;
+      sessionType: 'studyRoom' | 'peerSession';
+      action: 'mute' | 'unmute';
+      targetUserId?: string;
+    },
+  ) {
     if (!client.data.userId) {
       client.emit('moderation-error', { message: 'Not authenticated' });
       return;
@@ -423,22 +511,34 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
 
     try {
       // Verify the caller is the host
-      const isHost = await this.verifyIsHost(sessionId, sessionType, client.data.userId);
+      const isHost = await this.verifyIsHost(
+        sessionId,
+        sessionType,
+        client.data.userId,
+      );
       if (!isHost) {
-        client.emit('moderation-error', { message: 'Only the host can perform moderation actions' });
+        client.emit('moderation-error', {
+          message: 'Only the host can perform moderation actions',
+        });
         return;
       }
 
       // If muting a specific user, also lock their audio permission in Redis
       if (action === 'mute' && targetUserId) {
-        await this.permissionsService.setUserPermissions(sessionId, targetUserId, { canAudio: false });
-        this.logger.debug(`Locked audio for user ${targetUserId} in session ${sessionId}`);
+        await this.permissionsService.setUserPermissions(
+          sessionId,
+          targetUserId,
+          { canAudio: false },
+        );
+        this.logger.debug(
+          `Locked audio for user ${targetUserId} in session ${sessionId}`,
+        );
       }
 
       // Broadcast to session room; clients will check targetUserId
       // Include hostClerkId so frontend knows NOT to apply mute to the host
-      this.server.to(sessionId).emit('moderation-mute', { 
-        action, 
+      this.server.to(sessionId).emit('moderation-mute', {
+        action,
         targetUserId,
         hostClerkId: client.data.userId, // Host should be excluded from mute all
         isLocked: action === 'mute' && !!targetUserId, // Indicate if this is a lock action
@@ -446,12 +546,22 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
       client.emit('moderation-mute:ok', { message: 'Moderation action sent' });
     } catch (error: any) {
       this.logger.error('Error broadcasting moderation-mute:', error);
-      client.emit('moderation-error', { message: error?.message || 'Failed to perform moderation' });
+      client.emit('moderation-error', {
+        message: error?.message || 'Failed to perform moderation',
+      });
     }
   }
 
   @SubscribeMessage('moderation-video')
-  async handleModerationVideo(client: Socket, payload: { sessionId: string; sessionType: 'studyRoom' | 'peerSession'; action: 'disable' | 'enable'; targetUserId?: string }) {
+  async handleModerationVideo(
+    client: Socket,
+    payload: {
+      sessionId: string;
+      sessionType: 'studyRoom' | 'peerSession';
+      action: 'disable' | 'enable';
+      targetUserId?: string;
+    },
+  ) {
     if (!client.data.userId) {
       client.emit('moderation-error', { message: 'Not authenticated' });
       return;
@@ -464,35 +574,58 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
 
     try {
       // Verify the caller is the host
-      const isHost = await this.verifyIsHost(sessionId, sessionType, client.data.userId);
+      const isHost = await this.verifyIsHost(
+        sessionId,
+        sessionType,
+        client.data.userId,
+      );
       if (!isHost) {
-        client.emit('moderation-error', { message: 'Only the host can perform moderation actions' });
+        client.emit('moderation-error', {
+          message: 'Only the host can perform moderation actions',
+        });
         return;
       }
 
       // If disabling video for a specific user, also lock their video permission in Redis
       if (action === 'disable' && targetUserId) {
-        await this.permissionsService.setUserPermissions(sessionId, targetUserId, { canVideo: false });
-        this.logger.debug(`Locked video for user ${targetUserId} in session ${sessionId}`);
+        await this.permissionsService.setUserPermissions(
+          sessionId,
+          targetUserId,
+          { canVideo: false },
+        );
+        this.logger.debug(
+          `Locked video for user ${targetUserId} in session ${sessionId}`,
+        );
       }
 
       // Include hostClerkId so frontend knows NOT to apply video disable to the host
-      this.server.to(sessionId).emit('moderation-video', { 
-        action, 
+      this.server.to(sessionId).emit('moderation-video', {
+        action,
         targetUserId,
         hostClerkId: client.data.userId, // Host should be excluded from video disable all
         isLocked: action === 'disable' && !!targetUserId, // Indicate if this is a lock action
       });
-      client.emit('moderation-video:ok', { message: 'Moderation video action sent' });
+      client.emit('moderation-video:ok', {
+        message: 'Moderation video action sent',
+      });
     } catch (error: any) {
       this.logger.error('Error broadcasting moderation-video:', error);
-      client.emit('moderation-error', { message: error?.message || 'Failed to perform moderation' });
+      client.emit('moderation-error', {
+        message: error?.message || 'Failed to perform moderation',
+      });
     }
   }
 
   // Host requests participant to turn on audio (cannot force due to browser privacy)
   @SubscribeMessage('request-audio-on')
-  async handleRequestAudioOn(client: Socket, payload: { sessionId: string; sessionType: 'studyRoom' | 'peerSession'; targetUserId: string }) {
+  async handleRequestAudioOn(
+    client: Socket,
+    payload: {
+      sessionId: string;
+      sessionType: 'studyRoom' | 'peerSession';
+      targetUserId: string;
+    },
+  ) {
     if (!client.data.userId) {
       client.emit('moderation-error', { message: 'Not authenticated' });
       return;
@@ -505,29 +638,62 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
 
     try {
       // Verify the caller is the host
-      const isHost = await this.verifyIsHost(sessionId, sessionType, client.data.userId);
+      const isHost = await this.verifyIsHost(
+        sessionId,
+        sessionType,
+        client.data.userId,
+      );
       if (!isHost) {
-        client.emit('moderation-error', { message: 'Only the host can request audio on' });
+        client.emit('moderation-error', {
+          message: 'Only the host can request audio on',
+        });
         return;
       }
 
+      // Unlock audio for this participant in Redis so they can unmute if they accept
+      // (room defaults may have mic disabled; JWT/moderation need allowAudio true when host asks)
+      await this.permissionsService.setUserPermissions(sessionId, targetUserId, {
+        canAudio: true,
+      });
+      const audioComputed =
+        await this.permissionsService.getComputedPermissions(
+          sessionId,
+          targetUserId,
+          false,
+        );
+      this.server.to(sessionId).emit('user-permissions-updated', {
+        targetUserId,
+        permissions: audioComputed,
+      });
+
       // Broadcast request to the specific user
-      this.server.to(sessionId).emit('host-requested-audio', { 
+      this.server.to(sessionId).emit('host-requested-audio', {
         targetUserId,
         hostId: client.data.userId,
       });
       // Confirm to host that request was sent
       client.emit('request-sent-confirmation', { type: 'audio', targetUserId });
-      this.logger.debug(`Host ${client.data.userId} requested audio on for ${targetUserId}`);
+      this.logger.debug(
+        `Host ${client.data.userId} requested audio on for ${targetUserId}`,
+      );
     } catch (error: any) {
       this.logger.error('Error requesting audio on:', error);
-      client.emit('moderation-error', { message: error?.message || 'Failed to request audio' });
+      client.emit('moderation-error', {
+        message: error?.message || 'Failed to request audio',
+      });
     }
   }
 
   // Host requests participant to turn on video (cannot force due to browser privacy)
   @SubscribeMessage('request-video-on')
-  async handleRequestVideoOn(client: Socket, payload: { sessionId: string; sessionType: 'studyRoom' | 'peerSession'; targetUserId: string }) {
+  async handleRequestVideoOn(
+    client: Socket,
+    payload: {
+      sessionId: string;
+      sessionType: 'studyRoom' | 'peerSession';
+      targetUserId: string;
+    },
+  ) {
     if (!client.data.userId) {
       client.emit('moderation-error', { message: 'Not authenticated' });
       return;
@@ -540,29 +706,60 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
 
     try {
       // Verify the caller is the host
-      const isHost = await this.verifyIsHost(sessionId, sessionType, client.data.userId);
+      const isHost = await this.verifyIsHost(
+        sessionId,
+        sessionType,
+        client.data.userId,
+      );
       if (!isHost) {
-        client.emit('moderation-error', { message: 'Only the host can request video on' });
+        client.emit('moderation-error', {
+          message: 'Only the host can request video on',
+        });
         return;
       }
 
+      await this.permissionsService.setUserPermissions(sessionId, targetUserId, {
+        canVideo: true,
+      });
+      const videoComputed =
+        await this.permissionsService.getComputedPermissions(
+          sessionId,
+          targetUserId,
+          false,
+        );
+      this.server.to(sessionId).emit('user-permissions-updated', {
+        targetUserId,
+        permissions: videoComputed,
+      });
+
       // Broadcast request to the specific user
-      this.server.to(sessionId).emit('host-requested-video', { 
+      this.server.to(sessionId).emit('host-requested-video', {
         targetUserId,
         hostId: client.data.userId,
       });
       // Confirm to host that request was sent
       client.emit('request-sent-confirmation', { type: 'video', targetUserId });
-      this.logger.debug(`Host ${client.data.userId} requested video on for ${targetUserId}`);
+      this.logger.debug(
+        `Host ${client.data.userId} requested video on for ${targetUserId}`,
+      );
     } catch (error: any) {
       this.logger.error('Error requesting video on:', error);
-      client.emit('moderation-error', { message: error?.message || 'Failed to request video' });
+      client.emit('moderation-error', {
+        message: error?.message || 'Failed to request video',
+      });
     }
   }
 
   // User responds to host's audio request (accept/deny)
   @SubscribeMessage('respond-audio-request')
-  async handleRespondAudioRequest(client: Socket, payload: { sessionId: string; sessionType: 'studyRoom' | 'peerSession'; accepted: boolean }) {
+  async handleRespondAudioRequest(
+    client: Socket,
+    payload: {
+      sessionId: string;
+      sessionType: 'studyRoom' | 'peerSession';
+      accepted: boolean;
+    },
+  ) {
     if (!client.data.userId) {
       client.emit('moderation-error', { message: 'Not authenticated' });
       return;
@@ -575,26 +772,57 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
 
     try {
       if (accepted) {
-        // Unlock the user's audio permission in Redis
-        await this.permissionsService.setUserPermissions(sessionId, client.data.userId, { canAudio: true });
-        this.logger.debug(`User ${client.data.userId} accepted audio request, unlocked audio`);
+        await this.permissionsService.setUserPermissions(
+          sessionId,
+          client.data.userId,
+          { canAudio: true },
+        );
+        this.logger.debug(
+          `User ${client.data.userId} accepted audio request, unlocked audio`,
+        );
+      } else {
+        await this.permissionsService.removeUserPermissionFields(
+          sessionId,
+          client.data.userId,
+          ['canAudio'],
+        );
       }
 
+      const audioRespondComputed =
+        await this.permissionsService.getComputedPermissions(
+          sessionId,
+          client.data.userId,
+          false,
+        );
+      this.server.to(sessionId).emit('user-permissions-updated', {
+        targetUserId: client.data.userId,
+        permissions: audioRespondComputed,
+      });
+
       // Notify the host about the response
-      this.server.to(sessionId).emit('audio-request-response', { 
+      this.server.to(sessionId).emit('audio-request-response', {
         userId: client.data.userId,
         accepted,
       });
       client.emit('respond-audio-request:ok', { message: 'Response sent' });
     } catch (error: any) {
       this.logger.error('Error responding to audio request:', error);
-      client.emit('moderation-error', { message: error?.message || 'Failed to respond' });
+      client.emit('moderation-error', {
+        message: error?.message || 'Failed to respond',
+      });
     }
   }
 
   // User responds to host's video request (accept/deny)
   @SubscribeMessage('respond-video-request')
-  async handleRespondVideoRequest(client: Socket, payload: { sessionId: string; sessionType: 'studyRoom' | 'peerSession'; accepted: boolean }) {
+  async handleRespondVideoRequest(
+    client: Socket,
+    payload: {
+      sessionId: string;
+      sessionType: 'studyRoom' | 'peerSession';
+      accepted: boolean;
+    },
+  ) {
     if (!client.data.userId) {
       client.emit('moderation-error', { message: 'Not authenticated' });
       return;
@@ -607,26 +835,53 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
 
     try {
       if (accepted) {
-        // Unlock the user's video permission in Redis
-        await this.permissionsService.setUserPermissions(sessionId, client.data.userId, { canVideo: true });
-        this.logger.debug(`User ${client.data.userId} accepted video request, unlocked video`);
+        await this.permissionsService.setUserPermissions(
+          sessionId,
+          client.data.userId,
+          { canVideo: true },
+        );
+        this.logger.debug(
+          `User ${client.data.userId} accepted video request, unlocked video`,
+        );
+      } else {
+        await this.permissionsService.removeUserPermissionFields(
+          sessionId,
+          client.data.userId,
+          ['canVideo'],
+        );
       }
 
+      const videoRespondComputed =
+        await this.permissionsService.getComputedPermissions(
+          sessionId,
+          client.data.userId,
+          false,
+        );
+      this.server.to(sessionId).emit('user-permissions-updated', {
+        targetUserId: client.data.userId,
+        permissions: videoRespondComputed,
+      });
+
       // Notify the host about the response
-      this.server.to(sessionId).emit('video-request-response', { 
+      this.server.to(sessionId).emit('video-request-response', {
         userId: client.data.userId,
         accepted,
       });
       client.emit('respond-video-request:ok', { message: 'Response sent' });
     } catch (error: any) {
       this.logger.error('Error responding to video request:', error);
-      client.emit('moderation-error', { message: error?.message || 'Failed to respond' });
+      client.emit('moderation-error', {
+        message: error?.message || 'Failed to respond',
+      });
     }
   }
 
   // Participant requests permission to unmute audio
   @SubscribeMessage('participant-request-audio')
-  async handleParticipantRequestAudio(client: Socket, payload: { sessionId: string; sessionType: 'studyRoom' | 'peerSession' }) {
+  async handleParticipantRequestAudio(
+    client: Socket,
+    payload: { sessionId: string; sessionType: 'studyRoom' | 'peerSession' },
+  ) {
     if (!client.data.userId) {
       client.emit('moderation-error', { message: 'Not authenticated' });
       return;
@@ -643,17 +898,26 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
         userId: client.data.userId,
         requestType: 'audio',
       });
-      client.emit('participant-request-audio:ok', { message: 'Request sent to host' });
-      this.logger.debug(`Participant ${client.data.userId} requested audio permission`);
+      client.emit('participant-request-audio:ok', {
+        message: 'Request sent to host',
+      });
+      this.logger.debug(
+        `Participant ${client.data.userId} requested audio permission`,
+      );
     } catch (error: any) {
       this.logger.error('Error sending participant audio request:', error);
-      client.emit('moderation-error', { message: error?.message || 'Failed to send request' });
+      client.emit('moderation-error', {
+        message: error?.message || 'Failed to send request',
+      });
     }
   }
 
   // Participant requests permission to enable video
   @SubscribeMessage('participant-request-video')
-  async handleParticipantRequestVideo(client: Socket, payload: { sessionId: string; sessionType: 'studyRoom' | 'peerSession' }) {
+  async handleParticipantRequestVideo(
+    client: Socket,
+    payload: { sessionId: string; sessionType: 'studyRoom' | 'peerSession' },
+  ) {
     if (!client.data.userId) {
       client.emit('moderation-error', { message: 'Not authenticated' });
       return;
@@ -670,42 +934,76 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
         userId: client.data.userId,
         requestType: 'video',
       });
-      client.emit('participant-request-video:ok', { message: 'Request sent to host' });
-      this.logger.debug(`Participant ${client.data.userId} requested video permission`);
+      client.emit('participant-request-video:ok', {
+        message: 'Request sent to host',
+      });
+      this.logger.debug(
+        `Participant ${client.data.userId} requested video permission`,
+      );
     } catch (error: any) {
       this.logger.error('Error sending participant video request:', error);
-      client.emit('moderation-error', { message: error?.message || 'Failed to send request' });
+      client.emit('moderation-error', {
+        message: error?.message || 'Failed to send request',
+      });
     }
   }
 
   // Host responds to participant's audio request
   @SubscribeMessage('host-respond-participant-audio')
-  async handleHostRespondParticipantAudio(client: Socket, payload: { sessionId: string; sessionType: 'studyRoom' | 'peerSession'; userId: string; accepted: boolean }) {
+  async handleHostRespondParticipantAudio(
+    client: Socket,
+    payload: {
+      sessionId: string;
+      sessionType: 'studyRoom' | 'peerSession';
+      userId: string;
+      accepted: boolean;
+    },
+  ) {
     if (!client.data.userId) {
       client.emit('moderation-error', { message: 'Not authenticated' });
       return;
     }
     const { sessionId, sessionType, userId, accepted } = payload;
-    if (!sessionId || !sessionType || !userId || typeof accepted !== 'boolean') {
+    if (
+      !sessionId ||
+      !sessionType ||
+      !userId ||
+      typeof accepted !== 'boolean'
+    ) {
       client.emit('moderation-error', { message: 'Invalid payload' });
       return;
     }
 
     try {
       // Verify caller is host
-      const isHost = await this.verifyIsHost(sessionId, sessionType, client.data.userId);
+      const isHost = await this.verifyIsHost(
+        sessionId,
+        sessionType,
+        client.data.userId,
+      );
       if (!isHost) {
-        client.emit('moderation-error', { message: 'Only host can respond to permission requests' });
+        client.emit('moderation-error', {
+          message: 'Only host can respond to permission requests',
+        });
         return;
       }
 
       if (accepted) {
         // Unlock audio permission for the participant
-        await this.permissionsService.setUserPermissions(sessionId, userId, { canAudio: true });
-        this.logger.debug(`Host ${client.data.userId} accepted audio request from ${userId}`);
-        
+        await this.permissionsService.setUserPermissions(sessionId, userId, {
+          canAudio: true,
+        });
+        this.logger.debug(
+          `Host ${client.data.userId} accepted audio request from ${userId}`,
+        );
+
         // Emit user-permissions-updated so the participant's frontend updates their permissions
-        const computedPermissions = await this.permissionsService.getComputedPermissions(sessionId, userId, false);
+        const computedPermissions =
+          await this.permissionsService.getComputedPermissions(
+            sessionId,
+            userId,
+            false,
+          );
         this.server.to(sessionId).emit('user-permissions-updated', {
           targetUserId: userId,
           permissions: computedPermissions,
@@ -717,41 +1015,76 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
         userId,
         accepted,
       });
-      client.emit('host-respond-participant-audio:ok', { message: 'Response sent' });
+      client.emit('host-respond-participant-audio:ok', {
+        message: 'Response sent',
+      });
     } catch (error: any) {
-      this.logger.error('Error responding to participant audio request:', error);
-      client.emit('moderation-error', { message: error?.message || 'Failed to respond' });
+      this.logger.error(
+        'Error responding to participant audio request:',
+        error,
+      );
+      client.emit('moderation-error', {
+        message: error?.message || 'Failed to respond',
+      });
     }
   }
 
   // Host responds to participant's video request
   @SubscribeMessage('host-respond-participant-video')
-  async handleHostRespondParticipantVideo(client: Socket, payload: { sessionId: string; sessionType: 'studyRoom' | 'peerSession'; userId: string; accepted: boolean }) {
+  async handleHostRespondParticipantVideo(
+    client: Socket,
+    payload: {
+      sessionId: string;
+      sessionType: 'studyRoom' | 'peerSession';
+      userId: string;
+      accepted: boolean;
+    },
+  ) {
     if (!client.data.userId) {
       client.emit('moderation-error', { message: 'Not authenticated' });
       return;
     }
     const { sessionId, sessionType, userId, accepted } = payload;
-    if (!sessionId || !sessionType || !userId || typeof accepted !== 'boolean') {
+    if (
+      !sessionId ||
+      !sessionType ||
+      !userId ||
+      typeof accepted !== 'boolean'
+    ) {
       client.emit('moderation-error', { message: 'Invalid payload' });
       return;
     }
 
     try {
       // Verify caller is host
-      const isHost = await this.verifyIsHost(sessionId, sessionType, client.data.userId);
+      const isHost = await this.verifyIsHost(
+        sessionId,
+        sessionType,
+        client.data.userId,
+      );
       if (!isHost) {
-        client.emit('moderation-error', { message: 'Only host can respond to permission requests' });
+        client.emit('moderation-error', {
+          message: 'Only host can respond to permission requests',
+        });
         return;
       }
 
       if (accepted) {
         // Unlock video permission for the participant
-        await this.permissionsService.setUserPermissions(sessionId, userId, { canVideo: true });
-        this.logger.debug(`Host ${client.data.userId} accepted video request from ${userId}`);
-        
+        await this.permissionsService.setUserPermissions(sessionId, userId, {
+          canVideo: true,
+        });
+        this.logger.debug(
+          `Host ${client.data.userId} accepted video request from ${userId}`,
+        );
+
         // Emit user-permissions-updated so the participant's frontend updates their permissions
-        const computedPermissions = await this.permissionsService.getComputedPermissions(sessionId, userId, false);
+        const computedPermissions =
+          await this.permissionsService.getComputedPermissions(
+            sessionId,
+            userId,
+            false,
+          );
         this.server.to(sessionId).emit('user-permissions-updated', {
           targetUserId: userId,
           permissions: computedPermissions,
@@ -763,16 +1096,30 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
         userId,
         accepted,
       });
-      client.emit('host-respond-participant-video:ok', { message: 'Response sent' });
+      client.emit('host-respond-participant-video:ok', {
+        message: 'Response sent',
+      });
     } catch (error: any) {
-      this.logger.error('Error responding to participant video request:', error);
-      client.emit('moderation-error', { message: error?.message || 'Failed to respond' });
+      this.logger.error(
+        'Error responding to participant video request:',
+        error,
+      );
+      client.emit('moderation-error', {
+        message: error?.message || 'Failed to respond',
+      });
     }
   }
 
   // Toggle chat privileges globally
   @SubscribeMessage('toggle-chat')
-  async handleToggleChat(client: Socket, payload: { sessionId: string; sessionType: 'studyRoom' | 'peerSession'; disabled: boolean }) {
+  async handleToggleChat(
+    client: Socket,
+    payload: {
+      sessionId: string;
+      sessionType: 'studyRoom' | 'peerSession';
+      disabled: boolean;
+    },
+  ) {
     if (!client.data.userId) {
       client.emit('moderation-error', { message: 'Not authenticated' });
       return;
@@ -785,27 +1132,38 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
 
     try {
       // Verify the caller is the host
-      const isHost = await this.verifyIsHost(sessionId, sessionType, client.data.userId);
+      const isHost = await this.verifyIsHost(
+        sessionId,
+        sessionType,
+        client.data.userId,
+      );
       if (!isHost) {
-        client.emit('moderation-error', { message: 'Only the host can toggle chat' });
+        client.emit('moderation-error', {
+          message: 'Only the host can toggle chat',
+        });
         return;
       }
 
       // Update Redis
-      await this.permissionsService.setRoomSettings(sessionId, { chatDisabled: disabled });
+      await this.permissionsService.setRoomSettings(sessionId, {
+        chatDisabled: disabled,
+      });
 
       // Get updated settings
-      const updatedSettings = await this.permissionsService.getRoomSettings(sessionId);
+      const updatedSettings =
+        await this.permissionsService.getRoomSettings(sessionId);
 
       this.server.to(sessionId).emit('chat-toggled', { disabled });
       this.server.to(sessionId).emit('room-settings-updated', {
         settings: updatedSettings,
       });
-      
+
       client.emit('toggle-chat:ok', { message: 'Chat toggled' });
     } catch (error: any) {
       this.logger.error('Error toggling chat:', error);
-      client.emit('moderation-error', { message: error?.message || 'Failed to toggle chat' });
+      client.emit('moderation-error', {
+        message: error?.message || 'Failed to toggle chat',
+      });
     }
   }
 
@@ -825,7 +1183,7 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
       questions: Array<{
         id: string;
         text: string;
-        duration?: number;      // seconds to display (0 = manual dismiss)
+        duration?: number; // seconds to display (0 = manual dismiss)
         position?: 'top' | 'center' | 'bottom';
         fontSize?: 'sm' | 'md' | 'lg' | 'xl';
         bgColor?: string;
@@ -843,13 +1201,23 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
     }
 
     try {
-      const isHost = await this.verifyIsHost(sessionId, sessionType, client.data.userId);
+      const isHost = await this.verifyIsHost(
+        sessionId,
+        sessionType,
+        client.data.userId,
+      );
       if (!isHost) {
-        client.emit('moderation-error', { message: 'Only hosts can manage question lists' });
+        client.emit('moderation-error', {
+          message: 'Only hosts can manage question lists',
+        });
         return;
       }
 
-      await this.permissionsService.setFlashQuestions(sessionId, client.data.userId, questions);
+      await this.permissionsService.setFlashQuestions(
+        sessionId,
+        client.data.userId,
+        questions,
+      );
 
       // Confirm to the uploading host
       client.emit('flash:list-updated', {
@@ -857,10 +1225,14 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
         questions,
         currentIndex: 0,
       });
-      this.logger.log(`Host ${client.data.userId} uploaded ${questions.length} questions for session ${sessionId}`);
+      this.logger.log(
+        `Host ${client.data.userId} uploaded ${questions.length} questions for session ${sessionId}`,
+      );
     } catch (error: any) {
       this.logger.error('Error uploading flash question list:', error);
-      client.emit('moderation-error', { message: error?.message || 'Failed to upload questions' });
+      client.emit('moderation-error', {
+        message: error?.message || 'Failed to upload questions',
+      });
     }
   }
 
@@ -894,20 +1266,33 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
     }
 
     try {
-      const isHost = await this.verifyIsHost(sessionId, sessionType, client.data.userId);
+      const isHost = await this.verifyIsHost(
+        sessionId,
+        sessionType,
+        client.data.userId,
+      );
       if (!isHost) {
-        client.emit('moderation-error', { message: 'Only hosts can edit questions' });
+        client.emit('moderation-error', {
+          message: 'Only hosts can edit questions',
+        });
         return;
       }
 
-      const questions = await this.permissionsService.getFlashQuestions(sessionId, client.data.userId);
+      const questions = await this.permissionsService.getFlashQuestions(
+        sessionId,
+        client.data.userId,
+      );
       const idx = questions.findIndex((q) => q.id === questionId);
       if (idx === -1) {
         client.emit('moderation-error', { message: 'Question not found' });
         return;
       }
       questions[idx] = { ...questions[idx], ...updates };
-      await this.permissionsService.setFlashQuestions(sessionId, client.data.userId, questions);
+      await this.permissionsService.setFlashQuestions(
+        sessionId,
+        client.data.userId,
+        questions,
+      );
 
       client.emit('flash:list-updated', {
         hostId: client.data.userId,
@@ -915,7 +1300,9 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
       });
     } catch (error: any) {
       this.logger.error('Error updating flash question:', error);
-      client.emit('moderation-error', { message: error?.message || 'Failed to update question' });
+      client.emit('moderation-error', {
+        message: error?.message || 'Failed to update question',
+      });
     }
   }
 
@@ -943,16 +1330,31 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
     }
 
     try {
-      const isHost = await this.verifyIsHost(sessionId, sessionType, client.data.userId);
+      const isHost = await this.verifyIsHost(
+        sessionId,
+        sessionType,
+        client.data.userId,
+      );
       if (!isHost) {
-        client.emit('moderation-error', { message: 'Only hosts can reorder questions' });
+        client.emit('moderation-error', {
+          message: 'Only hosts can reorder questions',
+        });
         return;
       }
 
-      const questions = await this.permissionsService.getFlashQuestions(sessionId, client.data.userId);
+      const questions = await this.permissionsService.getFlashQuestions(
+        sessionId,
+        client.data.userId,
+      );
       const byId = new Map(questions.map((q) => [q.id, q]));
-      const reordered = orderedIds.map((id) => byId.get(id)).filter(Boolean) as typeof questions;
-      await this.permissionsService.setFlashQuestions(sessionId, client.data.userId, reordered);
+      const reordered = orderedIds
+        .map((id) => byId.get(id))
+        .filter(Boolean) as typeof questions;
+      await this.permissionsService.setFlashQuestions(
+        sessionId,
+        client.data.userId,
+        reordered,
+      );
 
       client.emit('flash:list-updated', {
         hostId: client.data.userId,
@@ -960,7 +1362,9 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
       });
     } catch (error: any) {
       this.logger.error('Error reordering flash questions:', error);
-      client.emit('moderation-error', { message: error?.message || 'Failed to reorder questions' });
+      client.emit('moderation-error', {
+        message: error?.message || 'Failed to reorder questions',
+      });
     }
   }
 
@@ -987,15 +1391,28 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
     }
 
     try {
-      const isHost = await this.verifyIsHost(sessionId, sessionType, client.data.userId);
+      const isHost = await this.verifyIsHost(
+        sessionId,
+        sessionType,
+        client.data.userId,
+      );
       if (!isHost) {
-        client.emit('moderation-error', { message: 'Only hosts can delete questions' });
+        client.emit('moderation-error', {
+          message: 'Only hosts can delete questions',
+        });
         return;
       }
 
-      const questions = await this.permissionsService.getFlashQuestions(sessionId, client.data.userId);
+      const questions = await this.permissionsService.getFlashQuestions(
+        sessionId,
+        client.data.userId,
+      );
       const filtered = questions.filter((q) => q.id !== questionId);
-      await this.permissionsService.setFlashQuestions(sessionId, client.data.userId, filtered);
+      await this.permissionsService.setFlashQuestions(
+        sessionId,
+        client.data.userId,
+        filtered,
+      );
 
       client.emit('flash:list-updated', {
         hostId: client.data.userId,
@@ -1003,7 +1420,9 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
       });
     } catch (error: any) {
       this.logger.error('Error deleting flash question:', error);
-      client.emit('moderation-error', { message: error?.message || 'Failed to delete question' });
+      client.emit('moderation-error', {
+        message: error?.message || 'Failed to delete question',
+      });
     }
   }
 
@@ -1037,9 +1456,15 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
     }
 
     try {
-      const isHost = await this.verifyIsHost(sessionId, sessionType, client.data.userId);
+      const isHost = await this.verifyIsHost(
+        sessionId,
+        sessionType,
+        client.data.userId,
+      );
       if (!isHost) {
-        client.emit('moderation-error', { message: 'Only hosts can flash messages' });
+        client.emit('moderation-error', {
+          message: 'Only hosts can flash messages',
+        });
         return;
       }
 
@@ -1055,7 +1480,10 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
 
       if (payload.questionId) {
         // Fetch from host's stored list
-        const questions = await this.permissionsService.getFlashQuestions(sessionId, client.data.userId);
+        const questions = await this.permissionsService.getFlashQuestions(
+          sessionId,
+          client.data.userId,
+        );
         const q = questions.find((q) => q.id === payload.questionId);
         if (!q) {
           client.emit('moderation-error', { message: 'Question not found' });
@@ -1082,16 +1510,22 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
           hostId: client.data.userId,
         };
       } else {
-        client.emit('moderation-error', { message: 'Must provide questionId or text' });
+        client.emit('moderation-error', {
+          message: 'Must provide questionId or text',
+        });
         return;
       }
 
       // Broadcast to ALL participants in the room
       this.server.to(sessionId).emit('flash:message', flashData);
-      this.logger.log(`Host ${client.data.userId} flashed message in session ${sessionId}: "${flashData.text.slice(0, 50)}"`);
+      this.logger.log(
+        `Host ${client.data.userId} flashed message in session ${sessionId}: "${flashData.text.slice(0, 50)}"`,
+      );
     } catch (error: any) {
       this.logger.error('Error showing flash message:', error);
-      client.emit('moderation-error', { message: error?.message || 'Failed to show flash message' });
+      client.emit('moderation-error', {
+        message: error?.message || 'Failed to show flash message',
+      });
     }
   }
 
@@ -1114,16 +1548,26 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
     }
 
     try {
-      const isHost = await this.verifyIsHost(sessionId, sessionType, client.data.userId);
+      const isHost = await this.verifyIsHost(
+        sessionId,
+        sessionType,
+        client.data.userId,
+      );
       if (!isHost) {
-        client.emit('moderation-error', { message: 'Only hosts can dismiss flash messages' });
+        client.emit('moderation-error', {
+          message: 'Only hosts can dismiss flash messages',
+        });
         return;
       }
 
-      this.server.to(sessionId).emit('flash:dismissed', { hostId: client.data.userId });
+      this.server
+        .to(sessionId)
+        .emit('flash:dismissed', { hostId: client.data.userId });
     } catch (error: any) {
       this.logger.error('Error dismissing flash message:', error);
-      client.emit('moderation-error', { message: error?.message || 'Failed to dismiss flash message' });
+      client.emit('moderation-error', {
+        message: error?.message || 'Failed to dismiss flash message',
+      });
     }
   }
 
@@ -1146,20 +1590,31 @@ export class SessionModerationGateway implements OnGatewayConnection, OnGatewayD
     }
 
     try {
-      const isHost = await this.verifyIsHost(sessionId, sessionType, client.data.userId);
+      const isHost = await this.verifyIsHost(
+        sessionId,
+        sessionType,
+        client.data.userId,
+      );
       if (!isHost) {
-        client.emit('moderation-error', { message: 'Only hosts can view question lists' });
+        client.emit('moderation-error', {
+          message: 'Only hosts can view question lists',
+        });
         return;
       }
 
-      const questions = await this.permissionsService.getFlashQuestions(sessionId, client.data.userId);
+      const questions = await this.permissionsService.getFlashQuestions(
+        sessionId,
+        client.data.userId,
+      );
       client.emit('flash:list-updated', {
         hostId: client.data.userId,
         questions,
       });
     } catch (error: any) {
       this.logger.error('Error getting flash question list:', error);
-      client.emit('moderation-error', { message: error?.message || 'Failed to get questions' });
+      client.emit('moderation-error', {
+        message: error?.message || 'Failed to get questions',
+      });
     }
   }
 }

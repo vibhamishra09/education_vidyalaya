@@ -85,12 +85,17 @@ export function useUpdateDebateRoom(roomId: string) {
 
   return useMutation({
     mutationFn: async (data: UpdateDebateRoomDto) => {
-      if (isLoaded) {
-        const token = await getToken();
-        if (token) {
-          setAuthToken(token);
-        }
+      if (!isLoaded) {
+        throw new Error('Signing in… try saving again in a moment.');
       }
+      let token = await getToken();
+      if (!token) {
+        token = await getToken({ skipCache: true });
+      }
+      if (!token) {
+        throw new Error('You must be signed in to update this debate.');
+      }
+      setAuthToken(token);
       return debateRoomsApi.updateDebateRoom(roomId, data);
     },
     onSuccess: () => {

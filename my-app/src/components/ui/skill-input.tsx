@@ -46,7 +46,7 @@ export function SkillInput({
       const skills = response.skills?.map(skill => skill.name) || [];
       setAvailableSkills(skills);
       setSkillsLoaded(true);
-    } catch (error) {
+    } catch (_error) {
       // Fallback to empty array if API fails
       setAvailableSkills([]);
     } finally {

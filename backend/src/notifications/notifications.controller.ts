@@ -27,7 +27,8 @@ export class NotificationsController {
 
   @Get()
   async getNotifications(
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
     @Query('type') type?: NotifType,
     @Query('viewed') viewed?: string,
     @Query('page') page?: number,
@@ -36,7 +37,7 @@ export class NotificationsController {
     const viewedBool = viewed !== undefined ? viewed === 'true' : undefined;
 
     return this.notificationsService.getNotifications(
-      userId,
+      userId ?? clerkUserId,
       type,
       viewedBool,
       page || 1,
@@ -47,27 +48,34 @@ export class NotificationsController {
   @Patch(':notificationId/read')
   async markNotificationAsRead(
     @Param('notificationId') notificationId: string,
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
   ) {
     return this.notificationsService.markNotificationAsRead(
       notificationId,
-      userId,
+      userId ?? clerkUserId,
     );
   }
 
   @Patch('read-all')
-  async markAllNotificationsAsRead(@CurrentUser() userId: string) {
-    return this.notificationsService.markAllNotificationsAsRead(userId);
+  async markAllNotificationsAsRead(
+    @CurrentUser('dbUserId') userId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
+  ) {
+    return this.notificationsService.markAllNotificationsAsRead(
+      userId ?? clerkUserId,
+    );
   }
 
   @Patch('read')
   async markNotificationsAsRead(
     @Body() body: MarkNotificationsReadDto,
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
   ) {
     return this.notificationsService.markNotificationsAsRead(
       body.notificationIds,
-      userId,
+      userId ?? clerkUserId,
     );
   }
 
@@ -80,39 +88,27 @@ export class NotificationsController {
 
   @Post('push/subscribe')
   async subscribeToPush(
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
     @Body('subscription') subscription: PushSubscriptionDto,
   ) {
-    // Convert clerkId to database ID
-    const user = await this.notificationsService['prisma'].user.findUnique({
-      where: { clerkId: userId },
-      select: { id: true },
-    });
-
-    if (!user) {
-      throw new Error('User not found');
-    }
-
-    await this.pushNotificationService.subscribeToPush(user.id, subscription);
+    await this.pushNotificationService.subscribeToPush(
+      userId ?? clerkUserId,
+      subscription,
+    );
     return { success: true };
   }
 
   @Delete('push/unsubscribe')
   async unsubscribeFromPush(
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') userId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
     @Body('endpoint') endpoint: string,
   ) {
-    // Convert clerkId to database ID
-    const user = await this.notificationsService['prisma'].user.findUnique({
-      where: { clerkId: userId },
-      select: { id: true },
-    });
-
-    if (!user) {
-      throw new Error('User not found');
-    }
-
-    await this.pushNotificationService.unsubscribeFromPush(user.id, endpoint);
+    await this.pushNotificationService.unsubscribeFromPush(
+      userId ?? clerkUserId,
+      endpoint,
+    );
     return { success: true };
   }
 }

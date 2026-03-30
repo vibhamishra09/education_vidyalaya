@@ -7,11 +7,13 @@ import {
   IsDateString,
   Min,
   Max,
+  MinLength,
   IsEnum,
   ValidateNested,
   ArrayUnique,
   IsBoolean,
   IsEmail,
+  IsObject,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { SessionStatus } from '../../generated/prisma/client';
@@ -31,25 +33,6 @@ export enum StudyRoomEditScope {
 export enum StudyRoomParticipantRoleDto {
   PARTICIPANT = 'PARTICIPANT',
   COHOST = 'COHOST',
-}
-
-export class ExternalInviteInputDto {
-  @IsEmail()
-  email: string;
-
-  @IsEnum(StudyRoomParticipantRoleDto)
-  role: StudyRoomParticipantRoleDto;
-}
-
-export class ExternalJoinRequestDto {
-  @IsString()
-  name: string;
-
-  @IsEmail()
-  email: string;
-
-  @IsString()
-  passcode: string;
 }
 
 export class StudyRoomRecurrenceDto {
@@ -90,14 +73,6 @@ export class StudyRoomDto {
   duration: number;
   maxParticipants: number;
   joiningFee: number;
-  allowExternalUsers?: boolean;
-  externalAutoAccept?: boolean;
-  externalPasscode?: string | null;
-  externalInvites?: Array<{
-    email: string;
-    role: StudyRoomParticipantRoleDto;
-  }>;
-  pendingExternalJoinRequests?: number;
   cohostCount?: number;
   isRecurring?: boolean;
   recurrenceMode?: StudyRoomRecurrenceMode;
@@ -147,6 +122,43 @@ export class StudyRoomCardDto {
   skills: string[];
 }
 
+/** Matches Prisma `StudyRoomSessionMode` */
+export enum StudyRoomSessionModeDto {
+  STANDARD = 'STANDARD',
+  WEBINAR = 'WEBINAR',
+}
+
+export class JoinWebinarWithPasscodeDto {
+  @IsString()
+  studyRoomId: string;
+
+  /** Required unless host has approved (waiting-room flow); then join token alone is enough. */
+  @IsString()
+  passcode: string;
+
+  /** Opaque token from the join link emailed to the registrant (`?token=…`). */
+  @IsString()
+  @MinLength(10)
+  joinToken: string;
+}
+
+export class WebinarChatEnabledDto {
+  @IsBoolean()
+  enabled: boolean;
+}
+
+export class RegisterWebinarDto {
+  @IsString()
+  name: string;
+
+  @IsEmail()
+  email: string;
+
+  @IsOptional()
+  @IsObject()
+  responses?: Record<string, string>;
+}
+
 export class CreateStudyRoomDto {
   @IsString()
   title: string;
@@ -194,22 +206,11 @@ export class CreateStudyRoomDto {
   recurrence?: StudyRoomRecurrenceDto;
 
   @IsOptional()
-  @IsBoolean()
-  allowExternalUsers?: boolean;
+  @IsEnum(StudyRoomSessionModeDto)
+  sessionMode?: StudyRoomSessionModeDto;
 
   @IsOptional()
-  @IsBoolean()
-  externalAutoAccept?: boolean;
-
-  @IsOptional()
-  @IsString()
-  externalPasscode?: string;
-
-  @IsOptional()
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => ExternalInviteInputDto)
-  externalInvites?: ExternalInviteInputDto[];
+  webinarConfig?: Record<string, unknown>;
 }
 
 export class UpdateStudyRoomDto {
@@ -271,34 +272,6 @@ export class UpdateStudyRoomDto {
   @ValidateNested()
   @Type(() => StudyRoomRecurrenceDto)
   recurrence?: StudyRoomRecurrenceDto;
-
-  @IsOptional()
-  @IsBoolean()
-  allowExternalUsers?: boolean;
-
-  @IsOptional()
-  @IsBoolean()
-  externalAutoAccept?: boolean;
-
-  @IsOptional()
-  @IsString()
-  externalPasscode?: string;
-
-  @IsOptional()
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => ExternalInviteInputDto)
-  externalInvites?: ExternalInviteInputDto[];
-}
-
-export class ToggleExternalAutoAcceptDto {
-  @IsBoolean()
-  enabled: boolean;
-}
-
-export class ResolveExternalJoinRequestDto {
-  @IsBoolean()
-  approve: boolean;
 }
 
 export class PromoteParticipantRoleDto {

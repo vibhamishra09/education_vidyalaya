@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { CreateStudyRoomClient } from "./create-study-room-client";
 
 export const metadata: Metadata = {
@@ -34,5 +35,9 @@ export const metadata: Metadata = {
 };
 
 export default function CreateStudyRoomPage() {
-  return <CreateStudyRoomClient />;
+  return (
+    <Suspense fallback={<div className="min-h-[40vh] flex items-center justify-center text-muted-foreground text-sm">Loading…</div>}>
+      <CreateStudyRoomClient />
+    </Suspense>
+  );
 }

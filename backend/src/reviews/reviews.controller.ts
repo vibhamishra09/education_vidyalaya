@@ -6,6 +6,7 @@ import {
   Query,
   Param,
   UseGuards,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { ReviewsService } from './reviews.service';
 import { ClerkAuthGuard } from '../common/guards/clerk-auth.guard';
@@ -37,10 +38,15 @@ export class ReviewsController {
   @Post()
   @UseGuards(ClerkAuthGuard)
   async createReview(
-    @CurrentUser() userId: string,
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
     @Body() createDto: CreateReviewDto,
   ) {
-    return this.reviewsService.createReview(userId, createDto);
+    const actorKey = dbUserId ?? clerkUserId;
+    if (!actorKey) {
+      throw new UnauthorizedException('User identity missing');
+    }
+    return this.reviewsService.createReview(actorKey, createDto);
   }
 
   @Get('sessions/:sessionId/reviews')

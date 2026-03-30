@@ -7,6 +7,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Injectable, CanActivate, ExecutionContext, Logger } from '@nestjs/common';
 import { createClerkClient } from '@clerk/backend';
+import { attachAuthenticatedUser } from '../auth/clerk-auth.utils';
 
 @Injectable()
 export class OptionalClerkAuthGuard implements CanActivate {
@@ -68,9 +69,7 @@ export class OptionalClerkAuthGuard implements CanActivate {
           const auth = requestState.toAuth();
 
           if (auth && auth.userId) {
-            // Attach user ID to request for use in controllers
-            request.userId = auth.userId;
-            request.auth = auth;
+            attachAuthenticatedUser(request, auth);
           }
         } catch (authError) {
           // If toAuth() fails, just continue without setting userId

@@ -39,6 +39,10 @@ export function getTimezoneAbbreviation(timezone?: string, date: Date = new Date
  * @param options - Formatting options
  * @returns Formatted date string in user's timezone
  */
+function isValidDate(d: Date): boolean {
+  return d instanceof Date && !Number.isNaN(d.getTime());
+}
+
 export function formatDateInLocalTimezone(
   utcDate: Date | string,
   options: {
@@ -48,6 +52,9 @@ export function formatDateInLocalTimezone(
   } = {}
 ): string {
   const date = typeof utcDate === 'string' ? new Date(utcDate) : utcDate;
+  if (!isValidDate(date)) {
+    return '—';
+  }
   const { dateStyle = 'medium', timeStyle = 'short', showTimezone = true } = options;
 
   const userTz = getUserTimezone();
@@ -79,6 +86,9 @@ export function formatDate(
   format: 'date' | 'time' | 'datetime' | 'relative' = 'datetime'
 ): string {
   const date = typeof utcDate === 'string' ? new Date(utcDate) : utcDate;
+  if (!isValidDate(date)) {
+    return '—';
+  }
   const userTz = getUserTimezone();
   const tzAbbr = getTimezoneAbbreviation(userTz, date);
 
@@ -121,6 +131,9 @@ export function formatDate(
  */
 export function getRelativeTimeString(utcDate: Date | string): string {
   const date = typeof utcDate === 'string' ? new Date(utcDate) : utcDate;
+  if (!isValidDate(date)) {
+    return '—';
+  }
   const userTz = getUserTimezone();
   const tzAbbr = getTimezoneAbbreviation(userTz, date);
 

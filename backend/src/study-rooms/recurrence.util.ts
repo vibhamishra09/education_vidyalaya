@@ -1,5 +1,8 @@
 import { convertLocalToUTC } from '../utils/timezone';
-import { StudyRoomRecurrenceDto, StudyRoomRecurrenceMode } from './dto/study-room.dto';
+import {
+  StudyRoomRecurrenceDto,
+  StudyRoomRecurrenceMode,
+} from './dto/study-room.dto';
 
 const MS_IN_DAY = 24 * 60 * 60 * 1000;
 const MAX_HORIZON_DAYS = 365;
@@ -51,7 +54,9 @@ function buildRecurringDates(
 
   if (recurrence.mode === StudyRoomRecurrenceMode.CUSTOM_DATES) {
     if (!recurrence.customDates?.length) {
-      throw new Error('customDates is required for CUSTOM_DATES recurrence mode');
+      throw new Error(
+        'customDates is required for CUSTOM_DATES recurrence mode',
+      );
     }
 
     const allCustomDates = [startDate, ...recurrence.customDates];
@@ -68,7 +73,10 @@ function buildRecurringDates(
         ? new Set(recurrence.weekdays ?? [])
         : null;
 
-    if (recurrence.mode === StudyRoomRecurrenceMode.WEEKLY && (!weekdays || weekdays.size === 0)) {
+    if (
+      recurrence.mode === StudyRoomRecurrenceMode.WEEKLY &&
+      (!weekdays || weekdays.size === 0)
+    ) {
       throw new Error('weekdays is required for WEEKLY recurrence mode');
     }
 
@@ -107,7 +115,9 @@ export function buildStudyRoomOccurrences(params: {
   recurrence?: StudyRoomRecurrenceDto;
 }): StudyRoomOccurrence[] {
   const { startDate, time, timezone, recurrence } = params;
-  const localDates = recurrence ? buildRecurringDates(startDate, recurrence) : [startDate];
+  const localDates = recurrence
+    ? buildRecurringDates(startDate, recurrence)
+    : [startDate];
 
   return localDates.map((localDate, index) => ({
     utcDate: convertLocalToUTC(localDate, time, timezone),

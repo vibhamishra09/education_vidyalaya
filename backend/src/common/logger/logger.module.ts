@@ -12,18 +12,22 @@ import { LoggerService } from './logger.service';
         const nodeEnv = configService.get<string>('NODE_ENV', 'development');
         const isDevelopment = nodeEnv !== 'production';
         const logLevel = configService.get<string>('LOG_LEVEL', 'debug');
-        
+
         // Check if we're in a TTY environment (terminal) or not (like CloudWatch)
         const isTTY = process.stdout.isTTY === true;
         // Use pretty printing only in development AND when in a TTY
         const usePretty = isDevelopment && isTTY;
 
         // Loki configuration
-        const lokiEnabled = configService.get<string>('LOKI_ENABLED', 'false') === 'true';
-        const lokiHost = configService.get<string>('LOKI_HOST', 'http://localhost:3100');
-      
+        const lokiEnabled =
+          configService.get<string>('LOKI_ENABLED', 'false') === 'true';
+        const lokiHost = configService.get<string>(
+          'LOKI_HOST',
+          'http://localhost:3100',
+        );
+
         // Base Pino configuration - shared between HTTP and application logging
-        let basePinoConfig: any = {
+        const basePinoConfig: any = {
           level: logLevel,
         };
 
@@ -133,7 +137,11 @@ import { LoggerService } from './logger.service';
             },
             // Request ID generation
             genReqId: (req) => {
-              return req.headers['x-request-id'] || req.id || `req-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+              return (
+                req.headers['x-request-id'] ||
+                req.id ||
+                `req-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`
+              );
             },
           },
         };
