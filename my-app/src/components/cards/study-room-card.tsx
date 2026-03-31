@@ -184,7 +184,7 @@ export function StudyRoomCard({
         <div className="flex-1 space-y-1.5 mb-4">
           <h3
             className={cn("text-2xl font-bold leading-tight text-foreground tracking-tight transition-colors line-clamp-2 cursor-pointer", theme.titleHover)}
-            onClick={() => router.push(`/studyroom/${slug || roomId}`)}
+            onClick={() => router.push(`/studyroom/${slug}`)}
           >
             {title}
           </h3>
