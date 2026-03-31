@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react'
 import { LiveKitRoom, useParticipants, useTracks, RoomAudioRenderer, useSpeakingParticipants, VideoTrack, useLocalParticipant, isTrackReference, useRoomContext } from '@livekit/components-react'
-import { Track, RoomOptions, VideoPresets, LocalVideoTrack, ConnectionState } from 'livekit-client'
+import { Track, RoomOptions, VideoPresets, LocalVideoTrack, ConnectionState, RoomEvent } from 'livekit-client'
 import '@livekit/components-styles'
 import { BackgroundProcessor, BackgroundBlur as _BackgroundBlur, VirtualBackground as _VirtualBackground, BackgroundOptions as _BackgroundOptions } from '@livekit/track-processors'
 import { ChatWidget } from '@/components/chat/ChatWidget'
@@ -11,7 +11,8 @@ import {
 	Clock, MonitorUp, MonitorOff, Grid2X2, Presentation, Pin,
 	PinOff, User, PictureInPicture2, Camera as _Camera, CameraOff, Sparkles, Lock, Settings2,
 	PhoneOff, ChevronUp, ChevronLeft, ChevronRight, ShieldCheck, Ban, Aperture,
-	ImageIcon, LayoutGrid, Check, Timer, Power, LogOut, Zap, ZoomIn, ZoomOut, MousePointer2
+	ImageIcon, LayoutGrid, Check, Timer, Power, Zap, LogOut, ZoomIn, ZoomOut, MousePointer2,
+	PencilLine, PenTool, Eraser, Type, Square, Circle, Minus
 } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
@@ -28,7 +29,17 @@ import { useSpeechRecognition } from '@/hooks/use-speech-recognition'
 import { useSessionExtension } from '@/hooks/use-session-extension'
 import { ExtensionRequestDialog } from '@/components/study-room/extension-request-dialog'
 import { EndMeetingDialog } from '@/components/study-room/end-meeting-dialog'
-import { useSessionModeration, RoomPermissions, PermissionRequest, ParticipantPermissionRequest, RoomSettings, FlashQuestion, ActiveFlashMessage } from '@/hooks/use-session-moderation'
+import {
+	useSessionModeration,
+	RoomPermissions,
+	RoomSettings,
+	ParticipantChatLocks,
+	PermissionRequest,
+	ModerationNotification,
+	ParticipantPermissionRequest,
+	FlashQuestion,
+	FlashMessage
+} from '@/hooks/use-session-moderation'
 import { FlashMessageOverlay } from '@/components/study-room/FlashMessageOverlay'
 import { WebinarHostPanel } from '@/components/study-room/webinar-host-panel'
 import { QuestionManager } from '@/components/study-room/QuestionManager'
@@ -36,7 +47,9 @@ import { ChatRecipient } from '@/components/chat/MessageInput'
 import { useRemoteControl } from '@/hooks/use-remote-control'
 
 import { RemoteControlOverlay } from '@/components/livekit/RemoteControlOverlay'
+import { ScratchPad } from '@/components/scratch-pad/ScratchPad'
 
+// Stable virtual backgrounds constant to avoid re-creating array each render
 const VIRTUAL_BACKGROUNDS = [
 	{
 		id: 0,
@@ -75,8 +88,17 @@ const VIRTUAL_BACKGROUNDS = [
 		thumbnail: 'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=200&h=150&fit=crop&q=80'
 	}
 ]
+interface ExternalJoinRequestItem {
+	id: string
+	name: string
+	email: string
+	status: 'PENDING' | 'APPROVED' | 'REJECTED'
+}
+
 interface SessionData {
 	id: string;
+	title?: string;
+	roomTitle?: string;
 	date: string;
 	duration: number;
 	sessionType: 'studyRoom' | 'peerSession';
@@ -111,6 +133,7 @@ interface EnhancedVideoRoomProps {
 	guestLivekitIdentity?: string | null
 	onParticipantListChange?: (participantIdentities: string[]) => void
 	webinarAttendeeMinimalUi?: boolean
+	sessionUuid?: string | null
 }
 
 export function EnhancedVideoRoom({
@@ -126,21 +149,54 @@ export function EnhancedVideoRoom({
 	guestLivekitIdentity = null,
 	onParticipantListChange,
 	webinarAttendeeMinimalUi = false,
+	sessionUuid = null,
 }: EnhancedVideoRoomProps) {
 	const isGuest = !!externalAccessToken
 	const [showChat, setShowChat] = useState(false)
 	const [showParticipants, setShowParticipants] = useState(false)
 	const [isFullscreen, setIsFullscreen] = useState(false)
 	const [showWarning, setShowWarning] = useState(false)
+	const [showScratchPad, setShowScratchPad] = useState(false)
 	const [isMobileViewport, setIsMobileViewport] = useState(false)
 	const [isMobileDevice, setIsMobileDevice] = useState(false)
 	const router = useRouter()
-	const { showSuccess: _showSuccess, showError: _showError } = useToast()
+	const { showSuccess: _showSuccess, showError: _showError, showInfo: _showInfo } = useToast()
 	const { getToken } = useAuth()
 	const { user } = useUser()
 	const moderationUserId = isGuest ? guestLivekitIdentity : user?.id ?? null
 	const queryClient = useQueryClient()
+	const params = useParams()
 
+	const [externalJoinRequests, setExternalJoinRequests] = useState<any[]>([])
+	const [activeExternalJoinRequest, setActiveExternalJoinRequest] = useState<any | null>(null)
+	const [resolvingExternalJoinRequest, setResolvingExternalJoinRequest] = useState(false)
+	const seenExternalJoinRequestIdsRef = useRef<Set<string>>(new Set())
+	const audioContextRef = useRef<AudioContext | null>(null)
+
+	const playJoinRequestAlertSound = useCallback(() => {
+		if (typeof window === 'undefined') return
+		try {
+			const AudioCtx = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+			if (!AudioCtx) return
+			if (!audioContextRef.current) {
+				audioContextRef.current = new AudioCtx()
+			}
+			const context = audioContextRef.current
+			const oscillator = context.createOscillator()
+			const gainNode = context.createGain()
+			oscillator.type = 'sine'
+			oscillator.frequency.value = 880
+			gainNode.gain.value = 0.06
+			oscillator.connect(gainNode)
+			gainNode.connect(context.destination)
+			oscillator.start()
+			oscillator.stop(context.currentTime + 0.14)
+		} catch (err) {
+			// Best-effort alert sound; ignore if browser blocks autoplay/audio context.
+		}
+	}, [])
+
+	// Socket.io for transcripts
 	const [transcriptSocket, setTranscriptSocket] = useState<Socket | null>(null)
 	const socketConnectingRef = useRef(false)
 
@@ -210,6 +266,20 @@ export function EnhancedVideoRoom({
 		showSuccessRef.current = _showSuccess
 	}, [_showSuccess])
 
+	const showSuccess = useCallback((title: string, description?: string) => {
+		_showSuccess(title, description)
+	}, [_showSuccess])
+
+	const showError = useCallback((title: string, description?: string) => {
+		_showError(title, description)
+	}, [_showError])
+
+	const showInfo = useCallback((title: string, description?: string) => {
+		_showInfo(title, description)
+	}, [_showInfo])
+
+	// MOVED: fetchPendingExternalJoinRequests and handleResolveExternalJoinRequest removed as they were missing from backend
+
 	const sessionStartTime = sessionData?.date ? new Date(sessionData.date) : null
 	const sessionDuration = sessionData?.duration || 0
 
@@ -241,7 +311,7 @@ export function EnhancedVideoRoom({
 		sessionId: sessionData?.id || null,
 		sessionType: sessionData?.sessionType || null,
 		isHost,
-		token: authToken,
+		token,
 		enabled: timerEnabled,
 	})
 
@@ -291,11 +361,12 @@ export function EnhancedVideoRoom({
 		flashDismiss,
 		flashGetList,
 		dismissFlashMessage,
+		lockScratchPad,
 	} = useSessionModeration({
 		sessionId: sessionData?.id || null,
 		sessionType: sessionData?.sessionType || null,
 		isHost,
-		token: authToken,
+		token,
 		userId: moderationUserId ?? undefined,
 		enabled: !!sessionData?.id && (!isGuest || !!guestLivekitIdentity),
 	})
@@ -444,7 +515,8 @@ export function EnhancedVideoRoom({
 				await queryClient.invalidateQueries({ queryKey: streakKeys.current() })
 				await queryClient.invalidateQueries({ queryKey: dashboardKeys.all })
 				await queryClient.invalidateQueries({ queryKey: achievementKeys.all })
-			} catch (_error) {
+			} catch (err) {
+				// Error completing session
 			}
 		}
 
@@ -680,6 +752,29 @@ export function EnhancedVideoRoom({
 					isGuest={isGuest}
 					guestToken={isGuest ? externalAccessToken : undefined}
 					sessionData={sessionData}
+					sessionStableId={sessionUuid}
+					showScratchPad={showScratchPad}
+					setShowScratchPad={setShowScratchPad}
+					onLockScratchPad={lockScratchPad}
+					onPromoteToCohost={async (participantIdentity, role) => {
+						if (sessionData?.sessionType !== 'studyRoom' || !sessionData?.id) return
+						const authTokenValue = await getToken()
+						await fetch(
+							`${process.env.NEXT_PUBLIC_API_URL}/api/study-rooms/${sessionData.id}/participants/role`,
+							{
+								method: 'POST',
+								headers: {
+									'Content-Type': 'application/json',
+									...(authTokenValue ? { Authorization: `Bearer ${authTokenValue}` } : {}),
+								},
+								body: JSON.stringify({ participantIdentity, role }),
+							},
+						)
+						showSuccess(
+							role === 'COHOST' ? 'Cohost assigned' : 'Cohost removed',
+							'Participant role updated',
+						)
+					}}
 					webinarAttendeeMinimalUi={webinarAttendeeMinimalUi}
 					sessionInfo={sessionData}
 					webinarChatEnabledUi={webinarChat.chatLive}
@@ -691,7 +786,7 @@ export function EnhancedVideoRoom({
 					onFlashDeleteQuestion={flashDeleteQuestion}
 					onFlashShowQuestion={flashShowQuestion}
 					onFlashShowAdHoc={flashShowAdHoc}
-					onFlashDismissForAll={flashDismiss}
+					onFlashDismiss={flashDismiss}
 					onFlashGetList={flashGetList}
 					onDismissFlashMessage={dismissFlashMessage}
 				/>
@@ -773,7 +868,6 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	chatDisabled,
 	webinarChatMode,
 	webinarChatLive,
-	permissions,
 	roomSettings,
 	onLockAudio,
 	onLockVideo,
@@ -801,6 +895,11 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	onParticipantListChange,
 	isGuest = false,
 	guestToken,
+	participantChatLocks,
+	onPromoteToCohost,
+	showScratchPad,
+	setShowScratchPad,
+	onLockScratchPad,
 	webinarAttendeeMinimalUi: _webinarAttendeeMinimalUi = false,
 	sessionInfo = null,
 	webinarChatEnabledUi = true,
@@ -812,10 +911,12 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	onFlashDeleteQuestion,
 	onFlashShowQuestion,
 	onFlashShowAdHoc,
-	onFlashDismissForAll,
+	onFlashDismiss,
 	onFlashGetList: _onFlashGetList,
 	onDismissFlashMessage,
-	sessionData: _sessionData,
+	sessionData,
+	sessionStableId,
+	permissions,
 }: {
 	isUserActive: boolean
 	showChat: boolean
@@ -858,6 +959,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	onLockChat?: (locked: boolean) => void
 	onRestrictChatToHostOnly?: (restricted: boolean) => void
 	onHideParticipantList?: (hidden: boolean) => void
+	onLockScratchPad: (locked: boolean) => void
 	onLockUserAudio?: (targetUserId: string, locked: boolean) => void
 	onLockUserVideo?: (targetUserId: string, locked: boolean) => void
 	onRequestAudioOn?: (targetUserId: string) => void
@@ -879,24 +981,33 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	onParticipantListChange?: (participantIdentities: string[]) => void
 	isGuest?: boolean
 	guestToken?: string | null
+	participantChatLocks?: Record<string, ParticipantChatLocks>
+	onPromoteToCohost?: (
+		participantIdentity: string,
+		role: 'PARTICIPANT' | 'COHOST',
+	) => void
+	showScratchPad: boolean
+	setShowScratchPad: (show: boolean) => void
 	webinarAttendeeMinimalUi?: boolean
 	sessionInfo?: SessionData | null
 	webinarChatEnabledUi?: boolean
-	activeFlashMessage?: ActiveFlashMessage | null
+	activeFlashMessage?: FlashMessage | null
 	flashQuestions?: FlashQuestion[]
 	onFlashUploadList?: (questions: FlashQuestion[]) => void
 	onFlashUpdateQuestion?: (questionId: string, updates: Partial<Omit<FlashQuestion, 'id'>>) => void
 	onFlashReorder?: (orderedIds: string[]) => void
-	onFlashDeleteQuestion?: (questionId: string) => void
-	onFlashShowQuestion?: (questionId: string) => void
-	onFlashShowAdHoc?: (text: string, meta?: Omit<FlashQuestion, 'id' | 'text'>) => void
-	onFlashDismissForAll?: () => void
+	onFlashDeleteQuestion?: (id: string) => void
+	onFlashShowQuestion?: (id: string, duration?: number) => void
+	onFlashShowAdHoc?: (content: string, type: 'AD_HOC' | 'MEDIA', duration?: number) => void
+	onFlashDismiss?: () => void
 	onFlashGetList?: () => void
 	onDismissFlashMessage?: () => void
 	sessionData?: SessionData | null
+	sessionStableId?: string | null
 }) {
-	const _params = useParams<{ room: string }>()
-	const _room = useRoomContext()
+	const params = useParams<{ room: string }>()
+	const room = useRoomContext()
+	const krispFilterRef = useRef<any>(null)
 	const { showWarning, showSuccess, showInfo: _showInfo, showError } = useToast()
 	const effectiveChatDisabled =
 		!!chatDisabled ||
@@ -917,8 +1028,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		revokeControl
 	} = useRemoteControl()
 
+	// Get participants list for name lookup
 	const [showFlashPanel, setShowFlashPanel] = useState(false)
-
 	const allParticipants = useParticipants()
 	const participantListHiddenByHost = roomSettings?.hideParticipantList === true
 	const canViewParticipantList =
@@ -936,6 +1047,55 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			participantIdentitiesKey ? participantIdentitiesKey.split('|') : [],
 		)
 	}, [onParticipantListChange, participantIdentitiesKey])
+
+	// Host: Broadcast scratchpad lock state
+	useEffect(() => {
+		if (!isHost || !room) return
+
+		const broadcastLockState = async () => {
+			if (room.state !== ConnectionState.Connected) return
+			try {
+				const payload = new TextEncoder().encode(JSON.stringify({ 
+					enabled: permissions?.allowScratchPad ?? true
+				}))
+				await room.localParticipant.publishData(
+					payload,
+					{ reliable: true, topic: 'scratch-pad-lock-update' }
+				)
+			} catch (err) {
+				if (String(err).includes('PC manager is closed') || String(err).includes('UnexpectedConnectionState')) {
+					return; // Silence this expected error during room unmount/teardown
+				}
+				console.error("Failed to broadcast scratchpad lock state:", err)
+			}
+		}
+
+		if (room.state === ConnectionState.Connected) {
+			broadcastLockState()
+		} else {
+			room.on(RoomEvent.Connected, broadcastLockState)
+			return () => { room.off(RoomEvent.Connected, broadcastLockState) }
+		}
+	}, [permissions?.allowScratchPad, isHost, room])
+
+	// Participants: Listen for scratchpad lock state updates
+	useEffect(() => {
+		if (isHost || !room) return
+
+		const handleData = (payload: Uint8Array, _participant?: unknown, _kind?: unknown, topic?: string) => {
+			if (topic === 'scratch-pad-lock-update') {
+				try {
+					const data = JSON.parse(new TextDecoder().decode(payload))
+					if (data.enabled !== undefined) {
+						// Internal state handled by permissions sync now
+					}
+				} catch (e) {}
+			}
+		}
+
+		room.on(RoomEvent.DataReceived, handleData)
+		return () => { room.off(RoomEvent.DataReceived, handleData) }
+	}, [isHost, room])
 
 	useEffect(() => {
 		if (canViewParticipantList) return
@@ -1131,7 +1291,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		try {
 			const metadata = JSON.parse(participant.metadata)
 			return metadata.avatar || null
-		} catch {
+		} catch (err) {
 			return null
 		}
 	}, [])
@@ -1488,6 +1648,45 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		}
 	}, [localParticipant])
 
+	// Apply Krisp AI noise suppression to microphone track
+	useEffect(() => {
+		if (!localParticipant || typeof window === 'undefined') return
+		let cancelled = false
+		let cleanup: (() => void) | null = null
+
+		const applyKrispFilter = async () => {
+			try {
+				const { KrispNoiseFilter, isKrispNoiseFilterSupported } = await import(
+					'@livekit/krisp-noise-filter'
+				)
+				if (cancelled || !isKrispNoiseFilterSupported()) return
+
+				const micPublication = localParticipant.getTrackPublication(Track.Source.Microphone)
+				const micTrack = micPublication?.audioTrack
+				if (!micTrack) return
+
+				const filter = KrispNoiseFilter()
+				krispFilterRef.current = filter
+				await micTrack.setProcessor(filter)
+				cleanup = () => {
+					micTrack.stopProcessor().catch(() => { })
+					krispFilterRef.current = null
+				}
+			} catch (err) {
+				// Ignore unsupported/runtime errors and continue without Krisp.
+			}
+		}
+
+		applyKrispFilter()
+
+		return () => {
+			cancelled = true
+			cleanup?.()
+		}
+	}, [localParticipant, isMicrophoneEnabled])
+
+	// Stable ordering system: Maintain positions for visible participants
+	// Only reorder when participants join/leave, not when speaking status changes
 	const stableOrderRef = useRef<string[]>([])
 	const previousParticipantIdsRef = useRef<Set<string>>(new Set())
 	const hasInitializedParticipantListRef = useRef(false)
@@ -1523,7 +1722,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			gainNode.connect(context.destination)
 			oscillator.start(startAt)
 			oscillator.stop(startAt + 0.2)
-		} catch {
+		} catch (err) {
+			// Best-effort join tone; ignore browsers that block audio context.
 		}
 	}, [])
 
@@ -1990,6 +2190,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 							videoElement.style.transform = 'none';
 						}
 
+						console.log('[PiP] Requesting PiP window...');
 						// Try Document PiP first
 						if ('documentPictureInPicture' in window) {
 							try {
@@ -2043,8 +2244,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 							setIsPiPActive(true);
 							pipVideoRef.current = videoElement;
 						}
-					} catch (_error) {
-						console.warn('[PiP] Auto-PiP failed:', _error);
+					} catch (err) {
+						console.warn('[PiP] Auto-PiP failed:', err);
 					}
 				}
 			} else if (!document.hidden && (document.pictureInPictureElement || pipWindowRef.current)) {
@@ -2062,7 +2263,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						bridgeLoopRef.current = null;
 					}
 					setIsPiPActive(false);
-				} catch (_error) {
+				} catch (_err) {
 					// Ignore
 				}
 			}
@@ -3141,6 +3342,24 @@ const VideoRoomContent = memo(function VideoRoomContent({
 																	onStopControl={stopControl}
 																	onRevokeControl={revokeControl}
 																/>
+															</div>
+														)}
+														{showScratchPad && (
+															<div className="absolute inset-0 z-[20] p-2 bg-[#0f0f0f]">
+																<ScratchPad 
+																	roomId={sessionStableId || sessionData?.id || (params.room as string)} 
+																	room={room}
+																	isHost={isHost}
+																	canEdit={isHost || permissions?.allowScratchPad}
+																/>
+																<button 
+																	onClick={() => setShowScratchPad(false)}
+																	className="absolute top-6 right-6 z-[21] w-10 h-10 bg-black/60 hover:bg-black/80 rounded-full flex items-center justify-center border border-white/10 text-white shadow-xl backdrop-blur-md"
+																>
+																	<X className="h-5 w-5" />
+																</button>
+															</div>
+														)}
 
 																{/* Remote Control Actions */}
 																{!focusedParticipantForDisplay.isLocal && !isControlling && (
@@ -3161,8 +3380,6 @@ const VideoRoomContent = memo(function VideoRoomContent({
 																		</Button>
 																	</div>
 																)}
-															</div>
-														)}
 														{isScreenShareFocused && !showScreenShareInMain && (
 															<div className="absolute inset-0 z-[2] flex flex-col items-center justify-center gap-3 bg-gradient-to-b from-[#252525] to-[#1a1a1a] px-6 text-center">
 																{screenShareMaximized ? (
@@ -3191,7 +3408,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 																</Button>
 															</div>
 														)}
-														{!isSplitMode && !isScreenShareFocused && focusedTrack.publication?.track && (
+														{!isSplitMode && !isScreenShareFocused && isTrackReference(focusedTrack) && focusedTrack.publication?.track && (
 															<div className="absolute inset-0 z-[2]">
 																<VideoTrack
 																	trackRef={focusedTrack}
@@ -3201,6 +3418,12 @@ const VideoRoomContent = memo(function VideoRoomContent({
 														)}
 													</>
 												)}
+
+												{/* Flash Message Overlay */}
+												<FlashMessageOverlay 
+													message={activeFlashMessage || null} 
+													onDismiss={onFlashDismiss}
+												/>
 
 												<div className="absolute top-4 right-4 flex items-center gap-2 z-20">
 													<div
@@ -3677,7 +3900,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						<div className={`flex flex-col items-center justify-center group ${(!canViewParticipantList && !isGuest) ? 'hidden' : ''}`}>
 							<button
 								onClick={() => {
-									if (!showChat) { setShowParticipants(false); setShowFlashPanel(false) }
+									if (!showChat) { setShowParticipants(false); setShowScratchPad(false) }
 									setShowChat(!showChat)
 								}}
 								className={`h-11 w-11 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl hover:bg-sky-500/20 active:scale-95 transition-all relative ${showChat ? 'bg-sky-500/20 text-sky-400' : 'text-white/80 hover:text-sky-400'}`}
@@ -3687,36 +3910,31 @@ const VideoRoomContent = memo(function VideoRoomContent({
 							</button>
 						</div>
 
-						{/* Flash Messages (host only) */}
-						{isHost && (
-							<div className="flex flex-col items-center justify-center group text-center">
-								<button
-									onClick={() => {
-										if (!showFlashPanel) { setShowChat(false); setShowParticipants(false) }
-										setShowFlashPanel((p) => !p)
-									}}
-									className={`h-11 w-11 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl hover:bg-yellow-500/20 active:scale-95 transition-all relative ${showFlashPanel ? 'bg-yellow-500/20 text-yellow-400' : 'text-white/80 hover:text-yellow-400'}`}
-									title="Flash Messages"
-								>
-									<Zap className="h-5 w-5 md:h-5 md:w-5" />
-									{activeFlashMessage && (
-										<span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-yellow-400 border-2 border-[#141414] animate-pulse" />
-									)}
-								</button>
-							</div>
-						)}
+						{/* Scratch Pad Toggle */}
+						<div className="flex relative flex-col items-center justify-center group">
+							<button
+								onClick={() => {
+									if (!showScratchPad) { setShowChat(false); setShowParticipants(false); setShowFlashPanel(false) }
+									setShowScratchPad(!showScratchPad)
+								}}
+								className={`h-9 w-9 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl transition-all active:scale-95 ${showScratchPad
+										? 'bg-purple-600 text-white shadow-lg shadow-purple-600/20'
+										: 'bg-white/5 text-white/80 hover:bg-white/10 hover:text-white'
+									}`}
+								title="Open Whiteboard"
+							>
+								<PenTool className={`h-4 w-4 md:h-5 md:w-5 ${showScratchPad ? 'text-white' : 'text-white/80'}`} />
+							</button>
+						</div>
 
 
 
 						{canViewParticipantList && (
-
 							<div className="flex flex-col items-center justify-center group">
-								{/* Participants */}
 								<button
 									onClick={() => {
 										if (!canViewParticipantList) return
-										if (!showParticipants) { setShowChat(false); setShowFlashPanel(false) }
-
+										if (!showParticipants) { setShowChat(false); setShowFlashPanel(false); setShowScratchPad(false) }
 										setShowParticipants(!showParticipants)
 									}}
 									className={`h-11 w-11 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl hover:bg-sky-500/20 active:scale-95 transition-all relative ${showParticipants ? 'bg-sky-500/20 text-sky-400' : 'text-white/80 hover:text-sky-400'}`}
@@ -3745,7 +3963,6 @@ const VideoRoomContent = memo(function VideoRoomContent({
 							</button>
 						</div>
 
-						{/* Extend Session - Only show if timer is enabled AND user is host */}
 						{timerEnabled && isHost && (
 							<div className="hidden md:flex relative flex-col items-center justify-center group">
 								<button
@@ -3856,7 +4073,33 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				</div>
 
 
-
+				{/* Collaborative Scratch Pad Overlay */}
+				{showScratchPad && (
+					<div className={`fixed md:absolute inset-0 z-[55] bg-black/40 backdrop-blur-sm flex flex-col transition-all duration-300 ${
+						(showChat || showParticipants) ? 'md:right-96' : ''
+					}`}>
+						<div className="absolute top-4 right-4 z-[60] flex items-center gap-2">
+							<Button 
+								variant="ghost" 
+								size="sm" 
+								onClick={() => setShowScratchPad(false)}
+								className="h-9 rounded-lg bg-black/60 text-white hover:bg-black/80 border border-white/10 backdrop-blur-sm"
+							>
+								<X className="h-4 w-4 mr-1.5" /> Close Pad
+							</Button>
+						</div>
+						<div className="flex-1 p-2 md:p-6 pb-20 md:pb-6">
+							<ScratchPad
+								roomId={sessionStableId || sessionData?.id || (params.room as string)}
+								room={room}
+								isHost={isHost}
+								canEdit={isHost || permissions?.allowScratchPad}
+								roomTitle={sessionData?.title}
+                                enabled={showScratchPad}
+							/>
+						</div>
+					</div>
+				)}
 
 				{/* Unified Sidebar - Tabbed Interface */}
 				<>
@@ -4129,51 +4372,6 @@ const VideoRoomContent = memo(function VideoRoomContent({
 							</div>
 						</div>
 					</div>
-					{/* Flash Panel sidebar (host only) */}
-					{isHost && (
-						<>
-							{/* Mobile backdrop */}
-							{showFlashPanel && (
-								<div
-									className="fixed inset-0 bg-black/60 z-40 md:hidden"
-									onClick={() => setShowFlashPanel(false)}
-								/>
-							)}
-							{/* Flash sidebar panel */}
-							<div className={`fixed md:absolute right-0 top-0 bottom-0 w-full sm:w-[85%] md:w-96 bg-[#1a1a1a]/95 backdrop-blur-md border-l border-white/10 z-[60] shadow-2xl flex flex-col transition-all duration-300 ${showFlashPanel
-								? 'translate-x-0 opacity-100 pointer-events-auto'
-								: 'translate-x-full opacity-0 pointer-events-none'
-								}`}>
-								{/* Header */}
-								<div className="h-14 md:h-16 bg-gradient-to-b from-[#1a1a1a] to-[#1a1a1a]/95 border-b border-white/10 flex items-center justify-between px-4 md:px-6 flex-shrink-0">
-									<div className="flex items-center gap-2 md:gap-3">
-										<Zap className="h-4 w-4 md:h-5 md:w-5 text-yellow-400" />
-										<span className="text-white font-semibold text-base md:text-lg">Flash Messages</span>
-									</div>
-									<button
-										onClick={() => setShowFlashPanel(false)}
-										className="h-7 w-7 md:h-8 md:w-8 p-0 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 rounded-full transition-colors"
-									>
-										<X className="h-3.5 w-3.5 md:h-4 md:w-4" />
-									</button>
-								</div>
-								{/* Body */}
-								<div className="flex-1 overflow-y-auto p-3 md:p-4">
-									<QuestionManager
-										questions={flashQuestions ?? []}
-										onUploadList={onFlashUploadList ?? (() => { })}
-										onUpdateQuestion={onFlashUpdateQuestion ?? (() => { })}
-										onReorder={onFlashReorder ?? (() => { })}
-										onDeleteQuestion={onFlashDeleteQuestion ?? (() => { })}
-										onFlashQuestion={onFlashShowQuestion ?? (() => { })}
-										onFlashAdHoc={onFlashShowAdHoc ?? (() => { })}
-										onDismissForAll={onFlashDismissForAll ?? (() => { })}
-										isFlashActive={!!activeFlashMessage}
-									/>
-								</div>
-							</div>
-						</>
-					)}
 				</>
 			</div>
 
@@ -4325,14 +4523,68 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				/>
 			)}
 
-			{/* Flash Message Overlay - shown to all participants when host broadcasts a flash */}
-			{activeFlashMessage && (
-				<FlashMessageOverlay
-					message={activeFlashMessage}
-					onDismiss={onDismissFlashMessage ?? (() => { })}
-					isHost={isHost}
-					onDismissForAll={onFlashDismissForAll}
-				/>
+			{/* Collaborative Scratchpad Overlay */}
+			{showScratchPad && (
+				<div className="fixed inset-0 z-[110] flex items-center justify-center p-4 md:p-12 animate-in fade-in zoom-in-95 duration-300">
+					<div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowScratchPad(false)} />
+					
+					<div className="relative w-full h-full max-w-7xl bg-[#0a0a0a]/90 backdrop-blur-2xl rounded-[32px] border border-white/10 shadow-[0_0_80px_-20px_rgba(0,0,0,0.8)] flex flex-col overflow-hidden ring-1 ring-white/5">
+						{/* Header */}
+						<div className="h-14 md:h-16 px-6 md:px-8 flex items-center justify-between border-b border-white/5 bg-white/5 flex-shrink-0">
+							<div className="flex items-center gap-3">
+								<div className="h-8 w-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
+									<PenTool className="h-4 w-4 text-purple-400" />
+								</div>
+								<div>
+									<h2 className="text-white font-bold text-sm md:text-base tracking-tight">Open Whiteboard</h2>
+									<p className="text-[10px] text-white/40 uppercase tracking-widest font-semibold flex items-center gap-1.5">
+										<span className="w-1.5 h-1.5 bg-[#00DC6E] rounded-full animate-pulse" />
+										 .
+									</p>
+								</div>
+							</div>
+
+							<div className="flex items-center gap-3">
+								{isHost && (
+									<Button
+										variant="ghost"
+										size="sm"
+										onClick={() => onLockScratchPad(!permissions?.allowScratchPad)}
+										className={`h-9 px-4 rounded-xl border transition-all text-xs font-semibold gap-2 ${
+											permissions?.allowScratchPad 
+												? 'bg-sky-500/10 text-sky-400 border-sky-500/20 hover:bg-sky-500/20' 
+												: 'bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20'
+										}`}
+									>
+										{permissions?.allowScratchPad ? <Lock className="h-3.5 w-3.5" /> : <ShieldCheck className="h-3.5 w-3.5" />}
+										{permissions?.allowScratchPad ? 'Lock for Participants' : 'Allow Participants to Edit'}
+									</Button>
+								)}
+								<div className="w-px h-6 bg-white/10 mx-1" />
+								<Button
+									variant="ghost"
+									size="sm"
+									onClick={() => setShowScratchPad(false)}
+									className="h-9 w-9 p-0 text-white/40 hover:text-white hover:bg-white/10 rounded-xl transition-all"
+								>
+									<X className="h-5 w-5" />
+								</Button>
+							</div>
+						</div>
+
+						{/* Editor Canvas */}
+						<div className="flex-1 min-h-0 relative bg-zinc-950">
+							<ScratchPad
+								roomId={sessionData?.id || 'default'}
+								room={room}
+								isHost={isHost}
+								canEdit={isHost || permissions?.allowScratchPad}
+								roomTitle={sessionData?.id || 'Meeting'}
+								enabled={showScratchPad}
+							/>
+						</div>
+					</div>
+				</div>
 			)}
 
 			{/* Remote Control Consent UI (Screen Sharer Side) */}
@@ -4465,7 +4717,7 @@ function ParticipantList({
 					if (!participant.metadata) return null
 					try {
 						return JSON.parse(participant.metadata).avatar
-					} catch { return null }
+					} catch (err) { return null }
 				}
 				const avatarUrl = getAvatar()
 

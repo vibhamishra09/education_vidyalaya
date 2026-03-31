@@ -185,6 +185,7 @@ export class SessionModerationGateway
         chatDisabled: roomSettings.chatDisabled,
         hideParticipantList: roomSettings.hideParticipantList,
         chatRestrictToHostOnly: roomSettings.chatRestrictToHostOnly,
+        lockScratchPad: roomSettings.lockScratchPad,
       },
       isHost,
     });
@@ -216,7 +217,8 @@ export class SessionModerationGateway
         allowChatHost?: boolean;
         allowChatUser?: boolean;
         allowParticipantList?: boolean;
-        restrictChatToHostOnly?: boolean; // New: restrict all users to send to host only
+        restrictChatToHostOnly?: boolean;
+        allowScratchPad?: boolean;
       };
       targetUserId?: string; // If set, only update this user's permissions
     },
@@ -303,6 +305,7 @@ export class SessionModerationGateway
           chatDisabled?: boolean;
           hideParticipantList?: boolean;
           chatRestrictToHostOnly?: boolean;
+          lockScratchPad?: boolean;
         } = {};
         if (permissions.allowAudio !== undefined)
           roomSettings.lockAudio = !permissions.allowAudio;
@@ -316,6 +319,9 @@ export class SessionModerationGateway
         if (permissions.restrictChatToHostOnly !== undefined) {
           roomSettings.chatRestrictToHostOnly =
             permissions.restrictChatToHostOnly;
+        }
+        if (permissions.allowScratchPad !== undefined) {
+          roomSettings.lockScratchPad = !permissions.allowScratchPad;
         }
 
         await this.permissionsService.setRoomSettings(sessionId, roomSettings);
@@ -355,6 +361,7 @@ export class SessionModerationGateway
             allowVideo: !updatedSettings.lockVideo,
             allowChat: !updatedSettings.chatDisabled,
             allowParticipantList: !updatedSettings.hideParticipantList,
+            allowScratchPad: !updatedSettings.lockScratchPad,
           },
         });
 

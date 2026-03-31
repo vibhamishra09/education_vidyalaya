@@ -1,106 +1,101 @@
 'use client'
-import { useEffect, useRef } from 'react'
-import { X } from 'lucide-react'
-import { ActiveFlashMessage } from '@/hooks/use-session-moderation'
+import { useEffect, useState } from 'react'
+import { FlashMessage } from '@/hooks/use-session-moderation'
+import { cn } from '@/lib/utils'
+import { Zap, MessageSquare, Image as ImageIcon } from 'lucide-react'
 
 interface FlashMessageOverlayProps {
-	message: ActiveFlashMessage
-	/** Called when the participant closes the overlay locally (participant-only dismiss) */
-	onDismiss: () => void
-	/** Whether the current user is a host (hosts get a "Dismiss for all" button) */
-	isHost?: boolean
-	/** Called by host to dismiss for everyone */
-	onDismissForAll?: () => void
+  message: FlashMessage | null
+  onDismiss?: () => void
 }
 
-const POSITION_CLASSES: Record<string, string> = {
-	top: 'items-start pt-16',
-	center: 'items-center',
-	bottom: 'items-end pb-16',
-}
+export function FlashMessageOverlay({ message, onDismiss }: FlashMessageOverlayProps) {
+  const [visible, setVisible] = useState(false)
 
-const FONT_SIZE_CLASSES: Record<string, string> = {
-	sm: 'text-base md:text-lg',
-	md: 'text-xl md:text-2xl',
-	lg: 'text-2xl md:text-3xl',
-	xl: 'text-3xl md:text-4xl',
-}
+  useEffect(() => {
+    if (message) {
+      setVisible(true)
+    } else {
+      setVisible(false)
+    }
+  }, [message])
 
-export function FlashMessageOverlay({
-	message,
-	onDismiss,
-	isHost = false,
-	onDismissForAll,
-}: FlashMessageOverlayProps) {
-	const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  if (!message || !visible) return null
 
-	// If duration is set, auto-dismiss locally after duration
-	useEffect(() => {
-		if (message.duration && message.duration > 0) {
-			timerRef.current = setTimeout(onDismiss, message.duration * 1000)
-		}
-		return () => {
-			if (timerRef.current) clearTimeout(timerRef.current)
-		}
-	}, [message.id, message.duration, onDismiss])
+  const positionClasses = {
+    top: 'top-8',
+    center: 'top-1/2 -translate-y-1/2',
+    bottom: 'bottom-24',
+  }
 
-	const positionClass = POSITION_CLASSES[message.position ?? 'center'] ?? POSITION_CLASSES.center
-	const fontSizeClass = FONT_SIZE_CLASSES[message.fontSize ?? 'lg'] ?? FONT_SIZE_CLASSES.lg
+  const fontSizeClasses = {
+    sm: 'text-sm md:text-base',
+    md: 'text-base md:text-xl',
+    lg: 'text-lg md:text-3xl',
+    xl: 'text-xl md:text-5xl',
+  }
 
-	return (
-		<div
-			className={`fixed inset-0 z-[200] flex flex-col justify-center ${positionClass} pointer-events-none`}
-			style={{ backgroundColor: 'rgba(0,0,0,0.65)' }}
-		>
-			{/* Card */}
-			<div
-				className="pointer-events-auto relative mx-auto w-full max-w-2xl rounded-2xl px-8 py-8 shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-300"
-				style={{
-					backgroundColor: message.bgColor || 'rgba(15, 15, 20, 0.97)',
-				}}
-			>
-				{/* Close button (local dismiss) */}
-				<button
-					onClick={onDismiss}
-					className="absolute top-3 right-3 h-7 w-7 rounded-full flex items-center justify-center text-white/50 hover:text-white hover:bg-white/10 transition-colors"
-					title="Close"
-				>
-					<X className="h-4 w-4" />
-				</button>
+  const typeIcons = {
+    QUESTION: <MessageSquare className="w-5 h-5 text-sky-400" />,
+    AD_HOC: <Zap className="w-5 h-5 text-yellow-400" />,
+    MEDIA: <ImageIcon className="w-5 h-5 text-purple-400" />,
+  }
 
-				{/* Message text */}
-				<p
-					className={`text-white font-semibold leading-snug text-center ${fontSizeClass}`}
-					style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
-				>
-					{message.text}
-				</p>
+  return (
+    <div 
+      className={cn(
+        "fixed left-1/2 -translate-x-1/2 z-[100] w-full max-w-[90%] md:max-w-2xl px-6 pointer-events-none transition-all duration-500 transform",
+        positionClasses[message.position || 'center'],
+        visible ? "opacity-100 translate-y-0 scale-100" : "opacity-0 translate-y-4 scale-95"
+      )}
+    >
+      <div className="relative group pointer-events-auto">
+        {/* Glow effect */}
+        <div className="absolute -inset-1 bg-gradient-to-r from-sky-500/20 via-primary/20 to-purple-500/20 rounded-2xl blur-xl opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200"></div>
+        
+        {/* Main Card */}
+        <div className="relative flex items-center gap-4 bg-[#141414]/80 backdrop-blur-2xl border border-white/10 rounded-2xl p-6 md:p-8 shadow-2xl">
+          <div className="flex-shrink-0 flex items-center justify-center w-12 h-12 rounded-xl bg-white/5 border border-white/10">
+            {typeIcons[message.type] || <Zap className="w-6 h-6 text-primary" />}
+          </div>
+          
+          <div className="flex-1 min-w-0">
+            <h4 className={cn(
+              "font-bold text-white tracking-tight leading-tight",
+              fontSizeClasses[message.fontSize || 'lg']
+            )}>
+              {message.content}
+            </h4>
+            
+            {message.type === 'QUESTION' && message.options && message.options.length > 0 && (
+              <div className="mt-4 flex flex-wrap gap-2">
+                {message.options.map((option, i) => (
+                  <div key={i} className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-white/60 text-xs font-medium">
+                    {option}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
-				{/* Duration progress bar */}
-				{message.duration && message.duration > 0 && (
-					<div className="mt-5 h-1 w-full rounded-full bg-white/10 overflow-hidden">
-						<div
-							className="h-full bg-primary rounded-full"
-							style={{
-								width: '100%',
-								animation: `shrink-x ${message.duration}s linear forwards`,
-							}}
-						/>
-					</div>
-				)}
+          {/* Progress bar if duration exists */}
+          {message.duration && message.duration > 0 && (
+            <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/5 overflow-hidden rounded-b-2xl">
+              <div 
+                className="h-full bg-primary/60 animate-[progress_linear_forwards]"
+                style={{ animationDuration: `${message.duration}s` }}
+              />
+            </div>
+          )}
+        </div>
+      </div>
 
-				{/* Host controls */}
-				{isHost && onDismissForAll && (
-					<div className="mt-4 flex justify-center">
-						<button
-							onClick={onDismissForAll}
-							className="px-4 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white/70 hover:text-white text-xs transition-colors border border-white/10"
-						>
-							Dismiss for everyone
-						</button>
-					</div>
-				)}
-			</div>
-		</div>
-	)
+      <style jsx>{`
+        @keyframes progress {
+          from { width: 100%; }
+          to { width: 0%; }
+        }
+      `}</style>
+    </div>
+  )
 }
