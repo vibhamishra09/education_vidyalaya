@@ -17,7 +17,7 @@ type BackendUserContextValue = {
   error: string | null;
   isAuthLoaded: boolean;
   isSignedIn: boolean;
-  refresh: () => Promise<void>;
+  refresh: () => Promise<boolean>;
 };
 
 type ClerkBootstrapUser = {
@@ -67,11 +67,11 @@ export function BackendUserProvider({ children }: PropsWithChildren) {
       attemptedUserRef.current = null;
       setError(null);
       setLoading(false);
-      return;
+      return false;
     }
 
     if (!force && attemptedUserRef.current === user.id) {
-      return;
+      return bootstrappedUserRef.current === user.id;
     }
 
     attemptedUserRef.current = user.id;
@@ -94,8 +94,10 @@ export function BackendUserProvider({ children }: PropsWithChildren) {
       );
 
       bootstrappedUserRef.current = user.id;
+      return true;
     } catch (err) {
       setError(getErrorMessage(err, 'Unable to prepare your backend profile.'));
+      return false;
     } finally {
       setLoading(false);
     }
@@ -103,7 +105,7 @@ export function BackendUserProvider({ children }: PropsWithChildren) {
 
   const refresh = useCallback(async () => {
     attemptedUserRef.current = null;
-    await bootstrapUser(true);
+    return bootstrapUser(true);
   }, [bootstrapUser]);
 
   useEffect(() => {

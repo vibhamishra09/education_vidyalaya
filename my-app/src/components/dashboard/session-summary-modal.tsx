@@ -17,12 +17,16 @@ import {
   User,
   FileText,
   Sparkles,
+  PencilLine,
+  ArrowRight,
 } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 import { setAuthToken } from "@/lib/api-client";
 import { peerSessionsApi, studyRoomsApi } from "@/lib/api";
 import { PeerSession, StudyRoom } from "@/types/api.types";
 import ReactMarkdown from "react-markdown";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
 
 interface SessionSummaryModalProps {
   open: boolean;
@@ -41,6 +45,7 @@ export function SessionSummaryModal({
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState<PeerSession | StudyRoom | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [hasScratchPad, setHasScratchPad] = useState(false);
 
   const fetchSessionDetails = useCallback(async () => {
     try {
@@ -59,6 +64,36 @@ export function SessionSummaryModal({
       }
 
       setSession(data);
+
+      try {
+        const prefix = sessionType === 'study-room' ? 'studyroom-' : 'peersession-';
+        const prefixedId = `${prefix}${sessionId}`;
+        
+        let spRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/scratch-pad/${sessionId}`, {
+          headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+        });
+        
+        let spJson = await spRes.json();
+        
+        if (!spJson?.content) {
+          // Try prefixed ID for older sessions or mismatch
+          const fallbackRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/scratch-pad/${prefixedId}`, {
+            headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+          });
+          if (fallbackRes.ok) {
+            const fallbackJson = await fallbackRes.json();
+            if (fallbackJson?.content) {
+              spJson = fallbackJson;
+            }
+          }
+        }
+
+        setHasScratchPad(!!spJson?.content);
+      } catch (err) {
+        console.error("ScratchPad check error:", err);
+        setHasScratchPad(false);
+      }
+
     } catch (err) {
       console.error("Error fetching session details:", err);
       setError("Failed to load session details");
@@ -281,6 +316,27 @@ export function SessionSummaryModal({
                   )}
                 </div>
               </div>
+
+              {/* Scratch Pad */}
+              {hasScratchPad && (
+                <div>
+                  <h3 className="text-sm font-medium mb-3 flex items-center gap-2">
+                    <PencilLine className="h-4 w-4 text-primary" />
+                    Whiteboard / Scratch Pad
+                  </h3>
+                  <div className="bg-muted/50 rounded-lg p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <p className="text-sm text-muted-foreground mr-4">
+                      Access the collaborative whiteboard saved from this session. Notes, diagrams, and drawings were saved automatically.
+                    </p>
+                    <Link href={`/scratch-pad/${session.id}`} >
+                      <Button variant="outline" size="sm" className="whitespace-nowrap">
+                        Open Scratch Pad
+                        <ArrowRight className="h-4 w-4 ml-2" />
+                      </Button>
+                    </Link>
+                  </div>
+                </div>
+              )}
             </div>
           ) : null}
         </ScrollArea>

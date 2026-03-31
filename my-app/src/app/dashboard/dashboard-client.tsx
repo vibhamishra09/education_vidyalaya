@@ -14,7 +14,8 @@ import { SkillsAndSuggestions } from "@/components/dashboard/skills-and-suggesti
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ArrowRight, Plus, PencilLine } from "lucide-react";
 import { useDashboard } from "@/hooks/use-dashboard";
 import { useCurrentUser } from "@/hooks/use-users";
 import { peerSessionsApi, studyRoomsApi } from "@/lib/api";
@@ -254,6 +255,12 @@ export function DashboardClient() {
           </div>
           
           <div className="flex items-center gap-3">
+             <Link href="/dashboard/scratch-pads">
+                <Button variant="outline" className="gap-2 shadow-sm text-purple-700 hover:bg-purple-100 hover:text-purple-800 border-purple-200 bg-purple-50">
+                   <PencilLine className="h-4 w-4" />
+                   Scratch Pads
+                </Button>
+             </Link>
              <Link href="/create-study-room">
                 <Button className="gap-2 shadow-sm bg-sky-100 text-sky-700 hover:bg-sky-200 border border-sky-200">
                    <Plus className="h-4 w-4" />

@@ -34,6 +34,7 @@ import { LoggingInterceptor } from './logging.interceptor';
 import { SentryModule } from './common/sentry';
 import { LoggerModule } from './common/logger';
 import { CacheModule } from './redis/cache.module';
+import { ScratchPadModule } from './scratch-pad/scratch-pad.module';
 
 @Module({
   imports: [
@@ -72,6 +73,7 @@ import { CacheModule } from './redis/cache.module';
     DebateChatModule,
     SessionExtensionModule,
     SessionModerationModule,
+    ScratchPadModule,
   ],
   controllers: [AppController],
   providers: [
