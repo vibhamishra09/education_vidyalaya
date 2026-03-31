@@ -601,6 +601,7 @@ export interface DashboardData {
     totalUnlocked: number;
     totalAvailable: number;
   };
+  engagement?: DashboardEngagementSummary;
 }
 
 // Pagination Types
@@ -713,10 +714,14 @@ export interface DashboardQuery {
 // Transaction History Types
 export interface TransactionHistoryItem {
   id: string;
-  type: 'PAYMENT_MADE' | 'PAYMENT_RECEIVED' | 'REFUND_RECEIVED';
+  type:
+    | 'PAYMENT_MADE'
+    | 'PAYMENT_RECEIVED'
+    | 'REFUND_RECEIVED'
+    | 'BONUS_EARNED';
   amount: number;
   description: string;
-  status: PaymentStatus;
+  status: PaymentStatus | 'BONUS';
   date: Date | string;
   relatedUser?: {
     id: string;
@@ -780,7 +785,7 @@ export interface Achievement {
   rarity: AchievementRarity;
   maxProgress: number;
   progress: number;
-  coinReward: number;
+  pointReward: number;
   unlocked: boolean;
   unlockedAt?: Date | string | null;
 }
@@ -806,6 +811,39 @@ export interface MonthlyTopUsersResponse {
   topTeacher: MonthlyTopUser | null;
   month: number;
   year: number;
+}
+
+export type DashboardMissionStatus = 'ready' | 'completed' | 'locked';
+
+export interface DashboardMission {
+  id: string;
+  title: string;
+  description: string;
+  rewardPoints: number;
+  status: DashboardMissionStatus;
+  progressLabel: string;
+  actionLabel: string;
+  actionHref: string;
+}
+
+export interface RewardActivityItem {
+  id: string;
+  rewardType: string;
+  title: string;
+  description?: string | null;
+  pointsAmount: number;
+  createdAt: string | Date;
+}
+
+export interface DashboardEngagementSummary {
+  headline: string;
+  subtitle: string;
+  completedCount: number;
+  totalCount: number;
+  weeklyPoints: number;
+  totalPoints: number;
+  missions: DashboardMission[];
+  recentRewards: RewardActivityItem[];
 }
 
 // Session Feedback Types (Post-session survey)

@@ -4,8 +4,8 @@ import { Navigation } from "@/components/layout/navigation";
 import { Footer } from "@/components/layout/footer";
 import { MetricCardComponent } from "@/components/cards/metric-card";
 import { SessionRequestCard } from "@/components/cards/session-request-card";
-import { QuickActions } from "@/components/dashboard/quick-actions";
 import { EnhancedCalendarWidget } from "@/components/dashboard/enhanced-calendar-widget";
+import { DailyMomentumCard } from "@/components/dashboard/daily-momentum-card";
 import { SessionsChart } from "@/components/stats/sessions-chart";
 import { AchievementShowcaseConnected } from "@/components/achievements/achievement-showcase-connected";
 import { StreakTrackerConnected } from "@/components/profile/streak-tracker-connected";
@@ -14,8 +14,7 @@ import { SkillsAndSuggestions } from "@/components/dashboard/skills-and-suggesti
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowRight, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useDashboard } from "@/hooks/use-dashboard";
 import { useCurrentUser } from "@/hooks/use-users";
 import { peerSessionsApi, studyRoomsApi } from "@/lib/api";
@@ -45,7 +44,7 @@ export function DashboardClient() {
   const [processingRequests, setProcessingRequests] = useState<Set<string>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
   const sessionsPerPage = 10;
-  
+
   // Use tab persistence hook for localStorage sync
   const [activeRequestTab, setActiveRequestTab] = useTabPersistence<RequestTab>(
     "dashboard_request_tab",
@@ -54,7 +53,7 @@ export function DashboardClient() {
   );
 
   // Fetch dashboard data from API
-  const { data: dashboardData, isLoading: dashboardLoading, error: dashboardError } = useDashboard({
+  const { data: dashboardData, isLoading: dashboardLoading } = useDashboard({
     includeMetrics: true,
     includeRequests: true,
     includeSessions: true,
@@ -74,27 +73,27 @@ export function DashboardClient() {
   // Create default/fallback metrics if actual metrics are missing
   const defaultMetrics = [
     {
-       name: "Sessions Completed",
-       value: "0",
-       icon: "check-circle",
-       description: "Total sessions"
+      name: "Sessions Completed",
+      value: "0",
+      icon: "check-circle",
+      description: "Total sessions"
     },
     {
-       name: "Total Earnings",
-       value: "0",
-       icon: "coins",
-       description: "Coins earned"
+      name: "Total Earnings",
+      value: "0",
+      icon: "coins",
+      description: "Coins earned"
     },
     {
-       name: "Average Rating",
-       value: "0.0",
-       icon: "star",
-       description: "Out of 5 stars"
+      name: "Average Rating",
+      value: "0.0",
+      icon: "star",
+      description: "Out of 5 stars"
     }
   ];
 
-  const metrics = (dashboardData?.metrics && dashboardData.metrics.length > 0) 
-    ? dashboardData.metrics 
+  const metrics = (dashboardData?.metrics && dashboardData.metrics.length > 0)
+    ? dashboardData.metrics
     : defaultMetrics;
 
   const pendingRequests = dashboardData?.pendingRequests || [];
@@ -173,7 +172,7 @@ export function DashboardClient() {
   const handleAcceptRequest = async (requestId: string) => {
     try {
       setProcessingRequests(prev => new Set(prev).add(requestId));
-      
+
       // Get token and set it for API calls
       const token = await getToken();
       if (token) {
@@ -181,12 +180,12 @@ export function DashboardClient() {
       }
 
       await peerSessionsApi.acceptPeerSession(requestId);
-      
+
       showSuccess("Session Accepted", "The session request has been accepted successfully!");
-      
+
       // Refresh dashboard data
       await queryClient.invalidateQueries({ queryKey: ['dashboard'] });
-      
+
     } catch (error) {
       console.error('Error accepting session request:', error);
       showError("Failed to Accept", "Failed to accept session request. Please try again.");
@@ -203,7 +202,7 @@ export function DashboardClient() {
   const handleDeclineRequest = async (requestId: string) => {
     try {
       setProcessingRequests(prev => new Set(prev).add(requestId));
-      
+
       // Get token and set it for API calls
       const token = await getToken();
       if (token) {
@@ -211,12 +210,12 @@ export function DashboardClient() {
       }
 
       await peerSessionsApi.rejectPeerSession(requestId);
-      
+
       showSuccess("Session Declined", "The session request has been declined.");
-      
+
       // Refresh dashboard data
       await queryClient.invalidateQueries({ queryKey: ['dashboard'] });
-      
+
     } catch (error) {
       console.error('Error declining session request:', error);
       showError("Failed to Decline", "Failed to decline session request. Please try again.");
@@ -253,15 +252,22 @@ export function DashboardClient() {
               </>
             )}
           </div>
-          
+
           <div className="flex items-center gap-3">
-             <Link href="/create-study-room">
-                <Button className="gap-2 shadow-sm bg-sky-100 text-sky-700 hover:bg-sky-200 border border-sky-200">
-                   <Plus className="h-4 w-4" />
-                   Create Room
-                </Button>
-             </Link>
+            <Link href="/create-study-room">
+              <Button className="gap-2 shadow-sm bg-sky-100 text-sky-700 hover:bg-sky-200 border border-sky-200">
+                <Plus className="h-4 w-4" />
+                Create Room
+              </Button>
+            </Link>
           </div>
+        </div>
+
+        <div className="mb-8">
+          <DailyMomentumCard
+            engagement={dashboardData?.engagement}
+            isLoading={dashboardLoading}
+          />
         </div>
 
         {/* Top Section: Metrics Row - REMOVED */}{/* Metrics moved to left column */}
@@ -270,36 +276,36 @@ export function DashboardClient() {
           {/* Main Content Column */}
           <div className="xl:col-span-2 space-y-8">
 
-             {/* Metrics - Now stacked vertically on mobile, horizontal on desktop, but contained in left column */}
-             <div className="space-y-4">
-                <div className="flex flex-col sm:flex-row gap-4">
-                  {dashboardLoading ? (
-                    Array.from({ length: 3 }).map((_, index) => (
-                      <div key={index} className="flex-1">
-                        <Card>
-                          <CardContent className="pt-6">
-                            <div className="flex items-start justify-between">
-                              <div className="space-y-2">
-                                 <Skeleton className="h-4 w-24" />
-                                 <Skeleton className="h-8 w-16" />
-                              </div>
-                              <Skeleton className="h-10 w-10 rounded-xl" />
+            {/* Metrics - Now stacked vertically on mobile, horizontal on desktop, but contained in left column */}
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row gap-4">
+                {dashboardLoading ? (
+                  Array.from({ length: 3 }).map((_, index) => (
+                    <div key={index} className="flex-1">
+                      <Card>
+                        <CardContent className="pt-6">
+                          <div className="flex items-start justify-between">
+                            <div className="space-y-2">
+                              <Skeleton className="h-4 w-24" />
+                              <Skeleton className="h-8 w-16" />
                             </div>
-                          </CardContent>
-                        </Card>
-                      </div>
-                    ))
-                  ) : (
-                    metrics.map((metric) => (
-                       <div key={metric.name} className="flex-1 min-w-0">
-                          <MetricCardComponent metric={metric} />
-                       </div>
-                    ))
-                  )}
-                </div>
-             </div>
+                            <Skeleton className="h-10 w-10 rounded-xl" />
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  ))
+                ) : (
+                  metrics.map((metric) => (
+                    <div key={metric.name} className="flex-1 min-w-0">
+                      <MetricCardComponent metric={metric} />
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
 
-             {/* Sessions List */}
+            {/* Sessions List */}
             <div className="space-y-4">
               <div className="pl-1">
                 <h3 className="font-semibold text-lg">Your Sessions</h3>
@@ -326,16 +332,16 @@ export function DashboardClient() {
                 isLoading={dashboardLoading}
               />
             </div>
-          
+
             {/* Pagination Controls */}
             {(() => {
-              const totalPastSessions = 
-                (dashboardData?.sessionsPagination?.pastSessions?.total || 0) + 
+              const totalPastSessions =
+                (dashboardData?.sessionsPagination?.pastSessions?.total || 0) +
                 (dashboardData?.sessionsPagination?.pastStudyRooms?.total || 0);
               const totalPages = Math.ceil(totalPastSessions / sessionsPerPage);
-              
+
               if (totalPages <= 1) return null;
-              
+
               return (
                 <div className="flex items-center justify-between pt-2 px-1">
                   <div className="text-sm text-muted-foreground">
@@ -363,27 +369,27 @@ export function DashboardClient() {
               );
             })()}
 
-             {/* Achievements - Moved from right side */}
-             <div className="pt-2">
-                 <AchievementShowcaseConnected showProgress={true} />
-             </div>
+            {/* Achievements - Moved from right side */}
+            <div className="pt-2">
+              <AchievementShowcaseConnected showProgress={true} />
+            </div>
 
-             {/* Charts */}
-             <div className="">
-                 <SessionsChart />
-             </div>
+            {/* Charts */}
+            <div className="">
+              <SessionsChart />
+            </div>
 
           </div>
 
           {/* Sidebar Column */}
           <div className="space-y-6">
 
-             {/* Streak Tracker - Moved from metrics row */}
-             <StreakTrackerConnected />
+            {/* Streak Tracker - Moved from metrics row */}
+            <StreakTrackerConnected />
 
-             {/* Calendar Section - Moved from left side */}
-             <div id="calendar-section">
-               <EnhancedCalendarWidget sessions={[
+            {/* Calendar Section - Moved from left side */}
+            <div id="calendar-section">
+              <EnhancedCalendarWidget sessions={[
                 ...upcomingSessions.map(s => ({
                   id: s.id,
                   title: s.title,
@@ -404,7 +410,7 @@ export function DashboardClient() {
                 })),
               ]} />
             </div>
-            
+
             {/* Requests Card */}
             <Card className="shadow-sm border-border/60">
               <CardHeader className="pb-3">
@@ -435,26 +441,26 @@ export function DashboardClient() {
                 </div>
               </CardHeader>
               <CardContent className="px-4">
-                  {(
-                    activeRequestTab === 'received' ? pendingRequests : sentRequests
-                  ).length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground text-sm border-2 border-dashed rounded-lg">
-                      {activeRequestTab === 'received' ? 'No incoming requests' : 'No sent requests'}
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {(activeRequestTab === 'received' ? pendingRequests : sentRequests).map((request) => (
-                        <SessionRequestCard
-                          key={request.id}
-                          request={request}
-                          variant={activeRequestTab}
-                          onAccept={activeRequestTab === 'received' ? () => handleAcceptRequest(request.id) : undefined}
-                          onDecline={activeRequestTab === 'received' ? () => handleDeclineRequest(request.id) : undefined}
-                          isProcessing={activeRequestTab === 'received' ? processingRequests.has(request.id) : false}
-                        />
-                      ))}
-                    </div>
-                  )}
+                {(
+                  activeRequestTab === 'received' ? pendingRequests : sentRequests
+                ).length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground text-sm border-2 border-dashed rounded-lg">
+                    {activeRequestTab === 'received' ? 'No incoming requests' : 'No sent requests'}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {(activeRequestTab === 'received' ? pendingRequests : sentRequests).map((request) => (
+                      <SessionRequestCard
+                        key={request.id}
+                        request={request}
+                        variant={activeRequestTab}
+                        onAccept={activeRequestTab === 'received' ? () => handleAcceptRequest(request.id) : undefined}
+                        onDecline={activeRequestTab === 'received' ? () => handleDeclineRequest(request.id) : undefined}
+                        isProcessing={activeRequestTab === 'received' ? processingRequests.has(request.id) : false}
+                      />
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -471,20 +477,20 @@ export function DashboardClient() {
                 </div>
               </CardHeader>
               <CardContent className="px-4">
-                  {pendingReviews > 0 ? (
-                    <div className="flex flex-col gap-2">
-                       <p className="text-sm text-muted-foreground">
-                        You have <span className="font-semibold text-primary">{pendingReviews}</span> session{pendingReviews > 1 ? 's' : ''} waiting for your review.
-                       </p>
-                    </div>
-                  ) : (
-                    <div className="text-center py-6 text-muted-foreground text-sm border-2 border-dashed rounded-lg">
-                      No reviews pending
-                    </div>
-                  )}
+                {pendingReviews > 0 ? (
+                  <div className="flex flex-col gap-2">
+                    <p className="text-sm text-muted-foreground">
+                      You have <span className="font-semibold text-primary">{pendingReviews}</span> session{pendingReviews > 1 ? 's' : ''} waiting for your review.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="text-center py-6 text-muted-foreground text-sm border-2 border-dashed rounded-lg">
+                    No reviews pending
+                  </div>
+                )}
               </CardContent>
             </Card>
-            
+
             {/* Skills & Suggestion */}
             <SkillsAndSuggestions
               userSkills={userSkills}

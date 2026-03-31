@@ -21,6 +21,7 @@ export function useTransactionHistory() {
       return paymentsApi.getTransactionHistory();
     },
     enabled: isSignedIn,
-    staleTime: 1000 * 60 * 5, // 5 minutes
+    staleTime: 30 * 1000,
+    refetchOnWindowFocus: true,
   });
 }

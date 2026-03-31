@@ -29,6 +29,7 @@ import { AvailabilityService } from '../availability/availability.service';
 import { StreaksService } from '../streaks/streaks.service';
 import { AchievementsService } from '../achievements/achievements.service';
 import { TranscriptsService } from '../transcripts/transcripts.service';
+import { EngagementService } from '../engagement/engagement.service';
 import { CacheService } from '../redis/cache.service';
 import { isConnectionError } from '../common/db-error-handler';
 
@@ -44,6 +45,7 @@ export class PeerSessionsService {
     private streaksService: StreaksService,
     private achievementsService: AchievementsService,
     private transcriptsService: TranscriptsService,
+    private engagementService: EngagementService,
     private readonly cacheService: CacheService,
   ) {}
 
@@ -665,6 +667,21 @@ export class PeerSessionsService {
       await this.achievementsService.checkStreakAchievements(
         peerSession.requestedToId,
         teacherStreak.currentStreak,
+      );
+
+      await this.engagementService.awardFirstMeaningfulActionBonus(
+        peerSession.requestedById,
+        peerSession.date,
+        'session_completion',
+      );
+      await this.engagementService.awardFirstMeaningfulActionBonus(
+        peerSession.requestedToId,
+        peerSession.date,
+        'session_completion',
+      );
+      await this.engagementService.awardFirstTeachingSessionOfWeekBonus(
+        peerSession.requestedToId,
+        peerSession.date,
       );
 
       // Generate AI summary from transcripts

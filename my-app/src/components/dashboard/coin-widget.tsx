@@ -75,6 +75,8 @@ export function CoinWidget({ coins = 0, isLoading = false }: CoinWidgetProps) {
                       className={`p-1.5 rounded-full flex-shrink-0 ${
                         transaction.type === 'PAYMENT_RECEIVED'
                           ? 'bg-green-100 text-green-600'
+                          : transaction.type === 'BONUS_EARNED'
+                          ? 'bg-amber-100 text-amber-600'
                           : transaction.type === 'REFUND_RECEIVED'
                           ? 'bg-blue-100 text-blue-600'
                           : 'bg-red-100 text-red-600'
@@ -82,6 +84,8 @@ export function CoinWidget({ coins = 0, isLoading = false }: CoinWidgetProps) {
                     >
                       {transaction.type === 'PAYMENT_RECEIVED' ? (
                         <ArrowDownLeft className="h-3 w-3" />
+                      ) : transaction.type === 'BONUS_EARNED' ? (
+                        <Coins className="h-3 w-3" />
                       ) : transaction.type === 'REFUND_RECEIVED' ? (
                         <RefreshCw className="h-3 w-3" />
                       ) : (
@@ -105,6 +109,8 @@ export function CoinWidget({ coins = 0, isLoading = false }: CoinWidgetProps) {
                       className={`text-xs font-semibold ${
                         transaction.type === 'PAYMENT_MADE'
                           ? 'text-red-600'
+                          : transaction.type === 'BONUS_EARNED'
+                          ? 'text-amber-600'
                           : 'text-green-600'
                       }`}
                     >
@@ -114,14 +120,16 @@ export function CoinWidget({ coins = 0, isLoading = false }: CoinWidgetProps) {
                     <Badge
                       variant="outline"
                       className={`text-[10px] px-1 h-4 ${
-                        transaction.status === PaymentStatus.RECEIVED
+                        transaction.status === 'BONUS'
+                          ? 'border-amber-200 text-amber-700'
+                          : transaction.status === PaymentStatus.RECEIVED
                           ? 'border-green-200 text-green-700'
                           : transaction.status === PaymentStatus.ESCROW
                           ? 'border-yellow-200 text-yellow-700'
                           : 'border-red-200 text-red-700'
                       }`}
                     >
-                      {transaction.status}
+                      {transaction.status === 'BONUS' ? 'BONUS' : transaction.status}
                     </Badge>
                   </div>
                 </div>

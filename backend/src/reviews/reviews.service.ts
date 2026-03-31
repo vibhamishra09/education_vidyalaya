@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { EngagementService } from '../engagement/engagement.service';
 import { CreateReviewDto } from './dto/review.dto';
 import { NotifType, PaymentStatus } from '../generated/prisma/client';
 import { CacheService } from '../redis/cache.service';
@@ -19,6 +20,7 @@ export class ReviewsService {
   constructor(
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
+    private engagementService: EngagementService,
     private readonly cacheService: CacheService,
   ) {}
 
@@ -310,6 +312,17 @@ export class ReviewsService {
       createDto.sessionId,
       createDto.sessionType,
       actorUserId,
+    );
+
+    await this.engagementService.awardReviewCompletionBonus(
+      actorUserId,
+      createDto.sessionId,
+      createDto.sessionType,
+    );
+    await this.engagementService.awardFirstMeaningfulActionBonus(
+      actorUserId,
+      new Date(),
+      'review_submission',
     );
 
     // Invalidate reviews cache
