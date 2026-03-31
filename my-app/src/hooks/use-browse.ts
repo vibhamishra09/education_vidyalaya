@@ -7,6 +7,7 @@ export const browseKeys = {
   all: ['browse'] as const,
   list: (filters: BrowseFilters) => [...browseKeys.all, filters] as const,
   recommendations: () => [...browseKeys.all, 'recommendations'] as const,
+  matches: (page: number, limit: number) => [...browseKeys.all, 'matches', { page, limit }] as const,
 };
 
 // Get browse data
@@ -72,5 +73,17 @@ export function useBrowseRecommendations(
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
     enabled: wantSkills.length > 0 && (options?.enabled !== false),
+  });
+}
+
+/**
+ * Get ranked peer matches for the "Recommended for You" section
+ */
+export function usePeerMatches(page: number = 1, limit: number = 10, options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: browseKeys.matches(page, limit),
+    queryFn: () => browseApi.getPeerMatches(page, limit),
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    enabled: options?.enabled !== false,
   });
 }

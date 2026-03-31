@@ -97,3 +97,12 @@ export class BrowseQueryDto extends PaginationQueryDto {
   @Max(10)
   trendingLimit?: number;
 }
+
+export class PeerMatchesQueryDto extends PaginationQueryDto {
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(20)
+  @Type(() => Number)
+  limit?: number = 10;
+}

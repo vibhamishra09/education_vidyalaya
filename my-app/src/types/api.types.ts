@@ -479,10 +479,15 @@ export interface BrowsePeer {
   avatar?: string;
   bio?: string;
   skills: string[];
+  matchedSkills?: string[];
   rating?: number | null;
   reviewCount?: number;
   totalSessions?: number;
   socialLinks?: SocialLink[];
+  matchScore?: number;
+  skillScore?: number;
+  availabilityScore?: number;
+  ratingScore?: number;
 }
 
 export interface BrowseResponse {
