@@ -48,9 +48,10 @@ import {
 
 interface StudyRoomClientProps {
   roomId: string;
+  slug:string
 }
 
-export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
+export default function StudyRoomClient({ roomId, slug }: StudyRoomClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const joinIntentRef = useRef(false);
@@ -61,6 +62,7 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
   const [recurringRoom, setRecurringRoom] = useState<{
     id: string;
     seriesId?: string | null;
+    slug: string | undefined
   } | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const { getToken, isSignedIn, isLoaded: authLoaded } = useAuth();
@@ -70,7 +72,7 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
   
   const { data: room, isLoading, error } = useStudyRoomDetails(roomId);
   const joinStudyRoom = useJoinStudyRoom();
-  const cancelStudyRoom = useCancelStudyRoom(roomId);
+  const cancelStudyRoom = useCancelStudyRoom();
   const [hostEditOpen, setHostEditOpen] = useState(false);
   const { data: currentUserData } = useCurrentUser();
 
@@ -176,17 +178,16 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
     const role = room.role || "empty";
     const full = room.participantCount >= room.maxParticipants;
 
-    if (role !== "empty" || full) {
-      router.replace(getStudyRoomPagePath(roomId), { scroll: false });
-      return;
-    }
+    if(role === 'teacher') return
+    if(role === 'learner') return
 
     joinIntentRef.current = true;
     void (async () => {
       try {
         await handleJoinRoom();
-      } finally {
-        router.replace(getStudyRoomPagePath(roomId), { scroll: false });
+      } 
+      catch(e){
+        console.log(e)
       }
     })();
   }, [
@@ -214,7 +215,11 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
     }
 
     try {
-      await cancelStudyRoom.mutateAsync(scope);
+      await cancelStudyRoom.mutateAsync({
+        roomId: room.id,
+        slug: room.slug,
+        scope,
+      });
       showSuccess("Cancelled", "Study room cancellation applied successfully.");
     } catch {
       showError("Cancel Failed", "Could not cancel this study room.");
@@ -306,7 +311,7 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
       scope === "ALL" ? "FOLLOWING" : "THIS";
 
     try {
-      await joinRecurring({ roomId: recurringRoom.id, scope: apiScope });
+      await joinRecurring({ roomId: recurringRoom.slug ?? recurringRoom.id, scope: apiScope });
       showSuccess("Joined Room successfully!");
     } catch (error: unknown) {
       const err = error as { response?: { data?: { message?: string } } };
@@ -335,11 +340,12 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
   };
 
   const handleConfirmLeave = async (scope: "ALL" | "THIS") => {
+    if(!recurringRoom)  return;
     setIsLeaveModalOpen(false);
     
     if (scope === "ALL") {
       try {
-        await unenroll({ roomId: room.seriesId!, scope: "ALL" });
+        await unenroll({ roomId: recurringRoom.seriesId!, scope: "ALL" });
         showSuccess("Successfully Unenrolled from series")
       }
       catch(e){
@@ -350,7 +356,7 @@ export default function StudyRoomClient({ roomId }: StudyRoomClientProps) {
       }
     } else {
       try {
-        await unenroll({ roomId: room.id, scope: "THIS" });
+        await unenroll({ roomId: recurringRoom.id, scope: "THIS" });
         showSuccess("Successfully Unenrolled from room")
       }
       catch(e){

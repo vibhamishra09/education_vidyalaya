@@ -31,12 +31,13 @@ interface StudyRoomData {
 async function getStudyRoomData(roomId: string): Promise<StudyRoomData | null> {
   try {
     const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-    const response = await fetch(`${baseUrl}/api/study-rooms/${roomId}`, {
+    const response = await fetch(`http://localhost:3001/api/study-rooms/${roomId}`, {
       next: { revalidate: 60 }, // Cache for 60 seconds
     });
+    const res = await response.json()
     
     if (!response.ok) return null;
-    return response.json();
+    return res;
   } catch (error) {
     console.error("Error fetching study room for metadata:", error);
     return null;
@@ -139,7 +140,7 @@ export default async function StudyRoomPage({
         </div>
       }
     >
-      <StudyRoomClient roomId={room?.id ?? roomId} />
+      <StudyRoomClient roomId={room?.id!} slug={room?.slug!} />
     </Suspense>
   );
 }
