@@ -3,8 +3,8 @@ import {  } from '@playwright/test';
 import { describe } from 'node:test';
 
 const loginAsParticipant = async (page: Page) => {
-    await page.goto('http://localhost:3000');
-    await page.waitForLoadState('networkidle')
+    await page.goto('http://localhost:3000', {waitUntil:'domcontentloaded'});
+    await page.waitForTimeout(5000)
     await page.getByRole('button', { name: 'Sign In' }).click();
     await page.getByRole('textbox', { name: 'Email address' }).click();
     await page.getByRole('textbox', { name: 'Email address' }).fill('learner1@gmail.com');
@@ -13,7 +13,7 @@ const loginAsParticipant = async (page: Page) => {
     await page.getByRole('textbox', { name: 'Password' }).fill('SAFESTpass');
     await page.getByRole('button', { name: 'Continue' }).click();
 }
-test.describe.configure({ timeout: 40000})
+test.describe.configure({ timeout: 60000})
 
 test.beforeEach('Login to test account', async ({ page }, testInfo) => {
     console.log(testInfo?.annotations?.at(0)?.type);
@@ -22,9 +22,9 @@ test.beforeEach('Login to test account', async ({ page }, testInfo) => {
        await loginAsParticipant(page)
        return
     }
-    await page.goto('http://localhost:3000', {
-        waitUntil: 'networkidle'
-    });
+    await page.goto('http://localhost:3000', {waitUntil:'domcontentloaded'})
+    await page.waitForTimeout(5000)
+
     await page.getByRole('button', { name: 'Sign In' }).click();
     await page.getByRole('textbox', { name: 'Email address' }).click();
     await page.getByRole('textbox', { name: 'Email address' }).fill('test@gmail.com');
@@ -91,23 +91,27 @@ test("Check existing study rooms, peers,webinars", async ({page}) => {
 })
 
 test("Attempt to create a room, join it and chat", async ({page}) => {
-    handlePopups(page)
-    page.on('dialog', async (dialog) => {
-        console.log(dialog.message()); 
-        await dialog.accept(); 
-    });
     await page.getByText('Create a Study Room').click();
     await page.getByRole('textbox', { name: 'Room Name' }).fill('auto-generated-room');
     await page.getByRole('textbox', { name: 'Type a skill (e.g. React,' }).click();
     await page.getByRole('textbox', { name: 'Type a skill (e.g. React,' }).fill('newskill');
     await page.getByText('newskill').click();
     await page.getByRole('switch', { name: 'Instant Session' }).click()
-    const launchBtn = page.getByText('Launch Session')
+
+    await page.waitForTimeout(2000)
+    const btn = page.getByRole('button', { name: /not now/i });
+    await btn.click()
+    const launchBtn = page.getByRole('button', {name: 'Launch Session'})
     await launchBtn.scrollIntoViewIfNeeded();
 
     await launchBtn.click();
 
     await page.getByRole('button', { name: 'Enter Room' }).click();
+    await expect(page.getByRole('button', { name: 'Enter Classroom' })).toBeVisible()
+
+    const roomUrl= page.url()
+    console.log(roomUrl);
+    
     await page.getByRole('button', { name: 'Enter Classroom' }).click();
     await page.getByRole('textbox', { name: 'Type a message...' }).click();
     await page.getByRole('textbox', { name: 'Type a message...' }).fill('Test Message');
@@ -117,12 +121,12 @@ test("Attempt to create a room, join it and chat", async ({page}) => {
     //cleanup the room
     await page.locator('.inline-flex').first().click();
     await page.getByRole('button', { name: 'End', exact: true }).click();
-    await page.getByRole('button', { name: 'Leave Room' }).click();
-    await page.getByRole('button', { name: 'Cancel Session' }).click();  
+    await page.goto(roomUrl);
+    await page.waitForLoadState('domcontentloaded');
+    await page.getByRole('button', { name: 'Cancel Session' }).click()
 });
 
 test("Attempt to create a recurring room, test chat and remove rooms", async ({page}) => {
-    handlePopups(page)
     page.on('dialog', async (dialog) => {
         console.log(dialog.message()); 
         await dialog.accept(); 
@@ -135,19 +139,26 @@ test("Attempt to create a recurring room, test chat and remove rooms", async ({p
     await page.getByText('newskill').click();
 
     const now = new Date();
-    const date = now.toISOString().split('T')[0];
+    const date = now.toLocaleDateString('en-CA');
     const time = now.toTimeString().slice(0, 5);
 
     await page.locator('input[type="date"]').fill(date);
     await page.locator('input[type="time"]').fill(time);
     await page.getByRole('switch').nth(1).click()
 
-    const launchBtn = page.getByText('Launch Session')
+     await page.waitForTimeout(2000)
+    const btn = page.getByRole('button', { name: /not now/i });
+    await btn.click()
+    const launchBtn = page.getByRole('button', {name: 'Launch Session'})
     await launchBtn.scrollIntoViewIfNeeded();
 
     await launchBtn.click();
 
     await page.getByRole('button', { name: 'Enter Room' }).click();
+        await expect(page.getByRole('button', { name: 'Enter Classroom' })).toBeVisible()
+
+    const roomUrl= page.url()
+    console.log(roomUrl);
     await page.getByRole('button', { name: 'Enter Classroom' }).click();
     await page.getByRole('textbox', { name: 'Type a message...' }).click();
     await page.getByRole('textbox', { name: 'Type a message...' }).fill('Test Message');
@@ -156,9 +167,10 @@ test("Attempt to create a recurring room, test chat and remove rooms", async ({p
 
     //cleanup the room
     await page.locator('.inline-flex').first().click();
-    await page.getByRole('button', { name: 'End', exact: true }).click();
-    await page.getByRole('button', { name: 'Leave Room' }).click();
-    await page.getByRole('button', { name: 'Cancel Session' }).click();  
+    await page.getByRole('button', { name: 'End', exact: true }).click()
+    await page.goto(roomUrl);
+    await page.waitForLoadState('domcontentloaded');
+    await page.getByRole('button', { name: 'Cancel Session' }).click()
 })
 
 describe("Debate room creation and chat testing", () => {

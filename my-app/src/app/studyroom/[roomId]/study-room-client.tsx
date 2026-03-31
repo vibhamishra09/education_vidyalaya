@@ -311,7 +311,7 @@ export default function StudyRoomClient({ roomId, slug }: StudyRoomClientProps) 
       scope === "ALL" ? "FOLLOWING" : "THIS";
 
     try {
-      await joinRecurring({ roomId: recurringRoom.slug ?? recurringRoom.id, scope: apiScope });
+      await joinRecurring({ roomId: recurringRoom.id ?? recurringRoom.id, scope: apiScope });
       showSuccess("Joined Room successfully!");
     } catch (error: unknown) {
       const err = error as { response?: { data?: { message?: string } } };
@@ -584,7 +584,7 @@ export default function StudyRoomClient({ roomId, slug }: StudyRoomClientProps) 
                                 )}
 
                                 <ShareButton
-                                    url={getStudyRoomShareUrl(roomId)}
+                                    url={getStudyRoomShareUrl(slug)}
                                     title={room.title}
                                     description={room.description || ""}
                                     image={room.imageUrl}
