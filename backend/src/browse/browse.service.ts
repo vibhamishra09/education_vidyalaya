@@ -712,6 +712,107 @@ export class BrowseService {
     }
   }
 
+  private async getTrendingWebinars(limit: number) {
+    try {
+      const rooms = await this.prisma.studyRoom.findMany({
+        where: {
+          sessionMode: StudyRoomSessionMode.WEBINAR,
+          sessionStatus: {
+            in: [SessionStatus.UPCOMING, SessionStatus.ONGOING],
+          },
+        },
+        distinct: ["slug"],
+        take: limit,
+        select: {
+          id: true,
+          slug: true,
+          title: true,
+          description: true,
+          sessionStatus: true,
+          date: true,
+          duration: true,
+          maxParticipants: true,
+          joiningFee: true,
+          createdBy: {
+            select: {
+              id: true,
+              name: true,
+              avatar: true,
+              reviewsReceived: {
+                select: { rating: true },
+              },
+              _count: {
+                select: {
+                  studyRooms: {
+                    where: { sessionStatus: SessionStatus.DONE },
+                  },
+                  peerSessionsReceived: {
+                    where: { sessionStatus: SessionStatus.DONE },
+                  },
+                },
+              },
+            },
+          },
+          skills: {
+            select: {
+              skill: {
+                select: { name: true },
+              },
+            },
+          },
+          learners: {
+            select: {
+              id: true,
+            },
+          },
+        },
+        orderBy: [{ learners: { _count: 'desc' } }, { date: 'asc' }],
+      });
+
+      return rooms.map((room) => {
+        const hostReviews = room.createdBy.reviewsReceived;
+        const hostAvgRating =
+          hostReviews.length > 0
+            ? hostReviews.reduce((sum, r) => sum + r.rating, 0) /
+              hostReviews.length
+            : null;
+        const hostTotalSessions =
+          room.createdBy._count.studyRooms +
+          room.createdBy._count.peerSessionsReceived;
+
+        return {
+          id: room.id,
+          title: room.title,
+          description: room.description,
+          sessionStatus: room.sessionStatus,
+          date: room.date,
+          duration: room.duration,
+          maxParticipants: room.maxParticipants,
+          joiningFee: room.joiningFee,
+          participantCount: room.learners.length,
+          createdBy: {
+            id: room.createdBy.id,
+            name: room.createdBy.name,
+            avatar: room.createdBy.avatar,
+          },
+          skills: room.skills.map((s) => s.skill.name),
+          slug: room.slug,
+          hostAvgRating,
+          hostReviewCount: hostReviews.length,
+          hostTotalSessions,
+        };
+      });
+    } catch (error) {
+      this.logger.warn({
+        message: '[Browse] Trending webinars query failed; returning empty list',
+        limit,
+        error: error instanceof Error ? error.message : String(error),
+      });
+
+      return [];
+    }
+  }
+
   /**
    * Get advanced peer matches based on weighted scores:
    * (Skills Match x 0.6) + (Availability Overlap x 0.3) + (Rating x 0.1)

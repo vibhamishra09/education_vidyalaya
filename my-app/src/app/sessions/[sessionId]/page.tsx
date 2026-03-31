@@ -181,7 +181,7 @@ export default function PeerSessionPage({
     canCancel; // canCancel is computed in useEffect based on time
   // No manual complete - session completes automatically when time ends in the video room
 
-  const formattedDate = new Date(session.date).toLocaleDateString("en-US", {
+  const _formattedDate = new Date(session.date).toLocaleDateString("en-US", {
     weekday: "long",
     year: "numeric",
     month: "long",
