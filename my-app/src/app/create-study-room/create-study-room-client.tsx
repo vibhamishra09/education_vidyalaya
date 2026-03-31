@@ -45,11 +45,21 @@ import {
 } from "@/components/ui/select";
 import { uploadFile, validateImageFile } from "@/lib/upload";
 import { setAuthToken } from "@/lib/api-client";
+<<<<<<< HEAD
 import {
   getStudyRoomPagePath,
   getStudyRoomShareUrl,
 } from "@/lib/utils/study-room-share";
 import { toAbsoluteAppUrl } from "@/lib/utils/public-url";
+=======
+<<<<<<< Updated upstream
+=======
+import {
+  getStudyRoomShareUrl,
+} from "@/lib/utils/study-room-share";
+import { toAbsoluteAppUrl } from "@/lib/utils/public-url";
+>>>>>>> Stashed changes
+>>>>>>> 90339ad (resolved build errors)
 
 interface StudyRoomFormData {
   title: string;
@@ -290,7 +300,7 @@ export function CreateStudyRoomClient() {
       // Upload file
       const fileUrl = await uploadFile(file, 'document');
       updateField("imageUrl", fileUrl);
-    } catch (error) {
+    } catch (_error) {
       setError('Failed to upload image. Please try again.');
       setImagePreview(null);
     } finally {

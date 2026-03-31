@@ -15,7 +15,7 @@ import {
   ChevronLeft,
   ChevronRight,
   BookOpen,
-  ArrowRight,
+ 
   Eye,
   Pencil
 } from "lucide-react";

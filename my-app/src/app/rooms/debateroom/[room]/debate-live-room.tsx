@@ -363,7 +363,7 @@ function DebateLiveContent({
   buzzerQueue,
   prepCountdown,
   onPressBuzzer,
-  onSendTeamChat,
+  onSendTeamChat: _onSendTeamChat,
   onAdvanceTurn,
   onEndDebate,
   onStartDebate,
@@ -2086,7 +2086,7 @@ function TeamVideoGrid({
           try {
             const metadata = JSON.parse(trackRef.participant.metadata);
             avatarUrl = metadata.avatar || undefined;
-          } catch (e) {
+          } catch (_e) {
             // Silently handle parsing errors
           }
         }

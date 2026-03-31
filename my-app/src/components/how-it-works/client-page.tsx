@@ -4,7 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+
 import { cn } from "@/lib/utils";
 import { CheckCircle2, ArrowRight } from "lucide-react";
 import Link from "next/link";

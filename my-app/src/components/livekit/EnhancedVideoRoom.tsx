@@ -4277,6 +4277,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 														: 'opacity-70 hover:opacity-100 hover:ring-1 hover:ring-white/20'
 														}`}
 												>
+													{/* eslint-disable-next-line @next/next/no-img-element */}
 													<img
 														src={bg.thumbnail}
 														alt={bg.name}

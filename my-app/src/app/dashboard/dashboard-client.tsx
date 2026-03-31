@@ -4,7 +4,7 @@ import { Navigation } from "@/components/layout/navigation";
 import { Footer } from "@/components/layout/footer";
 import { MetricCardComponent } from "@/components/cards/metric-card";
 import { SessionRequestCard } from "@/components/cards/session-request-card";
-import { QuickActions } from "@/components/dashboard/quick-actions";
+
 import { EnhancedCalendarWidget } from "@/components/dashboard/enhanced-calendar-widget";
 import { SessionsChart } from "@/components/stats/sessions-chart";
 import { AchievementShowcaseConnected } from "@/components/achievements/achievement-showcase-connected";
@@ -14,8 +14,7 @@ import { SkillsAndSuggestions } from "@/components/dashboard/skills-and-suggesti
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowRight, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useDashboard } from "@/hooks/use-dashboard";
 import { useCurrentUser } from "@/hooks/use-users";
 import { peerSessionsApi, studyRoomsApi } from "@/lib/api";
@@ -54,7 +53,7 @@ export function DashboardClient() {
   );
 
   // Fetch dashboard data from API
-  const { data: dashboardData, isLoading: dashboardLoading, error: dashboardError } = useDashboard({
+  const { data: dashboardData, isLoading: dashboardLoading, error: _dashboardError } = useDashboard({
     includeMetrics: true,
     includeRequests: true,
     includeSessions: true,

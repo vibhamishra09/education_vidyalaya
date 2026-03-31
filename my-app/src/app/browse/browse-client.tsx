@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, X, Sparkles, ArrowLeft, Swords } from "lucide-react";
+import { Search, X, Sparkles, ArrowLeft, Swords, Presentation, Plus } from "lucide-react";
 import { useBrowse, useBrowseRecommendations, usePeerMatches } from "@/hooks/use-browse";
 import { useSkills } from "@/hooks/use-skills";
 import { useCurrentUser } from "@/hooks/use-users";
