@@ -262,7 +262,7 @@ export class BrowseService {
   }
 
   async getBrowseData(
-    tab: 'peers' | 'studyRooms',
+    tab: 'peers' | 'studyRooms' | "webinars",
     search?: string,
     skills?: string[],
     page: number = 1,
@@ -271,7 +271,8 @@ export class BrowseService {
     studyStatus?: SessionStatus,
     studyFreeOnly?: boolean,
     includeTrendingStudyRooms?: boolean,
-    trendingLimit: number = 4,
+    includeTrendingWebinars?: boolean,
+    trendingLimit: number = 10,
   ) {
     // Create cache key from all query parameters
     const cacheKey = this.cacheService.createKey('browse:data', {
@@ -284,6 +285,7 @@ export class BrowseService {
       studyStatus,
       studyFreeOnly,
       includeTrendingStudyRooms,
+      includeTrendingWebinars,
       trendingLimit,
     });
 
@@ -373,6 +375,7 @@ export class BrowseService {
           ]);
 
           if (tab === 'peers') {
+            const peerSortMostActive = !search && !(skills && skills.length > 0);
             const users = await this.prisma.user.findMany({
               where: peerWhere,
               skip,
@@ -396,7 +399,12 @@ export class BrowseService {
                   },
                 },
               },
-              orderBy: { name: 'asc' }, // Sort by name alphabetically
+              orderBy: peerSortMostActive
+                ? [
+                    { reviewsReceived: { _count: 'desc' } },
+                    { name: 'asc' },
+                  ]
+                : { name: 'asc' },
             });
 
             return {
@@ -425,6 +433,7 @@ export class BrowseService {
               }),
               studyRooms: [],
               trendingStudyRooms: [],
+              trendingWebinars: [],
               counts: {
                 peers: peerCount,
                 studyRooms: studyRoomCount,
@@ -529,10 +538,16 @@ export class BrowseService {
               ? await this.getTrendingStudyRooms(trendingLimit)
               : [];
 
+            const trendingWebinars =
+              tab === 'webinars' && includeTrendingWebinars
+                ? await this.getTrendingWebinars(trendingLimit)
+                : [];
+
             return {
               peers: [],
               studyRooms: mappedStudyRooms,
               trendingStudyRooms,
+              trendingWebinars,
               counts: {
                 peers: peerCount,
                 studyRooms: studyRoomCount,
@@ -559,7 +574,10 @@ export class BrowseService {
               tab === 'peers'
                 ? {
                     peers: [],
-                    counts: { peers: 0, studyRooms: 0 },
+                    studyRooms: [],
+                    trendingStudyRooms: [],
+                    trendingWebinars: [],
+                    counts: { peers: 0, studyRooms: 0, webinars: 0 },
                     pagination: {
                       total: 0,
                       page,
@@ -572,7 +590,8 @@ export class BrowseService {
                     peers: [],
                     studyRooms: [],
                     trendingStudyRooms: [],
-                    counts: { peers: 0, studyRooms: 0 },
+                    trendingWebinars: [],
+                    counts: { peers: 0, studyRooms: 0, webinars: 0 },
                     pagination: {
                       total: 0,
                       page,

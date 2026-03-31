@@ -47,7 +47,7 @@ export function SkillSearch({
       const skills = response.skills?.map(skill => skill.name) || [];
       setSuggestions(skills);
       setShowSuggestions(true);
-    } catch (error) {
+    } catch (_error) {
       // Error fetching suggestions
     } finally {
       setIsLoading(false);

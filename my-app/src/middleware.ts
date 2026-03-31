@@ -2,6 +2,11 @@ import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 
 const isOnboardingRoute = createRouteMatcher(['/onboarding']);
+const isWebinarAttendeeRoute = createRouteMatcher([
+  '/webinar/register(.*)',
+  '/webinar/join(.*)',
+  '/webinar/waiting(.*)',
+]);
 const isPublicRoute = createRouteMatcher([
   '/',
   '/sign-in(.*)',
@@ -18,6 +23,16 @@ const isPublicRoute = createRouteMatcher([
   '/(.*).webmanifest'
 ]);
 const isApiRoute = createRouteMatcher(['/api(.*)']);
+
+/**
+ * Next.js Server Actions POST with this header. Redirecting those requests (e.g. to /onboarding)
+ * breaks the action response and surfaces as fetchServerAction → "Failed to fetch".
+ * Clerk also uses server actions for App Router session flows.
+ */
+function isNextServerActionRequest(req: NextRequest): boolean {
+  if (req.method !== 'POST') return false;
+  return req.headers.has('next-action') || req.headers.has('Next-Action');
+}
 
 export default clerkMiddleware(async (auth, req: NextRequest) => {
   const { isAuthenticated, sessionClaims, redirectToSignIn } = await auth();
@@ -40,7 +55,7 @@ export default clerkMiddleware(async (auth, req: NextRequest) => {
   }
 
   // If the user isn't signed in and the route is private, redirect to sign-in
-  if (!isAuthenticated && !isPublicRoute(req)) {
+  if (!isAuthenticated && !isPublicRoute(req) && !isWebinarAttendeeRoute(req)) {
     return redirectToSignIn({ returnBackUrl: req.url });
   }
 
@@ -48,6 +63,12 @@ export default clerkMiddleware(async (auth, req: NextRequest) => {
   // Redirect them to /onboarding — this applies to ALL routes (public and private)
   // so that new users landing on "/" are also caught.
   if (isAuthenticated && !sessionClaims?.metadata?.onboardingComplete) {
+    if (isNextServerActionRequest(req)) {
+      return NextResponse.next();
+    }
+    if (isWebinarAttendeeRoute(req)) {
+      return NextResponse.next();
+    }
     const onboardingUrl = new URL('/onboarding', req.url);
     onboardingUrl.searchParams.set('redirect_url', req.url);
     return NextResponse.redirect(onboardingUrl);

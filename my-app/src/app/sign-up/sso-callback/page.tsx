@@ -1,5 +1,7 @@
 import { AuthenticateWithRedirectCallback } from "@clerk/nextjs";
 
 export default function SSOCallbackPage() {
-  return <AuthenticateWithRedirectCallback redirectUrl="/onboarding" />;
+  return (
+    <AuthenticateWithRedirectCallback signUpFallbackRedirectUrl="/onboarding" />
+  );
 }

@@ -192,7 +192,7 @@ export function useSpeechRecognition({
             try {
               recognition.start();
               setIsListening(true);
-            } catch (err) {
+            } catch (_err) {
               // Failed to restart
             }
           }
@@ -209,9 +209,9 @@ export function useSpeechRecognition({
       
       recognition.start();
       setIsListening(true);
-    } catch (err) {
+    } catch (_err) {
       // Don't set error for InvalidStateError (usually means already started)
-      if (!(err as Error).toString().includes('InvalidStateError')) {
+      if (!(_err as Error).toString().includes('InvalidStateError')) {
         setError('Failed to start speech recognition');
       }
     }
@@ -229,7 +229,7 @@ export function useSpeechRecognition({
       if (recognitionRef.current) {
         try {
           recognitionRef.current.stop();
-        } catch (err) {
+        } catch (_err) {
           // Error stopping recognition
         }
         recognitionRef.current = null;

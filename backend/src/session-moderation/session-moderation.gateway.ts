@@ -93,9 +93,15 @@ export class SessionModerationGateway
             where: { token },
             include: {
               guestParticipant: true,
+              studyRoom: { select: { sessionMode: true } },
             },
           });
-        if (!guestAccess || guestAccess.expiresAt < new Date()) {
+        if (
+          !guestAccess ||
+          guestAccess.expiresAt < new Date() ||
+          (guestAccess.studyRoom.sessionMode === 'WEBINAR' &&
+            !guestAccess.guestParticipant.approvedBy)
+        ) {
           this.logger.error(
             'Token verification failed:',
             verifyError.message || verifyError,
@@ -465,6 +471,7 @@ export class SessionModerationGateway
       if (sessionType === 'studyRoom') {
         const result = await this.studyRoomsService.checkIsHost(
           sessionId,
+          undefined,
           clerkId,
         );
         return result.isHost;
@@ -643,6 +650,22 @@ export class SessionModerationGateway
         return;
       }
 
+      // Unlock audio for this participant in Redis so they can unmute if they accept
+      // (room defaults may have mic disabled; JWT/moderation need allowAudio true when host asks)
+      await this.permissionsService.setUserPermissions(sessionId, targetUserId, {
+        canAudio: true,
+      });
+      const audioComputed =
+        await this.permissionsService.getComputedPermissions(
+          sessionId,
+          targetUserId,
+          false,
+        );
+      this.server.to(sessionId).emit('user-permissions-updated', {
+        targetUserId,
+        permissions: audioComputed,
+      });
+
       // Broadcast request to the specific user
       this.server.to(sessionId).emit('host-requested-audio', {
         targetUserId,
@@ -695,6 +718,20 @@ export class SessionModerationGateway
         return;
       }
 
+      await this.permissionsService.setUserPermissions(sessionId, targetUserId, {
+        canVideo: true,
+      });
+      const videoComputed =
+        await this.permissionsService.getComputedPermissions(
+          sessionId,
+          targetUserId,
+          false,
+        );
+      this.server.to(sessionId).emit('user-permissions-updated', {
+        targetUserId,
+        permissions: videoComputed,
+      });
+
       // Broadcast request to the specific user
       this.server.to(sessionId).emit('host-requested-video', {
         targetUserId,
@@ -735,7 +772,6 @@ export class SessionModerationGateway
 
     try {
       if (accepted) {
-        // Unlock the user's audio permission in Redis
         await this.permissionsService.setUserPermissions(
           sessionId,
           client.data.userId,
@@ -744,7 +780,24 @@ export class SessionModerationGateway
         this.logger.debug(
           `User ${client.data.userId} accepted audio request, unlocked audio`,
         );
+      } else {
+        await this.permissionsService.removeUserPermissionFields(
+          sessionId,
+          client.data.userId,
+          ['canAudio'],
+        );
       }
+
+      const audioRespondComputed =
+        await this.permissionsService.getComputedPermissions(
+          sessionId,
+          client.data.userId,
+          false,
+        );
+      this.server.to(sessionId).emit('user-permissions-updated', {
+        targetUserId: client.data.userId,
+        permissions: audioRespondComputed,
+      });
 
       // Notify the host about the response
       this.server.to(sessionId).emit('audio-request-response', {
@@ -782,7 +835,6 @@ export class SessionModerationGateway
 
     try {
       if (accepted) {
-        // Unlock the user's video permission in Redis
         await this.permissionsService.setUserPermissions(
           sessionId,
           client.data.userId,
@@ -791,7 +843,24 @@ export class SessionModerationGateway
         this.logger.debug(
           `User ${client.data.userId} accepted video request, unlocked video`,
         );
+      } else {
+        await this.permissionsService.removeUserPermissionFields(
+          sessionId,
+          client.data.userId,
+          ['canVideo'],
+        );
       }
+
+      const videoRespondComputed =
+        await this.permissionsService.getComputedPermissions(
+          sessionId,
+          client.data.userId,
+          false,
+        );
+      this.server.to(sessionId).emit('user-permissions-updated', {
+        targetUserId: client.data.userId,
+        permissions: videoRespondComputed,
+      });
 
       // Notify the host about the response
       this.server.to(sessionId).emit('video-request-response', {

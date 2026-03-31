@@ -187,7 +187,7 @@ export function DebateRoomHostEditDialog({
                 onChange={(e) => {
                   const val = e.target.value;
                   if (val === '') {
-                    setMaxPerTeam('' as any);
+                    setMaxPerTeam('' as unknown as number);
                     return;
                   }
                   const num = parseInt(val, 10);

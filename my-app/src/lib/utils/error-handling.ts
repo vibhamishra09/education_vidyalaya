@@ -138,6 +138,16 @@ function normalizeNestMessageField(value: unknown): string | undefined {
   return out || undefined;
 }
 
+/** Nest `{ code: string }` on axios `response.data` (e.g. WEBINAR_PENDING_APPROVAL). */
+export function extractNestErrorCode(err: unknown): string | undefined {
+  if (!err || typeof err !== 'object') return undefined;
+  const resp = (err as { response?: { data?: unknown } }).response;
+  const data = resp?.data;
+  if (!data || typeof data !== 'object') return undefined;
+  const code = (data as { code?: unknown }).code;
+  return typeof code === 'string' ? code : undefined;
+}
+
 /**
  * Readable message from axios/Nest/react-query rejections (our interceptor often rejects plain `{ message }`).
  */

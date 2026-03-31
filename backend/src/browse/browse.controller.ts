@@ -23,6 +23,7 @@ export class BrowseController {
       query.studyStatus,
       query.studyFreeOnly,
       query.includeTrendingStudyRooms,
+      query.includeTrendingWebinars,
       query.trendingLimit,
     );
   }

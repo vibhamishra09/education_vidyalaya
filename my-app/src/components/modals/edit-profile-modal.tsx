@@ -318,7 +318,7 @@ export function EditProfileModal({
         if (!result.available) {
           setUsernameError('Username is already taken');
         }
-      } catch (err) {
+      } catch (_err) {
         setUsernameError('Failed to check username availability');
         setUsernameAvailable(false);
       } finally {
@@ -354,7 +354,7 @@ export function EditProfileModal({
       // Upload file with token
       const fileUrl = await uploadFile(file, 'avatar', token);
       setAvatar(fileUrl);
-    } catch (error) {
+    } catch (_error) {
       setError('Failed to upload image. Please try again.');
     } finally {
       setUploadingAvatar(false);
@@ -433,7 +433,7 @@ export function EditProfileModal({
       const response = await usersApi.updateUserProfile(updateData);
       onUserUpdate(response.user);
       onClose();
-    } catch (err) {
+    } catch (_err) {
       setError('Failed to update profile. Please try again.');
     } finally {
       setLoading(false);

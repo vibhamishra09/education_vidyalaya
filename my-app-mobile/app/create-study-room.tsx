@@ -62,10 +62,6 @@ interface StudyRoomFormData {
   recurrenceWeekdays: number[];
   recurrenceCustomDates: string;
   recurrenceRepeatUntil: string;
-  allowExternalUsers: boolean;
-  externalAutoAccept: boolean;
-  externalPasscode: string;
-  externalInviteList: string;
 }
 
 const initialFormData: StudyRoomFormData = {
@@ -83,10 +79,6 @@ const initialFormData: StudyRoomFormData = {
   recurrenceWeekdays: [],
   recurrenceCustomDates: "",
   recurrenceRepeatUntil: "",
-  allowExternalUsers: false,
-  externalAutoAccept: false,
-  externalPasscode: "",
-  externalInviteList: "",
 };
 
 const weekdayOptions = [
@@ -191,12 +183,6 @@ export default function CreateStudyRoomScreen() {
           }
         : undefined;
 
-      const externalInvites = formData.externalInviteList
-        .split(",")
-        .map((email) => email.trim())
-        .filter(Boolean)
-        .map((email) => ({ email, role: "PARTICIPANT" }));
-
       await request(
         "/api/study-rooms",
         {
@@ -216,10 +202,6 @@ export default function CreateStudyRoomScreen() {
               recurrence && recurrence.repeatUntil
                 ? recurrence
                 : undefined,
-            allowExternalUsers: formData.allowExternalUsers,
-            externalAutoAccept: formData.externalAutoAccept,
-            externalPasscode: formData.externalPasscode || undefined,
-            externalInvites: externalInvites.length > 0 ? externalInvites : undefined,
           }),
         },
         { auth: true },
@@ -652,19 +634,6 @@ export default function CreateStudyRoomScreen() {
               <Text className="text-xs text-slate-500 font-medium ml-1">
                  Set to 0 for a free session.
               </Text>
-
-              {/* Allow External Users Toggle */}
-              <View className="mt-4 pt-4 border-t border-dashed border-slate-200 flex-row items-center justify-between p-3 bg-slate-50/50 rounded-lg border border-slate-100/50">
-                 <View className="flex-1 pr-4">
-                    <Text className="text-sm font-semibold text-slate-900">Allow External Users</Text>
-                    <Text className="text-xs text-slate-500 mt-0.5">Guests can join with passcode without login</Text>
-                 </View>
-                 <Switch 
-                   value={formData.allowExternalUsers} 
-                   onValueChange={(val) => updateField("allowExternalUsers", val)} 
-                   trackColor={{ false: "#e2e8f0", true: "#3b82f6" }}
-                 />
-              </View>
             </View>
 
            </View>

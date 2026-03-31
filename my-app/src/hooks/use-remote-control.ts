@@ -120,7 +120,7 @@ export function useRemoteControl() {
           event = new MouseEvent('click', { view: window, bubbles: true, cancelable: true, clientX: x, clientY: y, button: message.button || 0 });
           
           if (target instanceof HTMLButtonElement || target instanceof HTMLAnchorElement || target instanceof HTMLInputElement) {
-            try { target.focus(); } catch(e) {}
+            try { target.focus(); } catch(_e) {}
             setTimeout(() => target.click(), 0);
           }
           break;
@@ -154,8 +154,8 @@ export function useRemoteControl() {
           }));
         }
       }
-    } catch (e) {
-      console.warn('[RemoteControl] Error executing input:', e);
+    } catch (_e) {
+      console.warn('[RemoteControl] Error executing input:', _e);
     }
   }, []);
 
@@ -166,7 +166,7 @@ export function useRemoteControl() {
     const handleDataMessage = (
       payload: Uint8Array,
       participant?: Participant | undefined,
-      kind?: import('livekit-client').DataPacket_Kind,
+      _kind?: import('livekit-client').DataPacket_Kind,
       topic?: string
     ) => {
       if (topic !== 'remote-control') return;
@@ -222,8 +222,8 @@ export function useRemoteControl() {
             }
             break;
         }
-      } catch (e) {
-        console.error('[RemoteControl] Parse error:', e);
+      } catch (_e) {
+        console.error('[RemoteControl] Parse error:', _e);
       }
     };
 
@@ -241,8 +241,8 @@ export function useRemoteControl() {
       const options: { reliable: boolean; topic: string; destinationIdentities?: string[] } = { reliable, topic: 'remote-control' };
       if (message.targetId) options.destinationIdentities = [message.targetId];
       localParticipant.publishData(data, options);
-    } catch (e) {
-      console.error('[RemoteControl] Send error:', e);
+    } catch (_e) {
+      console.error('[RemoteControl] Send error:', _e);
     }
   }, [room, localParticipant]);
 
