@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Body, Param, Req, UseGuards } from '@nestjs/common';
 import { ScratchPadService } from './scratch-pad.service';
 import { ClerkAuthGuard } from '../common/guards/clerk-auth.guard';
+import { OptionalClerkAuthGuard } from '../common/guards/optional-clerk-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 
 @Controller('api/scratch-pad')
@@ -20,6 +21,7 @@ export class ScratchPadController {
    * Get the saved scratch pad data for a specific room
    */
   @Get(':roomId')
+  @UseGuards(OptionalClerkAuthGuard)
   async getScratchPad(
     @Param('roomId') roomId: string,
     @Req() req: any
@@ -43,6 +45,7 @@ export class ScratchPadController {
     @Body('roomTitle') roomTitle?: string,
     @Body('isPersonal') isPersonal?: boolean
   ) {
+    console.log(`[ScratchPadController] Saving pad: roomId=${roomId}, userId=${userId}, isPersonal=${isPersonal}, hasContent=${!!content}`);
     return this.scratchPadService.saveScratchPad(userId, roomId, content, roomTitle, isPersonal !== false);
   }
 }

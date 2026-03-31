@@ -133,6 +133,7 @@ interface EnhancedVideoRoomProps {
 	guestLivekitIdentity?: string | null
 	onParticipantListChange?: (participantIdentities: string[]) => void
 	webinarAttendeeMinimalUi?: boolean
+	sessionUuid?: string | null
 }
 
 export function EnhancedVideoRoom({
@@ -148,6 +149,7 @@ export function EnhancedVideoRoom({
 	guestLivekitIdentity = null,
 	onParticipantListChange,
 	webinarAttendeeMinimalUi = false,
+	sessionUuid = null,
 }: EnhancedVideoRoomProps) {
 	const isGuest = !!externalAccessToken
 	const [showChat, setShowChat] = useState(false)
@@ -164,6 +166,7 @@ export function EnhancedVideoRoom({
 	const { user } = useUser()
 	const moderationUserId = isGuest ? guestLivekitIdentity : user?.id ?? null
 	const queryClient = useQueryClient()
+	const params = useParams()
 
 	const [externalJoinRequests, setExternalJoinRequests] = useState<ExternalJoinRequestItem[]>([])
 	const [activeExternalJoinRequest, setActiveExternalJoinRequest] = useState<ExternalJoinRequestItem | null>(null)
@@ -869,6 +872,7 @@ export function EnhancedVideoRoom({
 					isGuest={isGuest}
 					guestToken={isGuest ? externalAccessToken : undefined}
 					sessionData={sessionData}
+					sessionStableId={sessionUuid}
 					showScratchPad={showScratchPad}
 					setShowScratchPad={setShowScratchPad}
 					allowScratchPadEdit={allowScratchPadEdit}
@@ -1034,6 +1038,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	onFlashGetList: _onFlashGetList,
 	onDismissFlashMessage,
 	sessionData,
+	sessionStableId,
 }: {
 	isUserActive: boolean
 	showChat: boolean
@@ -1121,6 +1126,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	onFlashGetList?: () => void
 	onDismissFlashMessage?: () => void
 	sessionData?: SessionData | null
+	sessionStableId?: string | null
 }) {
 	const params = useParams<{ room: string }>()
 	const room = useRoomContext()
@@ -1170,6 +1176,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		if (!isHost || !room) return
 
 		const broadcastLockState = async () => {
+			if (room.state !== ConnectionState.Connected) return
 			try {
 				const payload = new TextEncoder().encode(JSON.stringify({ 
 					enabled: allowScratchPadEdit 
@@ -1179,11 +1186,19 @@ const VideoRoomContent = memo(function VideoRoomContent({
 					{ reliable: true, topic: 'scratch-pad-lock-update' }
 				)
 			} catch (err) {
+				if (String(err).includes('PC manager is closed') || String(err).includes('UnexpectedConnectionState')) {
+					return; // Silence this expected error during room unmount/teardown
+				}
 				console.error("Failed to broadcast scratchpad lock state:", err)
 			}
 		}
 
-		broadcastLockState()
+		if (room.state === ConnectionState.Connected) {
+			broadcastLockState()
+		} else {
+			room.on(RoomEvent.Connected, broadcastLockState)
+			return () => { room.off(RoomEvent.Connected, broadcastLockState) }
+		}
 	}, [allowScratchPadEdit, isHost, room])
 
 	// Participants: Listen for scratchpad lock state updates
@@ -3455,7 +3470,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 														{showScratchPad && (
 															<div className="absolute inset-0 z-[20] p-2 bg-[#0f0f0f]">
 																<ScratchPad 
-																	roomId={sessionData?.id || 'default'} 
+																	roomId={sessionStableId || sessionData?.id || (params.room as string)} 
 																	room={room}
 																	isHost={isHost}
 																	canEdit={isHost || allowScratchPadEdit}
@@ -4035,24 +4050,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 							</button>
 						</div>
 
-						{/* Flash Messages (host only) */}
-						{isHost && (
-							<div className="flex flex-col items-center justify-center group text-center">
-								<button
-									onClick={() => {
-										if (!showFlashPanel) { setShowChat(false); setShowParticipants(false); setShowScratchPad(false) }
-										setShowFlashPanel((p) => !p)
-									}}
-									className={`h-11 w-11 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl hover:bg-yellow-500/20 active:scale-95 transition-all relative ${showFlashPanel ? 'bg-yellow-500/20 text-yellow-400' : 'text-white/80 hover:text-yellow-400'}`}
-									title="Flash Messages"
-								>
-									<Zap className="h-5 w-5 md:h-5 md:w-5" />
-									{activeFlashMessage && (
-										<span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-yellow-400 border-2 border-[#141414] animate-pulse" />
-									)}
-								</button>
-							</div>
-						)}
+
 
 						{canViewParticipantList && (
 							<div className="flex flex-col items-center justify-center group">
@@ -4215,7 +4213,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						</div>
 						<div className="flex-1 p-2 md:p-6 pb-20 md:pb-6">
 							<ScratchPad
-								roomId={params.room as string}
+								roomId={sessionStableId || sessionData?.id || (params.room as string)}
 								room={room}
 								isHost={isHost}
 								canEdit={allowScratchPadEdit}

@@ -35,29 +35,47 @@ export function useScratchPad({ roomId, room, isHost, canEdit = true, roomTitle,
 			try {
 				setLoading(true)
 				const token = await getToken()
-				const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/scratch-pad/${roomId}`, {
+				
+				// Try fetching standard roomId first
+				console.log(`[ScratchPad] Fetching initial state for roomId: ${roomId}`);
+				let response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/scratch-pad/${roomId}`, {
 					headers: {
 						...(token ? { Authorization: `Bearer ${token}` } : {})
 					}
 				})
+
+				let data = null;
+				if (response.ok) {
+					data = await response.json();
+				}
+
+				// Fallback: If no content found, try prefixed ID for older/mismatched sessions
+				if (!data?.content) {
+					const prefix = roomId.includes('-') ? '' : (window.location.pathname.includes('studyroom') ? 'studyroom-' : 'peersession-');
+					if (prefix && !roomId.startsWith(prefix)) {
+						const fallbackId = `${prefix}${roomId}`;
+						console.log(`[ScratchPad] Trying fallback fetch for roomId: ${fallbackId}`);
+						const fallbackRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/scratch-pad/${fallbackId}`, {
+							headers: {
+								...(token ? { Authorization: `Bearer ${token}` } : {})
+							}
+						});
+						if (fallbackRes.ok) {
+							const fallbackData = await fallbackRes.json();
+							if (fallbackData?.content) {
+								data = fallbackData;
+								console.log(`[ScratchPad] Found content via fallback ID: ${fallbackId}`);
+							}
+						}
+					}
+				}
 				
-				if (response.status === 404) {
-					console.log('ScratchPad: No previous state found.')
-					setLoading(false)
-					return
-				}
-
-				if (!response.ok) {
-					const errorText = await response.text().catch(() => 'Unknown error')
-					throw new Error(`Failed to load scratch pad: ${response.status} ${errorText}`)
-				}
-
-				const data = await response.json()
-				if (data.content) {
-					// Use personal store by default now
+				if (data?.content) {
+					console.log(`[ScratchPad] Loading snapshot into stores...`);
 					loadSnapshot(personalStore, data.content)
-					// Also keep shared sync if needed, but the UI focuses on personal
 					loadSnapshot(sharedStore, data.content)
+				} else {
+					console.log(`[ScratchPad] No previous state found for room.`);
 				}
 			} catch (err) {
 				console.error('ScratchPad Load Error:', err)
@@ -113,6 +131,9 @@ export function useScratchPad({ roomId, room, isHost, canEdit = true, roomTitle,
 			if (now - lastSyncRef.current < 50) return
 			lastSyncRef.current = now
 
+			// Require connection state to be connected before attempting to broadcast
+			if (room.state !== 'connected') return
+
 			// Broadcast changes to everyone else at the Room level
 			const encoder = new TextEncoder()
 			const payload = encoder.encode(JSON.stringify({
@@ -133,13 +154,25 @@ export function useScratchPad({ roomId, room, isHost, canEdit = true, roomTitle,
 		editorRef.current = editor
 	}, [])
 
-	const saveManual = useCallback(async () => {
-		if (!roomId) return
+	const stateRef = useRef({ mode, roomId, roomTitle, enabled, canEdit, isHost })
+	useEffect(() => {
+		stateRef.current = { mode, roomId, roomTitle, enabled, canEdit, isHost }
+	}, [mode, roomId, roomTitle, enabled, canEdit, isHost])
+
+	const performSave = useCallback(async (isAuto = false) => {
+		const { mode: currentMode, roomId: currentId, roomTitle: currentTitle, enabled: isEnabled } = stateRef.current
+		if (!isEnabled || !currentId) return false
+
 		try {
-			setSaving(true)
-			const snapshot = getSnapshot(personalStore)
+			if (!isAuto) setSaving(true)
+			const activeStore = currentMode === 'personal' ? personalStore : sharedStore
+			const snapshot = getSnapshot(activeStore)
 			const token = await getToken()
-			const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/scratch-pad/${roomId}`, {
+			
+			const url = `${process.env.NEXT_PUBLIC_API_URL}/api/scratch-pad/${currentId}`
+			if (!isAuto) console.log(`[ScratchPad] Saving (${currentMode}): ${url}`)
+
+			const response = await fetch(url, {
 				method: 'POST',
 				headers: { 
 					'Content-Type': 'application/json',
@@ -147,49 +180,52 @@ export function useScratchPad({ roomId, room, isHost, canEdit = true, roomTitle,
 				},
 				body: JSON.stringify({ 
 					content: snapshot, 
-					roomTitle,
-					isPersonal: true 
+					roomTitle: currentTitle,
+					isPersonal: currentMode === 'personal' 
 				}),
 			})
 			
-			if (!response.ok) throw new Error('Save failed')
+			if (!response.ok) {
+				const errorText = await response.text().catch(() => 'No error body')
+				console.error(`[ScratchPad] Save failed: ${response.status}`, errorText)
+				return false
+			}
+			
+			if (!isAuto) console.log('[ScratchPad] Save successful')
 			return true
 		} catch (err) {
-			console.error('ScratchPad Save Error:', err)
+			console.error('[ScratchPad] Save Error:', err)
 			return false
 		} finally {
-			setSaving(false)
+			if (!isAuto) setSaving(false)
 		}
-	}, [roomId, personalStore, getToken, roomTitle])
+	}, [personalStore, sharedStore, getToken])
 
-	// Auto-save to S3 (Host only)
+	const saveManual = useCallback(() => performSave(false), [performSave])
+
+	// Auto-save to S3 (Host only or Solo mode)
 	useEffect(() => {
-		const shouldAutoSave = isHost && enabled && roomId && canEdit
+		const shouldAutoSave = isHost && enabled && roomId && canEdit && !loading
 		if (!shouldAutoSave) return
 
-		const interval = setInterval(async () => {
-			try {
-				const snapshot = getSnapshot(sharedStore)
-				const token = await getToken()
-				await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/scratch-pad/${roomId}`, {
-					method: 'POST',
-					headers: { 
-						'Content-Type': 'application/json',
-						...(token ? { Authorization: `Bearer ${token}` } : {})
-					},
-					body: JSON.stringify({ 
-						content: snapshot, 
-						roomTitle,
-						isPersonal: false 
-					}),
-				})
-			} catch (err) {
-				console.error('ScratchPad Auto-save Error:', err)
-			}
+		const interval = setInterval(() => {
+			performSave(true).catch(err => console.error('Auto-save Interval Error:', err))
 		}, 30000)
 
 		return () => clearInterval(interval)
-	}, [isHost, enabled, roomId, canEdit, roomTitle, getToken, sharedStore])
+	}, [isHost, enabled, roomId, canEdit, loading, performSave])
+
+	// Save on Unmount (Close)
+	useEffect(() => {
+		return () => {
+			const { enabled: isEnabled, roomId: currentId, canEdit: canUserEdit } = stateRef.current
+			if (isEnabled && currentId && canUserEdit) {
+				console.log('[ScratchPad] Component unmounting, triggering final save...')
+				// Fire and forget final save on unmount
+				performSave(true).catch(err => console.warn('[ScratchPad] Final unmount save failed:', err))
+			}
+		}
+	}, [performSave])
 
 	return {
 		store: mode === 'shared' ? sharedStore : personalStore,

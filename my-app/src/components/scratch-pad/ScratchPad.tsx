@@ -3,7 +3,7 @@ import 'tldraw/tldraw.css'
 import { Room } from 'livekit-client'
 import { useScratchPad } from '@/hooks/use-scratch-pad'
 import { memo, useState } from 'react'
-import { User, Save, Check, Loader2 } from 'lucide-react'
+import { User, Users, Save, Check, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/contexts/toast-context'
 
@@ -17,7 +17,7 @@ interface ScratchPadProps {
 }
 
 export const ScratchPad = memo(function ScratchPad({ roomId, room, isHost, canEdit = true, roomTitle, enabled = true }: ScratchPadProps) {
-	const { store, loading, saving, error, onEditorMount, saveManual } = useScratchPad({
+	const { store, mode, setMode, loading, saving, error, onEditorMount, saveManual } = useScratchPad({
 		roomId,
 		room,
 		isHost,
@@ -64,9 +64,13 @@ export const ScratchPad = memo(function ScratchPad({ roomId, room, isHost, canEd
             <div className="h-12 bg-white/5 border-b border-white/5 flex items-center justify-between px-4 z-[9999]">
                 <div className="flex items-center gap-2 text-xs font-semibold text-white/60">
                     <div className="h-6 w-6 rounded-lg bg-purple-500/10 flex items-center justify-center">
-                        <User className="h-3.5 w-3.5 text-purple-400" />
+                        {mode === 'personal' ? (
+                            <User className="h-3.5 w-3.5 text-purple-400" />
+                        ) : (
+                            <Users className="h-3.5 w-3.5 text-blue-400" />
+                        )}
                     </div>
-                    Personal Workspace
+                    {mode === 'personal' ? 'Personal Workspace' : 'Meeting Whiteboard'}
                 </div>
 
                 <Button 
