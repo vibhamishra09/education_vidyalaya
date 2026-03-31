@@ -11,6 +11,7 @@ export interface RoomPermissions {
   allowChatHost: boolean;
   allowChatUser: boolean;
   allowParticipantList: boolean;
+  allowScratchPad: boolean;
 }
 
 // Room settings stored in Redis (host view)
@@ -20,6 +21,7 @@ export interface RoomSettings {
   chatDisabled: boolean;
   hideParticipantList: boolean;
   chatRestrictToHostOnly: boolean;
+  lockScratchPad: boolean;
 }
 
 export interface ParticipantChatLocks {
@@ -86,6 +88,7 @@ export function useSessionModeration({ sessionId, sessionType, isHost: _isHost, 
     allowChatHost: true,
     allowChatUser: true,
     allowParticipantList: true,
+    allowScratchPad: true,
   });
   
   // Room settings from Redis (for host UI)
@@ -95,6 +98,7 @@ export function useSessionModeration({ sessionId, sessionType, isHost: _isHost, 
     chatDisabled: false,
     hideParticipantList: false,
     chatRestrictToHostOnly: false,
+    lockScratchPad: false,
   });
 
   const [participantChatLocks, setParticipantChatLocks] = useState<Record<string, ParticipantChatLocks>>({});
@@ -362,6 +366,11 @@ export function useSessionModeration({ sessionId, sessionType, isHost: _isHost, 
     socket.emit('update-permissions', { sessionId, sessionType, permissions: { allowParticipantList: !hidden } });
   }, [socket, sessionId, sessionType]);
 
+  const lockScratchPad = useCallback((locked: boolean) => {
+    if (!socket || !sessionId || !sessionType) return;
+    socket.emit('update-permissions', { sessionId, sessionType, permissions: { allowScratchPad: !locked } });
+  }, [socket, sessionId, sessionType]);
+
   const muteAll = useCallback(() => {
     if (!socket || !sessionId || !sessionType) return;
     socket.emit('moderation-mute', { sessionId, sessionType, action: 'mute' });
@@ -539,6 +548,7 @@ export function useSessionModeration({ sessionId, sessionType, isHost: _isHost, 
     lockUserChatAudience,
     restrictChatToHostOnly,
     hideParticipantList,
+    lockScratchPad,
     muteAll,
     unmuteAll,
     muteParticipant,

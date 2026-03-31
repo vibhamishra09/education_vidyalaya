@@ -157,6 +157,9 @@ export function useScratchPad({ roomId, room, isHost, canEdit = true, roomTitle,
 	const stateRef = useRef({ mode, roomId, roomTitle, enabled, canEdit, isHost })
 	useEffect(() => {
 		stateRef.current = { mode, roomId, roomTitle, enabled, canEdit, isHost }
+		if (editorRef.current) {
+			editorRef.current.updateInstanceState({ isReadonly: !canEdit })
+		}
 	}, [mode, roomId, roomTitle, enabled, canEdit, isHost])
 
 	const performSave = useCallback(async (isAuto = false) => {

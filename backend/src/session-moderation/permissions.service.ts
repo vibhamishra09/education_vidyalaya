@@ -20,6 +20,7 @@ export interface RoomSettings {
   chatDisabled: boolean;
   hideParticipantList: boolean;
   chatRestrictToHostOnly: boolean;
+  lockScratchPad: boolean;
 }
 
 export interface UserPermissions {
@@ -39,6 +40,7 @@ export interface ComputedPermissions {
   allowChatHost: boolean;
   allowChatUser: boolean;
   allowParticipantList: boolean;
+  allowScratchPad: boolean;
 }
 
 export interface FlashQuestion {
@@ -88,6 +90,7 @@ export class PermissionsService {
         chatDisabled: settings.chatDisabled === 'true',
         hideParticipantList: settings.hideParticipantList === 'true',
         chatRestrictToHostOnly: settings.chatRestrictToHostOnly === 'true',
+        lockScratchPad: settings.lockScratchPad === 'true',
       };
     } catch (error) {
       this.logger.error(`Error getting room settings for ${sessionId}:`, error);
@@ -98,6 +101,7 @@ export class PermissionsService {
         chatDisabled: false,
         hideParticipantList: false,
         chatRestrictToHostOnly: false,
+        lockScratchPad: false,
       };
     }
   }
@@ -128,6 +132,9 @@ export class PermissionsService {
       if (settings.chatRestrictToHostOnly !== undefined) {
         updates.chatRestrictToHostOnly =
           settings.chatRestrictToHostOnly.toString();
+      }
+      if (settings.lockScratchPad !== undefined) {
+        updates.lockScratchPad = settings.lockScratchPad.toString();
       }
 
       if (Object.keys(updates).length > 0) {
@@ -309,6 +316,7 @@ export class PermissionsService {
           allowChatHost: true,
           allowChatUser: true,
           allowParticipantList: true,
+          allowScratchPad: true,
         };
       }
 
@@ -353,6 +361,7 @@ export class PermissionsService {
         allowChatHost,
         allowChatUser,
         allowParticipantList: !roomSettings.hideParticipantList,
+        allowScratchPad: !roomSettings.lockScratchPad,
       };
     } catch (error) {
       this.logger.error(
@@ -368,6 +377,7 @@ export class PermissionsService {
         allowChatHost: true,
         allowChatUser: true,
         allowParticipantList: true,
+        allowScratchPad: true,
       };
     }
   }

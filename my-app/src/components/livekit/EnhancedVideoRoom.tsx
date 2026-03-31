@@ -157,7 +157,6 @@ export function EnhancedVideoRoom({
 	const [isFullscreen, setIsFullscreen] = useState(false)
 	const [showWarning, setShowWarning] = useState(false)
 	const [showScratchPad, setShowScratchPad] = useState(false)
-	const [allowScratchPadEdit, setAllowScratchPadEdit] = useState(isHost) // Default to locked for participants until host unlocks
 	const [isMobileViewport, setIsMobileViewport] = useState(false)
 	const [isMobileDevice, setIsMobileDevice] = useState(false)
 	const router = useRouter()
@@ -482,6 +481,7 @@ export function EnhancedVideoRoom({
 		flashDismiss,
 		flashGetList,
 		dismissFlashMessage,
+		lockScratchPad,
 	} = useSessionModeration({
 		sessionId: sessionData?.id || null,
 		sessionType: sessionData?.sessionType || null,
@@ -875,8 +875,7 @@ export function EnhancedVideoRoom({
 					sessionStableId={sessionUuid}
 					showScratchPad={showScratchPad}
 					setShowScratchPad={setShowScratchPad}
-					allowScratchPadEdit={allowScratchPadEdit}
-					setAllowScratchPadEdit={setAllowScratchPadEdit}
+					onLockScratchPad={lockScratchPad}
 					onPromoteToCohost={async (participantIdentity, role) => {
 						if (sessionData?.sessionType !== 'studyRoom' || !sessionData?.id) return
 						const authTokenValue = await getToken()
@@ -989,7 +988,6 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	chatDisabled,
 	webinarChatMode,
 	webinarChatLive,
-	permissions,
 	roomSettings,
 	onLockAudio,
 	onLockVideo,
@@ -1021,8 +1019,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	onPromoteToCohost,
 	showScratchPad,
 	setShowScratchPad,
-	allowScratchPadEdit,
-	setAllowScratchPadEdit,
+	onLockScratchPad,
 	webinarAttendeeMinimalUi: _webinarAttendeeMinimalUi = false,
 	sessionInfo = null,
 	webinarChatEnabledUi = true,
@@ -1081,6 +1078,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	onLockChat?: (locked: boolean) => void
 	onRestrictChatToHostOnly?: (restricted: boolean) => void
 	onHideParticipantList?: (hidden: boolean) => void
+	onLockScratchPad: (locked: boolean) => void
 	onLockUserAudio?: (targetUserId: string, locked: boolean) => void
 	onLockUserVideo?: (targetUserId: string, locked: boolean) => void
 	onRequestAudioOn?: (targetUserId: string) => void
@@ -1179,7 +1177,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			if (room.state !== ConnectionState.Connected) return
 			try {
 				const payload = new TextEncoder().encode(JSON.stringify({ 
-					enabled: allowScratchPadEdit 
+					enabled: permissions?.allowScratchPad ?? true
 				}))
 				await room.localParticipant.publishData(
 					payload,
@@ -1199,26 +1197,26 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			room.on(RoomEvent.Connected, broadcastLockState)
 			return () => { room.off(RoomEvent.Connected, broadcastLockState) }
 		}
-	}, [allowScratchPadEdit, isHost, room])
+	}, [permissions?.allowScratchPad, isHost, room])
 
 	// Participants: Listen for scratchpad lock state updates
 	useEffect(() => {
-		if (!room || isHost) return
+		if (isHost || !room) return
 
 		const handleData = (payload: Uint8Array, _participant?: unknown, _kind?: unknown, topic?: string) => {
 			if (topic === 'scratch-pad-lock-update') {
 				try {
-					const { enabled } = JSON.parse(new TextDecoder().decode(payload))
-					setAllowScratchPadEdit(enabled)
-				} catch {
-					console.error("Failed to parse scratchpad lock update")
-				}
+					const data = JSON.parse(new TextDecoder().decode(payload))
+					if (data.enabled !== undefined) {
+						// Internal state handled by permissions sync now
+					}
+				} catch (e) {}
 			}
 		}
 
 		room.on(RoomEvent.DataReceived, handleData)
 		return () => { room.off(RoomEvent.DataReceived, handleData) }
-	}, [room, isHost, setAllowScratchPadEdit])
+	}, [isHost, room])
 
 	useEffect(() => {
 		if (canViewParticipantList) return
@@ -3473,7 +3471,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 																	roomId={sessionStableId || sessionData?.id || (params.room as string)} 
 																	room={room}
 																	isHost={isHost}
-																	canEdit={isHost || allowScratchPadEdit}
+																	canEdit={isHost || permissions?.allowScratchPad}
 																/>
 																<button 
 																	onClick={() => setShowScratchPad(false)}
@@ -4216,7 +4214,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 								roomId={sessionStableId || sessionData?.id || (params.room as string)}
 								room={room}
 								isHost={isHost}
-								canEdit={allowScratchPadEdit}
+								canEdit={isHost || permissions?.allowScratchPad}
 								roomTitle={sessionData?.title}
                                 enabled={showScratchPad}
 							/>
@@ -4672,15 +4670,15 @@ const VideoRoomContent = memo(function VideoRoomContent({
 									<Button
 										variant="ghost"
 										size="sm"
-										onClick={() => setAllowScratchPadEdit(!allowScratchPadEdit)}
+										onClick={() => onLockScratchPad(!permissions?.allowScratchPad)}
 										className={`h-9 px-4 rounded-xl border transition-all text-xs font-semibold gap-2 ${
-											allowScratchPadEdit 
+											permissions?.allowScratchPad 
 												? 'bg-sky-500/10 text-sky-400 border-sky-500/20 hover:bg-sky-500/20' 
 												: 'bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20'
 										}`}
 									>
-										{allowScratchPadEdit ? <Lock className="h-3.5 w-3.5" /> : <ShieldCheck className="h-3.5 w-3.5" />}
-										{allowScratchPadEdit ? 'Lock for Participants' : 'Allow Participants to Edit'}
+										{permissions?.allowScratchPad ? <Lock className="h-3.5 w-3.5" /> : <ShieldCheck className="h-3.5 w-3.5" />}
+										{permissions?.allowScratchPad ? 'Lock for Participants' : 'Allow Participants to Edit'}
 									</Button>
 								)}
 								<div className="w-px h-6 bg-white/10 mx-1" />
@@ -4701,7 +4699,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 								roomId={sessionData?.id || 'default'}
 								room={room}
 								isHost={isHost}
-								canEdit={isHost || allowScratchPadEdit}
+								canEdit={isHost || permissions?.allowScratchPad}
 								roomTitle={sessionData?.id || 'Meeting'}
 								enabled={showScratchPad}
 							/>
