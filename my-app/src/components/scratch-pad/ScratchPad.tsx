@@ -18,7 +18,7 @@ interface ScratchPadProps {
 }
 
 export const ScratchPad = memo(function ScratchPad({ roomId, room, isHost, canEdit = true, roomTitle, enabled = true, isGuest = false }: ScratchPadProps) {
-	const { store, mode, setMode, loading, saving, syncStatus, error, saveError, onEditorMount, saveManual } = useScratchPad({
+	const { store, mode, setMode, loading, syncStatus, error, saveError, onEditorMount, saveManual } = useScratchPad({
 		roomId,
 		room,
 		isHost,
@@ -29,6 +29,7 @@ export const ScratchPad = memo(function ScratchPad({ roomId, room, isHost, canEd
 	})
     const { showSuccess, showError } = useToast()
     const [justSaved, setJustSaved] = useState(false)
+    const isSaving = syncStatus === 'saving'
 
 	if (loading) {
 		return (
@@ -78,10 +79,10 @@ export const ScratchPad = memo(function ScratchPad({ roomId, room, isHost, canEd
 
                     {/* Sync Status Indicator */}
                     <div className="flex items-center gap-2 transition-all duration-500">
-                        {syncStatus === 'syncing' && (
+                        {isSaving && (
                             <div className="flex items-center gap-1.5 text-[10px] font-medium text-sky-400/80 animate-pulse">
                                 <Loader2 className="h-2.5 w-2.5 animate-spin" />
-                                SYNCING...
+                                SAVING...
                             </div>
                         )}
                         {syncStatus === 'saved' && (
@@ -103,21 +104,21 @@ export const ScratchPad = memo(function ScratchPad({ roomId, room, isHost, canEd
                     variant="ghost" 
                     size="sm" 
                     onClick={handleSave}
-                    disabled={saving}
+                    disabled={isSaving}
                     className={`h-8 px-3 text-xs font-bold transition-all duration-300 rounded-lg ${
                         justSaved 
                         ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30' 
                         : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white'
                     }`}
                 >
-                    {saving ? (
+                    {isSaving ? (
                         <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
                     ) : justSaved ? (
                         <Check className="h-3.5 w-3.5 mr-1.5" />
                     ) : (
                         <Save className="h-3.5 w-3.5 mr-1.5" />
                     )}
-                    {saving ? 'SAVING...' : justSaved ? 'SAVED' : 'SAVE NOW'}
+                    {isSaving ? 'SAVING...' : justSaved ? 'SAVED' : 'SAVE NOW'}
                 </Button>
             </div>
             

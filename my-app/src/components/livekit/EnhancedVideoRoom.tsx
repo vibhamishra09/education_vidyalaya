@@ -988,8 +988,6 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	) => void
 	showScratchPad: boolean
 	setShowScratchPad: (show: boolean) => void
-	allowScratchPadEdit: boolean
-	setAllowScratchPadEdit: (allow: boolean) => void
 	webinarAttendeeMinimalUi?: boolean
 	sessionInfo?: SessionData | null
 	webinarChatEnabledUi?: boolean
