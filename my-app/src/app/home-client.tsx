@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useUser } from "@clerk/nextjs";
 import { Navigation } from "@/components/layout/navigation";
 import { HeroSection } from "@/components/sections/hero";
 import { PlatformStats } from "@/components/sections/platform-stats";
@@ -24,7 +23,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { studyRoomCardDisplayLive } from "@/lib/utils/study-room-edit";
 
 export function HomeClient() {
-  const { isLoaded } = useUser();
   const router = useRouter();
   const requireAuth = useRequireAuth();
   const { showSuccess, showError } = useToast();
@@ -82,22 +80,6 @@ export function HomeClient() {
     //   }
     // });
   };
-
-  // Show loading state while checking authentication
-  if (!isLoaded) {
-    return (
-      <div className="min-h-screen flex flex-col">
-        <Navigation />
-        <main className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto mb-4"></div>
-            <p className="text-muted-foreground">Loading...</p>
-          </div>
-        </main>
-        <Footer />
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen flex flex-col">

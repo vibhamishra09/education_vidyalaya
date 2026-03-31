@@ -134,6 +134,8 @@ export function EnhancedVideoRoom({
 	const [showWarning, setShowWarning] = useState(false)
 	const [isMobileViewport, setIsMobileViewport] = useState(false)
 	const [isMobileDevice, setIsMobileDevice] = useState(false)
+	const [hasResolvedMediaContext, setHasResolvedMediaContext] = useState(false)
+	const [isSecureMediaContext, setIsSecureMediaContext] = useState(false)
 	const router = useRouter()
 	const { showSuccess: _showSuccess, showError: _showError } = useToast()
 	const { getToken } = useAuth()
@@ -166,6 +168,15 @@ export function EnhancedVideoRoom({
 		const mobileByUa = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(window.navigator.userAgent)
 		const mobileByTouch = window.navigator.maxTouchPoints > 1 && window.screen.width <= 1024
 		setIsMobileDevice(mobileByUa || mobileByTouch)
+	}, [])
+
+	useEffect(() => {
+		if (typeof window === 'undefined') return
+		setIsSecureMediaContext(
+			window.isSecureContext &&
+				typeof window.navigator.mediaDevices?.getUserMedia === 'function',
+		)
+		setHasResolvedMediaContext(true)
 	}, [])
 
 	const isNavigatingRef = useRef(false)
@@ -585,7 +596,7 @@ export function EnhancedVideoRoom({
 
 	const [shouldConnectToRoom, setShouldConnectToRoom] = useState(false)
 	useEffect(() => {
-		if (!token?.trim() || !serverUrl?.trim()) {
+		if (!hasResolvedMediaContext || !token?.trim() || !serverUrl?.trim()) {
 			setShouldConnectToRoom(false)
 			return
 		}
@@ -594,13 +605,27 @@ export function EnhancedVideoRoom({
 			window.clearTimeout(t)
 			setShouldConnectToRoom(false)
 		}
-	}, [token, serverUrl])
+	}, [hasResolvedMediaContext, token, serverUrl])
+
+	const mediaCaptureBlockedReason = !hasResolvedMediaContext
+		? null
+		: !isSecureMediaContext
+			? 'insecure_context'
+			: null
 
 	return (
 		<div className="h-screen w-screen flex flex-col bg-[#202124] overflow-hidden fixed inset-0">
+			{mediaCaptureBlockedReason === 'insecure_context' && (
+				<div className="absolute left-4 right-4 top-4 z-[70] rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100 backdrop-blur-md">
+					<div className="font-medium text-amber-50">Microphone and camera need HTTPS on mobile web</div>
+					<div className="mt-1 text-amber-100/90">
+						This room opened over HTTP, so the browser joined in listen-only mode. Open the site over HTTPS or use the mobile app to speak or turn on video.
+					</div>
+				</div>
+			)}
 			<LiveKitRoom
 				video={false}
-				audio={true}
+				audio={isSecureMediaContext}
 				token={token}
 				serverUrl={serverUrl}
 				connect={shouldConnectToRoom}
@@ -694,6 +719,7 @@ export function EnhancedVideoRoom({
 					onFlashDismissForAll={flashDismiss}
 					onFlashGetList={flashGetList}
 					onDismissFlashMessage={dismissFlashMessage}
+					mediaCaptureBlockedReason={mediaCaptureBlockedReason}
 				/>
 			</LiveKitRoom>
 
@@ -816,6 +842,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	onFlashGetList: _onFlashGetList,
 	onDismissFlashMessage,
 	sessionData: _sessionData,
+	mediaCaptureBlockedReason = null,
 }: {
 	isUserActive: boolean
 	showChat: boolean
@@ -894,6 +921,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	onFlashGetList?: () => void
 	onDismissFlashMessage?: () => void
 	sessionData?: SessionData | null
+	mediaCaptureBlockedReason?: 'insecure_context' | null
 }) {
 	const _params = useParams<{ room: string }>()
 	const _room = useRoomContext()
@@ -946,9 +974,22 @@ const VideoRoomContent = memo(function VideoRoomContent({
 
 	const { localParticipant, isCameraEnabled, isMicrophoneEnabled, isScreenShareEnabled } = useLocalParticipant()
 	const lkRoom = useRoomContext()
+	const insecureMediaTitle = useMemo(
+		() =>
+			isMobileViewport || isGuest
+				? 'Microphone and camera need HTTPS'
+				: 'Microphone and camera unavailable on HTTP',
+		[isGuest, isMobileViewport],
+	)
+	const insecureMediaDescription =
+		'This page is open over HTTP, and browsers only allow microphone and camera access in a secure HTTPS context. Reopen the site over HTTPS or use the mobile app.'
 
 	const showMediaError = useCallback(
 		(kind: 'mic' | 'cam', err: unknown, enabling: boolean) => {
+			if (enabling && mediaCaptureBlockedReason === 'insecure_context') {
+				showError(insecureMediaTitle, insecureMediaDescription)
+				return
+			}
 			const name =
 				err instanceof DOMException
 					? err.name
@@ -986,8 +1027,15 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				)
 			}
 		},
-		[showError],
+		[mediaCaptureBlockedReason, insecureMediaDescription, insecureMediaTitle, showError],
 	)
+	const insecureMediaToastShownRef = useRef(false)
+	useEffect(() => {
+		if (mediaCaptureBlockedReason !== 'insecure_context') return
+		if (insecureMediaToastShownRef.current) return
+		insecureMediaToastShownRef.current = true
+		showWarning(insecureMediaTitle, 'You joined muted because this room is open over HTTP. Switch to HTTPS or the mobile app to use your microphone and camera.')
+	}, [mediaCaptureBlockedReason, insecureMediaTitle, showWarning])
 
 	const handleToggleMicrophone = useCallback(async () => {
 		if (!localParticipant) {
@@ -995,6 +1043,10 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			return
 		}
 		const newState = !localParticipant.isMicrophoneEnabled
+		if (newState && mediaCaptureBlockedReason === 'insecure_context') {
+			showError(insecureMediaTitle, insecureMediaDescription)
+			return
+		}
 		if (newState && !isHost && permissions && !permissions.allowAudio) {
 			participantRequestAudio?.()
 			return
@@ -1021,6 +1073,9 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		participantRequestAudio,
 		showError,
 		showMediaError,
+		mediaCaptureBlockedReason,
+		insecureMediaDescription,
+		insecureMediaTitle,
 	])
 
 	const handleToggleCamera = useCallback(async () => {
@@ -1029,6 +1084,10 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			return
 		}
 		const newState = !localParticipant.isCameraEnabled
+		if (newState && mediaCaptureBlockedReason === 'insecure_context') {
+			showError(insecureMediaTitle, insecureMediaDescription)
+			return
+		}
 		if (newState && !isHost && permissions && !permissions.allowVideo) {
 			participantRequestVideo?.()
 			return
@@ -1055,6 +1114,9 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		participantRequestVideo,
 		showError,
 		showMediaError,
+		mediaCaptureBlockedReason,
+		insecureMediaDescription,
+		insecureMediaTitle,
 	])
 
 	const prevRequestCountRef = useRef(0)
