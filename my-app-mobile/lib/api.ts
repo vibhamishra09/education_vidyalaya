@@ -44,13 +44,31 @@ function inferBaseUrlFromHostUri() {
   return `http://${host}:3001`;
 }
 
+function isLoopbackBaseUrl(rawUrl: string) {
+  try {
+    const { hostname } = new URL(rawUrl);
+    return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1' || hostname === '10.0.2.2';
+  } catch {
+    return false;
+  }
+}
+
 export function getApiBaseUrl() {
   const envBaseUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
+  const inferredBaseUrl = inferBaseUrlFromHostUri();
+
   if (envBaseUrl) {
-    return envBaseUrl.replace(/\/$/, '');
+    const normalizedEnvBaseUrl = envBaseUrl.replace(/\/$/, '');
+
+    // On a physical device, `localhost` points to the device itself, not the dev machine.
+    // Prefer Expo's host IP when the configured URL is loopback-based.
+    if (isLoopbackBaseUrl(normalizedEnvBaseUrl) && inferredBaseUrl) {
+      return inferredBaseUrl;
+    }
+
+    return normalizedEnvBaseUrl;
   }
 
-  const inferredBaseUrl = inferBaseUrlFromHostUri();
   if (inferredBaseUrl) {
     return inferredBaseUrl;
   }

@@ -8,7 +8,8 @@ import {
   Switch, 
   Image, 
   Platform,
-  Alert
+  Alert,
+  StyleSheet,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -37,6 +38,36 @@ import { useProtectedRoute } from "../lib/use-protected-route";
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
+}
+
+function formatLocalDate(date: Date) {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function formatLocalTime(date: Date) {
+  const hours = `${date.getHours()}`.padStart(2, "0");
+  const minutes = `${date.getMinutes()}`.padStart(2, "0");
+  return `${hours}:${minutes}`;
+}
+
+function buildLocalDateTime(date: string, time: string) {
+  const [year, month, day] = date.split("-").map(Number);
+  const [hours, minutes] = time.split(":").map(Number);
+
+  if (
+    !year ||
+    !month ||
+    !day ||
+    Number.isNaN(hours) ||
+    Number.isNaN(minutes)
+  ) {
+    return null;
+  }
+
+  return new Date(year, month - 1, day, hours, minutes, 0, 0);
 }
 
 // Enum for recurrence (matching web)
@@ -91,16 +122,30 @@ const weekdayOptions = [
   { value: 6, label: "Sat" },
 ];
 
+const recurrenceOptions = [
+  { label: "Daily", value: StudyRoomRecurrenceMode.DAILY },
+  { label: "Weekly", value: StudyRoomRecurrenceMode.WEEKLY },
+  { label: "Custom", value: StudyRoomRecurrenceMode.CUSTOM_DATES },
+] as const;
+
+const durationOptions = ["30", "45", "60", "90"] as const;
+
 export default function CreateStudyRoomScreen() {
   const router = useRouter();
   const { request } = useApi();
-  const { ready: backendReady } = useBackendUser();
+  const {
+    ready: backendReady,
+    loading: backendBootstrapLoading,
+    error: backendBootstrapError,
+    refresh: refreshBackendUser,
+  } = useBackendUser();
   const { shouldBlock } = useProtectedRoute(true, "/create-study-room");
   const [formData, setFormData] = useState<StudyRoomFormData>(initialFormData);
   const [isInstantRoom, setIsInstantRoom] = useState(false);
   const [skillInput, setSkillInput] = useState("");
   const [uploadingImage, setUploadingImage] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [retryingBackendBootstrap, setRetryingBackendBootstrap] = useState(false);
 
   // Sync instant room time
   useEffect(() => {
@@ -108,8 +153,8 @@ export default function CreateStudyRoomScreen() {
       const now = new Date();
       setFormData((prev) => ({
         ...prev,
-        date: now.toISOString().split("T")[0],
-        time: now.toTimeString().slice(0, 5),
+        date: formatLocalDate(now),
+        time: formatLocalTime(now),
         recurrenceEnabled: false,
       }));
     }
@@ -156,9 +201,40 @@ export default function CreateStudyRoomScreen() {
         return;
     }
 
-    if (!backendReady) {
-      Alert.alert("Please wait", "Your account is still syncing with the backend.");
+    const scheduledStart = buildLocalDateTime(formData.date, formData.time);
+    if (!scheduledStart) {
+      Alert.alert("Invalid schedule", "Please enter a valid date and time.");
       return;
+    }
+
+    const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
+    if (scheduledStart.getTime() < twoMinutesAgo.getTime()) {
+      Alert.alert(
+        "Invalid schedule",
+        "Study rooms cannot be scheduled in the past.",
+      );
+      return;
+    }
+
+    if (!backendReady) {
+      let backendReadyAfterRetry = backendReady;
+
+      if (!backendBootstrapLoading) {
+        setRetryingBackendBootstrap(true);
+        try {
+          backendReadyAfterRetry = await refreshBackendUser();
+        } finally {
+          setRetryingBackendBootstrap(false);
+        }
+      }
+
+      if (!backendReadyAfterRetry) {
+        Alert.alert(
+          "Account setup pending",
+          backendBootstrapError || "We could not finish syncing your profile with the backend yet. Please try again in a moment.",
+        );
+        return;
+      }
     }
 
     try {
@@ -183,7 +259,7 @@ export default function CreateStudyRoomScreen() {
           }
         : undefined;
 
-      await request(
+      const createdRoom = await request<{ id: string }>(
         "/api/study-rooms",
         {
           method: "POST",
@@ -207,12 +283,10 @@ export default function CreateStudyRoomScreen() {
         { auth: true },
       );
 
-      Alert.alert("Success", "Study room created successfully.", [
-        {
-          text: "Open Dashboard",
-          onPress: () => router.replace("/dashboard"),
-        },
-      ]);
+      router.replace({
+        pathname: "/study-room/[id]",
+        params: { id: createdRoom.id },
+      });
     } catch (error) {
       Alert.alert("Could not create room", getErrorMessage(error, "Please try again."));
     } finally {
@@ -259,6 +333,14 @@ export default function CreateStudyRoomScreen() {
 
         {/* Form Content */}
         <View className="px-4 space-y-8">
+          {!backendBootstrapLoading && backendBootstrapError ? (
+            <View className="rounded-2xl border border-rose-100 bg-rose-50 p-4">
+              <Text className="font-semibold text-rose-700">{backendBootstrapError}</Text>
+              <Text className="mt-2 text-rose-700">
+                If you are testing on a physical phone, the app now prefers your Expo host IP over `localhost` for backend calls.
+              </Text>
+            </View>
+          ) : null}
 
           {/* Title Input */}
           <View className="space-y-3">
@@ -336,7 +418,9 @@ export default function CreateStudyRoomScreen() {
                       onPress={handleImageUploadPlaceholder}
                       className="flex-row items-center border border-emerald-500 rounded-lg px-4 py-2 bg-white"
                     >
-                      <Upload size={16} color="#10b981" className="mr-2" />
+                      <View style={{ marginRight: 8 }}>
+                        <Upload size={16} color="#10b981" />
+                      </View>
                       <Text className="text-sm font-semibold text-emerald-600">Choose Image</Text>
                     </Pressable>
                   </View>
@@ -459,25 +543,25 @@ export default function CreateStudyRoomScreen() {
                         <View className="space-y-2">
                            <Text className="text-xs font-bold text-slate-400 uppercase">Repeat Type</Text>
                            <View className="flex-row gap-2">
-                              {[
-                                { label: "Daily", value: StudyRoomRecurrenceMode.DAILY },
-                                { label: "Weekly", value: StudyRoomRecurrenceMode.WEEKLY },
-                                { label: "Custom", value: StudyRoomRecurrenceMode.CUSTOM_DATES },
-                              ].map((mode) => (
+                              {recurrenceOptions.map((mode) => (
                                 <Pressable
                                   key={mode.value}
                                   onPress={() => updateField("recurrenceMode", mode.value)}
-                                  className={cn(
-                                    "flex-1 items-center justify-center py-2.5 rounded-lg border transition-all",
-                                    formData.recurrenceMode === mode.value 
-                                      ? "bg-slate-900 border-slate-900 shadow-sm" 
-                                      : "bg-white border-slate-200"
-                                  )}
+                                  style={[
+                                    styles.segmentButton,
+                                    formData.recurrenceMode === mode.value
+                                      ? styles.segmentButtonActive
+                                      : styles.segmentButtonInactive,
+                                  ]}
                                 >
-                                  <Text className={cn(
-                                    "text-xs font-bold",
-                                    formData.recurrenceMode === mode.value ? "text-white" : "text-slate-600"
-                                  )}>
+                                  <Text
+                                    style={[
+                                      styles.segmentButtonText,
+                                      formData.recurrenceMode === mode.value
+                                        ? styles.segmentButtonTextActive
+                                        : styles.segmentButtonTextInactive,
+                                    ]}
+                                  >
                                     {mode.label}
                                   </Text>
                                 </Pressable>
@@ -527,21 +611,27 @@ export default function CreateStudyRoomScreen() {
             <View className="space-y-3">
               <Text className="text-sm font-semibold text-slate-900">Session Duration</Text>
               <View className="flex-row gap-2">
-                {["30", "45", "60", "90"].map((mins) => (
+                {durationOptions.map((mins) => (
                   <Pressable 
                     key={mins}
                     onPress={() => updateField("duration", mins)}
-                    className={cn(
-                      "flex-1 py-2.5 rounded-lg border items-center justify-center transition-all",
-                       formData.duration === mins 
-                        ? "bg-blue-50 border-blue-200 shadow-sm" 
-                        : "bg-white border-slate-200"
-                    )}
+                    style={[
+                      styles.durationButton,
+                      formData.duration === mins
+                        ? styles.durationButtonActive
+                        : styles.durationButtonInactive,
+                    ]}
                   >
-                    <Text className={cn(
-                      "text-sm font-bold",
-                      formData.duration === mins ? "text-blue-700" : "text-slate-600"
-                    )}>{mins}m</Text>
+                    <Text
+                      style={[
+                        styles.durationButtonText,
+                        formData.duration === mins
+                          ? styles.durationButtonTextActive
+                          : styles.durationButtonTextInactive,
+                      ]}
+                    >
+                      {mins}m
+                    </Text>
                   </Pressable>
                 ))}
               </View>
@@ -640,7 +730,7 @@ export default function CreateStudyRoomScreen() {
         </View>
 
         {/* Floating Action / Submit Button */}
-        <View className="mb-8 mx-4 p-5 bg-white border border-slate-100 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] rounded-3xl mt-4 relative">
+        <View className="mb-8 mx-4 p-5 bg-white border border-slate-100 rounded-3xl mt-4 relative shadow-sm">
           
           {/* Earnings Preview */}
           <View className="flex-row items-center justify-between bg-white rounded-xl p-4 mb-4 border border-slate-100 shadow-sm">
@@ -656,11 +746,11 @@ export default function CreateStudyRoomScreen() {
 
           <Pressable 
               onPress={() => void handleSubmit()}
-              disabled={submitting}
-              className="w-full bg-emerald-100 h-14 rounded-xl flex-row items-center justify-center border border-emerald-200 active:scale-[0.99] transition-transform"
+              disabled={submitting || retryingBackendBootstrap}
+              className="w-full bg-emerald-100 h-14 rounded-xl flex-row items-center justify-center border border-emerald-200"
           >
               <Text className="text-emerald-900 font-bold text-lg mr-2">
-                {submitting ? "Launching..." : "Launch Session"}
+                {submitting ? "Launching..." : retryingBackendBootstrap ? "Syncing..." : "Launch Session"}
               </Text>
               <CheckCircle2 size={20} color="#065f46" strokeWidth={2.5} />
           </Pressable>
@@ -682,3 +772,70 @@ export default function CreateStudyRoomScreen() {
     </LinearGradient>
   );
 }
+
+const styles = StyleSheet.create({
+  segmentButton: {
+    alignItems: "center",
+    borderRadius: 8,
+    borderWidth: 1,
+    flex: 1,
+    justifyContent: "center",
+    minHeight: 42,
+    paddingVertical: 10,
+  },
+  segmentButtonActive: {
+    backgroundColor: "#0f172a",
+    borderColor: "#0f172a",
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  segmentButtonInactive: {
+    backgroundColor: "#ffffff",
+    borderColor: "#e2e8f0",
+  },
+  segmentButtonText: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  segmentButtonTextActive: {
+    color: "#ffffff",
+  },
+  segmentButtonTextInactive: {
+    color: "#475569",
+  },
+  durationButton: {
+    alignItems: "center",
+    borderRadius: 8,
+    borderWidth: 1,
+    flex: 1,
+    justifyContent: "center",
+    minHeight: 42,
+    paddingVertical: 10,
+  },
+  durationButtonActive: {
+    backgroundColor: "#eff6ff",
+    borderColor: "#bfdbfe",
+    shadowColor: "#1d4ed8",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  durationButtonInactive: {
+    backgroundColor: "#ffffff",
+    borderColor: "#e2e8f0",
+  },
+  durationButtonText: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  durationButtonTextActive: {
+    color: "#1d4ed8",
+  },
+  durationButtonTextInactive: {
+    color: "#475569",
+  },
+});

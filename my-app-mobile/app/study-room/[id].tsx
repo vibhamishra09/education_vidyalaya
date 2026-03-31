@@ -8,6 +8,7 @@ import { ShareSheet } from '../../components/ui/share-sheet';
 import { getErrorMessage } from '../../lib/api';
 import { useApi } from '../../lib/use-api';
 import { useBackendUser } from '../../lib/backend-user-context';
+import type { CurrentUserResponse } from '../../types/api';
 
 type StudyRoomDetails = {
   id: string;
@@ -41,6 +42,7 @@ export default function StudyRoomDetailScreen() {
   const [joining, setJoining] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [shareSheetVisible, setShareSheetVisible] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -76,6 +78,37 @@ export default function StudyRoomDetailScreen() {
     };
   }, [id, request]);
 
+  useEffect(() => {
+    let active = true;
+
+    const loadCurrentUser = async () => {
+      if (!isSignedIn || !backendReady) {
+        return;
+      }
+
+      try {
+        const result = await request<CurrentUserResponse>('/api/users/me', undefined, {
+          auth: true,
+        });
+        if (active) {
+          setCurrentUserId(result.user.id);
+        }
+      } catch {
+        if (active) {
+          setCurrentUserId(null);
+        }
+      }
+    };
+
+    void loadCurrentUser();
+
+    return () => {
+      active = false;
+    };
+  }, [backendReady, isSignedIn, request]);
+
+  const isHost = Boolean(room && currentUserId && room.createdBy.id === currentUserId);
+
   const handleJoin = async () => {
     if (!isSignedIn) {
       router.push({
@@ -90,10 +123,24 @@ export default function StudyRoomDetailScreen() {
       return;
     }
 
+    if (isHost) {
+      router.push(`/live-session/${id}`);
+      return;
+    }
+
     try {
       setJoining(true);
-      await request(`/api/study-rooms/${id}/join`, { method: 'POST' }, { auth: true });
-      Alert.alert('Joined', 'You have successfully joined this study room.', [
+      const result = await request<{ success: boolean; message?: string }>(
+        `/api/study-rooms/${id}/join`,
+        { method: 'POST' },
+        { auth: true },
+      );
+      const joinedMessage =
+        result.message === 'Already joined'
+          ? 'You have already joined this study room.'
+          : 'You have successfully joined this study room.';
+
+      Alert.alert(result.message === 'Already joined' ? 'Opening Room' : 'Joined', joinedMessage, [
         {
           text: 'Continue',
           onPress: () => router.push(`/live-session/${id}`),
@@ -233,7 +280,7 @@ export default function StudyRoomDetailScreen() {
             >
               <Video size={20} color="white" />
               <Text className="ml-2 text-lg font-bold text-white">
-                {joining ? 'Joining...' : 'Join Video Room'}
+                {joining ? 'Joining...' : isHost ? 'Open Video Room' : 'Join Video Room'}
               </Text>
             </TouchableOpacity>
           </View>

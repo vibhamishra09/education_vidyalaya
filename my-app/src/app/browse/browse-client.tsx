@@ -18,8 +18,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, X, Sparkles, ArrowLeft, Swords, Plus, Presentation } from "lucide-react";
-import { useBrowse, useBrowseRecommendations } from "@/hooks/use-browse";
+import { Search, X, Sparkles, ArrowLeft, Swords } from "lucide-react";
+import { useBrowse, useBrowseRecommendations, usePeerMatches } from "@/hooks/use-browse";
 import { useSkills } from "@/hooks/use-skills";
 import { useCurrentUser } from "@/hooks/use-users";
 import {
@@ -283,9 +283,17 @@ function BrowsePageContent() {
     { enabled: userWantSkills.length > 0 && !searchQuery && selectedSkills.length === 0 }
   );
   
-  const recommendedPeers = recommendationsData?.peers || [];
+  // New: Fetch ranked peer matches (weighted scoring)
+  const { data: peerMatchesData, isLoading: peerMatchesLoading } = usePeerMatches(
+    1, 4,
+    { enabled: activeTab === "peers" && userWantSkills.length > 0 && !searchQuery && selectedSkills.length === 0 }
+  );
+  
+  const recommendedPeers = peerMatchesData?.matches || recommendationsData?.peers || [];
   const recommendedRooms = recommendationsData?.studyRooms || [];
-  const hasRecommendations = recommendedPeers.length > 0 || recommendedRooms.length > 0;
+  
+  const isRecLoading = activeTab === "peers" ? peerMatchesLoading : recommendationsLoading;
+  const hasRecommendations = (activeTab === "peers" ? recommendedPeers.length > 0 : recommendedRooms.length > 0);
   const showRecommendations = hasRecommendations && !searchQuery && selectedSkills.length === 0;
 
   const handleRoomAction = (room: { slug?: string; id: string }) => {
@@ -340,10 +348,10 @@ function BrowsePageContent() {
                 ? "Peers who can teach what you want to learn"
                 : "Study rooms matching your learning interests"}
             </p>
-
-            {recommendationsLoading ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-                {Array.from({ length: 10 }).map((_, index) => (
+            
+            {isRecLoading ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {Array.from({ length: 4 }).map((_, index) => (
                   <div key={index} className="h-full">
                     <div className="border border-border/40 rounded-2xl p-4 space-y-3 bg-background/40 backdrop-blur-sm">
                       <Skeleton className="h-10 w-10 rounded-full" />
