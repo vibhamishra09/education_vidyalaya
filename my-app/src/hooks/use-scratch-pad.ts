@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Room, RoomEvent } from 'livekit-client'
-import { createTLStore, defaultShapeUtils, Editor, loadSnapshot, getSnapshot } from 'tldraw'
+import { Room, RoomEvent, ConnectionState } from 'livekit-client'
+import { createTLStore, Editor, createTLSchema } from 'tldraw'
 import { useAuth } from '@clerk/nextjs'
 
 interface UseScratchPadOptions {
@@ -10,76 +10,68 @@ interface UseScratchPadOptions {
 	canEdit?: boolean
 	roomTitle?: string
 	enabled?: boolean
+	isGuest?: boolean
 }
 
 export type ScratchPadMode = 'shared' | 'personal'
 
-export function useScratchPad({ roomId, room, isHost, canEdit = true, roomTitle, enabled }: UseScratchPadOptions) {
-	const [sharedStore] = useState(() => createTLStore({ shapeUtils: defaultShapeUtils }))
-	const [personalStore] = useState(() => createTLStore({ shapeUtils: defaultShapeUtils }))
-	const [mode, setMode] = useState<ScratchPadMode>('personal')
-	const [saving, setSaving] = useState(false)
+export function useScratchPad({ roomId, room, isHost, canEdit = true, roomTitle, enabled, isGuest = false }: UseScratchPadOptions) {
+	const [sharedStore] = useState(() => createTLStore({ schema: createTLSchema() }))
+	const [personalStore] = useState(() => createTLStore({ schema: createTLSchema() }))
+	const [mode, setMode] = useState<ScratchPadMode>(room ? 'shared' : 'personal')
+	const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+	const [lastSaved, setLastSaved] = useState<Date | null>(null)
 	
 	const [loading, setLoading] = useState(true)
 	const [error, setError] = useState<string | null>(null)
+	const [saveError, setSaveError] = useState<string | null>(null)
 	const editorRef = useRef<Editor | null>(null)
 	const { getToken } = useAuth()
 	const lastSyncRef = useRef<number>(0)
+	const lastSuccessfulSaveRef = useRef<number>(0)
+	const hasLoadedRef = useRef<boolean>(false)
+	const loadedRoomIdRef = useRef<string | null>(null)
 	const skipRemoteUpdateRef = useRef(false)
+
+	const LOG_TAG = '[ScratchPad-V12_ALIVE]'
+	const schema = createTLSchema()
 
 	// Load initial state from S3
 	useEffect(() => {
 		if (!enabled || !roomId) return
+		if (hasLoadedRef.current && loadedRoomIdRef.current === roomId) return
 
 		async function loadInitialState() {
 			try {
 				setLoading(true)
 				const token = await getToken()
+				await new Promise(resolve => setTimeout(resolve, 300))
 				
-				// Try fetching standard roomId first
-				console.log(`[ScratchPad] Fetching initial state for roomId: ${roomId}`);
-				let response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/scratch-pad/${roomId}`, {
-					headers: {
-						...(token ? { Authorization: `Bearer ${token}` } : {})
-					}
+				console.log(`${LOG_TAG} Loading state for ${roomId}...`)
+				const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/scratch-pad/${roomId}`, {
+					headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
 				})
 
-				let data = null;
 				if (response.ok) {
-					data = await response.json();
-				}
-
-				// Fallback: If no content found, try prefixed ID for older/mismatched sessions
-				if (!data?.content) {
-					const prefix = roomId.includes('-') ? '' : (window.location.pathname.includes('studyroom') ? 'studyroom-' : 'peersession-');
-					if (prefix && !roomId.startsWith(prefix)) {
-						const fallbackId = `${prefix}${roomId}`;
-						console.log(`[ScratchPad] Trying fallback fetch for roomId: ${fallbackId}`);
-						const fallbackRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/scratch-pad/${fallbackId}`, {
-							headers: {
-								...(token ? { Authorization: `Bearer ${token}` } : {})
-							}
-						});
-						if (fallbackRes.ok) {
-							const fallbackData = await fallbackRes.json();
-							if (fallbackData?.content) {
-								data = fallbackData;
-								console.log(`[ScratchPad] Found content via fallback ID: ${fallbackId}`);
-							}
-						}
+					const data = await response.json()
+					if (data?.content) {
+						const storeRecords = (data.content.store || data.content) as Record<string, any>
+						const recordArray = Object.values(storeRecords)
+						
+						sharedStore.mergeRemoteChanges(() => {
+							sharedStore.put(recordArray)
+						})
+						personalStore.mergeRemoteChanges(() => {
+							personalStore.put(recordArray)
+						})
+						console.log(`${LOG_TAG} Loaded ${recordArray.length} records.`)
 					}
 				}
-				
-				if (data?.content) {
-					console.log(`[ScratchPad] Loading snapshot into stores...`);
-					loadSnapshot(personalStore, data.content)
-					loadSnapshot(sharedStore, data.content)
-				} else {
-					console.log(`[ScratchPad] No previous state found for room.`);
-				}
+				hasLoadedRef.current = true
+				loadedRoomIdRef.current = roomId
 			} catch (err) {
-				console.error('ScratchPad Load Error:', err)
-				setError('Could not load previous scratch pad state.')
+				console.error(`${LOG_TAG} Load failed:`, err)
+				setError('Could not load scratch pad state.')
 			} finally {
 				setLoading(false)
 			}
@@ -88,94 +80,71 @@ export function useScratchPad({ roomId, room, isHost, canEdit = true, roomTitle,
 		loadInitialState()
 	}, [roomId, enabled, sharedStore, personalStore, getToken])
 
-	// LiveKit Sync: Remote -> Local (Only for shared store)
+	// LiveKit Sync: Remote -> Local
 	useEffect(() => {
 		if (!room || !enabled) return
 
 		const handleData = (payload: Uint8Array, _participant: unknown, _kind: unknown, topic?: string) => {
-			if (topic && topic !== 'scratch-pad-update') return
-
+			if (topic !== 'scratch-pad-update') return
 			try {
-				const decoder = new TextDecoder()
-				const data = JSON.parse(decoder.decode(payload))
-
+				const data = JSON.parse(new TextDecoder().decode(payload))
 				if (data.type === 'scratch-pad-update') {
 					skipRemoteUpdateRef.current = true
 					sharedStore.mergeRemoteChanges(() => {
-						if (data.changes) {
-							sharedStore.applyDiff(data.changes)
-						}
+						if (data.changes) sharedStore.applyDiff(data.changes)
 					})
 					skipRemoteUpdateRef.current = false
 				}
-			} catch {
-				// Silent fail
-			}
+			} catch (e) {}
 		}
 
 		room.on(RoomEvent.DataReceived, handleData)
 		return () => { room.off(RoomEvent.DataReceived, handleData) }
 	}, [room, enabled, sharedStore])
 
-	// LiveKit Sync: Local -> Remote (Shared Store Listener)
+	// LiveKit Sync: Local -> Remote
 	useEffect(() => {
-		if (!room || room.state !== 'connected') return
+		if (!room || room.state !== ConnectionState.Connected) return
 
 		const unlisten = sharedStore.listen((change) => {
-			if (skipRemoteUpdateRef.current) return
-			if (change.source !== 'user') return
-			if (!canEdit) return
-
-			// Throttle sync
+			if (skipRemoteUpdateRef.current || change.source !== 'user' || !canEdit) return
 			const now = Date.now()
 			if (now - lastSyncRef.current < 50) return
 			lastSyncRef.current = now
 
-			// Require connection state to be connected before attempting to broadcast
-			if (room.state !== 'connected') return
-
-			// Broadcast changes to everyone else at the Room level
-			const encoder = new TextEncoder()
-			const payload = encoder.encode(JSON.stringify({
+			const payload = new TextEncoder().encode(JSON.stringify({
 				type: 'scratch-pad-update',
 				changes: change.changes,
 			}))
 			
-			room.localParticipant.publishData(payload, {
-				reliable: true,
-				topic: 'scratch-pad-update'
-			}).catch(err => console.error("ScratchPad sync error:", err))
+			room.localParticipant.publishData(payload, { reliable: true, topic: 'scratch-pad-update' })
+				.catch(err => console.error(`${LOG_TAG} Sync failed:`, err))
 		}, { scope: 'document', source: 'user' })
 
 		return () => unlisten()
 	}, [room, canEdit, sharedStore])
 
-	const onEditorMount = useCallback((editor: Editor) => {
-		editorRef.current = editor
-	}, [])
-
-	const stateRef = useRef({ mode, roomId, roomTitle, enabled, canEdit, isHost })
-	useEffect(() => {
-		stateRef.current = { mode, roomId, roomTitle, enabled, canEdit, isHost }
-		if (editorRef.current) {
-			editorRef.current.updateInstanceState({ isReadonly: !canEdit })
-		}
-	}, [mode, roomId, roomTitle, enabled, canEdit, isHost])
-
 	const performSave = useCallback(async (isAuto = false) => {
-		const { mode: currentMode, roomId: currentId, roomTitle: currentTitle, enabled: isEnabled } = stateRef.current
-		if (!isEnabled || !currentId) return false
+		if (saveStatus === 'saving' || !hasLoadedRef.current) return false
+		if (isGuest && mode === 'shared') return false
 
+		const activeStore = mode === 'shared' ? sharedStore : personalStore
+		const records = activeStore.allRecords()
+
+		if (records.length <= 2 && isAuto) {
+			console.log(`${LOG_TAG} Skipping empty auto-save (${records.length} records)`)
+			return false
+		}
+
+		setSaveStatus('saving')
 		try {
-			if (!isAuto) setSaving(true)
-			const activeStore = currentMode === 'personal' ? personalStore : sharedStore
-			const snapshot = getSnapshot(activeStore)
 			const token = await getToken()
-			
-			const url = `${process.env.NEXT_PUBLIC_API_URL}/api/scratch-pad/${currentId}`
-			if (!isAuto) console.log(`[ScratchPad] Saving (${currentMode}): ${url}`)
+			const snapshot = {
+				store: Object.fromEntries(records.map((r) => [r.id, r] as const)),
+				schema: schema.serialize(),
+			}
 
-			const response = await fetch(url, {
+			const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/scratch-pad/${roomId}`, {
 				method: 'POST',
 				headers: { 
 					'Content-Type': 'application/json',
@@ -183,61 +152,55 @@ export function useScratchPad({ roomId, room, isHost, canEdit = true, roomTitle,
 				},
 				body: JSON.stringify({ 
 					content: snapshot, 
-					roomTitle: currentTitle,
-					isPersonal: currentMode === 'personal' 
+					roomTitle,
+					isPersonal: mode === 'personal' 
 				}),
 			})
-			
-			if (!response.ok) {
-				const errorText = await response.text().catch(() => 'No error body')
-				console.error(`[ScratchPad] Save failed: ${response.status}`, errorText)
-				return false
+
+			if (response.ok) {
+				setSaveStatus('saved')
+				lastSuccessfulSaveRef.current = Date.now()
+				setLastSaved(new Date())
+				setTimeout(() => setSaveStatus(prev => prev === 'saved' ? 'idle' : prev), 3000)
+				return true
 			}
-			
-			if (!isAuto) console.log('[ScratchPad] Save successful')
-			return true
+			throw new Error(`Status ${response.status}`)
 		} catch (err) {
-			console.error('[ScratchPad] Save Error:', err)
+			console.error(`${LOG_TAG} Save failed:`, err)
+			setSaveStatus('error')
+			setSaveError('Save failed')
 			return false
-		} finally {
-			if (!isAuto) setSaving(false)
 		}
-	}, [personalStore, sharedStore, getToken])
+	}, [roomId, mode, sharedStore, personalStore, isGuest, roomTitle, saveStatus, getToken, schema])
 
-	const saveManual = useCallback(() => performSave(false), [performSave])
+	const onEditorMount = useCallback((editor: Editor) => {
+		editorRef.current = editor
+		editor.updateInstanceState({ isReadonly: !canEdit })
+	}, [canEdit])
 
-	// Auto-save to S3 (Host only or Solo mode)
 	useEffect(() => {
-		const shouldAutoSave = isHost && enabled && roomId && canEdit && !loading
-		if (!shouldAutoSave) return
-
-		const interval = setInterval(() => {
-			performSave(true).catch(err => console.error('Auto-save Interval Error:', err))
-		}, 30000)
-
-		return () => clearInterval(interval)
-	}, [isHost, enabled, roomId, canEdit, loading, performSave])
-
-	// Save on Unmount (Close)
-	useEffect(() => {
-		return () => {
-			const { enabled: isEnabled, roomId: currentId, canEdit: canUserEdit } = stateRef.current
-			if (isEnabled && currentId && canUserEdit) {
-				console.log('[ScratchPad] Component unmounting, triggering final save...')
-				// Fire and forget final save on unmount
-				performSave(true).catch(err => console.warn('[ScratchPad] Final unmount save failed:', err))
-			}
+		if (editorRef.current) {
+			editorRef.current.updateInstanceState({ isReadonly: !canEdit })
 		}
-	}, [performSave])
+	}, [canEdit])
+
+	// Auto-save debounce
+	const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null)
+	useEffect(() => {
+		if (!enabled || loading) return
+		const activeStore = mode === 'shared' ? sharedStore : personalStore
+		const unlisten = activeStore.listen((change) => {
+			if (change.source !== 'user') return
+			if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
+			autoSaveTimerRef.current = setTimeout(() => performSave(true), 2000)
+		}, { scope: 'document', source: 'user' })
+		return () => { unlisten(); if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current) }
+	}, [mode, enabled, loading, sharedStore, personalStore, performSave])
 
 	return {
 		store: mode === 'shared' ? sharedStore : personalStore,
-		mode,
-		setMode,
-		loading,
-		saving,
-		error,
-		onEditorMount,
-		saveManual
+		mode, setMode, loading, syncStatus: saveStatus, error, saveError, onEditorMount,
+		saveManual: () => performSave(false),
+		lastSaved
 	}
 }

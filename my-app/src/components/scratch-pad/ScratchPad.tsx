@@ -14,16 +14,18 @@ interface ScratchPadProps {
     canEdit?: boolean
     roomTitle?: string
     enabled?: boolean
+    isGuest?: boolean
 }
 
-export const ScratchPad = memo(function ScratchPad({ roomId, room, isHost, canEdit = true, roomTitle, enabled = true }: ScratchPadProps) {
-	const { store, mode, setMode, loading, saving, error, onEditorMount, saveManual } = useScratchPad({
+export const ScratchPad = memo(function ScratchPad({ roomId, room, isHost, canEdit = true, roomTitle, enabled = true, isGuest = false }: ScratchPadProps) {
+	const { store, mode, setMode, loading, saving, syncStatus, error, saveError, onEditorMount, saveManual } = useScratchPad({
 		roomId,
 		room,
 		isHost,
 		canEdit,
         roomTitle,
-		enabled
+		enabled,
+        isGuest
 	})
     const { showSuccess, showError } = useToast()
     const [justSaved, setJustSaved] = useState(false)
@@ -54,7 +56,7 @@ export const ScratchPad = memo(function ScratchPad({ roomId, room, isHost, canEd
             setJustSaved(true)
             setTimeout(() => setJustSaved(false), 2000)
         } else {
-            showError("Save failed", "Could not persist your changes. Please try again.")
+            showError("Save failed", saveError || "Could not persist your changes. Please try again.")
         }
     }
 
@@ -62,15 +64,39 @@ export const ScratchPad = memo(function ScratchPad({ roomId, room, isHost, canEd
 		<div className="h-full w-full bg-zinc-950/50 backdrop-blur-md rounded-xl overflow-hidden border border-zinc-800 shadow-2xl relative flex flex-col">
             {/* Header with Title and Save Action */}
             <div className="h-12 bg-white/5 border-b border-white/5 flex items-center justify-between px-4 z-[9999]">
-                <div className="flex items-center gap-2 text-xs font-semibold text-white/60">
-                    <div className="h-6 w-6 rounded-lg bg-purple-500/10 flex items-center justify-center">
-                        {mode === 'personal' ? (
-                            <User className="h-3.5 w-3.5 text-purple-400" />
-                        ) : (
-                            <Users className="h-3.5 w-3.5 text-blue-400" />
+                <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 text-xs font-semibold text-white/60">
+                        <div className="h-6 w-6 rounded-lg bg-purple-500/10 flex items-center justify-center">
+                            {mode === 'personal' ? (
+                                <User className="h-3.5 w-3.5 text-purple-400" />
+                            ) : (
+                                <Users className="h-3.5 w-3.5 text-blue-400" />
+                            )}
+                        </div>
+                        {mode === 'personal' ? 'Personal Workspace' : 'Meeting Whiteboard'}
+                    </div>
+
+                    {/* Sync Status Indicator */}
+                    <div className="flex items-center gap-2 transition-all duration-500">
+                        {syncStatus === 'syncing' && (
+                            <div className="flex items-center gap-1.5 text-[10px] font-medium text-sky-400/80 animate-pulse">
+                                <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                                SYNCING...
+                            </div>
+                        )}
+                        {syncStatus === 'saved' && (
+                            <div className="flex items-center gap-1.5 text-[10px] font-medium text-green-400/80">
+                                <Check className="h-2.5 w-2.5" />
+                                CHANGES SAVED
+                            </div>
+                        )}
+                        {syncStatus === 'error' && (
+                            <div className="flex items-center gap-1.5 text-[10px] font-medium text-red-400/80">
+                                <div className="h-1 w-1 rounded-full bg-red-500" />
+                                SYNC ERROR
+                            </div>
                         )}
                     </div>
-                    {mode === 'personal' ? 'Personal Workspace' : 'Meeting Whiteboard'}
                 </div>
 
                 <Button 

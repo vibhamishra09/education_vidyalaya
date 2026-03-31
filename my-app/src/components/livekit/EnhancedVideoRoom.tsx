@@ -167,8 +167,8 @@ export function EnhancedVideoRoom({
 	const queryClient = useQueryClient()
 	const params = useParams()
 
-	const [externalJoinRequests, setExternalJoinRequests] = useState<ExternalJoinRequestItem[]>([])
-	const [activeExternalJoinRequest, setActiveExternalJoinRequest] = useState<ExternalJoinRequestItem | null>(null)
+	const [externalJoinRequests, setExternalJoinRequests] = useState<any[]>([])
+	const [activeExternalJoinRequest, setActiveExternalJoinRequest] = useState<any | null>(null)
 	const [resolvingExternalJoinRequest, setResolvingExternalJoinRequest] = useState(false)
 	const seenExternalJoinRequestIdsRef = useRef<Set<string>>(new Set())
 	const audioContextRef = useRef<AudioContext | null>(null)
@@ -278,127 +278,7 @@ export function EnhancedVideoRoom({
 		_showInfo(title, description)
 	}, [_showInfo])
 
-	useEffect(() => {
-		let cancelled = false
-
-		const fetchPendingExternalJoinRequests = async () => {
-			try {
-				const authTokenValue = await getToken()
-				if (!authTokenValue || cancelled || !sessionData?.id) return
-				const response = await fetch(
-					`${process.env.NEXT_PUBLIC_API_URL}/api/study-rooms/${sessionData.id}/external/requests`,
-					{
-						method: 'GET',
-						headers: {
-							Authorization: `Bearer ${authTokenValue}`,
-						},
-					},
-				)
-				if (!response.ok || cancelled) return
-
-				const data = (await response.json()) as { requests?: ExternalJoinRequestItem[] }
-				const pendingRequests = (data.requests || []).filter(
-					(request) => request.status === 'PENDING',
-				)
-				setExternalJoinRequests(pendingRequests)
-
-				const newPendingRequests = pendingRequests.filter(
-					(request) => !seenExternalJoinRequestIdsRef.current.has(request.id),
-				)
-
-				for (const request of pendingRequests) {
-					seenExternalJoinRequestIdsRef.current.add(request.id)
-				}
-
-				if (newPendingRequests.length > 0) {
-					const latest = newPendingRequests[newPendingRequests.length - 1]
-					showInfo(
-						'New join request',
-						`${latest.name} (${latest.email}) wants to join this session.`,
-					)
-					playJoinRequestAlertSound()
-				}
-
-				if (!activeExternalJoinRequest && pendingRequests.length > 0) {
-					setActiveExternalJoinRequest(pendingRequests[0])
-				}
-			} catch (err) {
-				// Ignore polling errors and retry on next interval.
-			}
-		}
-
-		fetchPendingExternalJoinRequests()
-		const interval = setInterval(fetchPendingExternalJoinRequests, 5000)
-
-		return () => {
-			cancelled = true
-			clearInterval(interval)
-		}
-	}, [
-		isHost,
-		sessionData?.sessionType,
-		sessionData?.id,
-		getToken,
-		activeExternalJoinRequest,
-		showInfo,
-		playJoinRequestAlertSound,
-	])
-
-	const handleResolveExternalJoinRequest = useCallback(
-		async (approve: boolean) => {
-			if (!activeExternalJoinRequest || sessionData?.sessionType !== 'studyRoom' || !sessionData?.id) {
-				return
-			}
-			try {
-				setResolvingExternalJoinRequest(true)
-				const authTokenValue = await getToken()
-				if (!authTokenValue) {
-					showError('Not authenticated', 'Please sign in again to review join requests.')
-					return
-				}
-
-				const response = await fetch(
-					`${process.env.NEXT_PUBLIC_API_URL}/api/study-rooms/${sessionData.id}/external/requests/${activeExternalJoinRequest.id}/resolve`,
-					{
-						method: 'POST',
-						headers: {
-							'Content-Type': 'application/json',
-							Authorization: `Bearer ${authTokenValue}`,
-						},
-						body: JSON.stringify({ approve }),
-					},
-				)
-
-				if (!response.ok) {
-					showError('Action failed', 'Could not update join request. Please try again.')
-					return
-				}
-
-				const resolvedRequest = activeExternalJoinRequest
-				const remaining = externalJoinRequests.filter((request) => request.id !== resolvedRequest.id)
-				setExternalJoinRequests(remaining)
-				setActiveExternalJoinRequest(remaining[0] || null)
-
-				showSuccess(
-					approve ? 'Guest approved' : 'Guest rejected',
-					`${resolvedRequest.name} has been ${approve ? 'allowed to join' : 'rejected'}.`,
-				)
-			} catch (err) {
-				showError('Action failed', 'Could not update join request. Please try again.')
-			} finally {
-				setResolvingExternalJoinRequest(false)
-			}
-		},
-		[
-			activeExternalJoinRequest,
-			externalJoinRequests,
-			getToken,
-			sessionData?.id,
-			sessionData?.sessionType,
-			showError,
-			showSuccess,
-		],
-	)
+	// MOVED: fetchPendingExternalJoinRequests and handleResolveExternalJoinRequest removed as they were missing from backend
 
 	const sessionStartTime = sessionData?.date ? new Date(sessionData.date) : null
 	const sessionDuration = sessionData?.duration || 0
@@ -431,7 +311,7 @@ export function EnhancedVideoRoom({
 		sessionId: sessionData?.id || null,
 		sessionType: sessionData?.sessionType || null,
 		isHost,
-		token: authToken,
+		token,
 		enabled: timerEnabled,
 	})
 
@@ -486,7 +366,7 @@ export function EnhancedVideoRoom({
 		sessionId: sessionData?.id || null,
 		sessionType: sessionData?.sessionType || null,
 		isHost,
-		token: authToken,
+		token,
 		userId: moderationUserId ?? undefined,
 		enabled: !!sessionData?.id && (!isGuest || !!guestLivekitIdentity),
 	})
@@ -1036,6 +916,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	onDismissFlashMessage,
 	sessionData,
 	sessionStableId,
+	permissions,
 }: {
 	isUserActive: boolean
 	showChat: boolean
