@@ -7,16 +7,18 @@ import { BackgroundProcessor, BackgroundBlur as _BackgroundBlur, VirtualBackgrou
 import { ChatWidget } from '@/components/chat/ChatWidget'
 import { Button } from '@/components/ui/button'
 import {
-	MessageSquare, X, Users, Maximize2, Minimize2, Video, VideoOff, Mic, MicOff,
-	Clock, MonitorUp, MonitorOff, Grid2X2, Presentation, Pin,
-	PinOff, User, PictureInPicture2, Camera as _Camera, CameraOff, Sparkles, Lock, Settings2,
-	PhoneOff, ChevronUp, ChevronLeft, ChevronRight, ShieldCheck, Ban, Aperture,
-	ImageIcon, LayoutGrid, Check, Timer, Power, Zap, LogOut, ZoomIn, ZoomOut, MousePointer2,
-	PencilLine, PenTool, Eraser, Type, Square, Circle, Minus
+	Aperture, Ban, Camera as _Camera, CameraOff, Check, ChevronLeft, ChevronRight,
+	ChevronUp, Circle, Clock, Eraser, Grid2X2, ImageIcon, LayoutGrid, Lock,
+	LogOut, Maximize2, MessageSquare, Mic, MicOff, Minimize2, Minus,
+	MonitorOff, MonitorUp, MousePointer2, PencilLine, PenTool, PhoneOff,
+	PictureInPicture2, Pin, PinOff, Power, Presentation, Settings2, ShieldCheck,
+	Sparkles, Square, Timer, Type, User, Users, Video, VideoOff, X, Zap,
+	ZoomIn, ZoomOut, Loader2
 } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { useSessionTimer } from '@/hooks/use-session-timer'
+import { useRecording } from '@/hooks/use-recording'
 import { SessionEndWarningDialog } from '@/components/study-room/session-end-warning-dialog'
 import { useToast } from '@/contexts/toast-context'
 import { useAuth, useUser } from '@clerk/nextjs'
@@ -1106,6 +1108,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 
 	const { localParticipant, isCameraEnabled, isMicrophoneEnabled, isScreenShareEnabled } = useLocalParticipant()
 	const lkRoom = useRoomContext()
+	
+	const { isRecording, startRecording, stopRecording, loading: isRecordingTransitioning } = useRecording({ roomId: sessionData?.id || 'default' })
 
 	const showMediaError = useCallback(
 		(kind: 'mic' | 'cam', err: unknown, enabling: boolean) => {
@@ -2385,6 +2389,15 @@ const VideoRoomContent = memo(function VideoRoomContent({
 									<span className="text-white text-[10px] md:text-xs font-semibold tracking-wide truncate max-w-[120px] md:max-w-none">
 										{sessionTitle || 'Webyalaya Meeting'}
 									</span>
+
+									{/* Recording Badge */}
+									{isRecording && (
+										<div className="flex items-center gap-1 px-1.5 py-0.5 bg-red-500/90 rounded-md animate-pulse">
+											<div className="w-1 h-1 rounded-full bg-white" />
+											<span className="text-[8px] font-bold text-white uppercase tracking-tighter">REC</span>
+										</div>
+									)}
+
 									<div className="w-px h-3 bg-white/10" />
 									<span className="text-white/50 text-[9px] md:text-xs font-mono whitespace-nowrap">
 										{formattedTime}
@@ -3880,7 +3893,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 										} catch (err) {
 											const error = err as DOMException
 											if (error?.name === 'NotAllowedError') {
-												showError('Permission Denied', 'Screen sharing permission was denied.')
+												showError('Permission Denied', 'Permission to share screen was denied.')
 											} else if (error?.name === 'NotSupportedError') {
 												showError('Not Supported', 'Screen sharing is not supported on this device or browser.')
 											} else {
@@ -3892,6 +3905,33 @@ const VideoRoomContent = memo(function VideoRoomContent({
 									title="Share Screen"
 								>
 									{isScreenShareEnabled ? <MonitorOff className="h-4 w-4 md:h-5 md:w-5 font-bold" /> : <MonitorUp className="h-4 w-4 md:h-5 md:w-5" />}
+								</button>
+							</div>
+						)}
+
+						{/* Recording Toggle (Host Only) */}
+						{isHost && !isGuest && (
+							<div className="flex flex-col items-center justify-center group relative">
+								<button
+									onClick={() => isRecording ? stopRecording() : startRecording()}
+									disabled={isRecordingTransitioning}
+									className={`h-9 w-9 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl transition-all duration-300 relative ${
+										isRecording 
+											? 'bg-red-500/20 text-red-500 hover:bg-red-500/30 shadow-[0_0_15px_rgba(239,68,68,0.3)]' 
+											: 'bg-white/5 text-white/80 hover:bg-white/10 hover:text-white'
+									} ${isRecordingTransitioning ? 'opacity-50 cursor-not-allowed' : 'active:scale-95'}`}
+									title={isRecording ? 'Stop Recording' : 'Start Recording'}
+								>
+									{isRecordingTransitioning ? (
+										<Loader2 className="h-4 w-4 md:h-5 md:w-5 animate-spin text-sky-400" />
+									) : (
+										<div className="relative flex items-center justify-center">
+											<Aperture className={`h-4 w-4 md:h-5 md:w-5 ${isRecording ? 'animate-pulse' : ''}`} />
+											{isRecording && (
+												<div className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-red-500 animate-ping" />
+											)}
+										</div>
+									)}
 								</button>
 							</div>
 						)}

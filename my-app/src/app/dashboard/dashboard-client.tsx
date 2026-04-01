@@ -1,6 +1,7 @@
 "use client";
 
 import { Navigation } from "@/components/layout/navigation";
+import { RecordingsList } from "@/components/dashboard/RecordingsList";
 import { Footer } from "@/components/layout/footer";
 import { MetricCardComponent } from "@/components/cards/metric-card";
 import { SessionRequestCard } from "@/components/cards/session-request-card";
@@ -11,6 +12,9 @@ import { AchievementShowcaseConnected } from "@/components/achievements/achievem
 import { StreakTrackerConnected } from "@/components/profile/streak-tracker-connected";
 import { SessionList } from "@/components/dashboard/session-list";
 import { SkillsAndSuggestions } from "@/components/dashboard/skills-and-suggestions";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
+import { useState, useMemo } from "react";
+import { useTabPersistence } from "@/hooks/use-local-storage";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -21,10 +25,7 @@ import { useCurrentUser } from "@/hooks/use-users";
 import { peerSessionsApi, studyRoomsApi } from "@/lib/api";
 import { useAuth } from "@clerk/nextjs";
 import { setAuthToken } from "@/lib/api-client";
-import { useQueryClient, useQuery } from "@tanstack/react-query";
-import { useState, useMemo } from "react";
 import { useToast } from "@/contexts/toast-context";
-import { useTabPersistence } from "@/hooks/use-local-storage";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import {
@@ -368,6 +369,14 @@ export function DashboardClient() {
                 </div>
               );
             })()}
+
+             {/* Recordings List */}
+             <div className="space-y-4 pt-4">
+               <div className="pl-1">
+                 <h3 className="font-semibold text-lg">Your Recordings</h3>
+               </div>
+               <RecordingsList />
+             </div>
 
              {/* Achievements - Moved from right side */}
              <div className="pt-2">
