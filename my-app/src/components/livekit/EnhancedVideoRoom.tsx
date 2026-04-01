@@ -587,7 +587,7 @@ export function EnhancedVideoRoom({
 				const authToken = await getToken()
 				if (!authToken) return
 
-				const url = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:3001'
+				const url = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:3002'
 
 				socket = io(url, {
 					transports: ['websocket'],

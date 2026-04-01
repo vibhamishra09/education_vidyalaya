@@ -89,14 +89,8 @@ export function DailyMomentumCard({
   engagement,
   isLoading = false,
 }: DailyMomentumCardProps) {
-  if (isLoading) {
-    return (
-      <Card className="overflow-hidden border-0 bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-900 text-white shadow-[0_24px_80px_-42px_rgba(15,23,42,0.9)]">
-        <CardContent className="p-6">
-          <div className="h-32 animate-pulse rounded-3xl bg-white/10" />
-        </CardContent>
-      </Card>
-    );
+  if (isLoading && !engagement) {
+    return null;
   }
 
   if (!engagement) {

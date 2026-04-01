@@ -30,8 +30,11 @@ interface StudyRoomData {
 // Server-side function to fetch room data for metadata
 async function getStudyRoomData(roomId: string): Promise<StudyRoomData | null> {
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-    const response = await fetch(`http://localhost:3001/api/study-rooms/${roomId}`, {
+    const baseUrl =
+      process.env.BACKEND_URL ||
+      process.env.NEXT_PUBLIC_API_URL ||
+      'http://127.0.0.1:3002';
+    const response = await fetch(`${baseUrl}/api/study-rooms/${roomId}`, {
       next: { revalidate: 60 }, // Cache for 60 seconds
     });
     const res = await response.json()

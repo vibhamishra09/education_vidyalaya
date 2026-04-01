@@ -514,7 +514,7 @@ export class UsersService {
 
     // Invalidate cache for this user
     await this.cacheService.delete(
-      this.cacheService.createKey('user:current', { clerkUserId: userId }),
+      this.cacheService.createKey('user:current', { userIdOrClerkId: userId }),
     );
     await this.cacheService.deletePattern(`user:public:${userId}*`);
 

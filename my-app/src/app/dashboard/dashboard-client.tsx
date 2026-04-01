@@ -18,7 +18,7 @@ import { Plus } from "lucide-react";
 import { useDashboard } from "@/hooks/use-dashboard";
 import { useCurrentUser } from "@/hooks/use-users";
 import { peerSessionsApi, studyRoomsApi } from "@/lib/api";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth, useUser } from "@clerk/nextjs";
 import { setAuthToken } from "@/lib/api-client";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
@@ -39,6 +39,7 @@ type RequestTab = typeof REQUEST_TABS[number];
 
 export function DashboardClient() {
   const { getToken } = useAuth();
+  const { user: clerkUser, isLoaded: isClerkLoaded } = useUser();
   const queryClient = useQueryClient();
   const { showSuccess, showError } = useToast();
   const [processingRequests, setProcessingRequests] = useState<Set<string>>(new Set());
@@ -69,6 +70,11 @@ export function DashboardClient() {
 
   const currentUser = currentUserData?.user;
   const myUserId = currentUser?.id;
+  const displayName =
+    currentUser?.name ||
+    clerkUser?.fullName ||
+    clerkUser?.firstName ||
+    null;
 
   // Create default/fallback metrics if actual metrics are missing
   const defaultMetrics = [
@@ -236,7 +242,7 @@ export function DashboardClient() {
         {/* Header Section */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
           <div>
-            {userLoading ? (
+            {userLoading && !displayName && !isClerkLoaded ? (
               <div className="space-y-2">
                 <Skeleton className="h-8 w-64" />
                 <Skeleton className="h-4 w-48" />
@@ -244,7 +250,7 @@ export function DashboardClient() {
             ) : (
               <>
                 <h1 className="text-3xl font-bold tracking-tight">
-                  Welcome back, {currentUser?.name || "Arghadeep"}
+                  {displayName ? `Welcome back, ${displayName}` : "Welcome back"}
                 </h1>
                 <p className="text-muted-foreground mt-1">
                   Ready to continue your learning journey?
@@ -263,12 +269,14 @@ export function DashboardClient() {
           </div>
         </div>
 
-        <div className="mb-8">
-          <DailyMomentumCard
-            engagement={dashboardData?.engagement}
-            isLoading={dashboardLoading}
-          />
-        </div>
+        {dashboardData?.engagement ? (
+          <div className="mb-8">
+            <DailyMomentumCard
+              engagement={dashboardData.engagement}
+              isLoading={dashboardLoading}
+            />
+          </div>
+        ) : null}
 
         {/* Top Section: Metrics Row - REMOVED */}{/* Metrics moved to left column */}
 

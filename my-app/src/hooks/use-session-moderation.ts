@@ -135,7 +135,7 @@ export function useSessionModeration({ sessionId, sessionType, isHost: _isHost, 
     if (!sessionId || !sessionType || !token || !enabled || connectingRef.current) return;
 
     connectingRef.current = true;
-    const url = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:3001';
+    const url = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:3002';
     const s = io(url, {
       transports: ['websocket'],
       auth: { token },

@@ -346,7 +346,7 @@ export function AchievementShowcase({
             </p>
             <div className="mt-4 flex justify-center gap-3">
               <Link href="/browse">
-                <Button className="rounded-full bg-emerald-600 hover:bg-emerald-700">
+                <Button className="rounded-full border border-emerald-800 bg-emerald-700 font-semibold text-white shadow-[0_10px_24px_-12px_rgba(4,120,87,0.85)] hover:bg-emerald-800">
                   Find a session
                 </Button>
               </Link>

@@ -10,7 +10,7 @@ export async function getWebinarPublicMetadata(
   const base =
     process.env.BACKEND_URL?.trim().replace(/\/$/, "") ||
     process.env.NEXT_PUBLIC_API_URL?.trim().replace(/\/$/, "") ||
-    "http://127.0.0.1:3001";
+    "http://127.0.0.1:3002";
   try {
     const url = `${base}/api/study-rooms/webinar/public/${encodeURIComponent(slug)}`;
     const res = await fetch(url, { cache: "no-store" });

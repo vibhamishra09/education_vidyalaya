@@ -18,6 +18,8 @@ import { EngagementModule } from '../engagement/engagement.module';
     AchievementsModule,
     TranscriptsModule,
     EmailModule,
+    UsersModule,
+    EngagementModule,
   ],
   controllers: [StudyRoomsController],
   providers: [StudyRoomsService],

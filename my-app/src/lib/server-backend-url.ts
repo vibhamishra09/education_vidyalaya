@@ -12,5 +12,5 @@ export function getBackendUrlForServer(): string {
   if (fromPublic) {
     return fromPublic;
   }
-  return "http://127.0.0.1:3001";
+  return "http://127.0.0.1:3002";
 }
