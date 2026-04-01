@@ -819,7 +819,7 @@ export class UsersService {
             clerkId,
             ...userPayload,
           },
-        });
+        }));
 
     this.logger.debug('🔍 User created:', user);
 
