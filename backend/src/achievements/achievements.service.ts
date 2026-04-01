@@ -82,7 +82,7 @@ export class AchievementsService {
             category: AchievementCategory;
             rarity: AchievementRarity;
             maxProgress: number;
-            coinReward: number;
+            pointReward: number;
             progress: number;
             unlockedAt: Date | null | undefined;
           };
@@ -102,7 +102,7 @@ export class AchievementsService {
               category: achievement.category,
               rarity: achievement.rarity,
               maxProgress: achievement.maxProgress,
-              coinReward: achievement.coinReward,
+              pointReward: achievement.pointReward,
               progress: userProgress?.progress || 0,
               unlockedAt: userProgress?.unlockedAt,
             };
@@ -205,7 +205,7 @@ export class AchievementsService {
   }
 
   /**
-   * Unlock an achievement and award coins
+   * Unlock an achievement NFT and mark it as minted in the user's collection
    * @param userId User ID
    * @param achievementId Achievement ID
    */
@@ -229,19 +229,9 @@ export class AchievementsService {
       },
     });
 
-    // Award coins to user
-    if (achievement.coinReward > 0) {
-      await this.prisma.user.update({
-        where: { id: userId },
-        data: {
-          coins: {
-            increment: achievement.coinReward,
-          },
-        },
-      });
-
+    if (achievement.pointReward > 0) {
       this.logger.log(
-        `Awarded ${achievement.coinReward} coins to user ${userId} for achievement ${achievement.title}`,
+        `Achievement ${achievement.title} minted for user ${userId} with ${achievement.pointReward} points metadata`,
       );
     }
 

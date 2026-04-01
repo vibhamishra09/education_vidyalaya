@@ -2,10 +2,63 @@ import { PrismaClient } from '../src/generated/prisma/client';
 
 const prisma = new PrismaClient();
 
-async function backfillAchievements() {
-  console.log('🔄 Starting achievement backfill...\n');
+async function mintAchievementIfEligible(params: {
+  userId: string;
+  achievementId: string;
+  progress: number;
+  title: string;
+}) {
+  const achievement = await prisma.achievement.findUnique({
+    where: { id: params.achievementId },
+  });
 
-  // Get all users
+  if (!achievement) {
+    return false;
+  }
+
+  const existing = await prisma.userAchievement.findUnique({
+    where: {
+      userId_achievementId: {
+        userId: params.userId,
+        achievementId: params.achievementId,
+      },
+    },
+  });
+
+  if (existing?.unlockedAt) {
+    console.log(`    Already minted: ${params.title}`);
+    return false;
+  }
+
+  await prisma.userAchievement.upsert({
+    where: {
+      userId_achievementId: {
+        userId: params.userId,
+        achievementId: params.achievementId,
+      },
+    },
+    create: {
+      userId: params.userId,
+      achievementId: params.achievementId,
+      progress: params.progress,
+      unlockedAt: new Date(),
+    },
+    update: {
+      progress: params.progress,
+      unlockedAt: new Date(),
+    },
+  });
+
+  console.log(
+    `    Minted: ${params.title} NFT (+${achievement.pointReward} points)`,
+  );
+
+  return true;
+}
+
+async function backfillAchievements() {
+  console.log('Starting achievement backfill...\n');
+
   const users = await prisma.user.findMany({
     select: { id: true, name: true, clerkId: true },
   });
@@ -13,9 +66,8 @@ async function backfillAchievements() {
   console.log(`Found ${users.length} users\n`);
 
   for (const user of users) {
-    console.log(`\n👤 Processing user: ${user.name} (${user.id})`);
+    console.log(`\nProcessing user: ${user.name} (${user.id})`);
 
-    // Count completed sessions
     const peerSessionsAsLearner = await prisma.peerSession.count({
       where: {
         requestedById: user.id,
@@ -50,14 +102,15 @@ async function backfillAchievements() {
     const totalTeacherSessions = peerSessionsAsTeacher + studyRoomsAsHost;
     const totalSessions = totalLearnerSessions + totalTeacherSessions;
 
-    console.log(`  📊 Sessions: ${totalSessions} total (${totalLearnerSessions} as learner, ${totalTeacherSessions} as teacher)`);
+    console.log(
+      `  Sessions: ${totalSessions} total (${totalLearnerSessions} as learner, ${totalTeacherSessions} as teacher)`,
+    );
 
     if (totalSessions === 0) {
-      console.log(`  ⏭️  Skipping user with no completed sessions`);
+      console.log('  Skipping user with no completed sessions');
       continue;
     }
 
-    // Session milestone achievements
     const sessionMilestones = [
       { id: 'achievement_first_session', count: 1, title: 'First Session' },
       { id: 'achievement_getting_started', count: 5, title: 'Getting Started' },
@@ -66,126 +119,43 @@ async function backfillAchievements() {
       { id: 'achievement_master', count: 100, title: 'Master' },
     ];
 
-    let unlockedCount = 0;
-
-    for (const milestone of sessionMilestones) {
-      if (totalSessions >= milestone.count) {
-        const achievement = await prisma.achievement.findUnique({
-          where: { id: milestone.id },
-        });
-
-        if (!achievement) continue;
-
-        // Check if already unlocked
-        const existing = await prisma.userAchievement.findUnique({
-          where: {
-            userId_achievementId: {
-              userId: user.id,
-              achievementId: milestone.id,
-            },
-          },
-        });
-
-        if (existing?.unlockedAt) {
-          console.log(`    ✅ Already unlocked: ${milestone.title}`);
-        } else {
-          // Create or update user achievement
-          await prisma.userAchievement.upsert({
-            where: {
-              userId_achievementId: {
-                userId: user.id,
-                achievementId: milestone.id,
-              },
-            },
-            create: {
-              userId: user.id,
-              achievementId: milestone.id,
-              progress: totalSessions,
-              unlockedAt: new Date(),
-            },
-            update: {
-              progress: totalSessions,
-              unlockedAt: new Date(),
-            },
-          });
-
-          // Award coins
-          await prisma.user.update({
-            where: { id: user.id },
-            data: {
-              coins: {
-                increment: achievement.coinReward,
-              },
-            },
-          });
-
-          console.log(`    🎉 Unlocked: ${milestone.title} (+${achievement.coinReward} coins)`);
-          unlockedCount++;
-        }
-      }
-    }
-
-    // Teaching achievements
     const teachingMilestones = [
       { id: 'achievement_first_teach', count: 1, title: 'First Teach' },
       { id: 'achievement_helpful_tutor', count: 10, title: 'Helpful Tutor' },
     ];
 
-    for (const milestone of teachingMilestones) {
-      if (totalTeacherSessions >= milestone.count) {
-        const achievement = await prisma.achievement.findUnique({
-          where: { id: milestone.id },
+    let mintedCount = 0;
+
+    for (const milestone of sessionMilestones) {
+      if (totalSessions >= milestone.count) {
+        const minted = await mintAchievementIfEligible({
+          userId: user.id,
+          achievementId: milestone.id,
+          progress: totalSessions,
+          title: milestone.title,
         });
 
-        if (!achievement) continue;
-
-        const existing = await prisma.userAchievement.findUnique({
-          where: {
-            userId_achievementId: {
-              userId: user.id,
-              achievementId: milestone.id,
-            },
-          },
-        });
-
-        if (existing?.unlockedAt) {
-          console.log(`    ✅ Already unlocked: ${milestone.title}`);
-        } else {
-          await prisma.userAchievement.upsert({
-            where: {
-              userId_achievementId: {
-                userId: user.id,
-                achievementId: milestone.id,
-              },
-            },
-            create: {
-              userId: user.id,
-              achievementId: milestone.id,
-              progress: totalTeacherSessions,
-              unlockedAt: new Date(),
-            },
-            update: {
-              progress: totalTeacherSessions,
-              unlockedAt: new Date(),
-            },
-          });
-
-          await prisma.user.update({
-            where: { id: user.id },
-            data: {
-              coins: {
-                increment: achievement.coinReward,
-              },
-            },
-          });
-
-          console.log(`    🎉 Unlocked: ${milestone.title} (+${achievement.coinReward} coins)`);
-          unlockedCount++;
+        if (minted) {
+          mintedCount++;
         }
       }
     }
 
-    // Check 5-star ratings
+    for (const milestone of teachingMilestones) {
+      if (totalTeacherSessions >= milestone.count) {
+        const minted = await mintAchievementIfEligible({
+          userId: user.id,
+          achievementId: milestone.id,
+          progress: totalTeacherSessions,
+          title: milestone.title,
+        });
+
+        if (minted) {
+          mintedCount++;
+        }
+      }
+    }
+
     const fiveStarRatings = await prisma.review.count({
       where: {
         revieweeId: user.id,
@@ -194,68 +164,31 @@ async function backfillAchievements() {
     });
 
     if (fiveStarRatings >= 50) {
-      const achievement = await prisma.achievement.findUnique({
-        where: { id: 'achievement_master_educator' },
+      const minted = await mintAchievementIfEligible({
+        userId: user.id,
+        achievementId: 'achievement_master_educator',
+        progress: fiveStarRatings,
+        title: 'Master Educator',
       });
 
-      if (achievement) {
-        const existing = await prisma.userAchievement.findUnique({
-          where: {
-            userId_achievementId: {
-              userId: user.id,
-              achievementId: 'achievement_master_educator',
-            },
-          },
-        });
-
-        if (!existing?.unlockedAt) {
-          await prisma.userAchievement.upsert({
-            where: {
-              userId_achievementId: {
-                userId: user.id,
-                achievementId: 'achievement_master_educator',
-              },
-            },
-            create: {
-              userId: user.id,
-              achievementId: 'achievement_master_educator',
-              progress: fiveStarRatings,
-              unlockedAt: new Date(),
-            },
-            update: {
-              progress: fiveStarRatings,
-              unlockedAt: new Date(),
-            },
-          });
-
-          await prisma.user.update({
-            where: { id: user.id },
-            data: {
-              coins: {
-                increment: achievement.coinReward,
-              },
-            },
-          });
-
-          console.log(`    🎉 Unlocked: Master Educator (+${achievement.coinReward} coins)`);
-          unlockedCount++;
-        }
+      if (minted) {
+        mintedCount++;
       }
     }
 
-    if (unlockedCount > 0) {
-      console.log(`  ✨ Unlocked ${unlockedCount} new achievements for ${user.name}`);
+    if (mintedCount > 0) {
+      console.log(`  Minted ${mintedCount} new achievement NFTs for ${user.name}`);
     } else {
-      console.log(`  ℹ️  No new achievements to unlock`);
+      console.log('  No new achievement NFTs to mint');
     }
   }
 
-  console.log('\n✅ Achievement backfill complete!\n');
+  console.log('\nAchievement backfill complete!\n');
 }
 
 backfillAchievements()
   .catch((error) => {
-    console.error('❌ Error during backfill:', error);
+    console.error('Error during backfill:', error);
     process.exit(1);
   })
   .finally(async () => {

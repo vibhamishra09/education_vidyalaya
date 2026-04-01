@@ -17,7 +17,7 @@ export interface Achievement {
   unlockedAt?: Date | string;
   progress?: number;
   maxProgress?: number;
-  coins?: number; // Reward coins
+  pointReward?: number;
 }
 
 export interface UserAchievements {
@@ -40,7 +40,7 @@ export const MOCK_ACHIEVEMENTS: Achievement[] = [
     unlockedAt: new Date(),
     progress: 1,
     maxProgress: 1,
-    coins: 10,
+    pointReward: 10,
   },
   {
     id: '2',
@@ -51,7 +51,7 @@ export const MOCK_ACHIEVEMENTS: Achievement[] = [
     rarity: 'rare',
     progress: 7,
     maxProgress: 10,
-    coins: 50,
+    pointReward: 50,
   },
   {
     id: '3',
@@ -62,7 +62,7 @@ export const MOCK_ACHIEVEMENTS: Achievement[] = [
     rarity: 'epic',
     progress: 5,
     maxProgress: 7,
-    coins: 100,
+    pointReward: 100,
   },
   {
     id: '4',
@@ -73,7 +73,7 @@ export const MOCK_ACHIEVEMENTS: Achievement[] = [
     rarity: 'legendary',
     progress: 12,
     maxProgress: 50,
-    coins: 500,
+    pointReward: 500,
   },
   {
     id: '5',
@@ -82,6 +82,6 @@ export const MOCK_ACHIEVEMENTS: Achievement[] = [
     icon: '🦋',
     category: 'social',
     rarity: 'rare',
-    coins: 75,
+    pointReward: 75,
   },
 ];

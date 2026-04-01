@@ -64,7 +64,7 @@ export class UsersService {
   constructor(
     private prisma: PrismaService,
     private readonly cacheService: CacheService,
-  ) {}
+  ) { }
 
   private buildClerkDisplayName(clerkUser: any): string {
     const firstName = typeof clerkUser?.firstName === 'string' ? clerkUser.firstName.trim() : '';
@@ -128,38 +128,38 @@ export class UsersService {
 
     const user = existingByEmail
       ? await this.prisma.user.update({
-          where: { id: existingByEmail.id },
-          data: {
-            clerkId,
-            name: existingByEmail.name || displayName,
-            avatar: existingByEmail.avatar || avatar,
-          },
-          select: {
-            id: true,
-            clerkId: true,
-            name: true,
-            email: true,
-            avatar: true,
-            onboarded: true,
-          },
-        })
+        where: { id: existingByEmail.id },
+        data: {
+          clerkId,
+          name: existingByEmail.name || displayName,
+          avatar: existingByEmail.avatar || avatar,
+        },
+        select: {
+          id: true,
+          clerkId: true,
+          name: true,
+          email: true,
+          avatar: true,
+          onboarded: true,
+        },
+      })
       : await this.prisma.user.create({
-          data: {
-            clerkId,
-            email: normalizedEmail,
-            name: displayName,
-            avatar,
-            onboarded: false,
-          },
-          select: {
-            id: true,
-            clerkId: true,
-            name: true,
-            email: true,
-            avatar: true,
-            onboarded: true,
-          },
-        });
+        data: {
+          clerkId,
+          email: normalizedEmail,
+          name: displayName,
+          avatar,
+          onboarded: false,
+        },
+        select: {
+          id: true,
+          clerkId: true,
+          name: true,
+          email: true,
+          avatar: true,
+          onboarded: true,
+        },
+      });
 
     await this.syncClerkMetadata(clerkId, user.id);
     return user;
@@ -225,22 +225,48 @@ export class UsersService {
             25000, // 25 second timeout
             `getCurrentUser - findUnique user ${userIdOrClerkId}`,
           );
+          const ensuredUser =
+            user ||
+            (userIdOrClerkId.startsWith('user_')
+              ? await this.ensureUserFromClerk(userIdOrClerkId)
+              : null);
 
-          const isNewUser = !user;
+          const isNewUser = !user && !!ensuredUser;
 
-          if (!user) {
+          if (!ensuredUser) {
             throw new NotFoundException(
               'User not found. Please complete onboarding first.',
             );
           }
 
-          const profile = user as UserWithSkillsForProfile;
+          const fullUser =
+            user && user.id === ensuredUser.id
+              ? user
+              : await withQueryTimeout(
+                this.findUserByIdOrClerkId(ensuredUser.id, {
+                  include: {
+                    userSkills: {
+                      include: {
+                        skill: true,
+                      },
+                    },
+                  },
+                }),
+                25000,
+                `getCurrentUser - refetch ensured user ${ensuredUser.id}`,
+              );
 
-          const hasSkills = profile.userSkills
+          if (!fullUser) {
+            throw new NotFoundException(
+              'User not found. Please complete onboarding first.',
+            );
+          }
+
+          const hasSkills = fullUser.userSkills
             .filter((us) => us.type === 'HAS')
             .map((us) => us.skill.name);
 
-          const wantSkills = profile.userSkills
+          const wantSkills = fullUser.userSkills
             .filter((us) => us.type === 'WANTS')
             .map((us) => us.skill.name);
 
@@ -264,47 +290,47 @@ export class UsersService {
               // Count peer sessions where user is the teacher (received)
               this.prisma.peerSession.count({
                 where: {
-                  requestedToId: profile.id,
+                  requestedToId: fullUser.id,
                   sessionStatus: SessionStatus.DONE,
                 },
               }),
               // Count study rooms where user is the creator/host
               this.prisma.studyRoom.count({
                 where: {
-                  createdById: profile.id,
+                  createdById: fullUser.id,
                   sessionStatus: SessionStatus.DONE,
                 },
               }),
               this.prisma.peerSession.count({
-                where: { requestedToId: profile.id },
+                where: { requestedToId: fullUser.id },
               }),
               this.prisma.peerSession.count({
                 where: {
-                  requestedToId: profile.id,
+                  requestedToId: fullUser.id,
                   sessionStatus: {
                     in: acceptedStatuses,
                   },
                 },
               }),
               this.prisma.review.aggregate({
-                where: { revieweeId: profile.id },
+                where: { revieweeId: fullUser.id },
                 _avg: { rating: true },
                 _count: { rating: true },
               }),
               // Count peer sessions where user is the learner (requester)
               this.prisma.peerSession.count({
                 where: {
-                  requestedById: profile.id,
+                  requestedById: fullUser.id,
                   sessionStatus: SessionStatus.DONE,
                 },
               }),
               // Count study rooms where user is a participant (not creator)
               this.prisma.studyRoomParticipant.count({
                 where: {
-                  userId: profile.id,
+                  userId: fullUser.id,
                   studyRoom: {
                     sessionStatus: SessionStatus.DONE,
-                    createdById: { not: profile.id }, // Exclude rooms user created (taught)
+                    createdById: { not: fullUser.id }, // Exclude rooms user created (taught)
                   },
                 },
               }),
@@ -325,19 +351,19 @@ export class UsersService {
 
           return {
             user: {
-              id: profile.id,
-              name: profile.name,
-              username: profile.username,
-              email: profile.email,
-              avatar: profile.avatar,
-              bio: profile.bio,
-              location: profile.location,
-              school: profile.school,
-              coins: profile.coins,
-              hourlyRate: profile.hourlyRate,
+              id: fullUser.id,
+              name: fullUser.name,
+              username: fullUser.username,
+              email: fullUser.email,
+              avatar: fullUser.avatar,
+              bio: fullUser.bio,
+              location: fullUser.location,
+              school: fullUser.school,
+              coins: fullUser.coins,
+              hourlyRate: fullUser.hourlyRate,
               hasSkills,
               wantSkills,
-              socialLinks: (profile.socialLinks as any[]) || [],
+              socialLinks: (fullUser.socialLinks as any[]) || [],
               publicStats: {
                 sessionsTaught,
                 sessionsAttendedAsLearner,
@@ -771,29 +797,29 @@ export class UsersService {
     const existingByEmail = existingByClerkId
       ? null
       : await this.prisma.user.findUnique({
-          where: { email: normalizedEmail },
-          select: { id: true },
-        });
+        where: { email: normalizedEmail },
+        select: { id: true },
+      });
 
     const user = (existingByClerkId
       ? await this.prisma.user.update({
-          where: { clerkId },
-          data: userPayload,
-        })
+        where: { clerkId },
+        data: userPayload,
+      })
       : existingByEmail
         ? await this.prisma.user.update({
-            where: { id: existingByEmail.id },
-            data: {
-              ...userPayload,
-              clerkId,
-            },
-          })
+          where: { id: existingByEmail.id },
+          data: {
+            ...userPayload,
+            clerkId,
+          },
+        })
         : await this.prisma.user.create({
-            data: {
-              clerkId,
-              ...userPayload,
-            },
-          })) as UserOnboardingResult;
+          data: {
+            clerkId,
+            ...userPayload,
+          },
+        });
 
     this.logger.debug('🔍 User created:', user);
 
