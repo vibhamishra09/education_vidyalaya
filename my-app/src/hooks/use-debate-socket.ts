@@ -137,7 +137,7 @@ export function useDebateSocket({
         const authToken = await getToken();
         if (!authToken || !mounted) return;
 
-        const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:3001';
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:3002';
 
         const newSocket = io(`${baseUrl}/debate`, {
           transports: ['websocket'],

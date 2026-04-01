@@ -21,12 +21,16 @@ export class DashboardController {
     dbUserId: string | undefined,
     clerkUserId: string,
   ): Promise<string> {
+    if (clerkUserId) {
+      const user = await this.usersService.ensureUserFromClerk(clerkUserId);
+      return user.id;
+    }
+
     if (dbUserId) {
       return dbUserId;
     }
 
-    const user = await this.usersService.ensureUserFromClerk(clerkUserId);
-    return user.id;
+    throw new Error('Authenticated user identity missing');
   }
 
   @Get()

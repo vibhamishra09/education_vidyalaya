@@ -336,7 +336,7 @@ export function ChatWidget({
 				const url =
 					process.env.NEXT_PUBLIC_CHAT_WS_URL ||
 					process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') ||
-					'http://localhost:3001'
+					'http://localhost:3002'
 
 				console.log(
 					'[Chat] Preparing WebSocket connection:',

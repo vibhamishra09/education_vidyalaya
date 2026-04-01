@@ -18,7 +18,7 @@ function getHostname(value?: string): string | undefined {
 const backendOrigin =
   process.env.BACKEND_URL?.trim().replace(/\/$/, "") ||
   process.env.NEXT_PUBLIC_API_URL?.trim().replace(/\/$/, "") ||
-  "http://127.0.0.1:3001";
+  "http://127.0.0.1:3002";
 
 const allowedDevOrigins = Array.from(
   new Set(
