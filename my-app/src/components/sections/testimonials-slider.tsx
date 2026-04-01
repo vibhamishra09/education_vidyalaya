@@ -56,6 +56,8 @@ export function TestimonialsSlider() {
     { page: 1, limit: 20 },
     { refetchInterval: REVIEWS_REFRESH_INTERVAL_MS, refetchIntervalInBackground: true }
   );
+  console.log(reviewsData);
+  
   const baseTestimonials = useMemo<Testimonial[]>(() => {
     const reviews = reviewsData?.reviews ?? [];
 
@@ -64,8 +66,7 @@ export function TestimonialsSlider() {
         const trimmedReview = review.review?.trim();
         if (!trimmedReview) return false;
         // Only show reviews with more than 3 words
-        const wordCount = trimmedReview.split(/\s+/).filter(word => word.length > 0).length;
-        return wordCount > 3;
+        return trimmedReview;
       })
       .map((review) => ({
         id: review.id,
