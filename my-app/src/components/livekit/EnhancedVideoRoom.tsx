@@ -940,7 +940,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	onFlashDismiss,
 	onFlashGetList: _onFlashGetList,
 	onDismissFlashMessage,
-	sessionData: _sessionData,
+	sessionData,
 	mediaCaptureBlockedReason = null,
 	sessionStableId,
 	permissions,
