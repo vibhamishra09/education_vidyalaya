@@ -32,6 +32,10 @@ export function formatCoins(coins: number | string | null | undefined): string {
   return parseFloat(formatted).toString();
 }
 
+export function formatPoints(points: number | string | null | undefined): string {
+  return formatCoins(points);
+}
+
 /**
  * @deprecated Use formatCoins instead - there is no Coins conversion
  * This function now just calls formatCoins for backward compatibility

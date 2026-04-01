@@ -1,7 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, Image } from 'react-native';
-import { cn } from '../../lib/utils';
-import { Users, Clock, Calendar, Share2, Plus } from 'lucide-react-native';
+import { Clock } from 'lucide-react-native';
 
 export interface PublicUser {
   id: string;
@@ -73,11 +72,15 @@ export function StudyRoomCard({
       {/* Date & Time Pills */}
       <View className="flex-row flex-wrap gap-2 mb-6">
          <View className="bg-blue-50/80 px-3 py-1.5 rounded-lg flex-row items-center border border-blue-100">
-            <Clock size={14} className="text-slate-500 mr-2" />
+            <View style={{ marginRight: 8 }}>
+              <Clock size={14} color="#64748b" />
+            </View>
             <Text className="text-xs font-medium text-slate-600">{formattedDate}</Text>
          </View>
          <View className="bg-blue-50/80 px-3 py-1.5 rounded-lg flex-row items-center border border-blue-100">
-            <Clock size={14} className="text-slate-500 mr-2" />
+            <View style={{ marginRight: 8 }}>
+              <Clock size={14} color="#64748b" />
+            </View>
             <Text className="text-xs font-medium text-slate-600">{duration} min</Text>
          </View>
       </View>

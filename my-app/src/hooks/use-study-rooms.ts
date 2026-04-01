@@ -177,7 +177,7 @@ export function useJoinRecurringStudyRoom() {
       }
       return studyRoomsApi.joinRecurringRooms(roomId, scope);
     },
-    onSuccess: async (_, { roomId }) => {
+    onSuccess: async (_, { roomId}) => {
       
       queryClient.invalidateQueries({ queryKey: studyRoomKeys.lists() });
       queryClient.invalidateQueries({ queryKey: studyRoomKeys.detail(roomId) });
@@ -320,22 +320,34 @@ export function useUpdateParticipantRole(studyRoomId: string) {
 }
 
 // Cancel study room
-export function useCancelStudyRoom(studyRoomId: string) {
+export function useCancelStudyRoom() {
   const queryClient = useQueryClient();
   const { getToken, isLoaded } = useAuth();
 
   return useMutation({
-    mutationFn: async (scope: StudyRoomEditScope = StudyRoomEditScope.SINGLE) => {
+    mutationFn: async ({
+      roomId,
+      scope,
+      slug
+    }: {
+      roomId: string;
+      scope: StudyRoomEditScope;
+      slug:string
+    }) => {
       if (isLoaded) {
         const token = await getToken();
-        if (token) {
-          setAuthToken(token);
-        }
+        if (token) setAuthToken(token);
       }
-      return studyRoomsApi.cancelStudyRoom(studyRoomId, scope);
+      return studyRoomsApi.cancelStudyRoom(roomId, scope);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: studyRoomKeys.detail(studyRoomId) });
+
+    onSuccess: (_, { roomId, slug }) => {
+      queryClient.invalidateQueries({ queryKey: studyRoomKeys.detail(roomId) });
+
+      if (slug) {
+        queryClient.invalidateQueries({ queryKey: studyRoomKeys.detail(slug) });
+      }
+
       queryClient.invalidateQueries({ queryKey: studyRoomKeys.lists() });
       queryClient.invalidateQueries({ queryKey: browseKeys.all });
     },

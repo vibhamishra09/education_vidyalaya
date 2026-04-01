@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SessionStatus } from '../generated/prisma/client';
 import { StreaksService } from '../streaks/streaks.service';
 import { AchievementsService } from '../achievements/achievements.service';
+import { EngagementService } from '../engagement/engagement.service';
 import { LoggerService } from '../common/logger';
 import { CacheService } from '../redis/cache.service';
 import { isConnectionError } from '../common/db-error-handler';
@@ -34,6 +35,7 @@ export class DashboardService {
     private prisma: PrismaService,
     private streaksService: StreaksService,
     private achievementsService: AchievementsService,
+    private engagementService: EngagementService,
     private readonly logger: LoggerService,
     private readonly cacheService: CacheService,
   ) {
@@ -136,9 +138,7 @@ export class DashboardService {
                 },
                 {
                   name: 'Total Earnings',
-                  value:
-                    Math.round(Number(totalEarnings._sum.amountReceived || 0) * 100) /
-                    100,
+                  value: Math.round(Number(totalEarnings._sum.amountReceived || 0) * 100) / 100,
                   description: 'Coins earned',
                 },
                 {
@@ -222,7 +222,8 @@ export class DashboardService {
               pastSessionsTotal,
               upcomingStudyRoomsTotal,
               pastStudyRoomsTotal,
-              pendingReviews,
+              pendingPeerReviews,
+              pendingStudyRoomReviews,
             ] = await Promise.all([
               // Upcoming peer sessions (including ONGOING)
               this.prisma.peerSession.findMany({
@@ -337,6 +338,14 @@ export class DashboardService {
                   reviews: { none: { reviewerId: userId } },
                 },
               }),
+              this.prisma.studyRoom.count({
+                where: {
+                  createdById: { not: userId },
+                  learners: { some: { userId } },
+                  sessionStatus: SessionStatus.DONE,
+                  reviews: { none: { reviewerId: userId } },
+                },
+              }),
             ]);
 
             const blockDuration = Date.now() - blockStart;
@@ -434,7 +443,7 @@ export class DashboardService {
                   hasMore: skip + sessionsLimit < pastStudyRoomsTotal,
                 },
               },
-              pendingReviews,
+              pendingReviews: pendingPeerReviews + pendingStudyRoomReviews,
             };
           };
 
@@ -490,6 +499,19 @@ export class DashboardService {
             };
           };
 
+          const getEngagement = async () => {
+            const blockStart = Date.now();
+            const engagement =
+              await this.engagementService.getDashboardEngagement(userId);
+
+            const blockDuration = Date.now() - blockStart;
+            this.logger.debug(
+              `[Dashboard] Engagement block completed in ${blockDuration}ms`,
+            );
+
+            return { engagement };
+          };
+
           // Execute all query blocks in parallel
           const [
             metricsData,
@@ -498,6 +520,7 @@ export class DashboardService {
             notificationsData,
             streaksData,
             achievementsData,
+            engagementData,
           ] = await Promise.all([
             getMetrics(),
             getRequests(),
@@ -505,6 +528,7 @@ export class DashboardService {
             getNotifications(),
             getStreaks(),
             getAchievements(),
+            getEngagement(),
           ]);
 
           // Combine all data
@@ -515,6 +539,7 @@ export class DashboardService {
             ...notificationsData,
             ...streaksData,
             ...achievementsData,
+            ...engagementData,
           };
 
           const totalDuration = Date.now() - startTime;

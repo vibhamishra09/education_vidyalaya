@@ -27,8 +27,8 @@ export function useCurrentUser() {
     // Token is set by AuthTokenSync before this fires; interceptor handles the rest
     queryFn: () => usersApi.getCurrentUser(),
     enabled: isLoaded && !!isSignedIn,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    refetchOnWindowFocus: false,
+    staleTime: 60 * 1000,
+    refetchOnWindowFocus: true,
     retry: (failureCount, error) => {
       if (isAuthError(error)) {
         return false;

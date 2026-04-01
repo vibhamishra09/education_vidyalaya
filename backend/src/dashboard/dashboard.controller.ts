@@ -1,4 +1,4 @@
-import { Controller, Get, NotFoundException, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import {
   DashboardService,
   SessionActivityDataPoint,
@@ -7,21 +7,35 @@ import {
 import { ClerkAuthGuard } from '../common/guards/clerk-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { DashboardQueryDto } from './dto/dashboard-query.dto';
+import { UsersService } from '../users/users.service';
 
 @Controller('api/dashboard')
 @UseGuards(ClerkAuthGuard)
 export class DashboardController {
-  constructor(private dashboardService: DashboardService) {}
+  constructor(
+    private dashboardService: DashboardService,
+    private readonly usersService: UsersService,
+  ) {}
+
+  private async resolveDbUserId(
+    dbUserId: string | undefined,
+    clerkUserId: string,
+  ): Promise<string> {
+    if (dbUserId) {
+      return dbUserId;
+    }
+
+    const user = await this.usersService.ensureUserFromClerk(clerkUserId);
+    return user.id;
+  }
 
   @Get()
   async getDashboardData(
-    @CurrentUser('dbUserId') userId: string | undefined,
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
     @CurrentUser('clerkId') clerkUserId: string,
     @Query() query: DashboardQueryDto,
   ) {
-    if (!userId) {
-      throw new NotFoundException('Authenticated user ID missing from token');
-    }
+    const userId = await this.resolveDbUserId(dbUserId, clerkUserId);
 
     return this.dashboardService.getDashboardData(
       userId,
@@ -39,12 +53,11 @@ export class DashboardController {
 
   @Get('session-activity')
   async getSessionActivity(
-    @CurrentUser('dbUserId') userId: string | undefined,
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
     @Query('days') days?: string,
   ): Promise<SessionActivityDataPoint[]> {
-    if (!userId) {
-      throw new NotFoundException('Authenticated user ID missing from token');
-    }
+    const userId = await this.resolveDbUserId(dbUserId, clerkUserId);
 
     const daysNum = days ? parseInt(days, 10) : 30;
     return this.dashboardService.getSessionActivity(userId, daysNum);
@@ -52,12 +65,11 @@ export class DashboardController {
 
   @Get('wallet-activity')
   async getWalletActivity(
-    @CurrentUser('dbUserId') userId: string | undefined,
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
     @Query('months') months?: string,
   ): Promise<WalletActivityDataPoint[]> {
-    if (!userId) {
-      throw new NotFoundException('Authenticated user ID missing from token');
-    }
+    const userId = await this.resolveDbUserId(dbUserId, clerkUserId);
 
     const monthsNum = months ? parseInt(months, 10) : 6;
     return this.dashboardService.getWalletActivity(userId, monthsNum);

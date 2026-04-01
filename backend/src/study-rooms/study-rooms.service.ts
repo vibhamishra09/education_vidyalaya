@@ -19,6 +19,7 @@ import { EmailService, EmailDeliveryResult } from '../email/email.service';
 import { StreaksService } from '../streaks/streaks.service';
 import { AchievementsService } from '../achievements/achievements.service';
 import { TranscriptsService } from '../transcripts/transcripts.service';
+import { EngagementService } from '../engagement/engagement.service';
 import { UsersService } from '../users/users.service';
 import { LoggerService } from '../common/logger/logger.service';
 import { CacheService } from '../redis/cache.service';
@@ -47,7 +48,7 @@ import { createClerkClient } from '@clerk/backend';
 type StudyRoomWithRelations = {
   id: string;
   title: string;
-  slug?:string | null
+  slug?: string | null
   description?: string | null;
   imageUrl?: string | null;
   sessionStatus: SessionStatus;
@@ -82,9 +83,9 @@ type StudyRoomWithRelations = {
 @Injectable()
 export class StudyRoomsService {
   private readonly clerkClient = createClerkClient({
-      secretKey: process.env.CLERK_SECRET_KEY,
-      publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
-    });
+    secretKey: process.env.CLERK_SECRET_KEY,
+    publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
+  });
   private studyRoomSchemaCapabilities:
     | {
       slug: boolean;
@@ -100,6 +101,7 @@ export class StudyRoomsService {
     private streaksService: StreaksService,
     private achievementsService: AchievementsService,
     private transcriptsService: TranscriptsService,
+    private engagementService: EngagementService,
     private readonly logger: LoggerService,
     private readonly cacheService: CacheService,
     private readonly usersService: UsersService,
@@ -253,49 +255,72 @@ export class StudyRoomsService {
       select: { id: true, clerkId: true },
     });
 
-    if(byClerkId) {
-        try {
-          const clerkUser = await this.clerkClient.users.getUser(userIdOrClerkId);
-          await this.clerkClient.users.updateUser(userIdOrClerkId, {
-            publicMetadata: {
-              ...(clerkUser.publicMetadata || {}),
-              onboardingComplete: true,
-              dbUserId: byClerkId.id,
-            },
-          });
-        } catch (error) {
-          this.logger.warn(
-            `Failed to sync Clerk metadata for ${userIdOrClerkId}: ${error instanceof Error ? error.message : String(error)}`,
-          );
-        }
+    if (byClerkId) {
+      try {
+        const clerkUser = await this.clerkClient.users.getUser(userIdOrClerkId);
+        await this.clerkClient.users.updateUser(userIdOrClerkId, {
+          publicMetadata: {
+            ...(clerkUser.publicMetadata || {}),
+            onboardingComplete: true,
+            dbUserId: byClerkId.id,
+          },
+        });
+      } catch (error) {
+        this.logger.warn(
+          `Failed to sync Clerk metadata for ${userIdOrClerkId}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
 
-        return byClerkId;
+      return byClerkId;
     }
 
     throw new NotFoundException('User not found');
   }
 
+  private isSlug(key: string) {
+    return key.includes("-");
+  }
   private async resolveStudyRoomByIdOrSlug(
     studyRoomIdOrSlug: string,
     options?: { select?: any; include?: any },
   ): Promise<any> {
-    const caps = await this.getStudyRoomSchemaCapabilities();
+    this.logger.log("ROOM ID OR SLUG : : : ", studyRoomIdOrSlug)
 
-    if (caps.slug) {
-      return this.prisma.studyRoom.findFirst({
-        where: {
-          OR: [{ id: studyRoomIdOrSlug }, { slug: studyRoomIdOrSlug }],
-        },
+     const baseOptions = {
         ...(options?.select ? { select: options.select } : {}),
         ...(options?.include ? { include: options.include } : {}),
-      });
-    }
+      };
 
-    return this.prisma.studyRoom.findUnique({
-      where: { id: studyRoomIdOrSlug },
-      ...(options?.select ? { select: options.select } : {}),
-      ...(options?.include ? { include: options.include } : {}),
-    });
+      if (!this.isSlug(studyRoomIdOrSlug)) {
+        return this.prisma.studyRoom.findUnique({
+          where: { id: studyRoomIdOrSlug },
+          ...baseOptions,
+        });
+      }
+
+      // its slug
+       const rooms = await this.prisma.studyRoom.findMany({
+          where: { slug: studyRoomIdOrSlug },
+          orderBy: { date: "asc" },
+          ...baseOptions,
+        });
+
+        // snigle  room  with slug  OR a sigle sessio in a series
+        if (rooms.length === 1) {
+          return rooms[0];
+        }
+        // a series 
+        if (rooms.length > 1) {
+          const now = new Date();
+
+          return (
+            rooms.find(r => r.sessionStatus === "ONGOING") ||
+            rooms.find(r => r.sessionStatus === "UPCOMING") ||
+            rooms[0]
+          );
+        }
+
+        return null;
   }
 
   private async getStudyRoomSchemaCapabilities() {
@@ -954,7 +979,7 @@ export class StudyRoomsService {
       occurrenceIndex: (room as any).occurrenceIndex,
       timezone: (room as any).timezone,
       participantCount: room.learners.length,
-      slug:room.slug,
+      slug: room.slug,
       createdBy: {
         id: room.createdBy.id,
         name: room.createdBy.name,
@@ -974,6 +999,7 @@ export class StudyRoomsService {
           select: {
             id: true,
             title: true,
+            slug:true, // please dont remove slugs 
             description: true,
             imageUrl: true,
             sessionStatus: true,
@@ -1049,7 +1075,7 @@ export class StudyRoomsService {
                   },
                 },
               },
-              orderBy: { id: 'desc' },
+              orderBy: { id: 'asc' },
               take: 20,
             },
           },
@@ -1137,7 +1163,7 @@ export class StudyRoomsService {
         webinarRegistrationSlug:
           role === 'teacher'
             ? (studyRoom as { webinarRegistrationSlug?: string | null })
-                .webinarRegistrationSlug ?? null
+              .webinarRegistrationSlug ?? null
             : null,
       };
     } catch (error) {
@@ -1251,7 +1277,7 @@ export class StudyRoomsService {
   //             seriesRootId: rootId,
   //           }))
   //         });
-          
+
   //         if (skillIds.length > 0) {
   //           const skillRelations = roomData.flatMap(room => 
   //             skillIds.map(skillId => ({ studyRoomId: room.id, skillId }))
@@ -1274,7 +1300,7 @@ export class StudyRoomsService {
   //       await Promise.all(
   //       result.map(room => this.chatService.getOrCreateChannelForStudyRoom(room.id, [creator.id]))
   //   );
-    
+
   //   let emailDelivery;
   //   if (createDto.allowExternalUsers && roomData[0].externalPasscode && createDto.externalInvites?.length) {
   //     emailDelivery = await this.sendExternalInviteEmails(
@@ -2751,13 +2777,13 @@ export class StudyRoomsService {
 
     const seriesId = randomUUID();
 
-      const recurrenceEndDate = createDto.recurrence
-        ? convertLocalToUTC(
-          createDto.recurrence.repeatUntil,
-          createDto.time,
-          createDto.timezone,
-        )
-    : null;
+    const recurrenceEndDate = createDto.recurrence
+      ? convertLocalToUTC(
+        createDto.recurrence.repeatUntil,
+        createDto.time,
+        createDto.timezone,
+      )
+      : null;
 
 
     const studyRoomData = occurrences.map((occurrence) => {
@@ -2823,7 +2849,7 @@ export class StudyRoomsService {
       });
     } catch (err) {
       console.log(err);
-      
+
       await this.prisma.studyRoom.deleteMany({
         where: { seriesId },
       });
@@ -3009,14 +3035,14 @@ export class StudyRoomsService {
       }
 
       await this.notificationsService.createAndPushNotification(
-          rooms[0].createdById,
-          `${user.name} joined ${rooms.length} sessions in your series "${rooms[0].title}`,
-          'New Participant',
-          NotifType.NORMAL,
-          {
-            actionType: 'STUDYROOM_JOINED',
-            studyRoomId: rooms[0].id,
-          },
+        rooms[0].createdById,
+        `${user.name} joined ${rooms.length} sessions in your series "${rooms[0].title}`,
+        'New Participant',
+        NotifType.NORMAL,
+        {
+          actionType: 'STUDYROOM_JOINED',
+          studyRoomId: rooms[0].id,
+        },
       );
     });
 
@@ -3024,35 +3050,35 @@ export class StudyRoomsService {
       success: true,
       message: `Joined ${rooms.length} sessions in the series`,
     };
-}
+  }
 
 
   async unenroll(userId: string, targetId: string, scope: "THIS" | "ALL" | "FOLLOWING") {
 
     const actor = await this.resolveUserIdentity(userId);
-    userId=actor.id
+    userId = actor.id
 
     if (scope === "ALL") {
       const result = await this.prisma.studyRoomParticipant.deleteMany({
         where: {
           userId: userId,
           studyRoom: {
-            seriesId: targetId, 
+            seriesId: targetId,
           },
         },
       });
       return { message: `Unenrolled from ${result.count} sessions in the series.` };
     }
-    
+
     await this.prisma.studyRoomParticipant.delete({
       where: {
         userId_studyRoomId: {
           userId: userId,
-          studyRoomId: targetId, 
+          studyRoomId: targetId,
         },
       },
     });
-    
+
     return { message: 'Unenrolled from this session.' };
   }
 
@@ -3084,7 +3110,7 @@ export class StudyRoomsService {
   ) {
 
     const actor = await this.resolveUserIdentity(userId);
-    userId=actor.id
+    userId = actor.id
 
     const { room } = await this.assertHostOrCohost(studyRoomId, userId);
     const nextRole = this.toParticipantRole(role);
@@ -3151,7 +3177,7 @@ export class StudyRoomsService {
   ) {
 
     const actor = await this.resolveUserIdentity(userId);
-    userId=actor.id
+    userId = actor.id
 
     const studyRoom = await this.resolveStudyRoomByIdOrSlug(studyRoomId, {
       select: { id: true, createdById: true, seriesId: true, date: true },
@@ -3199,7 +3225,7 @@ export class StudyRoomsService {
     });
 
     const actor = await this.resolveUserIdentity(userId);
-    userId=actor.id
+    userId = actor.id
 
     // userId is actually clerkId, so we need to find the user by clerkId first
     const user = await this.prisma.user.findUnique({
@@ -3320,6 +3346,16 @@ export class StudyRoomsService {
       creatorStreak.currentStreak,
     );
 
+    await this.engagementService.awardFirstMeaningfulActionBonus(
+      studyRoom.createdById,
+      studyRoom.date,
+      'session_completion',
+    );
+    await this.engagementService.awardFirstTeachingSessionOfWeekBonus(
+      studyRoom.createdById,
+      studyRoom.date,
+    );
+
     // Update streak for all participants (learners)
     for (let i = 0; i < participants.length; i++) {
       const participant = participants[i];
@@ -3345,6 +3381,12 @@ export class StudyRoomsService {
       await this.achievementsService.checkStreakAchievements(
         participant.userId,
         participantStreak.currentStreak,
+      );
+
+      await this.engagementService.awardFirstMeaningfulActionBonus(
+        participant.userId,
+        studyRoom.date,
+        'session_completion',
       );
     }
 
@@ -3457,7 +3499,7 @@ export class StudyRoomsService {
     });
 
     const actor = await this.resolveUserIdentity(userId);
-    userId=actor.id
+    userId = actor.id
 
     const studyRoom = await this.resolveStudyRoomByIdOrSlug(studyRoomId, {
       select: {
@@ -3512,7 +3554,7 @@ export class StudyRoomsService {
     // userId is actually clerkId, so we need to find the user by clerkId first
 
     const actor = await this.resolveUserIdentity(userId);
-    userId=actor.id
+    userId = actor.id
 
     const studyRoom = await this.resolveStudyRoomByIdOrSlug(studyRoomId, {
       select: {

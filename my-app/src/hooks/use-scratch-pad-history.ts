@@ -18,7 +18,7 @@ export function useScratchPadHistory() {
     queryKey: ['scratch-pad-history'],
     queryFn: async () => {
       const token = await getToken();
-      const response = await axios.get(`${API_URL}/scratch-pad/history`, {
+      const response = await axios.get(`${API_URL}/api/scratch-pad/history`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },

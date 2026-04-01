@@ -2,20 +2,6 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { toast } from 'sonner';
 
-// Flash message types
-export interface FlashQuestion {
-  id: string;
-  text: string;
-  duration?: number;      // seconds (0 = manual dismiss)
-  position?: 'top' | 'center' | 'bottom';
-  fontSize?: 'sm' | 'md' | 'lg' | 'xl';
-  bgColor?: string;
-}
-
-export interface ActiveFlashMessage extends FlashQuestion {
-  hostId: string;
-}
-
 // Room permissions interface for the "Lock" system
 export interface RoomPermissions {
   allowAudio: boolean;
@@ -25,6 +11,7 @@ export interface RoomPermissions {
   allowChatHost: boolean;
   allowChatUser: boolean;
   allowParticipantList: boolean;
+  allowScratchPad: boolean;
 }
 
 // Room settings stored in Redis (host view)
@@ -34,6 +21,7 @@ export interface RoomSettings {
   chatDisabled: boolean;
   hideParticipantList: boolean;
   chatRestrictToHostOnly: boolean;
+  lockScratchPad: boolean;
 }
 
 export interface ParticipantChatLocks {
@@ -61,6 +49,29 @@ export interface ParticipantPermissionRequest {
   timestamp: number;
 }
 
+// Flash Message interfaces
+export interface FlashMessage {
+  id: string;
+  type: 'QUESTION' | 'AD_HOC' | 'MEDIA';
+  content: string;
+  options?: string[];
+  duration?: number;
+  position?: 'top' | 'center' | 'bottom';
+  fontSize?: 'sm' | 'md' | 'lg' | 'xl';
+  timestamp: number;
+}
+
+export interface FlashQuestion {
+  id: string;
+  text: string;
+  options?: string[];
+  type?: 'MULTIPLE_CHOICE' | 'TRUE_FALSE' | 'OPEN';
+  order?: number;
+  duration?: number;
+  position?: 'top' | 'center' | 'bottom';
+  fontSize?: 'sm' | 'md' | 'lg' | 'xl';
+}
+
 export function useSessionModeration({ sessionId, sessionType, isHost: _isHost, token, userId, enabled = true } : { sessionId: string | null; sessionType: 'studyRoom' | 'peerSession' | null; isHost: boolean; token: string | null; userId?: string | null; enabled?: boolean }) {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -77,6 +88,7 @@ export function useSessionModeration({ sessionId, sessionType, isHost: _isHost, 
     allowChatHost: true,
     allowChatUser: true,
     allowParticipantList: true,
+    allowScratchPad: true,
   });
   
   // Room settings from Redis (for host UI)
@@ -86,6 +98,7 @@ export function useSessionModeration({ sessionId, sessionType, isHost: _isHost, 
     chatDisabled: false,
     hideParticipantList: false,
     chatRestrictToHostOnly: false,
+    lockScratchPad: false,
   });
 
   const [participantChatLocks, setParticipantChatLocks] = useState<Record<string, ParticipantChatLocks>>({});
@@ -106,9 +119,8 @@ export function useSessionModeration({ sessionId, sessionType, isHost: _isHost, 
   // Pending requests from participants (for host to see)
   const [pendingParticipantRequests, setPendingParticipantRequests] = useState<ParticipantPermissionRequest[]>([]);
 
-  // Flash message state
-  const [activeFlashMessage, setActiveFlashMessage] = useState<ActiveFlashMessage | null>(null);
-  // Host's own question list (only populated for hosts)
+  // Flash Message state
+  const [activeFlashMessage, setActiveFlashMessage] = useState<FlashMessage | null>(null);
   const [flashQuestions, setFlashQuestions] = useState<FlashQuestion[]>([]);
 
   const connectingRef = useRef(false);
@@ -146,33 +158,38 @@ export function useSessionModeration({ sessionId, sessionType, isHost: _isHost, 
       permissions: RoomPermissions;
       roomSettings: RoomSettings;
       isHost: boolean;
+      flashQuestions?: FlashQuestion[];
+      activeFlashMessage?: FlashMessage;
     }) => {
       console.log('[moderation] sync-permissions:', data);
       if (data.permissions) {
         setPermissions(data.permissions);
         const newChatDisabled = !data.permissions.allowChat;
-        console.log('[moderation] sync-permissions: setting chatDisabled to', newChatDisabled);
         setChatDisabled(newChatDisabled);
       }
       if (data.roomSettings) {
         setRoomSettings(data.roomSettings);
       }
       setIsHostFromServer(data.isHost);
+      
+      if (data.flashQuestions) {
+        setFlashQuestions(data.flashQuestions);
+      }
+      if (data.activeFlashMessage) {
+        setActiveFlashMessage(data.activeFlashMessage);
+      }
     });
 
     // Room settings updated (for host UI)
     s.on('room-settings-updated', (data: { settings: RoomSettings }) => {
-      console.log('[moderation] room-settings-updated:', data);
       if (data.settings) {
         setRoomSettings(data.settings);
-        console.log('[moderation] room-settings-updated: setting chatDisabled to', data.settings.chatDisabled);
         setChatDisabled(data.settings.chatDisabled);
       }
     });
 
     // User-specific permissions updated
     s.on('user-permissions-updated', (data: { targetUserId: string; permissions: RoomPermissions }) => {
-      console.log('[moderation] user-permissions-updated:', data, 'my userId:', userIdRef.current);
       if (data.targetUserId === userIdRef.current && data.permissions) {
         setPermissions(data.permissions);
         setChatDisabled(!data.permissions.allowChat);
@@ -194,69 +211,41 @@ export function useSessionModeration({ sessionId, sessionType, isHost: _isHost, 
     });
 
     s.on('chat-toggled', (data: { disabled: boolean }) => {
-      console.log('[moderation] chat-toggled', data);
-      console.log('[moderation] chat-toggled: setting chatDisabled to', !!data.disabled);
       setChatDisabled(!!data.disabled);
     });
 
     // Handle permissions updates (Lock system)
     s.on('permissions-updated', (data: { targetUserId?: string; permissions: Partial<RoomPermissions> }) => {
-      console.log('[moderation] permissions-updated', data);
-      // If it's a room-wide update, apply to everyone
       if (!data.targetUserId) {
-        setPermissions(prev => ({
-          ...prev,
-          ...data.permissions,
-        }));
-        // Sync chatDisabled with permissions
+        setPermissions(prev => ({ ...prev, ...data.permissions }));
         if (data.permissions.allowChat !== undefined) {
-          const newChatDisabled = !data.permissions.allowChat;
-          console.log('[moderation] permissions-updated (room-wide): setting chatDisabled to', newChatDisabled);
-          setChatDisabled(newChatDisabled);
+          setChatDisabled(!data.permissions.allowChat);
         }
       } else if (data.targetUserId === userIdRef.current) {
-        // If it's targeted at this specific user, apply the override
-        setPermissions(prev => ({
-          ...prev,
-          ...data.permissions,
-        }));
-        // Sync chatDisabled with permissions
+        setPermissions(prev => ({ ...prev, ...data.permissions }));
         if (data.permissions.allowChat !== undefined) {
-          const newChatDisabled = !data.permissions.allowChat;
-          console.log('[moderation] permissions-updated (user-specific): setting chatDisabled to', newChatDisabled);
-          setChatDisabled(newChatDisabled);
+          setChatDisabled(!data.permissions.allowChat);
         }
       }
+      // Update participant locks for UI feedback
       if (data.targetUserId && data.permissions) {
         const targetUserId = data.targetUserId;
         setParticipantChatLocks((prev) => {
-          const existing = prev[targetUserId] || {
-            everyone: false,
-            host: false,
-            user: false,
+          const existing = prev[targetUserId] || { everyone: false, host: false, user: false };
+          return {
+            ...prev,
+            [targetUserId]: {
+              everyone: data.permissions.allowChatEveryone !== undefined ? !data.permissions.allowChatEveryone : existing.everyone,
+              host: data.permissions.allowChatHost !== undefined ? !data.permissions.allowChatHost : existing.host,
+              user: data.permissions.allowChatUser !== undefined ? !data.permissions.allowChatUser : existing.user,
+            }
           };
-          const next = {
-            everyone:
-              data.permissions.allowChatEveryone !== undefined
-                ? !data.permissions.allowChatEveryone
-                : existing.everyone,
-            host:
-              data.permissions.allowChatHost !== undefined
-                ? !data.permissions.allowChatHost
-                : existing.host,
-            user:
-              data.permissions.allowChatUser !== undefined
-                ? !data.permissions.allowChatUser
-                : existing.user,
-          };
-          return { ...prev, [targetUserId]: next };
         });
       }
     });
 
     // Host requested participant to turn on audio
     s.on('host-requested-audio', (data: { targetUserId: string; hostId: string }) => {
-      console.log('[moderation] host-requested-audio', data);
       if (data.targetUserId === userIdRef.current) {
         setPendingPermissionRequest({ type: 'audio', hostId: data.hostId });
       }
@@ -264,112 +253,60 @@ export function useSessionModeration({ sessionId, sessionType, isHost: _isHost, 
 
     // Host requested participant to turn on video
     s.on('host-requested-video', (data: { targetUserId: string; hostId: string }) => {
-      console.log('[moderation] host-requested-video', data);
       if (data.targetUserId === userIdRef.current) {
         setPendingPermissionRequest({ type: 'video', hostId: data.hostId });
       }
     });
 
-    // User response to audio request (for host notification)
-    s.on('audio-request-response', (data: { userId: string; accepted: boolean }) => {
-      console.log('[moderation] audio-request-response', data);
-      // Host can use this to show a notification about the response
-    });
-
-    // User response to video request (for host notification)
-    s.on('video-request-response', (data: { userId: string; accepted: boolean }) => {
-      console.log('[moderation] video-request-response', data);
-      // Host can use this to show a notification about the response
-    });
-
-    // Confirmation that host's request was sent
-    s.on('request-sent-confirmation', (data: { type: 'audio' | 'video'; targetUserId: string }) => {
-      console.log('[moderation] request-sent-confirmation', data);
-      // Host receives this after successfully sending a request
-    });
-
     // Participant requested audio permission (host receives this)
-    s.on('participant-requested-audio', (data: { userId: string; requestType: 'audio' }) => {
-      console.log('[moderation] participant-requested-audio', data);
-      // Add to pending requests (avoid duplicates)
+    s.on('participant-requested-audio', (data: { userId: string }) => {
       setPendingParticipantRequests(prev => {
-        // Remove existing request from same user for same type
         const filtered = prev.filter(r => !(r.userId === data.userId && r.type === 'audio'));
         return [...filtered, { userId: data.userId, type: 'audio', timestamp: Date.now() }];
       });
     });
 
     // Participant requested video permission (host receives this)
-    s.on('participant-requested-video', (data: { userId: string; requestType: 'video' }) => {
-      console.log('[moderation] participant-requested-video', data);
-      // Add to pending requests (avoid duplicates)
+    s.on('participant-requested-video', (data: { userId: string }) => {
       setPendingParticipantRequests(prev => {
         const filtered = prev.filter(r => !(r.userId === data.userId && r.type === 'video'));
         return [...filtered, { userId: data.userId, type: 'video', timestamp: Date.now() }];
       });
     });
 
-    // Host responded to participant's audio request (participant receives this)
+    // Host responded to participant's audio request
     s.on('host-responded-participant-audio', (data: { userId: string; accepted: boolean }) => {
-      console.log('[moderation] host-responded-participant-audio received:', data);
-      console.log('[moderation] comparing data.userId:', data.userId, 'with my userIdRef.current:', userIdRef.current);
-      console.log('[moderation] match:', data.userId === userIdRef.current);
-      
-      // Show toast for the participant whose request was processed
       if (data.userId === userIdRef.current) {
-        console.log('[moderation] MATCH! Showing toast...');
         if (data.accepted) {
-          toast.success('🎤 Host approved your request!', {
-            description: 'You can now unmute your microphone',
-            duration: 5000,
-          });
+          toast.success('🎤 Host approved your request!', { description: 'You can now unmute your microphone' });
         } else {
           toast.error('Host denied your unmute request');
         }
       }
     });
 
-    // Host responded to participant's video request (participant receives this)
+    // Host responded to participant's video request
     s.on('host-responded-participant-video', (data: { userId: string; accepted: boolean }) => {
-      console.log('[moderation] host-responded-participant-video', data, 'my userId:', userIdRef.current);
       if (data.userId === userIdRef.current) {
-        // This participant's request was processed
         if (data.accepted) {
-          toast.success('Host approved your request', {
-            description: 'You can now enable your camera',
-            duration: 4000,
-          });
+          toast.success('Host approved your request', { description: 'You can now enable your camera' });
         } else {
           toast.error('Host denied your video request');
         }
       }
     });
 
+    // Flash Message Events
+    s.on('flash-message', (data: { message: FlashMessage | null }) => {
+      setActiveFlashMessage(data.message);
+    });
+
+    s.on('flash-questions-updated', (data: { questions: FlashQuestion[] }) => {
+      setFlashQuestions(data.questions);
+    });
+
     s.on('moderation-error', (data: { message?: string }) => {
       setError(data?.message || 'Moderation error');
-    });
-
-    // Flash message events
-    s.on('flash:message', (data: ActiveFlashMessage) => {
-      console.log('[moderation] flash:message received', data);
-      setActiveFlashMessage(data);
-      // Auto-dismiss after duration if specified
-      if (data.duration && data.duration > 0) {
-        setTimeout(() => {
-          setActiveFlashMessage((current) => (current?.id === data.id ? null : current));
-        }, data.duration * 1000);
-      }
-    });
-
-    s.on('flash:dismissed', () => {
-      console.log('[moderation] flash:dismissed');
-      setActiveFlashMessage(null);
-    });
-
-    // Host receives their question list (after upload, edit, reorder, or get-list)
-    s.on('flash:list-updated', (data: { hostId: string; questions: FlashQuestion[] }) => {
-      console.log('[moderation] flash:list-updated', data.questions.length, 'questions');
-      setFlashQuestions(data.questions);
     });
 
     return () => {
@@ -384,113 +321,55 @@ export function useSessionModeration({ sessionId, sessionType, isHost: _isHost, 
     socket.emit('end-meeting', { sessionId, sessionType });
   }, [socket, sessionId, sessionType]);
 
-  // Lock/unlock audio for all (persistent permission)
   const lockAudio = useCallback((locked: boolean) => {
     if (!socket || !sessionId || !sessionType) return;
-    socket.emit('update-permissions', { 
-      sessionId, 
-      sessionType, 
-      permissions: { allowAudio: !locked } 
-    });
+    socket.emit('update-permissions', { sessionId, sessionType, permissions: { allowAudio: !locked } });
   }, [socket, sessionId, sessionType]);
 
-  // Lock/unlock video for all (persistent permission)
   const lockVideo = useCallback((locked: boolean) => {
     if (!socket || !sessionId || !sessionType) return;
-    socket.emit('update-permissions', { 
-      sessionId, 
-      sessionType, 
-      permissions: { allowVideo: !locked } 
-    });
+    socket.emit('update-permissions', { sessionId, sessionType, permissions: { allowVideo: !locked } });
   }, [socket, sessionId, sessionType]);
 
-  // Lock/unlock chat for all (persistent permission)
   const lockChat = useCallback((locked: boolean) => {
     if (!socket || !sessionId || !sessionType) return;
-    socket.emit('update-permissions', { 
-      sessionId, 
-      sessionType, 
-      permissions: { allowChat: !locked } 
-    });
-    // Also emit the legacy chat-toggled for backwards compatibility
+    socket.emit('update-permissions', { sessionId, sessionType, permissions: { allowChat: !locked } });
     socket.emit('toggle-chat', { sessionId, sessionType, disabled: locked });
   }, [socket, sessionId, sessionType]);
 
-  // Lock permissions for a specific user
   const lockUserAudio = useCallback((targetUserId: string, locked: boolean) => {
     if (!socket || !sessionId || !sessionType) return;
-    socket.emit('update-permissions', { 
-      sessionId, 
-      sessionType, 
-      permissions: { allowAudio: !locked },
-      targetUserId,
-    });
+    socket.emit('update-permissions', { sessionId, sessionType, permissions: { allowAudio: !locked }, targetUserId });
   }, [socket, sessionId, sessionType]);
 
   const lockUserVideo = useCallback((targetUserId: string, locked: boolean) => {
     if (!socket || !sessionId || !sessionType) return;
-    socket.emit('update-permissions', { 
-      sessionId, 
-      sessionType, 
-      permissions: { allowVideo: !locked },
-      targetUserId,
-    });
+    socket.emit('update-permissions', { sessionId, sessionType, permissions: { allowVideo: !locked }, targetUserId });
   }, [socket, sessionId, sessionType]);
 
-  const lockUserChatAudience = useCallback(
-    (targetUserId: string, audience: 'everyone' | 'host' | 'user', locked: boolean) => {
-      if (!socket || !sessionId || !sessionType) return;
-      const permissionPatch: Partial<RoomPermissions> = {};
-      if (audience === 'everyone') permissionPatch.allowChatEveryone = !locked;
-      if (audience === 'host') permissionPatch.allowChatHost = !locked;
-      if (audience === 'user') permissionPatch.allowChatUser = !locked;
+  const lockUserChatAudience = useCallback((targetUserId: string, audience: 'everyone' | 'host' | 'user', locked: boolean) => {
+    if (!socket || !sessionId || !sessionType) return;
+    const permissionPatch: Partial<RoomPermissions> = {};
+    if (audience === 'everyone') permissionPatch.allowChatEveryone = !locked;
+    if (audience === 'host') permissionPatch.allowChatHost = !locked;
+    if (audience === 'user') permissionPatch.allowChatUser = !locked;
+    socket.emit('update-permissions', { sessionId, sessionType, permissions: permissionPatch, targetUserId });
+  }, [socket, sessionId, sessionType]);
 
-      socket.emit('update-permissions', {
-        sessionId,
-        sessionType,
-        permissions: permissionPatch,
-        targetUserId,
-      });
-
-      setParticipantChatLocks((prev) => {
-        const existing = prev[targetUserId] || {
-          everyone: false,
-          host: false,
-          user: false,
-        };
-        return {
-          ...prev,
-          [targetUserId]: {
-            ...existing,
-            [audience]: locked,
-          },
-        };
-      });
-    },
-    [socket, sessionId, sessionType],
-  );
-
-  // Restrict all users to send messages to host only
   const restrictChatToHostOnly = useCallback((restricted: boolean) => {
     if (!socket || !sessionId || !sessionType) return;
-    socket.emit('update-permissions', {
-      sessionId,
-      sessionType,
-      permissions: { restrictChatToHostOnly: restricted },
-    });
+    socket.emit('update-permissions', { sessionId, sessionType, permissions: { restrictChatToHostOnly: restricted } });
   }, [socket, sessionId, sessionType]);
 
-  const hideParticipantList = useCallback(
-    (hidden: boolean) => {
-      if (!socket || !sessionId || !sessionType) return;
-      socket.emit('update-permissions', {
-        sessionId,
-        sessionType,
-        permissions: { allowParticipantList: !hidden },
-      });
-    },
-    [socket, sessionId, sessionType],
-  );
+  const hideParticipantList = useCallback((hidden: boolean) => {
+    if (!socket || !sessionId || !sessionType) return;
+    socket.emit('update-permissions', { sessionId, sessionType, permissions: { allowParticipantList: !hidden } });
+  }, [socket, sessionId, sessionType]);
+
+  const lockScratchPad = useCallback((locked: boolean) => {
+    if (!socket || !sessionId || !sessionType) return;
+    socket.emit('update-permissions', { sessionId, sessionType, permissions: { allowScratchPad: !locked } });
+  }, [socket, sessionId, sessionType]);
 
   const muteAll = useCallback(() => {
     if (!socket || !sessionId || !sessionType) return;
@@ -537,26 +416,22 @@ export function useSessionModeration({ sessionId, sessionType, isHost: _isHost, 
     socket.emit('toggle-chat', { sessionId, sessionType, disabled });
   }, [socket, sessionId, sessionType]);
 
-  // Host requests participant to turn on audio (privacy: cannot force)
   const requestAudioOn = useCallback((targetUserId: string) => {
     if (!socket || !sessionId || !sessionType) return;
     socket.emit('request-audio-on', { sessionId, sessionType, targetUserId });
   }, [socket, sessionId, sessionType]);
 
-  // Host requests participant to turn on video (privacy: cannot force)
   const requestVideoOn = useCallback((targetUserId: string) => {
     if (!socket || !sessionId || !sessionType) return;
     socket.emit('request-video-on', { sessionId, sessionType, targetUserId });
   }, [socket, sessionId, sessionType]);
 
-  // Participant responds to audio request (accept/deny)
   const respondToAudioRequest = useCallback((accepted: boolean) => {
     if (!socket || !sessionId || !sessionType) return;
     socket.emit('respond-audio-request', { sessionId, sessionType, accepted });
     setPendingPermissionRequest(null);
   }, [socket, sessionId, sessionType]);
 
-  // Participant responds to video request (accept/deny)
   const respondToVideoRequest = useCallback((accepted: boolean) => {
     if (!socket || !sessionId || !sessionType) return;
     socket.emit('respond-video-request', { sessionId, sessionType, accepted });
@@ -581,90 +456,76 @@ export function useSessionModeration({ sessionId, sessionType, isHost: _isHost, 
     setPendingPermissionRequest(null);
   }, [socket, sessionId, sessionType]);
 
-  // Participant requests permission to unmute audio
   const participantRequestAudio = useCallback(() => {
     if (!socket || !sessionId || !sessionType) return;
     socket.emit('participant-request-audio', { sessionId, sessionType });
   }, [socket, sessionId, sessionType]);
 
-  // Participant requests permission to enable video
   const participantRequestVideo = useCallback(() => {
     if (!socket || !sessionId || !sessionType) return;
     socket.emit('participant-request-video', { sessionId, sessionType });
   }, [socket, sessionId, sessionType]);
 
-  // Host responds to participant's audio request
   const hostRespondParticipantAudio = useCallback((userId: string, accepted: boolean) => {
     if (!socket || !sessionId || !sessionType) return;
     socket.emit('host-respond-participant-audio', { sessionId, sessionType, userId, accepted });
-    // Remove from pending requests
     setPendingParticipantRequests(prev => prev.filter(r => !(r.userId === userId && r.type === 'audio')));
   }, [socket, sessionId, sessionType]);
 
-  // Host responds to participant's video request
   const hostRespondParticipantVideo = useCallback((userId: string, accepted: boolean) => {
     if (!socket || !sessionId || !sessionType) return;
     socket.emit('host-respond-participant-video', { sessionId, sessionType, userId, accepted });
-    // Remove from pending requests
     setPendingParticipantRequests(prev => prev.filter(r => !(r.userId === userId && r.type === 'video')));
   }, [socket, sessionId, sessionType]);
 
-  // Clear a specific pending participant request
   const clearParticipantRequest = useCallback((userId: string, type: 'audio' | 'video') => {
     setPendingParticipantRequests(prev => prev.filter(r => !(r.userId === userId && r.type === type)));
   }, []);
 
-  // ─── Flash Message Actions ────────────────────────────────────────────────
-
-  /** Host uploads / replaces their full question list */
-  const flashUploadList = useCallback((questions: FlashQuestion[]) => {
+  // Flash Message methods
+  const flashUploadList = useCallback((questions: Omit<FlashQuestion, 'id'>[]) => {
     if (!socket || !sessionId || !sessionType) return;
-    socket.emit('flash:upload-list', { sessionId, sessionType, questions });
+    socket.emit('flash-upload-list', { sessionId, sessionType, questions });
   }, [socket, sessionId, sessionType]);
 
-  /** Host updates a single question's text or metadata */
-  const flashUpdateQuestion = useCallback((questionId: string, updates: Partial<Omit<FlashQuestion, 'id'>>) => {
+  const flashUpdateQuestion = useCallback((id: string, updates: Partial<FlashQuestion>) => {
     if (!socket || !sessionId || !sessionType) return;
-    socket.emit('flash:update-question', { sessionId, sessionType, questionId, updates });
+    socket.emit('flash-update-question', { sessionId, sessionType, id, updates });
   }, [socket, sessionId, sessionType]);
 
-  /** Host reorders the list by providing new ordered IDs */
-  const flashReorder = useCallback((orderedIds: string[]) => {
+  const flashReorder = useCallback((ids: string[]) => {
     if (!socket || !sessionId || !sessionType) return;
-    socket.emit('flash:reorder', { sessionId, sessionType, orderedIds });
+    socket.emit('flash-reorder', { sessionId, sessionType, ids });
   }, [socket, sessionId, sessionType]);
 
-  /** Host deletes a question */
-  const flashDeleteQuestion = useCallback((questionId: string) => {
+  const flashDeleteQuestion = useCallback((id: string) => {
     if (!socket || !sessionId || !sessionType) return;
-    socket.emit('flash:delete-question', { sessionId, sessionType, questionId });
+    socket.emit('flash-delete-question', { sessionId, sessionType, id });
   }, [socket, sessionId, sessionType]);
 
-  /** Host flashes a specific question from their list to all participants */
-  const flashShowQuestion = useCallback((questionId: string) => {
+  const flashShowQuestion = useCallback((id: string, duration?: number) => {
     if (!socket || !sessionId || !sessionType) return;
-    socket.emit('flash:show', { sessionId, sessionType, questionId });
+    socket.emit('flash-show-question', { sessionId, sessionType, id, duration });
   }, [socket, sessionId, sessionType]);
 
-  /** Host flashes an ad-hoc message to all participants */
-  const flashShowAdHoc = useCallback((text: string, meta?: Omit<FlashQuestion, 'id' | 'text'>) => {
-    if (!socket || !sessionId || !sessionType) return;
-    socket.emit('flash:show', { sessionId, sessionType, text, ...meta });
+  const flashShowAdHoc = useCallback((content: string, type: 'AD_HOC' | 'MEDIA', duration?: number) => {
+    if (!socket || !socket.connected || !sessionId || !sessionType) {
+      console.warn('Cannot show flash message: socket not connected');
+      return;
+    }
+    socket.emit('flash-show-adhoc', { sessionId, sessionType, content, type, duration });
   }, [socket, sessionId, sessionType]);
 
-  /** Host dismisses the current flash message for everyone */
   const flashDismiss = useCallback(() => {
     if (!socket || !sessionId || !sessionType) return;
-    socket.emit('flash:dismiss', { sessionId, sessionType });
+    socket.emit('flash-dismiss', { sessionId, sessionType });
   }, [socket, sessionId, sessionType]);
 
-  /** Host refreshes their question list from the server */
   const flashGetList = useCallback(() => {
     if (!socket || !sessionId || !sessionType) return;
-    socket.emit('flash:get-list', { sessionId, sessionType });
+    socket.emit('flash-get-list', { sessionId, sessionType });
   }, [socket, sessionId, sessionType]);
 
-  /** Participant locally dismisses the flash overlay (does NOT dismiss for others) */
   const dismissFlashMessage = useCallback(() => {
     setActiveFlashMessage(null);
   }, []);
@@ -674,12 +535,11 @@ export function useSessionModeration({ sessionId, sessionType, isHost: _isHost, 
     isConnected,
     meetingEnded,
     chatDisabled,
-    permissions, // Computed permissions for this user
-    roomSettings, // Room settings from Redis (for host UI)
-    isHostFromServer, // Host status from server
+    permissions,
+    roomSettings,
+    isHostFromServer,
     error,
     endMeetingForAll,
-    // Lock functions (persistent permissions)
     lockAudio,
     lockVideo,
     lockChat,
@@ -688,7 +548,7 @@ export function useSessionModeration({ sessionId, sessionType, isHost: _isHost, 
     lockUserChatAudience,
     restrictChatToHostOnly,
     hideParticipantList,
-    // Immediate actions (mute/unmute)
+    lockScratchPad,
     muteAll,
     unmuteAll,
     muteParticipant,
@@ -698,32 +558,25 @@ export function useSessionModeration({ sessionId, sessionType, isHost: _isHost, 
     disableVideoParticipant,
     enableVideoParticipant,
     toggleChatDisabled,
-    // Request functions (host asks participant to enable)
     requestAudioOn,
     requestVideoOn,
-    // Response functions (participant accepts/denies)
     respondToAudioRequest,
     respondToVideoRequest,
-    // Pending request state (for participant modal)
     pendingPermissionRequest,
     dismissPermissionRequest,
-    // Moderation notification (for participant toast)
     moderationNotification,
     clearModerationNotification,
-    // Participant request functions (participant asks host for permission)
     participantRequestAudio,
     participantRequestVideo,
-    // Host response functions (host approves/denies participant request)
     hostRespondParticipantAudio,
     hostRespondParticipantVideo,
-    // Pending participant requests (for host to see in participant list)
     pendingParticipantRequests,
     clearParticipantRequest,
     participantChatLocks,
     // Flash message state
     activeFlashMessage,
     flashQuestions,
-    // Flash message actions (host only)
+    // Flash message actions
     flashUploadList,
     flashUpdateQuestion,
     flashReorder,

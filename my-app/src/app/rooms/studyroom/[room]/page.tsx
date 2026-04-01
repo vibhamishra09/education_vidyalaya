@@ -432,12 +432,22 @@ export default function RoomPage() {
 		sessionMode === 'WEBINAR' &&
 		!isHost
 
+	// Extract stable UUID for consistent scratch pad identification
+	const isStudyRoom = roomName?.startsWith('studyroom-')
+	const isPeerSession = roomName?.startsWith('peersession-')
+	const extractedUuid = isStudyRoom 
+		? roomName.slice('studyroom-'.length)
+		: isPeerSession 
+			? roomName.slice('peersession-'.length)
+			: roomName?.includes('-') ? roomName.split('-')[1] : roomName
+
 	return (
 		<EnhancedVideoRoom
 			token={token}
 			serverUrl={serverUrl}
 			channelId={channelId}
 			sessionData={sessionData}
+			sessionUuid={extractedUuid}
 			isHost={isHost}
 			chatRecipients={chatRecipients}
 			hostUser={hostUser}

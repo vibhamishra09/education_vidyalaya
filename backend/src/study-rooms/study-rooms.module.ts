@@ -8,6 +8,7 @@ import { AchievementsModule } from '../achievements/achievements.module';
 import { TranscriptsModule } from '../transcripts/transcripts.module';
 import { EmailModule } from '../email/email.module';
 import { UsersModule } from '../users/users.module';
+import { EngagementModule } from '../engagement/engagement.module';
 
 @Module({
   imports: [
@@ -17,10 +18,9 @@ import { UsersModule } from '../users/users.module';
     AchievementsModule,
     TranscriptsModule,
     EmailModule,
-    UsersModule,
   ],
   controllers: [StudyRoomsController],
   providers: [StudyRoomsService],
   exports: [StudyRoomsService],
 })
-export class StudyRoomsModule {}
+export class StudyRoomsModule { }
