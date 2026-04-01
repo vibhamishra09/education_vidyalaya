@@ -15,9 +15,10 @@ import {
   ChevronLeft,
   ChevronRight,
   BookOpen,
-  ArrowRight,
+ 
   Eye,
-  Pencil
+  Pencil,
+  PencilLine
 } from "lucide-react";
 import { LucideIcon } from "lucide-react";
 import { SessionSummaryModal } from "./session-summary-modal";
@@ -251,13 +252,23 @@ export function SessionList({
                 {showSummaryButton && onViewSummary && (
                   <div className="flex gap-2 pt-2">
                     <Button 
-                      className="w-full" 
+                      className="flex-1" 
                       size="sm"
                       onClick={onViewSummary}
                     >
                       <Eye className="h-4 w-4 mr-2" />
                       View Summary
                     </Button>
+                    <Link href={`/scratch-pad/${session.id}`} className="flex-1">
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        className="w-full text-purple-700 hover:bg-purple-100 hover:text-purple-800 border-purple-200 bg-purple-50"
+                      >
+                        <PencilLine className="h-4 w-4 mr-2" />
+                        Scratch Pad
+                      </Button>
+                    </Link>
                   </div>
                 )}
               </div>

@@ -3,7 +3,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Star, Users, BrainCircuit, ExternalLink, Sparkles } from 'lucide-react';
+import { Star, BrainCircuit, ExternalLink, Sparkles } from 'lucide-react';
 import type { BrowsePeer } from '@/types/api.types';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';

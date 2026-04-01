@@ -312,7 +312,7 @@ export interface StudyRoom extends StudyRoomCard {
   webinarRegistrationSlug?: string | null;
   webinarRegistrationUrl?: string | null;
   /** Stable URL segment when set (browse / links); falls back to id in routes. */
-  slug?: string;
+  slug: string;
 }
 
 export enum StudyRoomRecurrenceMode {

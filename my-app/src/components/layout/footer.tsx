@@ -4,7 +4,7 @@ import { Facebook, Instagram, Linkedin, Youtube } from "lucide-react";
 
 export function Footer() {
   // Landing site URL for Terms and Privacy Policy
-  const landingSiteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://webyalaya.com";
+  const _landingSiteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://webyalaya.com";
   
   const socialLinks = [
     { icon: Linkedin, label: "LinkedIn", url: "https://www.linkedin.com/company/webyalaya/?viewAsMember=true" },
