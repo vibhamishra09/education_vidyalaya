@@ -46,14 +46,14 @@ interface UseDebateSocketReturn {
   teamChatMessages: TeamChatMessage[];
   buzzerQueue: BuzzerPressedEvent[];
   prepCountdown: number | null;
-  
+
   // Actions
   joinRoom: () => void;
   leaveRoom: () => void;
   pressBuzzer: () => void;
   sendTeamChat: (message: string) => void;
   sendTranscript: (text: string, isFinal: boolean) => void;
-  
+
   // For moderators
   startPrep: () => void;
   advanceTurn: () => void;
@@ -221,11 +221,11 @@ export function useDebateSocket({
             setDebateState((prev) =>
               prev
                 ? {
-                    ...prev,
-                    currentSpeakerId: event.participantId,
-                    turnStartedAt: event.startedAt,
-                    currentTurnIndex: event.turnIndex,
-                  }
+                  ...prev,
+                  currentSpeakerId: event.participantId,
+                  turnStartedAt: event.startedAt,
+                  currentTurnIndex: event.turnIndex,
+                }
                 : prev
             );
           }

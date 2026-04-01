@@ -73,6 +73,7 @@ export function MessageInput({
 	const canSendUser = allowedAudiences?.USER !== false && canUseSpecificUser
 
 	// Guests often only allow HOST; default was EVERYONE which kept Send disabled.
+	// eslint-disable-next-line react-hooks/exhaustive-deps
 	useEffect(() => {
 		setAudienceType((prev) => {
 			const prevOk =
@@ -226,6 +227,7 @@ export function MessageInput({
 												}`}
 											>
 												{recipient.avatar ? (
+													/* eslint-disable-next-line @next/next/no-img-element */
 													<img
 														src={recipient.avatar}
 														alt={recipient.name}

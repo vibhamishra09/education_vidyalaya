@@ -19,17 +19,11 @@ import {
 import { cn } from "@/lib/utils";
 import {
   SessionFeedbackAnswers,
-  FirstFeelingOption,
   ClarityOption,
   ProblemSolvedOption,
-  PreviousSolutionOption,
   EaseOfStartOption,
   YesNoOption,
-  TrustIncreaseOption,
-  PlatformComparisonOption,
   ContinueUsingOption,
-  WillingToPayOption,
-  PaidFeatureOption,
 } from "@/types/api.types";
 
 interface SessionFeedbackFormProps {
@@ -64,9 +58,7 @@ const QUESTION_GROUPS = [
   },
 ];
 
-const FIRST_FEELING_OPTIONS: FirstFeelingOption[] = [
-  "Excited", "Curious", "Confused", "Neutral", "Disgusting"
-];
+
 
 const CLARITY_OPTIONS: ClarityOption[] = [
   "Very clear", "Somewhat clear", "Not clear", "Confusing"

@@ -24,10 +24,10 @@ import { studyRoomCardDisplayLive } from "@/lib/utils/study-room-edit";
 
 export function HomeClient() {
   const router = useRouter();
-  const requireAuth = useRequireAuth();
-  const { showSuccess, showError } = useToast();
+  const _requireAuth = useRequireAuth();
+  const { showSuccess: _showSuccess, showError: _showError } = useToast();
   const joinStudyRoom = useJoinStudyRoom();
-  const [joiningRoomId, setJoiningRoomId] = useState<string | null>(null);
+  const [joiningRoomId, _setJoiningRoomId] = useState<string | null>(null);
   const { data: currentUserData } = useCurrentUser();
 
   const { data: studyRoomsData, isLoading: studyRoomsLoading, error: studyRoomsError } = useStudyRooms({

@@ -275,27 +275,50 @@ export class StudyRoomsService {
     throw new NotFoundException('User not found');
   }
 
+  private isSlug(key: string) {
+    return key.includes("-");
+  }
   private async resolveStudyRoomByIdOrSlug(
     studyRoomIdOrSlug: string,
     options?: { select?: any; include?: any },
   ): Promise<any> {
-    const caps = await this.getStudyRoomSchemaCapabilities();
+    this.logger.log("ROOM ID OR SLUG : : : ", studyRoomIdOrSlug)
 
-    if (caps.slug) {
-      return this.prisma.studyRoom.findFirst({
-        where: {
-          OR: [{ id: studyRoomIdOrSlug }, { slug: studyRoomIdOrSlug }],
-        },
+     const baseOptions = {
         ...(options?.select ? { select: options.select } : {}),
         ...(options?.include ? { include: options.include } : {}),
-      });
-    }
+      };
 
-    return this.prisma.studyRoom.findUnique({
-      where: { id: studyRoomIdOrSlug },
-      ...(options?.select ? { select: options.select } : {}),
-      ...(options?.include ? { include: options.include } : {}),
-    });
+      if (!this.isSlug(studyRoomIdOrSlug)) {
+        return this.prisma.studyRoom.findUnique({
+          where: { id: studyRoomIdOrSlug },
+          ...baseOptions,
+        });
+      }
+
+      // its slug
+       const rooms = await this.prisma.studyRoom.findMany({
+          where: { slug: studyRoomIdOrSlug },
+          orderBy: { date: "asc" },
+          ...baseOptions,
+        });
+
+        // snigle  room  with slug  OR a sigle sessio in a series
+        if (rooms.length === 1) {
+          return rooms[0];
+        }
+        // a series 
+        if (rooms.length > 1) {
+          const now = new Date();
+
+          return (
+            rooms.find(r => r.sessionStatus === "ONGOING") ||
+            rooms.find(r => r.sessionStatus === "UPCOMING") ||
+            rooms[0]
+          );
+        }
+
+        return null;
   }
 
   private async getStudyRoomSchemaCapabilities() {
@@ -974,6 +997,7 @@ export class StudyRoomsService {
           select: {
             id: true,
             title: true,
+            slug:true, // please dont remove slugs 
             description: true,
             imageUrl: true,
             sessionStatus: true,
@@ -1049,7 +1073,7 @@ export class StudyRoomsService {
                   },
                 },
               },
-              orderBy: { id: 'desc' },
+              orderBy: { id: 'asc' },
               take: 20,
             },
           },
