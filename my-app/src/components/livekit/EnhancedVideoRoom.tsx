@@ -1,24 +1,21 @@
 'use client'
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react'
-import { LiveKitRoom, useParticipants, useTracks, RoomAudioRenderer, useSpeakingParticipants, VideoTrack, useLocalParticipant, isTrackReference, useRoomContext } from '@livekit/components-react'
-import { Track, RoomOptions, VideoPresets, LocalVideoTrack, ConnectionState, RoomEvent } from 'livekit-client'
+import { LiveKitRoom, useParticipants, useTracks, RoomAudioRenderer, useSpeakingParticipants, VideoTrack, useLocalParticipant, isTrackReference } from '@livekit/components-react'
+import { Track, RoomOptions, VideoPresets, LocalVideoTrack } from 'livekit-client'
 import '@livekit/components-styles'
-import { BackgroundProcessor, BackgroundBlur as _BackgroundBlur, VirtualBackground as _VirtualBackground, BackgroundOptions as _BackgroundOptions } from '@livekit/track-processors'
+import { BackgroundProcessor, BackgroundBlur, VirtualBackground, BackgroundOptions } from '@livekit/track-processors'
 import { ChatWidget } from '@/components/chat/ChatWidget'
 import { Button } from '@/components/ui/button'
 import {
-	Aperture, Ban, Camera as _Camera, CameraOff, Check, ChevronLeft, ChevronRight,
-	ChevronUp, Circle, Clock, Eraser, Grid2X2, ImageIcon, LayoutGrid, Lock,
-	LogOut, Maximize2, MessageSquare, Mic, MicOff, Minimize2, Minus,
-	MonitorOff, MonitorUp, MousePointer2, PencilLine, PenTool, PhoneOff,
-	PictureInPicture2, Pin, PinOff, Power, Presentation, Settings2, ShieldCheck,
-	Sparkles, Square, Timer, Type, User, Users, Video, VideoOff, X, Zap,
-	ZoomIn, ZoomOut, Loader2
+	MessageSquare, X, Users, Maximize2, Minimize2, Video, VideoOff, Mic, MicOff,
+	Clock, MonitorUp, MonitorOff, Grid2X2, Presentation, Pin,
+	PinOff, User, PictureInPicture2, Camera, CameraOff, Sparkles, Lock, Settings2,
+	PhoneOff, ChevronUp, ChevronLeft, ChevronRight, ShieldCheck, Ban, Aperture,
+	ImageIcon, LayoutGrid, Check, Timer, Power, LogOut, Zap, ZoomIn, ZoomOut, MousePointer2
 } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { useSessionTimer } from '@/hooks/use-session-timer'
-import { useRecording } from '@/hooks/use-recording'
 import { SessionEndWarningDialog } from '@/components/study-room/session-end-warning-dialog'
 import { useToast } from '@/contexts/toast-context'
 import { useAuth, useUser } from '@clerk/nextjs'
@@ -31,26 +28,12 @@ import { useSpeechRecognition } from '@/hooks/use-speech-recognition'
 import { useSessionExtension } from '@/hooks/use-session-extension'
 import { ExtensionRequestDialog } from '@/components/study-room/extension-request-dialog'
 import { EndMeetingDialog } from '@/components/study-room/end-meeting-dialog'
-import {
-	useSessionModeration,
-	RoomPermissions,
-	RoomSettings,
-	ParticipantChatLocks,
-	PermissionRequest,
-	ModerationNotification,
-	ParticipantPermissionRequest,
-	FlashQuestion,
-	FlashMessage
-} from '@/hooks/use-session-moderation'
+import { useSessionModeration, RoomPermissions, PermissionRequest, ParticipantPermissionRequest, ParticipantChatLocks, RoomSettings, FlashQuestion, ActiveFlashMessage } from '@/hooks/use-session-moderation'
 import { FlashMessageOverlay } from '@/components/study-room/FlashMessageOverlay'
-import { WebinarHostPanel } from '@/components/study-room/webinar-host-panel'
 import { QuestionManager } from '@/components/study-room/QuestionManager'
 import { ChatRecipient } from '@/components/chat/MessageInput'
 import { useRemoteControl } from '@/hooks/use-remote-control'
-
 import { RemoteControlOverlay } from '@/components/livekit/RemoteControlOverlay'
-import { ScratchPad } from '@/components/scratch-pad/ScratchPad'
-
 // Stable virtual backgrounds constant to avoid re-creating array each render
 const VIRTUAL_BACKGROUNDS = [
 	{
@@ -90,29 +73,11 @@ const VIRTUAL_BACKGROUNDS = [
 		thumbnail: 'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=200&h=150&fit=crop&q=80'
 	}
 ]
-interface ExternalJoinRequestItem {
-	id: string
-	name: string
-	email: string
-	status: 'PENDING' | 'APPROVED' | 'REJECTED'
-}
-
 interface SessionData {
 	id: string;
-	title?: string;
-	roomTitle?: string;
 	date: string;
 	duration: number;
 	sessionType: 'studyRoom' | 'peerSession';
-	sessionMode?: string;
-	webinarConfig?: unknown;
-	createdBy?: { id?: string; name?: string; avatar?: string; email?: string };
-	guestParticipants?: Array<{
-		id: string
-		name: string
-		email: string
-		role: string
-	}>;
 	[key: string]: unknown;
 }
 
@@ -120,6 +85,14 @@ interface ChatIdentity {
 	id: string
 	name: string
 	avatar?: string | null
+}
+
+interface ExternalJoinRequestItem {
+	id: string
+	name: string
+	email: string
+	status: 'PENDING' | 'APPROVED' | 'REJECTED'
+	createdAt: string
 }
 
 interface EnhancedVideoRoomProps {
@@ -132,10 +105,7 @@ interface EnhancedVideoRoomProps {
 	hostUser?: ChatIdentity | null
 	currentUserDbId?: string | null
 	externalAccessToken?: string | null
-	guestLivekitIdentity?: string | null
 	onParticipantListChange?: (participantIdentities: string[]) => void
-	webinarAttendeeMinimalUi?: boolean
-	sessionUuid?: string | null
 }
 
 export function EnhancedVideoRoom({
@@ -148,29 +118,22 @@ export function EnhancedVideoRoom({
 	hostUser,
 	currentUserDbId,
 	externalAccessToken,
-	guestLivekitIdentity = null,
 	onParticipantListChange,
-	webinarAttendeeMinimalUi = false,
-	sessionUuid = null,
 }: EnhancedVideoRoomProps) {
 	const isGuest = !!externalAccessToken
-	const [showChat, setShowChat] = useState(false)
+	const [showChat, setShowChat] = useState(false) // Start hidden on mobile
 	const [showParticipants, setShowParticipants] = useState(false)
 	const [isFullscreen, setIsFullscreen] = useState(false)
 	const [showWarning, setShowWarning] = useState(false)
-	const [showScratchPad, setShowScratchPad] = useState(false)
 	const [isMobileViewport, setIsMobileViewport] = useState(false)
 	const [isMobileDevice, setIsMobileDevice] = useState(false)
 	const router = useRouter()
-	const { showSuccess: _showSuccess, showError: _showError, showInfo: _showInfo } = useToast()
+	const { showSuccess, showError, showInfo } = useToast()
 	const { getToken } = useAuth()
 	const { user } = useUser()
-	const moderationUserId = isGuest ? guestLivekitIdentity : user?.id ?? null
 	const queryClient = useQueryClient()
-	const params = useParams()
-
-	const [externalJoinRequests, setExternalJoinRequests] = useState<any[]>([])
-	const [activeExternalJoinRequest, setActiveExternalJoinRequest] = useState<any | null>(null)
+	const [externalJoinRequests, setExternalJoinRequests] = useState<ExternalJoinRequestItem[]>([])
+	const [activeExternalJoinRequest, setActiveExternalJoinRequest] = useState<ExternalJoinRequestItem | null>(null)
 	const [resolvingExternalJoinRequest, setResolvingExternalJoinRequest] = useState(false)
 	const seenExternalJoinRequestIdsRef = useRef<Set<string>>(new Set())
 	const audioContextRef = useRef<AudioContext | null>(null)
@@ -193,7 +156,7 @@ export function EnhancedVideoRoom({
 			gainNode.connect(context.destination)
 			oscillator.start()
 			oscillator.stop(context.currentTime + 0.14)
-		} catch (err) {
+		} catch {
 			// Best-effort alert sound; ignore if browser blocks autoplay/audio context.
 		}
 	}, [])
@@ -202,12 +165,16 @@ export function EnhancedVideoRoom({
 	const [transcriptSocket, setTranscriptSocket] = useState<Socket | null>(null)
 	const socketConnectingRef = useRef(false)
 
+	// Auth token for socket connection
 	const [authToken, setAuthToken] = useState<string | null>(null)
 
+	// Loading state when ending meeting
 	const [endingMeeting, setEndingMeeting] = useState(false)
 
+	// Confirmation dialog for ending meeting
 	const [showEndConfirmation, setShowEndConfirmation] = useState(false)
 
+	// User activity tracking for auto-hiding controls
 	const [isUserActive, setIsUserActive] = useState(true)
 
 	useEffect(() => {
@@ -223,10 +190,10 @@ export function EnhancedVideoRoom({
 		if (typeof window === 'undefined') return
 		const mobileByUa = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(window.navigator.userAgent)
 		const mobileByTouch = window.navigator.maxTouchPoints > 1 && window.screen.width <= 1024
+		// Keep a stable device signal so orientation changes don't reconfigure media pipelines.
 		setIsMobileDevice(mobileByUa || mobileByTouch)
 	}, [])
 
-	const isNavigatingRef = useRef(false)
 	useEffect(() => {
 		let timeoutId: NodeJS.Timeout
 		const handleActivity = () => {
@@ -240,6 +207,7 @@ export function EnhancedVideoRoom({
 		window.addEventListener('click', handleActivity)
 		window.addEventListener('touchstart', handleActivity)
 
+		// Initial timeout
 		timeoutId = setTimeout(() => setIsUserActive(false), 3000)
 
 		return () => {
@@ -251,6 +219,7 @@ export function EnhancedVideoRoom({
 		}
 	}, [])
 
+	// Get auth token on mount
 	useEffect(() => {
 		async function fetchToken() {
 			if (externalAccessToken) {
@@ -263,44 +232,152 @@ export function EnhancedVideoRoom({
 		fetchToken()
 	}, [getToken, externalAccessToken])
 
-	const showSuccessRef = useRef(_showSuccess)
 	useEffect(() => {
-		showSuccessRef.current = _showSuccess
-	}, [_showSuccess])
+		if (!isHost || sessionData?.sessionType !== 'studyRoom' || !sessionData?.id) return
 
-	const showSuccess = useCallback((title: string, description?: string) => {
-		_showSuccess(title, description)
-	}, [_showSuccess])
+		let cancelled = false
 
-	const showError = useCallback((title: string, description?: string) => {
-		_showError(title, description)
-	}, [_showError])
+		const fetchPendingExternalJoinRequests = async () => {
+			try {
+				const authTokenValue = await getToken()
+				if (!authTokenValue || cancelled) return
+				const response = await fetch(
+					`${process.env.NEXT_PUBLIC_API_URL}/api/study-rooms/${sessionData.id}/external/requests`,
+					{
+						method: 'GET',
+						headers: {
+							Authorization: `Bearer ${authTokenValue}`,
+						},
+					},
+				)
+				if (!response.ok || cancelled) return
 
-	const showInfo = useCallback((title: string, description?: string) => {
-		_showInfo(title, description)
-	}, [_showInfo])
+				const data = (await response.json()) as { requests?: ExternalJoinRequestItem[] }
+				const pendingRequests = (data.requests || []).filter(
+					(request) => request.status === 'PENDING',
+				)
+				setExternalJoinRequests(pendingRequests)
 
-	// MOVED: fetchPendingExternalJoinRequests and handleResolveExternalJoinRequest removed as they were missing from backend
+				const newPendingRequests = pendingRequests.filter(
+					(request) => !seenExternalJoinRequestIdsRef.current.has(request.id),
+				)
 
-	const sessionStartTime = sessionData?.date ? new Date(sessionData.date) : null
-	const sessionDuration = sessionData?.duration || 0
+				for (const request of pendingRequests) {
+					seenExternalJoinRequestIdsRef.current.add(request.id)
+				}
 
-	const webinarChat = useMemo(() => {
-		const cfg = (sessionData?.webinarConfig || {}) as Record<string, unknown>
-		const perms = (cfg.permissions || {}) as Record<string, string>
-		const runtime = (cfg.runtime || {}) as Record<string, unknown>
-		return {
-			chatMode: (perms.chat as string) || 'host_only',
-			chatLive: runtime.chatEnabled !== false,
+				if (newPendingRequests.length > 0) {
+					const latest = newPendingRequests[newPendingRequests.length - 1]
+					showInfo(
+						'New join request',
+						`${latest.name} (${latest.email}) wants to join this session.`,
+					)
+					playJoinRequestAlertSound()
+				}
+
+				if (!activeExternalJoinRequest && pendingRequests.length > 0) {
+					setActiveExternalJoinRequest(pendingRequests[0])
+				}
+			} catch {
+				// Ignore polling errors and retry on next interval.
+			}
 		}
-	}, [sessionData?.webinarConfig])
 
+		fetchPendingExternalJoinRequests()
+		const interval = setInterval(fetchPendingExternalJoinRequests, 5000)
+
+		return () => {
+			cancelled = true
+			clearInterval(interval)
+		}
+	}, [
+		isHost,
+		sessionData?.sessionType,
+		sessionData?.id,
+		getToken,
+		activeExternalJoinRequest,
+		showInfo,
+		playJoinRequestAlertSound,
+	])
+
+	const handleResolveExternalJoinRequest = useCallback(
+		async (approve: boolean) => {
+			if (!activeExternalJoinRequest || sessionData?.sessionType !== 'studyRoom' || !sessionData?.id) {
+				return
+			}
+			try {
+				setResolvingExternalJoinRequest(true)
+				const authTokenValue = await getToken()
+				if (!authTokenValue) {
+					showError('Not authenticated', 'Please sign in again to review join requests.')
+					return
+				}
+
+				const response = await fetch(
+					`${process.env.NEXT_PUBLIC_API_URL}/api/study-rooms/${sessionData.id}/external/requests/${activeExternalJoinRequest.id}/resolve`,
+					{
+						method: 'POST',
+						headers: {
+							'Content-Type': 'application/json',
+							Authorization: `Bearer ${authTokenValue}`,
+						},
+						body: JSON.stringify({ approve }),
+					},
+				)
+
+				if (!response.ok) {
+					showError('Action failed', 'Could not update join request. Please try again.')
+					return
+				}
+
+				const resolvedRequest = activeExternalJoinRequest
+				const remaining = externalJoinRequests.filter((request) => request.id !== resolvedRequest.id)
+				setExternalJoinRequests(remaining)
+				setActiveExternalJoinRequest(remaining[0] || null)
+
+				showSuccess(
+					approve ? 'Guest approved' : 'Guest rejected',
+					`${resolvedRequest.name} has been ${approve ? 'allowed to join' : 'rejected'}.`,
+				)
+			} catch {
+				showError('Action failed', 'Could not update join request. Please try again.')
+			} finally {
+				setResolvingExternalJoinRequest(false)
+			}
+		},
+		[
+			activeExternalJoinRequest,
+			externalJoinRequests,
+			getToken,
+			sessionData?.id,
+			sessionData?.sessionType,
+			showError,
+			showSuccess,
+		],
+	)
+
+	// Store showSuccess in ref to avoid recreating handleWarning callback
+	const showSuccessRef = useRef(showSuccess)
+	useEffect(() => {
+		showSuccessRef.current = showSuccess
+	}, [showSuccess])
+
+	// Calculate session start time and duration (only if sessionData exists)
+	const sessionStartTime = sessionData?.date ? new Date(sessionData.date) : null
+	const sessionDuration = sessionData?.duration || 0 // in minutes
+
+	// Convert to stable timestamp (use 0 as fallback to avoid hydration issues)
 	const sessionStartTimestamp = sessionStartTime ? sessionStartTime.getTime() : 0
 
+	// Session timer with warnings (only if we have start time and duration)
 	const timerEnabled = !!sessionStartTime && sessionDuration > 0 && !!sessionData
 
+	// For peer sessions, show moderator controls even if timer isn't configured
 	const showModeratorControls = !!sessionData && (sessionData.sessionType === 'peerSession' || timerEnabled)
 
+	// Timer debug logging removed
+
+	// Session extension hook
 	const {
 		hasExtended,
 		extendedEndTime,
@@ -313,15 +390,17 @@ export function EnhancedVideoRoom({
 		sessionId: sessionData?.id || null,
 		sessionType: sessionData?.sessionType || null,
 		isHost,
-		token,
+		token: authToken,
 		enabled: timerEnabled,
 	})
 
+	// Session moderation hook (host actions + listeners)
 	const {
 		socket: moderationSocket,
+		isConnected: moderationConnected,
 		meetingEnded,
 		chatDisabled,
-		permissions,
+		permissions, // Room-wide permissions (Lock system)
 		roomSettings,
 		endMeetingForAll,
 		lockAudio,
@@ -330,6 +409,7 @@ export function EnhancedVideoRoom({
 		restrictChatToHostOnly,
 		lockUserAudio,
 		lockUserVideo,
+		lockUserChatAudience,
 		hideParticipantList,
 		muteAll,
 		unmuteAll,
@@ -340,18 +420,24 @@ export function EnhancedVideoRoom({
 		disableVideoParticipant,
 		enableVideoParticipant,
 		toggleChatDisabled,
+		// New request functions
 		requestAudioOn,
 		requestVideoOn,
 		respondToAudioRequest,
 		respondToVideoRequest,
 		pendingPermissionRequest,
 		dismissPermissionRequest,
+		// Participant request functions
 		participantRequestAudio,
 		participantRequestVideo,
+		// Host response functions
 		hostRespondParticipantAudio,
 		hostRespondParticipantVideo,
+		// Pending participant requests (for host UI)
 		pendingParticipantRequests,
 		clearParticipantRequest,
+		participantChatLocks,
+		// Flash message
 		activeFlashMessage,
 		flashQuestions,
 		flashUploadList,
@@ -363,88 +449,59 @@ export function EnhancedVideoRoom({
 		flashDismiss,
 		flashGetList,
 		dismissFlashMessage,
-		lockScratchPad,
 	} = useSessionModeration({
 		sessionId: sessionData?.id || null,
 		sessionType: sessionData?.sessionType || null,
 		isHost,
-		token,
-		userId: moderationUserId ?? undefined,
-		enabled: !!sessionData?.id && (!isGuest || !!guestLivekitIdentity),
+		token: authToken,
+		userId: user?.id,
+		enabled: !!sessionData?.id,
 	})
 
-	const meetingEndedRef = useRef(meetingEnded)
-	useEffect(() => { meetingEndedRef.current = meetingEnded }, [meetingEnded])
-
-	useEffect(() => {
-		const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-			if (isNavigatingRef.current || meetingEndedRef.current) return
-			e.preventDefault()
-			e.returnValue = ''
-			return ''
-		}
-
-		const handlePopState = (_e: PopStateEvent) => {
-			if (isNavigatingRef.current || meetingEndedRef.current) return
-			if (window.confirm('Are you sure you want to leave the room? Your progress might be lost.')) {
-				isNavigatingRef.current = true
-				router.replace('/dashboard')
-			} else {
-				window.history.pushState(null, '', window.location.href)
-			}
-		}
-
-		window.addEventListener('beforeunload', handleBeforeUnload)
-		window.addEventListener('popstate', handlePopState)
-
-		window.history.pushState(null, '', window.location.href)
-
-		return () => {
-			window.removeEventListener('beforeunload', handleBeforeUnload)
-			window.removeEventListener('popstate', handlePopState)
-		}
-	}, [router])
-
+	// Redirect all clients when server signals meeting ended
 	useEffect(() => {
 		if (!meetingEnded) return
-		isNavigatingRef.current = true
 		const redirectUrl = `/session-feedback/${sessionData?.id}?type=${sessionData?.sessionType}&isHost=${isHost}`
 		router.push(redirectUrl)
 	}, [meetingEnded, sessionData?.id, sessionData?.sessionType, isHost, router])
 
+	// Wrapper functions for request actions with toast notifications
 	const handleRequestAudioOn = useCallback((targetUserId: string) => {
 		requestAudioOn(targetUserId)
-		_showSuccess('Request sent', 'Asked participant to unmute microphone')
-	}, [requestAudioOn, _showSuccess])
+		showSuccess('Request sent', 'Asked participant to unmute microphone')
+	}, [requestAudioOn, showSuccess])
 
 	const handleRequestVideoOn = useCallback((targetUserId: string) => {
 		requestVideoOn(targetUserId)
-		_showSuccess('Request sent', 'Asked participant to enable camera')
-	}, [requestVideoOn, _showSuccess])
+		showSuccess('Request sent', 'Asked participant to enable camera')
+	}, [requestVideoOn, showSuccess])
 
 	const handleParticipantRequestAudio = useCallback(() => {
 		participantRequestAudio()
-		_showSuccess('Request sent', 'Asked host for permission to unmute')
-	}, [participantRequestAudio, _showSuccess])
+		showSuccess('Request sent', 'Asked host for permission to unmute')
+	}, [participantRequestAudio, showSuccess])
 
 	const handleParticipantRequestVideo = useCallback(() => {
 		participantRequestVideo()
-		_showSuccess('Request sent', 'Asked host for permission to enable camera')
-	}, [participantRequestVideo, _showSuccess])
+		showSuccess('Request sent', 'Asked host for permission to enable camera')
+	}, [participantRequestVideo, showSuccess])
 
 	const handleRequestExtension = useCallback(() => {
 		requestExtension()
-		_showSuccess('Extension request sent', 'Your request to extend the session has been sent to the host')
-	}, [requestExtension, _showSuccess])
+		showSuccess('Extension request sent', 'Your request to extend the session has been sent to the host')
+	}, [requestExtension, showSuccess])
 
+	// Show confirmation dialog before ending meeting
 	const handleEndMeetingClick = useCallback(() => {
 		setShowEndConfirmation(true)
 	}, [])
 
+	// Actually end the meeting after confirmation
 	const confirmEndMeeting = useCallback(async () => {
 		setShowEndConfirmation(false)
 		setEndingMeeting(true)
 
+		// Call backend to complete the session
 		if (sessionData?.id && sessionData?.sessionType) {
 			try {
 				const authTokenValue = await getToken()
@@ -467,30 +524,36 @@ export function EnhancedVideoRoom({
 					})
 				}
 
+				// Invalidate queries
 				await queryClient.invalidateQueries({ queryKey: streakKeys.current() })
 				await queryClient.invalidateQueries({ queryKey: dashboardKeys.all })
 				await queryClient.invalidateQueries({ queryKey: achievementKeys.all })
-			} catch (_error) {
+			} catch (error) {
+				// Error completing session
 			}
 		}
 
+		// End meeting for all participants via socket
 		endMeetingForAll()
 
+		// Fallback: If socket event doesn't trigger redirect within 3 seconds, redirect manually (host only)
 		setTimeout(() => {
-			isNavigatingRef.current = true
 			const redirectUrl = `/session-feedback/${sessionData?.id}?type=${sessionData?.sessionType}&isHost=${isHost}`
 			router.push(redirectUrl)
 		}, 3000)
 	}, [sessionData?.id, sessionData?.sessionType, getToken, queryClient, endMeetingForAll, isHost, router])
 
 	const handleTimeUp = useCallback(async () => {
+		// Set loading state
 		setEndingMeeting(true)
 
+		// Timer expired - auto-complete the session (payment processed, redirect to review)
 		if (sessionData?.id && sessionData?.sessionType && isHost) {
 			try {
 				const authToken = await getToken()
 
 				if (sessionData.sessionType === 'studyRoom') {
+					// For study rooms, mark as completed
 					const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/study-rooms/${sessionData.id}/complete`, {
 						method: 'POST',
 						headers: {
@@ -500,8 +563,10 @@ export function EnhancedVideoRoom({
 					})
 
 					if (!response.ok) {
+						// Failed to complete study room
 					}
 				} else if (sessionData.sessionType === 'peerSession') {
+					// For peer sessions, mark as completed (payment processed)
 					const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/peer-sessions/${sessionData.id}/complete`, {
 						method: 'PATCH',
 						headers: {
@@ -511,18 +576,20 @@ export function EnhancedVideoRoom({
 					})
 
 					if (!response.ok) {
+						// Failed to complete peer session
 					}
 				}
 
+				// Invalidate queries
 				await queryClient.invalidateQueries({ queryKey: streakKeys.current() })
 				await queryClient.invalidateQueries({ queryKey: dashboardKeys.all })
 				await queryClient.invalidateQueries({ queryKey: achievementKeys.all })
-			} catch (err) {
+			} catch (error) {
 				// Error completing session
 			}
 		}
 
-		isNavigatingRef.current = true
+		// Redirect to session feedback page for review
 		const redirectUrl = `/session-feedback/${sessionData?.id}?type=${sessionData?.sessionType}&isHost=${isHost}`
 		router.push(redirectUrl)
 	}, [sessionData?.id, sessionData?.sessionType, isHost, getToken, queryClient, router])
@@ -541,16 +608,20 @@ export function EnhancedVideoRoom({
 		extendedEndTime,
 	})
 
+	// Handle approving extension request from the dialog
 	const handleApproveExtension = useCallback(() => {
 		approveExtension(currentEndTime)
 	}, [approveExtension, currentEndTime])
 
+	// Show toast when session is extended
 	useEffect(() => {
 		if (hasExtended && extendedEndTime && extensionMinutes) {
 			showSuccessRef.current('⏱️ Session Extended!', `The session has been extended by ${extensionMinutes} minutes.`)
 		}
 	}, [hasExtended, extendedEndTime, extensionMinutes])
 
+	// Auto-show chat on desktop, hide on mobile only when crossing the md breakpoint.
+	// This avoids closing chat on mobile keyboard open, which can trigger window resize.
 	useEffect(() => {
 		if (typeof window === 'undefined') return
 		const mediaQuery = window.matchMedia('(min-width: 768px)')
@@ -567,6 +638,7 @@ export function EnhancedVideoRoom({
 		return () => mediaQuery.removeEventListener('change', handleChange)
 	}, [])
 
+	// Setup Socket.io for transcripts
 	useEffect(() => {
 		if (!sessionData?.id || !user || socketConnectingRef.current) return
 
@@ -589,23 +661,27 @@ export function EnhancedVideoRoom({
 				})
 
 				socket.on('connect', () => {
-					setTranscriptSocket(socket)
+					setTranscriptSocket(socket) // Set socket only after successful connection
 				})
 
-				socket.on('connect_error', (_err: Error) => {
-					setTranscriptSocket(null)
+				socket.on('connect_error', (err: Error) => {
+					setTranscriptSocket(null) // Clear socket on connection error
 				})
 
-				socket.on('disconnect', (_reason) => {
-					setTranscriptSocket(null)
+				socket.on('disconnect', (reason) => {
+					setTranscriptSocket(null) // Clear socket on disconnect
 				})
 
-				socket.on('transcript-received', (_data) => {
+				// Add transcript-specific event handlers
+				socket.on('transcript-received', (data) => {
+					// Server acknowledged transcript
 				})
 
-				socket.on('transcript-error', (_error) => {
+				socket.on('transcript-error', (error) => {
+					// Server error
 				})
 			} catch (_err) {
+				// Failed to connect socket
 			}
 		}
 
@@ -620,18 +696,21 @@ export function EnhancedVideoRoom({
 		}
 	}, [sessionData?.id, user, getToken])
 
-	const { isListening: _isListening, error: _speechError } = useSpeechRecognition({
+	// Enable speech recognition
+	const { isListening, error: speechError } = useSpeechRecognition({
 		callId: sessionData?.id || null,
 		userId: user?.id || null,
 		socket: transcriptSocket,
 		enabled: !!sessionData?.id && !!user && !!transcriptSocket && !isMobileDevice,
 	})
 
+	// Speech recognition status logging removed
+
 	const handleLeave = useCallback(() => {
-		isNavigatingRef.current = true
 		router.back()
 	}, [router])
 
+	// Memoize LiveKit room options to avoid passing a new object every render
 	const roomOptions = useMemo(() => ({
 		videoCaptureDefaults: {
 			resolution: isMobileDevice ? VideoPresets.h360 : VideoPresets.h720,
@@ -644,31 +723,12 @@ export function EnhancedVideoRoom({
 		},
 		adaptiveStream: true,
 		dynacast: true,
-		disconnectOnPageLeave: false,
 		publishDefaults: {
 			videoSimulcastLayers: isMobileDevice
 				? [VideoPresets.h180]
 				: [VideoPresets.h180, VideoPresets.h360],
 		},
 	} as RoomOptions), [isMobileDevice])
-
-	const liveConnectOptions = useMemo(
-		() => ({ peerConnectionTimeout: 30_000 }),
-		[],
-	)
-
-	const [shouldConnectToRoom, setShouldConnectToRoom] = useState(false)
-	useEffect(() => {
-		if (!token?.trim() || !serverUrl?.trim()) {
-			setShouldConnectToRoom(false)
-			return
-		}
-		const t = window.setTimeout(() => setShouldConnectToRoom(true), 200)
-		return () => {
-			window.clearTimeout(t)
-			setShouldConnectToRoom(false)
-		}
-	}, [token, serverUrl])
 
 	return (
 		<div className="h-screen w-screen flex flex-col bg-[#202124] overflow-hidden fixed inset-0">
@@ -677,10 +737,9 @@ export function EnhancedVideoRoom({
 				audio={true}
 				token={token}
 				serverUrl={serverUrl}
-				connect={shouldConnectToRoom}
+				connect={true}
 				className="flex-1 flex flex-col overflow-hidden"
 				options={roomOptions}
-				connectOptions={liveConnectOptions}
 			>
 				<VideoRoomContent
 					isUserActive={isUserActive}
@@ -699,7 +758,7 @@ export function EnhancedVideoRoom({
 					sessionTitle={sessionData?.title as string | undefined}
 					isHost={isHost}
 					hasExtended={hasExtended}
-					onRequestExtension={handleRequestExtension}
+					onRequestExtension={requestExtension}
 					onExtendSession={(mins) => approveExtension(currentEndTime, mins)}
 					currentUserId={user?.id}
 					moderationSocket={moderationSocket}
@@ -715,16 +774,6 @@ export function EnhancedVideoRoom({
 					onEnableVideoParticipant={enableVideoParticipant}
 					onToggleChat={toggleChatDisabled}
 					chatDisabled={chatDisabled}
-					webinarChatMode={
-						sessionData?.sessionMode === 'WEBINAR'
-							? webinarChat.chatMode
-							: undefined
-					}
-					webinarChatLive={
-						sessionData?.sessionMode === 'WEBINAR'
-							? webinarChat.chatLive
-							: undefined
-					}
 					permissions={permissions}
 					roomSettings={roomSettings}
 					onLockAudio={lockAudio}
@@ -734,6 +783,7 @@ export function EnhancedVideoRoom({
 					onHideParticipantList={hideParticipantList}
 					onLockUserAudio={lockUserAudio}
 					onLockUserVideo={lockUserVideo}
+					onLockUserChatAudience={lockUserChatAudience}
 					onRequestAudioOn={handleRequestAudioOn}
 					onRequestVideoOn={handleRequestVideoOn}
 					pendingPermissionRequest={pendingPermissionRequest}
@@ -746,6 +796,7 @@ export function EnhancedVideoRoom({
 					hostRespondParticipantVideo={hostRespondParticipantVideo}
 					pendingParticipantRequests={pendingParticipantRequests}
 					clearParticipantRequest={clearParticipantRequest}
+					participantChatLocks={participantChatLocks}
 					isMobileViewport={isMobileViewport}
 					chatRecipients={chatRecipients}
 					hostUser={hostUser}
@@ -753,11 +804,19 @@ export function EnhancedVideoRoom({
 					onParticipantListChange={onParticipantListChange}
 					isGuest={isGuest}
 					guestToken={isGuest ? externalAccessToken : undefined}
-					sessionData={sessionData}
-					sessionStableId={sessionUuid}
-					showScratchPad={showScratchPad}
-					setShowScratchPad={setShowScratchPad}
-					onLockScratchPad={lockScratchPad}
+					// Flash message props
+					activeFlashMessage={activeFlashMessage}
+					flashQuestions={flashQuestions}
+					onFlashUploadList={flashUploadList}
+					onFlashUpdateQuestion={flashUpdateQuestion}
+					onFlashReorder={flashReorder}
+					onFlashDeleteQuestion={flashDeleteQuestion}
+					onFlashShowQuestion={flashShowQuestion}
+					onFlashShowAdHoc={flashShowAdHoc}
+					onFlashDismissForAll={flashDismiss}
+					onFlashGetList={flashGetList}
+					onDismissFlashMessage={dismissFlashMessage}
+
 					onPromoteToCohost={async (participantIdentity, role) => {
 						if (sessionData?.sessionType !== 'studyRoom' || !sessionData?.id) return
 						const authTokenValue = await getToken()
@@ -777,23 +836,10 @@ export function EnhancedVideoRoom({
 							'Participant role updated',
 						)
 					}}
-					webinarAttendeeMinimalUi={webinarAttendeeMinimalUi}
-					sessionInfo={sessionData}
-					webinarChatEnabledUi={webinarChat.chatLive}
-					activeFlashMessage={activeFlashMessage}
-					flashQuestions={flashQuestions}
-					onFlashUploadList={flashUploadList}
-					onFlashUpdateQuestion={flashUpdateQuestion}
-					onFlashReorder={flashReorder}
-					onFlashDeleteQuestion={flashDeleteQuestion}
-					onFlashShowQuestion={flashShowQuestion}
-					onFlashShowAdHoc={flashShowAdHoc}
-					onFlashDismiss={flashDismiss}
-					onFlashGetList={flashGetList}
-					onDismissFlashMessage={dismissFlashMessage}
 				/>
 			</LiveKitRoom>
 
+			{/* Extension Request Dialog - Shows when a participant requests extension (Host only) */}
 			{isHost && pendingRequest && (
 				<ExtensionRequestDialog
 					open={!!pendingRequest}
@@ -803,6 +849,7 @@ export function EnhancedVideoRoom({
 				/>
 			)}
 
+			{/* Warning Dialog - Shows at 5 minutes (Only for host) */}
 			{timerEnabled && isHost && (
 				<SessionEndWarningDialog
 					open={showWarning}
@@ -811,6 +858,7 @@ export function EnhancedVideoRoom({
 				/>
 			)}
 
+			{/* End Meeting Confirmation Dialog */}
 			{isHost && (
 				<EndMeetingDialog
 					open={showEndConfirmation}
@@ -819,6 +867,53 @@ export function EnhancedVideoRoom({
 				/>
 			)}
 
+			{isHost && activeExternalJoinRequest && (
+				<div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/40 backdrop-blur-[2px] px-4">
+					<div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#141414] p-5 text-white shadow-2xl">
+						<p className="text-xs uppercase tracking-wide text-[#00DC6E] font-semibold">Join Request</p>
+						<h3 className="mt-1 text-lg font-semibold">Someone wants to join this session</h3>
+						<div className="mt-4 rounded-xl bg-white/5 border border-white/10 p-3 space-y-1">
+							<p className="text-sm">
+								<span className="text-white/60">Name:</span> {activeExternalJoinRequest.name}
+							</p>
+							<p className="text-sm break-all">
+								<span className="text-white/60">Email:</span> {activeExternalJoinRequest.email}
+							</p>
+						</div>
+						{externalJoinRequests.length > 1 && (
+							<p className="mt-3 text-xs text-white/60">
+								{externalJoinRequests.length - 1} more request(s) waiting.
+							</p>
+						)}
+						<div className="mt-5 flex items-center justify-end gap-2">
+							<Button
+								variant="outline"
+								className="border-red-400/50 text-red-300 hover:bg-red-500/10 hover:text-red-200"
+								onClick={() => handleResolveExternalJoinRequest(false)}
+								disabled={resolvingExternalJoinRequest}
+							>
+								Reject
+							</Button>
+							<Button
+								className="bg-[#00DC6E] text-black hover:bg-[#00c562]"
+								onClick={() => handleResolveExternalJoinRequest(true)}
+								disabled={resolvingExternalJoinRequest}
+							>
+								Approve & Let In
+							</Button>
+						</div>
+					</div>
+				</div>
+			)}
+			{isHost && externalJoinRequests.length > 0 && (
+				<div className="fixed top-4 right-4 z-[94]">
+					<div className="rounded-full bg-[#00DC6E] text-black text-xs font-semibold px-3 py-1 shadow-lg">
+						{externalJoinRequests.length} join request{externalJoinRequests.length > 1 ? 's' : ''}
+					</div>
+				</div>
+			)}
+
+			{/* Loading Overlay when ending meeting */}
 			{endingMeeting && (
 				<div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/90 backdrop-blur-sm">
 					<div className="relative">
@@ -835,6 +930,7 @@ export function EnhancedVideoRoom({
 	)
 }
 
+// Memoized to prevent re-renders from parent component state changes
 const VideoRoomContent = memo(function VideoRoomContent({
 	isUserActive,
 	showChat,
@@ -846,18 +942,18 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	channelId,
 	onLeave,
 	timerEnabled,
-	showModeratorControls: _showModeratorControls = true,
+	showModeratorControls,
 	formattedTime,
-	minutesLeft: _minutesLeft,
+	minutesLeft,
 	sessionTitle,
 	isHost,
 	hasExtended,
-	onRequestExtension: _onRequestExtension,
+	onRequestExtension,
 	onExtendSession,
 	currentUserId,
 	moderationSocket,
 	onEndMeeting,
-	endingMeeting: _endingMeeting,
+	endingMeeting,
 	onMuteAll,
 	onUnmuteAll,
 	onMuteParticipant,
@@ -868,8 +964,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	onEnableVideoParticipant,
 	onToggleChat,
 	chatDisabled,
-	webinarChatMode,
-	webinarChatLive,
+	permissions,
 	roomSettings,
 	onLockAudio,
 	onLockVideo,
@@ -878,6 +973,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	onHideParticipantList,
 	onLockUserAudio,
 	onLockUserVideo,
+	onLockUserChatAudience,
 	onRequestAudioOn,
 	onRequestVideoOn,
 	pendingPermissionRequest,
@@ -889,7 +985,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	hostRespondParticipantAudio,
 	hostRespondParticipantVideo,
 	pendingParticipantRequests,
-	clearParticipantRequest: _clearParticipantRequest,
+	clearParticipantRequest,
 	isMobileViewport,
 	chatRecipients,
 	hostUser,
@@ -899,12 +995,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	guestToken,
 	participantChatLocks,
 	onPromoteToCohost,
-	showScratchPad,
-	setShowScratchPad,
-	onLockScratchPad,
-	webinarAttendeeMinimalUi: _webinarAttendeeMinimalUi = false,
-	sessionInfo = null,
-	webinarChatEnabledUi = true,
+	// Flash message
 	activeFlashMessage,
 	flashQuestions = [],
 	onFlashUploadList,
@@ -913,12 +1004,9 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	onFlashDeleteQuestion,
 	onFlashShowQuestion,
 	onFlashShowAdHoc,
-	onFlashDismiss,
-	onFlashGetList: _onFlashGetList,
+	onFlashDismissForAll,
+	onFlashGetList,
 	onDismissFlashMessage,
-	sessionData,
-	sessionStableId,
-	permissions,
 }: {
 	isUserActive: boolean
 	showChat: boolean
@@ -952,8 +1040,6 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	onEnableVideoParticipant?: (targetUserId: string) => void
 	onToggleChat?: (disabled: boolean) => void
 	chatDisabled?: boolean
-	webinarChatMode?: string
-	webinarChatLive?: boolean
 	permissions?: RoomPermissions
 	roomSettings?: RoomSettings
 	onLockAudio?: (locked: boolean) => void
@@ -961,9 +1047,13 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	onLockChat?: (locked: boolean) => void
 	onRestrictChatToHostOnly?: (restricted: boolean) => void
 	onHideParticipantList?: (hidden: boolean) => void
-	onLockScratchPad: (locked: boolean) => void
 	onLockUserAudio?: (targetUserId: string, locked: boolean) => void
 	onLockUserVideo?: (targetUserId: string, locked: boolean) => void
+	onLockUserChatAudience?: (
+		targetUserId: string,
+		audience: 'everyone' | 'host' | 'user',
+		locked: boolean,
+	) => void
 	onRequestAudioOn?: (targetUserId: string) => void
 	onRequestVideoOn?: (targetUserId: string) => void
 	pendingPermissionRequest?: PermissionRequest | null
@@ -988,34 +1078,24 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		participantIdentity: string,
 		role: 'PARTICIPANT' | 'COHOST',
 	) => void
-	showScratchPad: boolean
-	setShowScratchPad: (show: boolean) => void
-	webinarAttendeeMinimalUi?: boolean
-	sessionInfo?: SessionData | null
-	webinarChatEnabledUi?: boolean
-	activeFlashMessage?: FlashMessage | null
+	// Flash message props
+	activeFlashMessage?: ActiveFlashMessage | null
 	flashQuestions?: FlashQuestion[]
 	onFlashUploadList?: (questions: FlashQuestion[]) => void
 	onFlashUpdateQuestion?: (questionId: string, updates: Partial<Omit<FlashQuestion, 'id'>>) => void
 	onFlashReorder?: (orderedIds: string[]) => void
-	onFlashDeleteQuestion?: (id: string) => void
-	onFlashShowQuestion?: (id: string, duration?: number) => void
-	onFlashShowAdHoc?: (content: string, type: 'AD_HOC' | 'MEDIA', duration?: number) => void
-	onFlashDismiss?: () => void
+	onFlashDeleteQuestion?: (questionId: string) => void
+	onFlashShowQuestion?: (questionId: string) => void
+	onFlashShowAdHoc?: (text: string, meta?: Omit<FlashQuestion, 'id' | 'text'>) => void
+	onFlashDismissForAll?: () => void
 	onFlashGetList?: () => void
 	onDismissFlashMessage?: () => void
-	sessionData?: SessionData | null
-	sessionStableId?: string | null
 }) {
+	// Room context removed to avoid race conditions, using localParticipant hook instead
 	const params = useParams<{ room: string }>()
-	const room = useRoomContext()
-	const krispFilterRef = useRef<any>(null)
-	const { showWarning, showSuccess, showInfo: _showInfo, showError } = useToast()
-	const effectiveChatDisabled =
-		!!chatDisabled ||
-		(webinarChatMode !== undefined &&
-			(webinarChatMode === 'disabled' || webinarChatLive === false))
+	const { showWarning, showSuccess, showInfo, showError } = useToast()
 
+	// Remote Control Hook
 	const {
 		isControlling,
 		isRequestPending,
@@ -1030,14 +1110,12 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		revokeControl
 	} = useRemoteControl()
 
-	// Get participants list for name lookup
+	// Flash panel state (host only)
 	const [showFlashPanel, setShowFlashPanel] = useState(false)
+
+	// Get participants list for name lookup
 	const allParticipants = useParticipants()
-	const participantListHiddenByHost = roomSettings?.hideParticipantList === true
-	const canViewParticipantList =
-		isHost ||
-		(!participantListHiddenByHost &&
-			(isGuest ? true : permissions?.allowParticipantList !== false))
+	const canViewParticipantList = !isGuest && (isHost || permissions?.allowParticipantList !== false)
 	const participantIdentitiesKey = useMemo(
 		() => allParticipants.map((participant) => participant.identity).sort().join('|'),
 		[allParticipants],
@@ -1050,55 +1128,6 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		)
 	}, [onParticipantListChange, participantIdentitiesKey])
 
-	// Host: Broadcast scratchpad lock state
-	useEffect(() => {
-		if (!isHost || !room) return
-
-		const broadcastLockState = async () => {
-			if (room.state !== ConnectionState.Connected) return
-			try {
-				const payload = new TextEncoder().encode(JSON.stringify({ 
-					enabled: permissions?.allowScratchPad ?? true
-				}))
-				await room.localParticipant.publishData(
-					payload,
-					{ reliable: true, topic: 'scratch-pad-lock-update' }
-				)
-			} catch (err) {
-				if (String(err).includes('PC manager is closed') || String(err).includes('UnexpectedConnectionState')) {
-					return; // Silence this expected error during room unmount/teardown
-				}
-				console.error("Failed to broadcast scratchpad lock state:", err)
-			}
-		}
-
-		if (room.state === ConnectionState.Connected) {
-			broadcastLockState()
-		} else {
-			room.on(RoomEvent.Connected, broadcastLockState)
-			return () => { room.off(RoomEvent.Connected, broadcastLockState) }
-		}
-	}, [permissions?.allowScratchPad, isHost, room])
-
-	// Participants: Listen for scratchpad lock state updates
-	useEffect(() => {
-		if (isHost || !room) return
-
-		const handleData = (payload: Uint8Array, _participant?: unknown, _kind?: unknown, topic?: string) => {
-			if (topic === 'scratch-pad-lock-update') {
-				try {
-					const data = JSON.parse(new TextDecoder().decode(payload))
-					if (data.enabled !== undefined) {
-						// Internal state handled by permissions sync now
-					}
-				} catch (e) {}
-			}
-		}
-
-		room.on(RoomEvent.DataReceived, handleData)
-		return () => { room.off(RoomEvent.DataReceived, handleData) }
-	}, [isHost, room])
-
 	useEffect(() => {
 		if (canViewParticipantList) return
 		if (showParticipants) {
@@ -1106,121 +1135,10 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		}
 	}, [canViewParticipantList, showParticipants, setShowParticipants])
 
+	// Get local participant state directly - most reliable source of truth
 	const { localParticipant, isCameraEnabled, isMicrophoneEnabled, isScreenShareEnabled } = useLocalParticipant()
-	const lkRoom = useRoomContext()
-	
-	const { isRecording, startRecording, stopRecording, loading: isRecordingTransitioning } = useRecording({ roomId: sessionData?.id || 'default' })
 
-	const showMediaError = useCallback(
-		(kind: 'mic' | 'cam', err: unknown, enabling: boolean) => {
-			const name =
-				err instanceof DOMException
-					? err.name
-					: typeof err === 'object' &&
-							err !== null &&
-							'name' in err &&
-							typeof (err as { name: unknown }).name === 'string'
-						? (err as { name: string }).name
-						: ''
-			if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
-				showError(
-					`${kind === 'mic' ? 'Microphone' : 'Camera'} blocked`,
-					`Allow ${kind === 'mic' ? 'microphone' : 'camera'} access for this site in your browser settings, then try again.`,
-				)
-			} else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
-				showError(
-					`No ${kind === 'mic' ? 'microphone' : 'camera'}`,
-					'Connect a device or choose a different input in your system settings.',
-				)
-			} else if (
-				name === 'NotReadableError' ||
-				name === 'TrackStartError' ||
-				name === 'AbortError'
-			) {
-				showError(
-					`${kind === 'mic' ? 'Microphone' : 'Camera'} busy`,
-					'Another app or tab may be using the device. Close it and try again.',
-				)
-			} else {
-				showError(
-					`${kind === 'mic' ? 'Microphone' : 'Camera'}`,
-					enabling
-						? `Could not turn ${kind === 'mic' ? 'the microphone' : 'the camera'} on. Try again or reload the page.`
-						: `Could not turn ${kind === 'mic' ? 'the microphone' : 'the camera'} off.`,
-				)
-			}
-		},
-		[showError],
-	)
-
-	const handleToggleMicrophone = useCallback(async () => {
-		if (!localParticipant) {
-			showError('Not connected', 'Wait until the room finishes connecting, then try again.')
-			return
-		}
-		const newState = !localParticipant.isMicrophoneEnabled
-		if (newState && !isHost && permissions && !permissions.allowAudio) {
-			participantRequestAudio?.()
-			return
-		}
-		try {
-			await localParticipant.setMicrophoneEnabled(newState)
-		} catch (err) {
-			if (newState) {
-				try {
-					await new Promise((r) => setTimeout(r, 350))
-					await localParticipant.setMicrophoneEnabled(true)
-					return
-				} catch (retryErr) {
-					showMediaError('mic', retryErr, true)
-					return
-				}
-			}
-			showMediaError('mic', err, false)
-		}
-	}, [
-		localParticipant,
-		isHost,
-		permissions,
-		participantRequestAudio,
-		showError,
-		showMediaError,
-	])
-
-	const handleToggleCamera = useCallback(async () => {
-		if (!localParticipant) {
-			showError('Not connected', 'Wait until the room finishes connecting, then try again.')
-			return
-		}
-		const newState = !localParticipant.isCameraEnabled
-		if (newState && !isHost && permissions && !permissions.allowVideo) {
-			participantRequestVideo?.()
-			return
-		}
-		try {
-			await localParticipant.setCameraEnabled(newState)
-		} catch (err) {
-			if (newState) {
-				try {
-					await new Promise((r) => setTimeout(r, 350))
-					await localParticipant.setCameraEnabled(true)
-					return
-				} catch (retryErr) {
-					showMediaError('cam', retryErr, true)
-					return
-				}
-			}
-			showMediaError('cam', err, false)
-		}
-	}, [
-		localParticipant,
-		isHost,
-		permissions,
-		participantRequestVideo,
-		showError,
-		showMediaError,
-	])
-
+	// Track pending requests to show toast when new requests arrive
 	const prevRequestCountRef = useRef(0)
 	const lastToastAtRef = useRef<Record<string, number>>({})
 	const shouldShowToast = useCallback((key: string, cooldownMs: number = 5000) => {
@@ -1233,8 +1151,11 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	useEffect(() => {
 		if (!isHost || !pendingParticipantRequests) return
 
+		// Check if a new request was added
 		if (pendingParticipantRequests.length > prevRequestCountRef.current) {
+			// Find the newest request
 			const newest = pendingParticipantRequests[pendingParticipantRequests.length - 1]
+			// Look up participant name from room
 			const participant = allParticipants.find(p => p.identity === newest.userId)
 			const displayName = participant?.name || newest.userId
 			const toastKey = `permission-request-${newest.type}-${newest.userId}`
@@ -1248,25 +1169,31 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		prevRequestCountRef.current = pendingParticipantRequests.length
 	}, [pendingParticipantRequests, isHost, showWarning, allParticipants, shouldShowToast])
 
+	// Layout mode: 'focus' shows speaker large with others small, 'grid' shows equal tiles
 	const [layoutMode, setLayoutMode] = useState<'focus' | 'grid'>('grid')
 	const [isViewMenuOpen, setIsViewMenuOpen] = useState(false)
 	const [showEndMenu, setShowEndMenu] = useState(false)
 	const [showExtendMenu, setShowExtendMenu] = useState(false)
+	// Expanded view - hide thumbnails and show only main video
 	const [isExpandedView, setIsExpandedView] = useState(false)
+	// Screen share: zoom + minimize (floating) + maximize (full workspace overlay)
 	const [screenShareZoom, setScreenShareZoom] = useState(1)
 	const [screenShareMinimized, setScreenShareMinimized] = useState(false)
 	const [screenShareMaximized, setScreenShareMaximized] = useState(false)
 
+	// Automatically switch to Focus Mode and maximize screen share when controlling
 	useEffect(() => {
 		if (isControlling) {
 			setLayoutMode('focus')
 			setIsExpandedView(true)
 			setScreenShareMaximized(true)
+			// Also ensure sidebars are closed
 			setShowChat(false)
 			setShowParticipants(false)
 		}
 	}, [isControlling, setLayoutMode, setIsExpandedView, setScreenShareMaximized, setShowChat, setShowParticipants])
 
+	// Close extend menu on outside click
 	useEffect(() => {
 		if (!showExtendMenu) return
 		const handleClick = () => setShowExtendMenu(false)
@@ -1274,48 +1201,63 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		return () => document.removeEventListener('click', handleClick)
 	}, [showExtendMenu])
 
+	// Pinned participant - manually pinned by user
 	const [pinnedParticipantId, setPinnedParticipantId] = useState<string | null>(null)
 
 	const [isAudioEnabled, setIsAudioEnabled] = useState(true)
 
+	// Background effects state - use refs for values that don't need to trigger re-renders
 	const [backgroundMode, setBackgroundMode] = useState<'none' | 'blur' | 'virtual'>('none')
 	const [showBackgroundMenu, setShowBackgroundMenu] = useState(false)
 	const [blurAmount, setBlurAmount] = useState(10)
 	const [selectedVirtualBg, setSelectedVirtualBg] = useState(0)
 	const processorRef = useRef<ReturnType<typeof BackgroundProcessor> | null>(null)
 	const blurDebounceRef = useRef<NodeJS.Timeout | null>(null)
+	// Store current values in refs to avoid stale closures without adding deps
 	const blurAmountRef = useRef(blurAmount)
 	const selectedVirtualBgRef = useRef(selectedVirtualBg)
 	const backgroundModeRef = useRef(backgroundMode)
+	// CRITICAL: Store localParticipant in ref to avoid callback recreation on every audio level update
 	const localParticipantRef = useRef(localParticipant)
+	// Prevent concurrent effect applications
 	const isApplyingEffectRef = useRef(false)
+	// Krisp noise filter ref for cleanup
+	const krispFilterRef = useRef<unknown | null>(null)
 
+	// Helper function to get avatar URL from participant metadata
 	const getParticipantAvatar = useCallback((participant: { metadata?: string | null }): string | null => {
 		if (!participant.metadata) return null
 		try {
 			const metadata = JSON.parse(participant.metadata)
 			return metadata.avatar || null
-		} catch (err) {
+		} catch {
 			return null
 		}
 	}, [])
 
+	// Keep refs in sync with state
 	useEffect(() => { blurAmountRef.current = blurAmount }, [blurAmount])
 	useEffect(() => { selectedVirtualBgRef.current = selectedVirtualBg }, [selectedVirtualBg])
 	useEffect(() => { backgroundModeRef.current = backgroundMode }, [backgroundMode])
+	// CRITICAL: Keep localParticipant ref in sync
 	useEffect(() => { localParticipantRef.current = localParticipant }, [localParticipant])
 
+	// Listen for moderation socket events and apply local actions
 	useEffect(() => {
 		if (!moderationSocket) return
 
 		const handleMute = (data: { action: 'mute' | 'unmute'; targetUserId?: string; hostClerkId?: string; isLocked?: boolean }) => {
 			try {
+				// If targetUserId is specified and it's not this user, skip
 				if (data.targetUserId && data.targetUserId !== currentUserId) return
+				// If this is a global action (no targetUserId) but current user is the host, skip
+				// The host should NEVER be affected by global mute actions
 				if (!data.targetUserId && data.hostClerkId && data.hostClerkId === currentUserId) return
 				if (!localParticipant) return
 				const enable = data.action === 'unmute'
 				localParticipant.setMicrophoneEnabled(enable).catch(() => { })
 
+				// Show toast notification when host mutes this participant
 				if (data.action === 'mute' && data.targetUserId === currentUserId) {
 					if (shouldShowToast('moderation-muted', 6000)) {
 						showWarning(
@@ -1326,18 +1268,23 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						)
 					}
 				}
-			} catch (_err) {
+			} catch (err) {
+				// Error applying mute action
 			}
 		}
 
 		const handleVideo = (data: { action: 'disable' | 'enable'; targetUserId?: string; hostClerkId?: string; isLocked?: boolean }) => {
 			try {
+				// If targetUserId is specified and it's not this user, skip
 				if (data.targetUserId && data.targetUserId !== currentUserId) return
+				// If this is a global action (no targetUserId) but current user is the host, skip
+				// The host should NEVER be affected by global video disable actions
 				if (!data.targetUserId && data.hostClerkId && data.hostClerkId === currentUserId) return
 				if (!localParticipant) return
 				const enable = data.action === 'enable'
 				localParticipant.setCameraEnabled(enable).catch(() => { })
 
+				// Show toast notification when host disables video for this participant
 				if (data.action === 'disable' && data.targetUserId === currentUserId) {
 					if (shouldShowToast('moderation-video-disabled', 6000)) {
 						showWarning(
@@ -1348,7 +1295,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						)
 					}
 				}
-			} catch (_err) {
+			} catch (err) {
+				// Error applying video action
 			}
 		}
 
@@ -1361,21 +1309,27 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		}
 	}, [moderationSocket, currentUserId, localParticipant, showWarning, shouldShowToast])
 
+	// Enforce permission locks on initial join and when permissions change
+	// This ensures that when a participant rejoins/refreshes, they respect the locked state
 	const prevPermissionsRef = useRef(permissions)
 	useEffect(() => {
 		if (!localParticipant || isHost) return
 
 		const prevPermissions = prevPermissionsRef.current
 
+		// If audio is locked and mic is on, force disable it
 		if (permissions && !permissions.allowAudio && localParticipant.isMicrophoneEnabled) {
 			localParticipant.setMicrophoneEnabled(false).catch(() => { })
 		}
 
+		// If video is locked and camera is on, force disable it
 		if (permissions && !permissions.allowVideo && localParticipant.isCameraEnabled) {
 			localParticipant.setCameraEnabled(false).catch(() => { })
 		}
 
+		// Show notifications to participants when permissions change
 		if (permissions && prevPermissions) {
+			// Audio lock changed
 			if (prevPermissions.allowAudio !== permissions.allowAudio) {
 				if (!permissions.allowAudio) {
 					if (shouldShowToast('audio-locked', 5000)) {
@@ -1388,6 +1342,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				}
 			}
 
+			// Video lock changed
 			if (prevPermissions.allowVideo !== permissions.allowVideo) {
 				if (!permissions.allowVideo) {
 					if (shouldShowToast('video-locked', 5000)) {
@@ -1400,6 +1355,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				}
 			}
 
+			// Chat lock changed
 			if (prevPermissions.allowChat !== permissions.allowChat) {
 				if (!permissions.allowChat) {
 					if (shouldShowToast('chat-locked', 5000)) {
@@ -1413,28 +1369,38 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			}
 		}
 
+		// Update ref for next comparison
 		prevPermissionsRef.current = permissions
 	}, [permissions, localParticipant, isHost, showWarning, showSuccess, shouldShowToast])
 
+	// Use memoized virtual backgrounds (moved outside with stable ref below)
+	// Access via `VIRTUAL_BACKGROUNDS` constant defined below to avoid re-creating this array each render
+
+	// Get all camera tracks using useTracks - the standard way
 	const cameraTracks = useTracks(
 		[{ source: Track.Source.Camera, withPlaceholder: true }],
 		{ onlySubscribed: false }
 	)
 
+	// Get screen share tracks
 	const screenShareTracks = useTracks(
 		[{ source: Track.Source.ScreenShare, withPlaceholder: false }]
 	)
 
 
+	// Debounced speaking detection - only switch focus after sustained speaking (1.5 seconds)
 	const [debouncedSpeakerId, setDebouncedSpeakerId] = useState<string | null>(null)
 	const speakingTimerRef = useRef<NodeJS.Timeout | null>(null)
 	const lastSpeakerRef = useRef<string | null>(null)
 
+	// Find the focused participant (screenShare > pinned > speaking > host)
 	const speakingParticipants = useSpeakingParticipants()
 
+	// Debounce the speaking detection - require 1.5 seconds of continuous speaking
 	useEffect(() => {
 		const currentSpeaker = speakingParticipants.length > 0 ? speakingParticipants[0]?.identity : null
 
+		// If no one is speaking, clear timer but keep last speaker for a bit
 		if (!currentSpeaker) {
 			if (speakingTimerRef.current) {
 				clearTimeout(speakingTimerRef.current)
@@ -1443,20 +1409,23 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			return
 		}
 
+		// If same person keeps speaking, don't reset
 		if (currentSpeaker === lastSpeakerRef.current) {
 			return
 		}
 
+		// New speaker detected - start debounce timer
 		if (speakingTimerRef.current) {
 			clearTimeout(speakingTimerRef.current)
 		}
 
 		speakingTimerRef.current = setTimeout(() => {
+			// Only update if still speaking after 1.5 seconds
 			if (speakingParticipants.some(p => p.identity === currentSpeaker)) {
 				lastSpeakerRef.current = currentSpeaker
 				setDebouncedSpeakerId(currentSpeaker)
 			}
-		}, 1500)
+		}, 1500) // 1.5 second debounce
 
 		return () => {
 			if (speakingTimerRef.current) {
@@ -1465,31 +1434,41 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		}
 	}, [speakingParticipants])
 
+	// Auto-switch to presenter view when someone shares screen (only once)
 	const hasAutoSwitchedRef = useRef(false)
 	useEffect(() => {
 		if (screenShareTracks.length > 0) {
+			// Auto-switch to focus mode when screen share starts (only if we haven't auto-switched yet)
 			if (layoutMode === 'grid' && !hasAutoSwitchedRef.current) {
 				setLayoutMode('focus')
 				hasAutoSwitchedRef.current = true
 			}
 		} else {
+			// Reset when screen share ends
 			hasAutoSwitchedRef.current = false
 		}
 	}, [screenShareTracks.length, layoutMode])
 
+	// Check if anyone is screen sharing (highest priority)
 	const activeScreenShare = screenShareTracks.length > 0 ? screenShareTracks[0] : null
 
 	const focusedParticipant = useMemo(() => {
+		// Priority 1: Screen sharing participant (handled separately via activeScreenShare)
+		// We still need a focused participant for the thumbnail strip
+
+		// Priority 2: Pinned participant
 		if (pinnedParticipantId) {
 			const pinned = allParticipants.find(p => p.identity === pinnedParticipantId)
 			if (pinned) return pinned
 		}
 
+		// Priority 3: Debounced speaking participant (requires sustained speaking)
 		if (debouncedSpeakerId) {
 			const speaker = allParticipants.find(p => p.identity === debouncedSpeakerId)
 			if (speaker) return speaker
 		}
 
+		// Priority 4: Host or first remote
 		if (localParticipant) {
 			if (isHost) {
 				return localParticipant
@@ -1498,16 +1477,19 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			return firstRemote || localParticipant
 		}
 		return null
-	}, [debouncedSpeakerId, localParticipant, allParticipants, isHost, pinnedParticipantId])
+	}, [debouncedSpeakerId, localParticipant, allParticipants, isHost, pinnedParticipantId, activeScreenShare])
 
+	// Handle clicking on a thumbnail to focus/pin that participant
 	const handleThumbnailClick = useCallback((participantId: string) => {
 		if (pinnedParticipantId === participantId) {
+			// Unpin if clicking on already pinned
 			setPinnedParticipantId(null)
 		} else {
 			setPinnedParticipantId(participantId)
 		}
 	}, [pinnedParticipantId])
 
+	// Toggle pin on the focused video
 	const togglePinFocused = useCallback(() => {
 		if (focusedParticipant) {
 			if (pinnedParticipantId === focusedParticipant.identity) {
@@ -1518,16 +1500,22 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		}
 	}, [focusedParticipant, pinnedParticipantId])
 
+	// Pin from grid and switch to presenter view
 	const pinAndSwitchToPresenter = useCallback((participantId: string) => {
 		setPinnedParticipantId(participantId)
 		setLayoutMode('focus')
 	}, [])
 
+	// Apply background effect to local video track using the newer BackgroundProcessor API
+	// This provides smoother transitions and better segmentation quality
+	// CRITICAL FIX: Empty dependency array - all values accessed via refs to prevent flickering
 	const applyBackgroundEffect = useCallback(async (mode: 'none' | 'blur' | 'virtual', intensity?: number) => {
+		// Hard guard: never allow background processing on mobile to avoid accidental high CPU usage.
 		if (isMobileViewport && mode !== 'none') {
 			return
 		}
 
+		// Prevent concurrent applications which cause flickering
 		if (isApplyingEffectRef.current) {
 			return
 		}
@@ -1535,13 +1523,16 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		isApplyingEffectRef.current = true
 
 		try {
+			// CRITICAL: Access localParticipant from ref, not from closure
 			const participant = localParticipantRef.current
 
+			// Check if camera is enabled
 			if (!participant?.isCameraEnabled) {
 				alert('Please turn on your camera first to use background effects')
 				return
 			}
 
+			// Get local video track
 			const videoPublication = Array.from(participant.videoTrackPublications.values()).find(
 				pub => pub.source === Track.Source.Camera
 			)
@@ -1552,9 +1543,12 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				return
 			}
 
+			// Use refs for current values to avoid stale closures
 			const blurRadius = intensity ?? blurAmountRef.current
 			const currentSelectedBg = selectedVirtualBgRef.current
 
+			// OPTIMIZATION: If processor already exists, use switchTo for smooth transitions
+			// This avoids destroying and recreating the processor which causes flickering
 			if (processorRef.current) {
 				if (mode === 'blur') {
 					await processorRef.current.switchTo({ mode: 'background-blur', blurRadius })
@@ -1566,10 +1560,13 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						imagePath: selectedBg.url
 					})
 				} else {
+					// Mode is 'none' - remove processor
 					await localVideoTrack.stopProcessor()
 					processorRef.current = null
 				}
 			} else if (mode !== 'none') {
+				// Only create new processor if one doesn't exist
+
 				let processor: ReturnType<typeof BackgroundProcessor>
 
 				if (mode === 'blur') {
@@ -1604,6 +1601,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		}
 	}, [isMobileViewport])
 
+	// Ensure mobile sessions never keep background processors active.
 	useEffect(() => {
 		if (!isMobileViewport) return
 		setShowBackgroundMenu(false)
@@ -1612,27 +1610,37 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		}
 	}, [isMobileViewport, applyBackgroundEffect])
 
+	// Debounced blur radius update - only updates the blur radius without recreating processor
+	// STABILIZED: Uses ref for backgroundMode check
 	const updateBlurRadius = useCallback(async (newRadius: number) => {
 		if (!processorRef.current || backgroundModeRef.current !== 'blur') return
 
 		try {
+			// Use switchTo for smooth radius update without recreating the processor
 			await processorRef.current.switchTo({ mode: 'background-blur', blurRadius: newRadius })
-		} catch (_err) {
+		} catch (err) {
+			// Failed to update blur radius
 		}
 	}, [])
 
+	// Debounced handler for slider changes - updates UI immediately, processor after delay
+	// STABILIZED: No dependencies since updateBlurRadius is now stable
 	const handleBlurSliderChange = useCallback((newValue: number) => {
+		// Update UI immediately for smooth slider feel
 		setBlurAmount(newValue)
 
+		// Clear any pending debounce timer
 		if (blurDebounceRef.current) {
 			clearTimeout(blurDebounceRef.current)
 		}
 
+		// Debounce the heavy processor update (150ms delay for smoother experience)
 		blurDebounceRef.current = setTimeout(() => {
 			updateBlurRadius(newValue)
 		}, 150)
 	}, [updateBlurRadius])
 
+	// Cleanup debounce timer on unmount
 	useEffect(() => {
 		return () => {
 			if (blurDebounceRef.current) {
@@ -1641,6 +1649,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		}
 	}, [])
 
+	// Cleanup processor on unmount
 	useEffect(() => {
 		return () => {
 			if (processorRef.current) {
@@ -1676,7 +1685,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 					micTrack.stopProcessor().catch(() => { })
 					krispFilterRef.current = null
 				}
-			} catch (err) {
+			} catch {
 				// Ignore unsupported/runtime errors and continue without Krisp.
 			}
 		}
@@ -1726,26 +1735,31 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			gainNode.connect(context.destination)
 			oscillator.start(startAt)
 			oscillator.stop(startAt + 0.2)
-		} catch (err) {
+		} catch {
 			// Best-effort join tone; ignore browsers that block audio context.
 		}
 	}, [])
 
+	// Update stable order when participants join/leave (not on speaking status changes)
 	useEffect(() => {
 		const currentParticipantIds = new Set(
 			allParticipants.map((participant) => participant.identity)
 		)
 
+		// Check if participants have actually joined or left (not just speaking status changed)
 		const participantIdsChanged =
 			currentParticipantIds.size !== previousParticipantIdsRef.current.size ||
 			[...currentParticipantIds].some(id => !previousParticipantIdsRef.current.has(id)) ||
 			[...previousParticipantIdsRef.current].some(id => !currentParticipantIds.has(id))
 
 		if (participantIdsChanged) {
+			// Find local participant identity
 			const localParticipantId = allParticipants.find((participant) => participant.isLocal)?.identity
 
+			// Get current stable order
 			const currentStableOrder = [...stableOrderRef.current]
 
+			// Identify new participants (not in stable order)
 			const newParticipantIds = [...currentParticipantIds].filter(
 				id => !currentStableOrder.includes(id) && id !== localParticipantId
 			)
@@ -1753,9 +1767,12 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				playParticipantJoinedSound()
 			}
 
+			// Remove participants who left
 			const updatedOrder = currentStableOrder.filter(id => currentParticipantIds.has(id))
 
+			// If this is the first time (empty stable order), initialize with all current participants
 			if (currentStableOrder.length === 0 && currentParticipantIds.size > 0) {
+				// Initialize: local first, then others
 				if (localParticipantId) {
 					const others = [...currentParticipantIds].filter(id => id !== localParticipantId)
 					stableOrderRef.current = [localParticipantId, ...others]
@@ -1763,15 +1780,19 @@ const VideoRoomContent = memo(function VideoRoomContent({
 					stableOrderRef.current = [...currentParticipantIds]
 				}
 			} else {
+				// Insert new participants right after local participant
 				if (localParticipantId && updatedOrder.includes(localParticipantId)) {
 					const localIndex = updatedOrder.indexOf(localParticipantId)
 					updatedOrder.splice(localIndex + 1, 0, ...newParticipantIds)
 				} else if (localParticipantId) {
+					// If local participant is not in order yet, add it first, then new participants
 					updatedOrder.unshift(localParticipantId, ...newParticipantIds)
 				} else {
+					// No local participant, just append new ones
 					updatedOrder.push(...newParticipantIds)
 				}
 
+				// Ensure local participant is always first if it exists
 				if (localParticipantId && updatedOrder[0] !== localParticipantId) {
 					const localIndex = updatedOrder.indexOf(localParticipantId)
 					if (localIndex > 0) {
@@ -1780,9 +1801,11 @@ const VideoRoomContent = memo(function VideoRoomContent({
 					}
 				}
 
+				// Update stable order
 				stableOrderRef.current = updatedOrder
 			}
 
+			// Update previous participant IDs for next comparison
 			previousParticipantIdsRef.current = new Set(currentParticipantIds)
 			hasInitializedParticipantListRef.current = true
 		}
@@ -1794,39 +1817,50 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		}
 	}, [])
 
+	// Sort participants using stable order: local participant first, then stable order of others
 	const sortedParticipants = useMemo(() => {
 		if (allParticipants.length === 0) return []
 
+		// Find local participant
 		const localEntry = allParticipants.find((participant) => participant.isLocal)
 		const otherParticipants = allParticipants.filter((participant) => !participant.isLocal)
 
+		// Sort other participants according to stable order
 		const sortedOthers = [...otherParticipants].sort((a, b) => {
 			const stableOrder = stableOrderRef.current
 			const aIndex = stableOrder.indexOf(a.identity)
 			const bIndex = stableOrder.indexOf(b.identity)
 
+			// If both are in stable order, maintain their relative positions
 			if (aIndex !== -1 && bIndex !== -1) {
 				return aIndex - bIndex
 			}
 
+			// If only one is in stable order, prioritize it
 			if (aIndex !== -1) return -1
 			if (bIndex !== -1) return 1
 
+			// If neither is in stable order, use identity as fallback for consistent ordering
 			return a.identity.localeCompare(b.identity)
 		})
 
+		// Return local first, then sorted others
 		return localEntry ? [localEntry, ...sortedOthers] : sortedOthers
 	}, [allParticipants])
 
+	// Build a quick lookup for camera tracks by participant identity.
 	const cameraTrackByParticipantId = useMemo(() => {
 		return new Map(cameraTracks.map((track) => [track.participant.identity, track]))
 	}, [cameraTracks])
 
+	// Separate focused track from other tracks
+	// Screen share gets highest priority in focus view
 	const { focusedTrack, isScreenShareFocused, isSplitMode, pinnedTrack } = useMemo(() => {
 		if (layoutMode === 'grid') {
 			return { focusedTrack: null, isScreenShareFocused: false, isSplitMode: false, pinnedTrack: null }
 		}
 
+		// Detection for Split Mode - Both screen share and a pinned participant
 		if (pinnedParticipantId && activeScreenShare) {
 			const pinned = cameraTrackByParticipantId.get(pinnedParticipantId) || {
 				participant: allParticipants.find(p => p.identity === pinnedParticipantId) || activeScreenShare.participant,
@@ -1840,6 +1874,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			}
 		}
 
+		// Priority 1: Pinned participant (single focus)
 		if (pinnedParticipantId) {
 			const pinned = cameraTrackByParticipantId.get(pinnedParticipantId) || {
 				participant: allParticipants.find(p => p.identity === pinnedParticipantId),
@@ -1848,6 +1883,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			if (pinned.participant) return { focusedTrack: pinned, isScreenShareFocused: false, isSplitMode: false, pinnedTrack: pinned }
 		}
 
+		// Priority 2: Screen share (single focus)
 		if (activeScreenShare) {
 			return {
 				focusedTrack: activeScreenShare,
@@ -1857,6 +1893,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			}
 		}
 
+		// Priority 3: Show speaker if they have a camera
 		if (!focusedParticipant) {
 			return { focusedTrack: null, isScreenShareFocused: false, isSplitMode: false, pinnedTrack: null }
 		}
@@ -1866,6 +1903,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		return { focusedTrack: focused, isScreenShareFocused: false, isSplitMode: false, pinnedTrack: null }
 	}, [focusedParticipant, layoutMode, activeScreenShare, cameraTrackByParticipantId, pinnedParticipantId, allParticipants])
 
+	// Automatically un-minimize/un-maximize screen share when entering split mode
 	useEffect(() => {
 		if (isSplitMode) {
 			setScreenShareMinimized(false)
@@ -1898,9 +1936,12 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		return focusedTrack?.participant || focusedParticipant || null
 	}, [focusedTrack, focusedParticipant, isScreenShareFocused])
 
-	const _toggleAudio = () => {
+	const toggleAudio = () => {
+		// Toggle audio output (mute/unmute all remote audio)
+
 		const enabled = !isAudioEnabled
 		setIsAudioEnabled(enabled)
+		// Mute/unmute all remote audio tracks by setting volume
 		allParticipants.forEach((participant) => {
 			if (participant.isLocal) return
 			participant.audioTrackPublications.forEach((publication) => {
@@ -1911,9 +1952,125 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		})
 	}
 
+	const toggleFullscreen = () => {
+		if (!document.fullscreenElement) {
+			document.documentElement.requestFullscreen()
+			setIsFullscreen(true)
+		} else {
+			document.exitFullscreen()
+			setIsFullscreen(false)
+		}
+	}
 
+	// Native Picture-in-Picture state and refs
 	const [isPiPActive, setIsPiPActive] = useState(false)
 
+	// Helper to get actual Track object from a TrackReference or Placeholder object
+	// Updated for PiP Priority: Screen Share > Camera
+	const getTrackFromReference = useCallback((ref: any, pipMode = false): Track | null => {
+		if (!ref || !ref.participant) return null
+		const participant = ref.participant
+		
+		if (pipMode) {
+			// Priority 1: Screen Share
+			const screenPub = Array.from(participant.videoTrackPublications.values()).find(
+				(p: any) => p.source === Track.Source.ScreenShare && p.track
+			)
+			if (screenPub) return (screenPub as any).track
+
+			// Priority 2: Camera
+			const cameraPub = Array.from(participant.videoTrackPublications.values()).find(
+				(p: any) => p.source === Track.Source.Camera && p.track
+			)
+			if (cameraPub) return (cameraPub as any).track
+			
+			return null
+		}
+
+		// Default behavior (current reference or any video)
+		if (ref.track) return ref.track as Track
+		if (ref.publication?.track) return ref.publication.track as Track
+		const pubs = Array.from(participant.videoTrackPublications.values()) as any[]
+		return pubs.find(p => p.track)?.track || null
+	}, [])
+
+	// Helper to draw participant avatar to a canvas for PiP streaming when no camera is active
+	const drawAvatarToCanvas = useCallback(async (participant: any): Promise<MediaStream | null> => {
+		const canvas = document.createElement('canvas')
+		canvas.width = 512
+		canvas.height = 512
+		const ctx = canvas.getContext('2d')
+		if (!ctx) return null
+
+		// 1. Draw Initials/Placeholder IMMEDIATELY (Fix 3)
+		drawAvatarFallback(ctx, participant)
+
+		const avatarUrl = getParticipantAvatar(participant)
+		if (avatarUrl) {
+			try {
+				const img = new Image()
+				img.crossOrigin = 'anonymous'
+				img.src = avatarUrl
+				await new Promise((resolve, reject) => {
+					img.onload = resolve
+					img.onerror = () => reject(new Error('Image load failed'))
+					// Timeout to ensure we don't block PiP opening
+					setTimeout(() => reject(new Error('Image load timeout')), 2000)
+				})
+				
+				// Clear background and draw circular avatar over initials
+				ctx.clearRect(0, 0, 512, 512)
+				const gradient = ctx.createLinearGradient(0, 0, 0, 512)
+				gradient.addColorStop(0, '#252525')
+				gradient.addColorStop(1, '#1a1a1a')
+				ctx.fillStyle = gradient
+				ctx.fillRect(0, 0, 512, 512)
+
+				ctx.save()
+				ctx.beginPath()
+				ctx.arc(256, 256, 128, 0, Math.PI * 2)
+				ctx.clip()
+				ctx.drawImage(img, 128, 128, 256, 256)
+				ctx.restore()
+			} catch (err) {
+				// We already have the fallback initials drawn
+				console.warn('[PiP] Avatar image failed, using fallback:', err)
+			}
+		}
+
+		// Capture at 30fps to ensure browser treats it as active video (fixes stale frames)
+		return (canvas as any).captureStream(30)
+	}, [getParticipantAvatar])
+
+	// Helper for better avatar fallback (Fix 3)
+	const drawAvatarFallback = (ctx: CanvasRenderingContext2D, participant: any) => {
+		const name = participant.name || participant.identity || '?'
+		const initials = name
+			.split(' ')
+			.map((n: string) => n[0])
+			.join('')
+			.toUpperCase()
+			.substring(0, 2)
+
+		// Draw Circle
+		ctx.fillStyle = '#3b82f6' // Nice blue
+		ctx.beginPath()
+		ctx.arc(256, 256, 128, 0, Math.PI * 2)
+		ctx.fill()
+
+		// Draw Text
+		ctx.fillStyle = 'white'
+		ctx.font = 'bold 100px Inter, sans-serif'
+		ctx.textAlign = 'center'
+		ctx.textBaseline = 'middle'
+		ctx.fillText(initials, 256, 256)
+		
+		// Draw Name at bottom
+		ctx.font = '30px Inter, sans-serif'
+		ctx.fillText(name, 256, 420)
+	}
+
+	// Thumbnails scroll logic
 	const thumbnailsRef = useRef<HTMLDivElement>(null)
 	const [canScrollLeft, setCanScrollLeft] = useState(false)
 	const [canScrollRight, setCanScrollRight] = useState(false)
@@ -1922,7 +2079,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		if (thumbnailsRef.current) {
 			const { scrollLeft, scrollWidth, clientWidth } = thumbnailsRef.current
 			setCanScrollLeft(scrollLeft > 0)
-			setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 5)
+			setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 5) // -5 buffer
 		}
 	}, [])
 
@@ -1937,7 +2094,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				window.removeEventListener('resize', checkScroll)
 			}
 		}
-	}, [checkScroll, sortedParticipants.length])
+	}, [checkScroll, sortedParticipants.length]) // Re-check when participants change
 
 	const scrollThumbnails = (direction: 'left' | 'right') => {
 		if (thumbnailsRef.current) {
@@ -1949,342 +2106,172 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		}
 	}
 
+	const pipWindowRef = useRef<any>(null)
 	const pipVideoRef = useRef<HTMLVideoElement | null>(null)
-	const pipWindowRef = useRef<Window | null>(null)
-	const _pipAnimationFrameRef = useRef<number | null>(null)
-	const isAutoPiPRef = useRef(false)
-	const bridgeCanvasRef = useRef<HTMLCanvasElement | null>(null)
-	const bridgeVideoRef = useRef<HTMLVideoElement | null>(null)
-	const bridgeLoopRef = useRef<number | null>(null)
 
-
-	const startCanvasBridge = useCallback((sourceVideo: HTMLVideoElement) => {
-		if (!bridgeCanvasRef.current || !bridgeVideoRef.current) return null;
-
-		const canvas = bridgeCanvasRef.current;
-		const ctx = canvas.getContext('2d', { alpha: false });
-		if (!ctx) return null;
-
-		canvas.width = sourceVideo.videoWidth || 640;
-		canvas.height = sourceVideo.videoHeight || 360;
-
-		const drawFrame = () => {
-			if (sourceVideo.paused || sourceVideo.ended) return;
-			ctx.drawImage(sourceVideo, 0, 0, canvas.width, canvas.height);
-			bridgeLoopRef.current = requestAnimationFrame(drawFrame);
-		};
-
-		if (bridgeLoopRef.current) cancelAnimationFrame(bridgeLoopRef.current);
-		drawFrame();
-
-		const stream = canvas.captureStream(30);
-		bridgeVideoRef.current.srcObject = stream;
-
-		bridgeVideoRef.current.title = ' ';
-		bridgeVideoRef.current.controls = false;
-
-		bridgeVideoRef.current.play().catch(() => { });
-
-		return bridgeVideoRef.current;
-	}, []);
-
-	const togglePiP = useCallback(async (_e?: React.MouseEvent) => {
+	const togglePiP = useCallback(async () => {
 		try {
 			if (isMobileViewport) return
 
-			if (pipWindowRef.current) {
-				pipWindowRef.current.close()
-				pipWindowRef.current = null
+			// If already in PiP, close it
+			if (document.pictureInPictureElement || pipWindowRef.current) {
+				if (document.pictureInPictureElement) await document.exitPictureInPicture()
+				if (pipWindowRef.current) pipWindowRef.current.close()
 				return
 			}
 
-			if (document.pictureInPictureElement) {
-				await document.exitPictureInPicture()
+			// 1. Priority Selection: Screen Share > Camera > Avatar
+			const trackToUse = getTrackFromReference(focusedTrack, true)
+			let streamToUse: MediaStream | null = null
+			const participant = focusedTrack?.participant
+			const participantName = participant?.name || 'Participant'
+
+			if (!trackToUse && participant) {
+				streamToUse = await drawAvatarToCanvas(participant)
+			} else if (!trackToUse) {
+				console.warn('[PiP] No usable track or participant found')
 				return
 			}
 
-			// Case 2: Requesting PiP
-			const videoElement = document.querySelector('.focus-main-video video, .custom-grid-tile video, .lk-participant-tile video, video:not([data-remote-ignore])') as HTMLVideoElement
-			if (!videoElement) return
-
-			// Handle mirroring manually to avoid React re-renders (which close PiP)
-			const isMirrored = videoElement.classList.contains('scale-x-[-1]') || videoElement.style.transform.includes('scaleX(-1)')
-			if (isMirrored) {
-				videoElement.style.transform = 'none'
-			}
-
-			// Try Document PiP first (Available in Chrome 116+, requires gesture)
+			// 2. Document PiP Strategy (The 'Google Meet' Way)
 			if ('documentPictureInPicture' in window) {
 				try {
-					console.log('[PiP] Requesting Document PiP window...');
-					// eslint-disable-next-line @typescript-eslint/no-explicit-any
 					const pipWindow = await (window as any).documentPictureInPicture.requestWindow({
-						width: videoElement.clientWidth || 400,
-						height: videoElement.clientHeight || 300,
+						width: 400,
+						height: 300,
+					})
+					pipWindowRef.current = pipWindow
+
+					// Proxy styles
+					document.querySelectorAll('style, link[rel="stylesheet"]').forEach((s) => {
+						pipWindow.document.head.appendChild(s.cloneNode(true))
 					})
 
-					pipWindowRef.current = pipWindow
+					// Prepare Container
+					const container = pipWindow.document.createElement('div')
+					container.className = 'pip-container'
+					container.style.cssText = 'width:100vw; height:100vh; background:#000; display:flex; align-items:center; justify-content:center; overflow:hidden;'
+					pipWindow.document.body.appendChild(container)
+
+					const video = pipWindow.document.createElement('video')
+					video.autoplay = true
+					video.muted = true
+					video.playsInline = true
+					video.style.cssText = 'width:100%; height:100%; object-fit:cover;'
+					
+					if (trackToUse) {
+						const isLocalCamera = trackToUse.source === Track.Source.Camera && 
+							localParticipant?.identity === participant?.identity
+						if (isLocalCamera) video.style.transform = 'scaleX(-1)'
+						trackToUse.attach(video)
+					} else if (streamToUse) {
+						video.srcObject = streamToUse
+					}
+					
+					container.appendChild(video)
 					setIsPiPActive(true)
-					pipVideoRef.current = videoElement
-
-					// Set window title
-					pipWindow.document.title = 'Webyalaya PiP'
-
-					// Style the PiP window
-					const style = pipWindow.document.createElement('style')
-					style.textContent = `
-						body { 
-							margin: 0; 
-							padding: 0; 
-							background: #09090b; 
-							display: flex; 
-							align-items: center; 
-							justify-content: center; 
-							overflow: hidden; 
-							width: 100vw; 
-							height: 100vh; 
-							font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-						}
-						video { 
-							width: 100%; 
-							height: 100%; 
-							object-fit: contain; 
-							background: black;
-							transition: transform 0.3s ease;
-						}
-						.overlay {
-							position: absolute;
-							inset: 0;
-							pointer-events: none;
-							background: linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, transparent 20%, transparent 80%, rgba(0,0,0,0.3) 100%);
-							opacity: 0;
-							transition: opacity 0.3s;
-						}
-						body:hover .overlay { opacity: 1; }
-						.controls { 
-							position: absolute; 
-							top: 12px; 
-							right: 12px; 
-							z-index: 100; 
-							pointer-events: auto;
-						}
-						.badge {
-							position: absolute;
-							top: 12px;
-							left: 12px;
-							background: rgba(0, 220, 110, 0.2);
-							color: #00dc6e;
-							padding: 4px 10px;
-							border-radius: 99px;
-							font-size: 10px;
-							font-weight: 700;
-							letter-spacing: 0.05em;
-							border: 1px solid rgba(0, 220, 110, 0.3);
-							backdrop-filter: blur(8px);
-						}
-						button { 
-							background: rgba(255, 255, 255, 0.1);
-							color: white; 
-							border: 1px solid rgba(255, 255, 255, 0.2); 
-							padding: 6px 14px; 
-							border-radius: 8px; 
-							cursor: pointer; 
-							backdrop-filter: blur(12px);
-							font-size: 11px;
-							font-weight: 600;
-							transition: all 0.2s;
-							display: flex;
-							align-items: center;
-							gap: 6px;
-						}
-						button:hover {
-							background: rgba(255, 255, 255, 0.2);
-							transform: translateY(-1px);
-							box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-						}
-						button:active { transform: translateY(0); }
-					`
-					pipWindow.document.head.append(style)
-
-					// Container for overlay/UI
-					const overlay = pipWindow.document.createElement('div')
-					overlay.className = 'overlay'
-					pipWindow.document.body.append(overlay)
-
-					// Custom Badge
-					const customBadge = pipWindow.document.createElement('div')
-					customBadge.className = 'badge'
-					customBadge.textContent = 'SESSION LIVE'
-					pipWindow.document.body.append(customBadge)
-
-					// Move the video element to the PiP window
-					const videoParent = videoElement.parentElement
-					const videoNextSibling = videoElement.nextSibling
-					pipWindow.document.body.append(videoElement)
-
-					// Add a premium "Return" button
-					const controls = pipWindow.document.createElement('div')
-					controls.className = 'controls'
-					const returnBtn = pipWindow.document.createElement('button')
-					returnBtn.innerHTML = `
-						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
-						Back to Session
-					`
-					returnBtn.onclick = () => pipWindow.close()
-					controls.append(returnBtn)
-					pipWindow.document.body.append(controls)
 
 					pipWindow.addEventListener('pagehide', () => {
-						console.log('[PiP] Document PiP window closed');
+						if (trackToUse) trackToUse.detach(video)
 						setIsPiPActive(false)
 						pipWindowRef.current = null
-						if (videoParent) {
-							if (videoNextSibling) { videoParent.insertBefore(videoElement, videoNextSibling) }
-							else { videoParent.append(videoElement) }
-						}
-						// Small timeout to ensure it's removed from PiP doc before playing
-						setTimeout(() => {
-							videoElement.play().catch(() => { });
-						}, 50);
-						if (isMirrored) { videoElement.style.transform = '' }
-						pipVideoRef.current = null
-					}, { once: true })
-
+					})
 					return
-				} catch (e) {
-					console.warn('[PiP] Document PiP failed:', e);
+				} catch (docPipErr) {
+					console.warn('[PiP] Document PiP failed, falling back to Video PiP:', docPipErr)
 				}
 			}
 
-			// Fallback: Native Video Picture-in-Picture using the "Canvas Bridge"
-			// This tricks the browser into hiding the "LIVE" badge and scrubber line.
-			const bridgeVideo = startCanvasBridge(videoElement);
-			if (bridgeVideo) {
-				await bridgeVideo.requestPictureInPicture()
-				setIsPiPActive(true)
-				pipVideoRef.current = videoElement
-			}
-		} catch (_error) {
-			console.error('PiP error:', _error)
-		}
-	}, [isMobileViewport, startCanvasBridge])
+			// 3. Fallback Video PiP Strategy
+			const video = document.createElement('video')
+			video.autoplay = true
+			video.muted = true
+			video.playsInline = true
+			video.controls = false
+			video.style.cssText = 'width:100%; height:100%; object-fit:cover; background:black; position:fixed; top:-9999px;'
+			video.setAttribute('disableRemotePlayback', 'true')
 
-	// Users can still use the PiP toolbar button.
+			if (trackToUse) {
+				const isLocalCamera = trackToUse.source === Track.Source.Camera && 
+					localParticipant?.identity === participant?.identity
+				if (isLocalCamera) video.style.transform = 'scaleX(-1)'
+				trackToUse.attach(video)
+				video.srcObject = video.srcObject 
+			} else if (streamToUse) {
+				video.srcObject = streamToUse
+			}
+
+			document.body.appendChild(video)
+
+			// Aggressive "Clean PiP" Strategy for standard Video PiP
+			if ('mediaSession' in navigator) {
+				try {
+					navigator.mediaSession.metadata = new MediaMetadata({
+						title: ' ',
+						artist: ' ',
+						artwork: []
+					});
+					navigator.mediaSession.playbackState = 'none';
+				} catch (e) {}
+			}
+
+			try {
+				await video.play().catch(() => {})
+				await video.requestPictureInPicture()
+				setIsPiPActive(true)
+				pipVideoRef.current = video
+			} catch (err) {
+				console.error('[PiP] requestPictureInPicture failed:', err)
+				if (trackToUse) trackToUse.detach(video)
+				video.remove()
+			}
+		} catch (error) {
+			console.error('PiP error:', error)
+		}
+	}, [isMobileViewport, focusedTrack, localParticipant, getTrackFromReference, drawAvatarToCanvas])
+
+	// Auto-trigger PiP on visibility change (like Google Meet)
 	useEffect(() => {
 		if (isMobileViewport) return
 
-		const handleVisibilityChange = async () => {
-			console.log(`[PiP] event: hidden=${document.hidden}, pip=${!!document.pictureInPictureElement}`);
+		const handleVisibilityChange = async (e?: Event) => {
+			const isHidden = document.hidden;
+			const isVisible = !document.hidden;
 
-			if (document.hidden && !document.pictureInPictureElement && !pipWindowRef.current) {
-				// Search for candidate video
-				const videos = Array.from(document.querySelectorAll('.focus-main-video video, .custom-grid-tile video, .lk-participant-tile video, video:not([data-remote-ignore])')) as HTMLVideoElement[];
-				const videoElement = videos.find(v => v.readyState >= 2 && v.srcObject) || videos.find(v => v.readyState >= 2) || videos[0];
+			if (isHidden && !document.pictureInPictureElement && !pipWindowRef.current) {
+				// Use the priority-aware logic for auto-PiP too
+				const trackToUse = getTrackFromReference(focusedTrack, true)
+				let streamToUse: MediaStream | null = null
 
-				if (videoElement && videoElement.readyState >= 2) {
-					try {
-						// A tiny delay helps some browsers (like Chrome) process state changes before requesting PiP again
-						await new Promise(resolve => setTimeout(resolve, 150));
-
-						// Ensure video is active
-						await videoElement.play().catch(() => { });
-
-						const isMirrored = videoElement.classList.contains('scale-x-[-1]') || videoElement.style.transform.includes('scaleX(-1)')
-						if (isMirrored) {
-							videoElement.style.transform = 'none';
-						}
-
-						console.log('[PiP] Requesting PiP window...');
-						// Try Document PiP first
-						if ('documentPictureInPicture' in window) {
-							try {
-								console.log('[PiP] Requesting auto D-PiP window...');
-								// eslint-disable-next-line @typescript-eslint/no-explicit-any
-								const pipWindow = await (window as any).documentPictureInPicture.requestWindow({
-									width: videoElement.clientWidth || 400,
-									height: videoElement.clientHeight || 300,
-								})
-
-								pipWindowRef.current = pipWindow
-								setIsPiPActive(true)
-								pipVideoRef.current = videoElement
-								isAutoPiPRef.current = true
-
-								// Set window title
-								pipWindow.document.title = 'Webyalaya PiP'
-
-								const style = pipWindow.document.createElement('style')
-								style.textContent = `
-									body { margin: 0; padding: 0; background: black; display: flex; align-items: center; justify-content: center; overflow: hidden; width: 100vw; height: 100vh; }
-									video { width: 100%; height: 100%; object-fit: contain; }
-								`
-								pipWindow.document.head.append(style)
-
-								const videoParent = videoElement.parentElement
-								const videoNextSibling = videoElement.nextSibling
-								pipWindow.document.body.append(videoElement)
-
-								pipWindow.addEventListener('pagehide', () => {
-									setIsPiPActive(false)
-									pipWindowRef.current = null
-									isAutoPiPRef.current = false
-									if (videoParent) {
-										if (videoNextSibling) { videoParent.insertBefore(videoElement, videoNextSibling) }
-										else { videoParent.append(videoElement) }
-									}
-									if (isMirrored) { videoElement.style.transform = '' }
-									pipVideoRef.current = null
-								}, { once: true })
-								return; // Success
-							} catch (e) {
-								console.warn('[PiP] Auto D-PiP failed:', e);
-							}
-						}
-
-						// Fallback to Canvas Bridge (avoids the badge/line in native PiP)
-						const bridgeVideo = startCanvasBridge(videoElement);
-						if (bridgeVideo) {
-							await bridgeVideo.requestPictureInPicture();
-							setIsPiPActive(true);
-							pipVideoRef.current = videoElement;
-						}
-					} catch (err) {
-						console.warn('[PiP] Auto-PiP failed:', err);
-					}
+				if (!trackToUse && focusedTrack?.participant) {
+					streamToUse = await drawAvatarToCanvas(focusedTrack.participant)
+				} else if (!trackToUse) {
+					return
 				}
-			} else if (!document.hidden && (document.pictureInPictureElement || pipWindowRef.current)) {
+
 				try {
-					console.log('[PiP] Tab active, closing PiP');
-					if (document.pictureInPictureElement) {
-						await document.exitPictureInPicture();
-					}
-					if (pipWindowRef.current) {
-						pipWindowRef.current.close()
-						pipWindowRef.current = null
-					}
-					if (bridgeLoopRef.current) {
-						cancelAnimationFrame(bridgeLoopRef.current);
-						bridgeLoopRef.current = null;
-					}
-					setIsPiPActive(false);
-				} catch (_err) {
-					// Ignore
+					await new Promise(resolve => setTimeout(resolve, 150));
+					// For auto-PiP, we reuse togglePiP or similar logic
+					await togglePiP();
+				} catch (error) {
+					console.warn('[PiP] Auto-PiP failed:', error);
 				}
+			} else if (isVisible && (document.pictureInPictureElement || pipWindowRef.current)) {
+				try {
+					if (document.pictureInPictureElement) await document.exitPictureInPicture();
+					if (pipWindowRef.current) pipWindowRef.current.close();
+					setIsPiPActive(false);
+				} catch (error) { }
 			}
 		}
 
-		// Listen for native PiP exit
 		const handlePiPExit = () => {
 			setIsPiPActive(false)
-			if (bridgeLoopRef.current) {
-				cancelAnimationFrame(bridgeLoopRef.current);
-				bridgeLoopRef.current = null;
-			}
 			const videoElement = pipVideoRef.current
 			if (videoElement) {
-				if (videoElement.classList.contains('scale-x-[-1]')) {
-					videoElement.style.transform = ''
-				}
+				const trackToUse = getTrackFromReference(focusedTrack, true)
+				if (trackToUse) trackToUse.detach(videoElement)
+				videoElement.remove()
 			}
 			pipVideoRef.current = null
 		}
@@ -2293,50 +2280,43 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		document.addEventListener('leavepictureinpicture', handlePiPExit)
 
 		return () => {
-			if (bridgeLoopRef.current) cancelAnimationFrame(bridgeLoopRef.current);
 			document.removeEventListener('visibilitychange', handleVisibilityChange)
 			document.removeEventListener('leavepictureinpicture', handlePiPExit)
 		}
-	}, [isMobileViewport, startCanvasBridge])
+	}, [isMobileViewport, focusedTrack, localParticipant, togglePiP, getTrackFromReference, drawAvatarToCanvas])
 
-
-	// Mobile only: restore mic/camera after tab switch (Android can suspend tracks).
-	// Desktop: skip — same listener was firing on every tab/DevTools switch and calling setMicrophoneEnabled
-	// while the LiveKit engine was still reconnecting → "engine not connected within timeout".
+	// Mobile: Restore mic/camera after Android tab switch
+	// Android browsers suspend media tracks when the page is hidden.
+	// When the user returns, we re-enable tracks that were active before the switch.
 	const micBeforeHideRef = useRef<boolean>(false)
 	const cameraBeforeHideRef = useRef<boolean>(false)
 	useEffect(() => {
-		if (!isMobileViewport) return
-
 		const handleMobileVisibilityChange = async () => {
 			if (!localParticipant) return
 
 			if (document.hidden) {
-				if (lkRoom.state === ConnectionState.Connected) {
-					micBeforeHideRef.current = localParticipant.isMicrophoneEnabled
-					cameraBeforeHideRef.current = localParticipant.isCameraEnabled
-				}
-				return
-			}
+				// Tab going hidden — remember current track states
+				micBeforeHideRef.current = localParticipant.isMicrophoneEnabled
+				cameraBeforeHideRef.current = localParticipant.isCameraEnabled
+			} else {
+				// Tab becoming visible again — restore tracks that were active
+				// Small delay to let the browser fully resume
+				await new Promise(r => setTimeout(r, 500))
 
-			await new Promise((r) => setTimeout(r, 400))
-			if (lkRoom.state !== ConnectionState.Connected) return
-
-			if (micBeforeHideRef.current && !localParticipant.isMicrophoneEnabled) {
-				try {
-					await localParticipant.setMicrophoneEnabled(true)
-				} catch (err) {
-					if (process.env.NODE_ENV === 'development') {
+				if (micBeforeHideRef.current && !localParticipant.isMicrophoneEnabled) {
+					try {
+						await localParticipant.setMicrophoneEnabled(true)
+						console.log('[MobileVisibility] Mic restored after tab switch')
+					} catch (err) {
 						console.warn('[MobileVisibility] Failed to restore mic:', err)
 					}
 				}
-			}
 
-			if (cameraBeforeHideRef.current && !localParticipant.isCameraEnabled) {
-				try {
-					await localParticipant.setCameraEnabled(true)
-				} catch (err) {
-					if (process.env.NODE_ENV === 'development') {
+				if (cameraBeforeHideRef.current && !localParticipant.isCameraEnabled) {
+					try {
+						await localParticipant.setCameraEnabled(true)
+						console.log('[MobileVisibility] Camera restored after tab switch')
+					} catch (err) {
 						console.warn('[MobileVisibility] Failed to restore camera:', err)
 					}
 				}
@@ -2347,34 +2327,11 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		return () => {
 			document.removeEventListener('visibilitychange', handleMobileVisibilityChange)
 		}
-	}, [localParticipant, isMobileViewport, lkRoom])
+	}, [localParticipant])
 
 	return (
 		<>
 			<div className="flex-1 flex relative bg-[#09090b] overflow-hidden h-full w-full">
-				{isHost &&
-					sessionInfo?.sessionMode === 'WEBINAR' &&
-					sessionInfo?.sessionType === 'studyRoom' && (
-						<WebinarHostPanel
-							studyRoomId={sessionInfo.id}
-							guestParticipants={
-								(
-									sessionInfo as {
-										guestParticipants?: Array<{
-											id: string
-											name: string
-											email: string
-											role: string
-										}>
-									}
-								).guestParticipants ?? []
-							}
-							hostEmail={
-								(sessionInfo as SessionData).createdBy?.email ?? null
-							}
-							chatEnabled={webinarChatEnabledUi}
-						/>
-					)}
 				{/* Main Video Area - Centered and full width always (overlays used for sidebars) */}
 				<div className={`flex-1 flex flex-col transition-all duration-300 ease-in-out overflow-hidden relative ${(showChat || showParticipants) ? 'md:mr-96' : ''}`}>
 					{/* Zoom-Style Top Info Bar - Centered */}
@@ -2389,15 +2346,6 @@ const VideoRoomContent = memo(function VideoRoomContent({
 									<span className="text-white text-[10px] md:text-xs font-semibold tracking-wide truncate max-w-[120px] md:max-w-none">
 										{sessionTitle || 'Webyalaya Meeting'}
 									</span>
-
-									{/* Recording Badge */}
-									{isRecording && (
-										<div className="flex items-center gap-1 px-1.5 py-0.5 bg-red-500/90 rounded-md animate-pulse">
-											<div className="w-1 h-1 rounded-full bg-white" />
-											<span className="text-[8px] font-bold text-white uppercase tracking-tighter">REC</span>
-										</div>
-									)}
-
 									<div className="w-px h-3 bg-white/10" />
 									<span className="text-white/50 text-[9px] md:text-xs font-mono whitespace-nowrap">
 										{formattedTime}
@@ -3283,7 +3231,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 																		<span>SCREEN SHARE</span>
 																	</div>
 
-																	{/* Remote Control Actions - Overlay */}
+																	{/* Remote Control Actions - Overlay on the screen share half */}
 																	<RemoteControlOverlay
 																		isControlling={isControlling && targetScreenShareId === focusedParticipantForDisplay.identity}
 																		isSharing={focusedParticipantForDisplay.isLocal}
@@ -3355,24 +3303,6 @@ const VideoRoomContent = memo(function VideoRoomContent({
 																	onStopControl={stopControl}
 																	onRevokeControl={revokeControl}
 																/>
-															</div>
-														)}
-														{showScratchPad && (
-															<div className="absolute inset-0 z-[20] p-2 bg-[#0f0f0f]">
-																<ScratchPad 
-																	roomId={sessionStableId || sessionData?.id || (params.room as string)} 
-																	room={room}
-																	isHost={isHost}
-																	canEdit={isHost || permissions?.allowScratchPad}
-																/>
-																<button 
-																	onClick={() => setShowScratchPad(false)}
-																	className="absolute top-6 right-6 z-[21] w-10 h-10 bg-black/60 hover:bg-black/80 rounded-full flex items-center justify-center border border-white/10 text-white shadow-xl backdrop-blur-md"
-																>
-																	<X className="h-5 w-5" />
-																</button>
-															</div>
-														)}
 
 																{/* Remote Control Actions */}
 																{!focusedParticipantForDisplay.isLocal && !isControlling && (
@@ -3393,6 +3323,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 																		</Button>
 																	</div>
 																)}
+															</div>
+														)}
 														{isScreenShareFocused && !showScreenShareInMain && (
 															<div className="absolute inset-0 z-[2] flex flex-col items-center justify-center gap-3 bg-gradient-to-b from-[#252525] to-[#1a1a1a] px-6 text-center">
 																{screenShareMaximized ? (
@@ -3421,7 +3353,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 																</Button>
 															</div>
 														)}
-														{!isSplitMode && !isScreenShareFocused && isTrackReference(focusedTrack) && focusedTrack.publication?.track && (
+														{!isSplitMode && !isScreenShareFocused && focusedTrack.publication?.track && (
 															<div className="absolute inset-0 z-[2]">
 																<VideoTrack
 																	trackRef={focusedTrack}
@@ -3432,17 +3364,11 @@ const VideoRoomContent = memo(function VideoRoomContent({
 													</>
 												)}
 
-												{/* Flash Message Overlay */}
-												<FlashMessageOverlay 
-													message={activeFlashMessage || null} 
-													onDismiss={onFlashDismiss}
-												/>
-
 												<div className="absolute top-4 right-4 flex items-center gap-2 z-20">
 													<div
 														className={`w-8 h-8 rounded-full flex items-center justify-center ${focusedParticipantForDisplay.isMicrophoneEnabled
-															? 'bg-black/60 border border-white/20'
-															: 'bg-sky-500'
+																? 'bg-black/60 border border-white/20'
+																: 'bg-sky-500'
 															}`}
 														title={focusedParticipantForDisplay.isMicrophoneEnabled ? 'Unmuted' : 'Muted'}
 													>
@@ -3467,8 +3393,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 															size="sm"
 															onClick={togglePinFocused}
 															className={`h-9 px-4 rounded-lg border ${pinnedParticipantId === focusedParticipantForDisplay.identity
-																? 'bg-[#3b82f6] text-white hover:bg-[#2563eb] border-[#3b82f6]'
-																: 'bg-black/60 text-white hover:bg-black/80 border-white/10 backdrop-blur-sm'
+																	? 'bg-[#3b82f6] text-white hover:bg-[#2563eb] border-[#3b82f6]'
+																	: 'bg-black/60 text-white hover:bg-black/80 border-white/10 backdrop-blur-sm'
 																}`}
 															title={pinnedParticipantId === focusedParticipantForDisplay.identity ? 'Unpin' : 'Pin this video'}
 														>
@@ -3821,28 +3747,51 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				<div
 					className={`fixed left-2 right-2 md:left-1/2 md:-translate-x-1/2 md:w-fit md:min-w-[500px] flex items-center justify-between px-2 md:px-4 py-2 md:py-3 bg-[#141414]/90 backdrop-blur-xl border border-white/10 shadow-2xl z-[50] transition-all duration-300 rounded-xl md:rounded-2xl gap-1 md:gap-8 ${isUserActive ? 'bottom-3 md:bottom-6 opacity-100' : 'bottom-[-100px] opacity-0'}`}
 				>
-					{/* LEFT: Audio/Video Controls — shown for signed-in users and join-link guests */}
+					{/* LEFT: Audio/Video Controls - Horizontal Group */}
 					<div className="flex items-center gap-1 md:gap-3">
 						{/* Audio Button Stack */}
-						<div className="flex flex-col items-center justify-center group relative">
-							<div className="flex items-center bg-white/5 rounded-lg md:rounded-xl p-0.5 md:p-1 border border-white/5">
-								<button
-									type="button"
-									onClick={() => void handleToggleMicrophone()}
-									className={`h-11 w-11 md:h-10 md:w-10 flex items-center justify-center rounded-lg hover:bg-sky-500/20 active:scale-95 transition-all ${(isMicrophoneEnabled) ? 'text-white hover:text-sky-400' : 'bg-sky-500/10 text-sky-500 hover:text-sky-400'}`}
-									title="Toggle Microphone"
-								>
-									{(isMicrophoneEnabled) ? <Mic className="h-5 w-5 md:h-5 md:w-5" /> : <MicOff className="h-5 w-5 md:h-5 md:w-5" />}
-								</button>
-							</div>
-						</div>
-
-						{/* Video Button Stack */}
-						<div className="flex flex-col items-center justify-center group relative">
+						{!isGuest && (
+							<div className="flex flex-col items-center justify-center group relative">
 								<div className="flex items-center bg-white/5 rounded-lg md:rounded-xl p-0.5 md:p-1 border border-white/5">
 									<button
-										type="button"
-										onClick={() => void handleToggleCamera()}
+										onClick={async () => {
+											try {
+												if (!localParticipant) return
+
+												const newState = !localParticipant.isMicrophoneEnabled
+												if (newState && !isHost && permissions && !permissions.allowAudio) {
+													participantRequestAudio?.()
+													return
+												}
+												await localParticipant.setMicrophoneEnabled(newState)
+											} catch { }
+										}}
+										className={`h-11 w-11 md:h-10 md:w-10 flex items-center justify-center rounded-lg hover:bg-sky-500/20 active:scale-95 transition-all ${(isMicrophoneEnabled) ? 'text-white hover:text-sky-400' : 'bg-sky-500/10 text-sky-500 hover:text-sky-400'}`}
+										title="Toggle Microphone"
+									>
+										{(isMicrophoneEnabled) ? <Mic className="h-5 w-5 md:h-5 md:w-5" /> : <MicOff className="h-5 w-5 md:h-5 md:w-5" />}
+									</button>
+								</div>
+							</div>
+						)}
+
+						{/* Video Button Stack */}
+						{!isGuest && (
+							<div className="flex flex-col items-center justify-center group relative">
+								<div className="flex items-center bg-white/5 rounded-lg md:rounded-xl p-0.5 md:p-1 border border-white/5">
+									<button
+										onClick={async () => {
+											try {
+												if (!localParticipant) return
+
+												const newState = !localParticipant.isCameraEnabled
+												if (newState && !isHost && permissions && !permissions.allowVideo) {
+													participantRequestVideo?.()
+													return
+												}
+												await localParticipant.setCameraEnabled(newState)
+											} catch (_err) { }
+										}}
 										className={`h-11 w-11 md:h-10 md:w-10 flex items-center justify-center rounded-lg hover:bg-sky-500/20 active:scale-95 transition-all ${(isCameraEnabled) ? 'text-white hover:text-sky-400' : 'bg-sky-500/10 text-sky-500 hover:text-sky-400'}`}
 										title="Toggle Camera"
 									>
@@ -3861,6 +3810,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 									</button>
 								</div>
 							</div>
+						)}
 					</div>
 
 					{/* CENTER: Main Controls */}
@@ -3893,7 +3843,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 										} catch (err) {
 											const error = err as DOMException
 											if (error?.name === 'NotAllowedError') {
-												showError('Permission Denied', 'Permission to share screen was denied.')
+												showError('Permission Denied', 'Screen sharing permission was denied.')
 											} else if (error?.name === 'NotSupportedError') {
 												showError('Not Supported', 'Screen sharing is not supported on this device or browser.')
 											} else {
@@ -3909,38 +3859,11 @@ const VideoRoomContent = memo(function VideoRoomContent({
 							</div>
 						)}
 
-						{/* Recording Toggle (Host Only) */}
-						{isHost && !isGuest && (
-							<div className="flex flex-col items-center justify-center group relative">
-								<button
-									onClick={() => isRecording ? stopRecording() : startRecording()}
-									disabled={isRecordingTransitioning}
-									className={`h-9 w-9 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl transition-all duration-300 relative ${
-										isRecording 
-											? 'bg-red-500/20 text-red-500 hover:bg-red-500/30 shadow-[0_0_15px_rgba(239,68,68,0.3)]' 
-											: 'bg-white/5 text-white/80 hover:bg-white/10 hover:text-white'
-									} ${isRecordingTransitioning ? 'opacity-50 cursor-not-allowed' : 'active:scale-95'}`}
-									title={isRecording ? 'Stop Recording' : 'Start Recording'}
-								>
-									{isRecordingTransitioning ? (
-										<Loader2 className="h-4 w-4 md:h-5 md:w-5 animate-spin text-sky-400" />
-									) : (
-										<div className="relative flex items-center justify-center">
-											<Aperture className={`h-4 w-4 md:h-5 md:w-5 ${isRecording ? 'animate-pulse' : ''}`} />
-											{isRecording && (
-												<div className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-red-500 animate-ping" />
-											)}
-										</div>
-									)}
-								</button>
-							</div>
-						)}
-
 						{/* Chat */}
 						<div className={`flex flex-col items-center justify-center group ${(!canViewParticipantList && !isGuest) ? 'hidden' : ''}`}>
 							<button
 								onClick={() => {
-									if (!showChat) { setShowParticipants(false); setShowScratchPad(false) }
+									if (!showChat) { setShowParticipants(false); setShowFlashPanel(false) }
 									setShowChat(!showChat)
 								}}
 								className={`h-11 w-11 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl hover:bg-sky-500/20 active:scale-95 transition-all relative ${showChat ? 'bg-sky-500/20 text-sky-400' : 'text-white/80 hover:text-sky-400'}`}
@@ -3950,35 +3873,37 @@ const VideoRoomContent = memo(function VideoRoomContent({
 							</button>
 						</div>
 
-						{/* Scratch Pad Toggle */}
-						<div className="flex relative flex-col items-center justify-center group">
-							<button
-								onClick={() => {
-									if (!showScratchPad) { setShowChat(false); setShowParticipants(false); setShowFlashPanel(false) }
-									setShowScratchPad(!showScratchPad)
-								}}
-								className={`h-9 w-9 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl transition-all active:scale-95 ${showScratchPad
-										? 'bg-purple-600 text-white shadow-lg shadow-purple-600/20'
-										: 'bg-white/5 text-white/80 hover:bg-white/10 hover:text-white'
-									}`}
-								title="Open Whiteboard"
-							>
-								<PenTool className={`h-4 w-4 md:h-5 md:w-5 ${showScratchPad ? 'text-white' : 'text-white/80'}`} />
-							</button>
-						</div>
-
-
-
-						{canViewParticipantList && (
+						{/* Flash Messages (host only) */}
+						{isHost && (
 							<div className="flex flex-col items-center justify-center group">
 								<button
 									onClick={() => {
+										if (!showFlashPanel) { setShowChat(false); setShowParticipants(false) }
+										setShowFlashPanel((p) => !p)
+									}}
+									className={`h-11 w-11 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl hover:bg-yellow-500/20 active:scale-95 transition-all relative ${showFlashPanel ? 'bg-yellow-500/20 text-yellow-400' : 'text-white/80 hover:text-yellow-400'}`}
+									title="Flash Messages"
+								>
+									<Zap className="h-5 w-5 md:h-5 md:w-5" />
+									{activeFlashMessage && (
+										<span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-yellow-400 border-2 border-[#141414] animate-pulse" />
+									)}
+								</button>
+							</div>
+						)}
+
+						{!isGuest && (
+							<div className="flex flex-col items-center justify-center group">
+								{/* Participants */}
+								<button
+									onClick={() => {
 										if (!canViewParticipantList) return
-										if (!showParticipants) { setShowChat(false); setShowFlashPanel(false); setShowScratchPad(false) }
+										if (!showParticipants) { setShowChat(false); setShowFlashPanel(false) }
 										setShowParticipants(!showParticipants)
 									}}
+									disabled={!canViewParticipantList}
 									className={`h-11 w-11 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl hover:bg-sky-500/20 active:scale-95 transition-all relative ${showParticipants ? 'bg-sky-500/20 text-sky-400' : 'text-white/80 hover:text-sky-400'}`}
-									title="Participants"
+									title={canViewParticipantList ? 'Participants' : 'Participant list is hidden by host'}
 								>
 									<Users className="h-5 w-5 md:h-5 md:w-5" />
 									{allParticipants && allParticipants.length > 0 && (
@@ -3989,8 +3914,6 @@ const VideoRoomContent = memo(function VideoRoomContent({
 								</button>
 							</div>
 						)}
-
-
 
 						{/* PiP */}
 						<div className="hidden md:flex flex-col items-center justify-center group">
@@ -4003,6 +3926,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 							</button>
 						</div>
 
+						{/* Extend Session - Only show if timer is enabled AND user is host */}
 						{timerEnabled && isHost && (
 							<div className="hidden md:flex relative flex-col items-center justify-center group">
 								<button
@@ -4112,35 +4036,6 @@ const VideoRoomContent = memo(function VideoRoomContent({
 					</div>
 				</div>
 
-
-				{/* Collaborative Scratch Pad Overlay */}
-				{showScratchPad && (
-					<div className={`fixed md:absolute inset-0 z-[55] bg-black/40 backdrop-blur-sm flex flex-col transition-all duration-300 ${
-						(showChat || showParticipants) ? 'md:right-96' : ''
-					}`}>
-						<div className="absolute top-4 right-4 z-[60] flex items-center gap-2">
-							<Button 
-								variant="ghost" 
-								size="sm" 
-								onClick={() => setShowScratchPad(false)}
-								className="h-9 rounded-lg bg-black/60 text-white hover:bg-black/80 border border-white/10 backdrop-blur-sm"
-							>
-								<X className="h-4 w-4 mr-1.5" /> Close Pad
-							</Button>
-						</div>
-						<div className="flex-1 p-2 md:p-6 pb-20 md:pb-6">
-							<ScratchPad
-								roomId={sessionStableId || sessionData?.id || (params.room as string)}
-								room={room}
-								isHost={isHost}
-								canEdit={isHost || permissions?.allowScratchPad}
-								roomTitle={sessionData?.title}
-                                enabled={showScratchPad}
-							/>
-						</div>
-					</div>
-				)}
-
 				{/* Unified Sidebar - Tabbed Interface */}
 				<>
 					{/* Mobile Overlay Backdrop */}
@@ -4204,18 +4099,12 @@ const VideoRoomContent = memo(function VideoRoomContent({
 								{channelId ? (
 									<ChatWidget
 										channelId={channelId}
-										chatDisabled={effectiveChatDisabled}
+										chatDisabled={chatDisabled}
 										recipients={chatRecipients}
 										hostUserId={hostUser?.id}
 										currentUserDbId={currentUserDbId}
 										allowedAudiences={isGuest
-											? webinarChatMode === 'everyone' && webinarChatLive !== false
-												? {
-														EVERYONE: true,
-														HOST: true,
-														USER: true,
-													}
-												: { HOST: true, EVERYONE: false, USER: false }
+											? { HOST: true, EVERYONE: false, USER: false }
 											: {
 												EVERYONE: permissions?.allowChatEveryone ?? true,
 												HOST: permissions?.allowChatHost ?? true,
@@ -4402,16 +4291,64 @@ const VideoRoomContent = memo(function VideoRoomContent({
 										onEnableVideoParticipant={onEnableVideoParticipant}
 										onLockUserAudio={onLockUserAudio}
 										onLockUserVideo={onLockUserVideo}
+										onLockUserChatAudience={onLockUserChatAudience}
 										onRequestAudioOn={onRequestAudioOn}
 										onRequestVideoOn={onRequestVideoOn}
+										participantChatLocks={participantChatLocks}
 										pendingParticipantRequests={pendingParticipantRequests}
 										onApproveAudioRequest={hostRespondParticipantAudio}
 										onApproveVideoRequest={hostRespondParticipantVideo}
+										onPromoteToCohost={onPromoteToCohost}
 									/>
 								</div>
 							</div>
 						</div>
 					</div>
+					{/* Flash Panel sidebar (host only) */}
+					{isHost && (
+						<>
+							{/* Mobile backdrop */}
+							{showFlashPanel && (
+								<div
+									className="fixed inset-0 bg-black/60 z-40 md:hidden"
+									onClick={() => setShowFlashPanel(false)}
+								/>
+							)}
+							{/* Flash sidebar panel */}
+							<div className={`fixed md:absolute right-0 top-0 bottom-0 w-full sm:w-[85%] md:w-96 bg-[#1a1a1a]/95 backdrop-blur-md border-l border-white/10 z-[60] shadow-2xl flex flex-col transition-all duration-300 ${showFlashPanel
+								? 'translate-x-0 opacity-100 pointer-events-auto'
+								: 'translate-x-full opacity-0 pointer-events-none'
+								}`}>
+								{/* Header */}
+								<div className="h-14 md:h-16 bg-gradient-to-b from-[#1a1a1a] to-[#1a1a1a]/95 border-b border-white/10 flex items-center justify-between px-4 md:px-6 flex-shrink-0">
+									<div className="flex items-center gap-2 md:gap-3">
+										<Zap className="h-4 w-4 md:h-5 md:w-5 text-yellow-400" />
+										<span className="text-white font-semibold text-base md:text-lg">Flash Messages</span>
+									</div>
+									<button
+										onClick={() => setShowFlashPanel(false)}
+										className="h-7 w-7 md:h-8 md:w-8 p-0 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 rounded-full transition-colors"
+									>
+										<X className="h-3.5 w-3.5 md:h-4 md:w-4" />
+									</button>
+								</div>
+								{/* Body */}
+								<div className="flex-1 overflow-y-auto p-3 md:p-4">
+									<QuestionManager
+										questions={flashQuestions ?? []}
+										onUploadList={onFlashUploadList ?? (() => { })}
+										onUpdateQuestion={onFlashUpdateQuestion ?? (() => { })}
+										onReorder={onFlashReorder ?? (() => { })}
+										onDeleteQuestion={onFlashDeleteQuestion ?? (() => { })}
+										onFlashQuestion={onFlashShowQuestion ?? (() => { })}
+										onFlashAdHoc={onFlashShowAdHoc ?? (() => { })}
+										onDismissForAll={onFlashDismissForAll ?? (() => { })}
+										isFlashActive={!!activeFlashMessage}
+									/>
+								</div>
+							</div>
+						</>
+					)}
 				</>
 			</div>
 
@@ -4515,7 +4452,6 @@ const VideoRoomContent = memo(function VideoRoomContent({
 														: 'opacity-70 hover:opacity-100 hover:ring-1 hover:ring-white/20'
 														}`}
 												>
-													{/* eslint-disable-next-line @next/next/no-img-element */}
 													<img
 														src={bg.thumbnail}
 														alt={bg.name}
@@ -4539,8 +4475,9 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				</div>
 			)}
 
-			{/* Permission Request Modal - when host asks participant to enable audio/video */}
-			{!isHost && pendingPermissionRequest && (
+			{/* Permission Request Modal - Shows when host asks participant to enable audio/video */}
+			{/* Guests don't need microphone/camera permissions as they won't be using them */}
+			{!isHost && !isGuest && pendingPermissionRequest && (
 				<PermissionRequestModal
 					type={pendingPermissionRequest.type}
 					onAccept={() => {
@@ -4557,75 +4494,18 @@ const VideoRoomContent = memo(function VideoRoomContent({
 							respondToVideoRequest?.(false)
 						}
 					}}
-					onMediaError={(mediaType, err) =>
-						showMediaError(mediaType === 'audio' ? 'mic' : 'cam', err, true)
-					}
 					onDismiss={dismissPermissionRequest}
 				/>
 			)}
 
-			{/* Collaborative Scratchpad Overlay */}
-			{showScratchPad && (
-				<div className="fixed inset-0 z-[110] flex items-center justify-center p-4 md:p-12 animate-in fade-in zoom-in-95 duration-300">
-					<div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowScratchPad(false)} />
-					
-					<div className="relative w-full h-full max-w-7xl bg-[#0a0a0a]/90 backdrop-blur-2xl rounded-[32px] border border-white/10 shadow-[0_0_80px_-20px_rgba(0,0,0,0.8)] flex flex-col overflow-hidden ring-1 ring-white/5">
-						{/* Header */}
-						<div className="h-14 md:h-16 px-6 md:px-8 flex items-center justify-between border-b border-white/5 bg-white/5 flex-shrink-0">
-							<div className="flex items-center gap-3">
-								<div className="h-8 w-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
-									<PenTool className="h-4 w-4 text-purple-400" />
-								</div>
-								<div>
-									<h2 className="text-white font-bold text-sm md:text-base tracking-tight">Open Whiteboard</h2>
-									<p className="text-[10px] text-white/40 uppercase tracking-widest font-semibold flex items-center gap-1.5">
-										<span className="w-1.5 h-1.5 bg-[#00DC6E] rounded-full animate-pulse" />
-										 .
-									</p>
-								</div>
-							</div>
-
-							<div className="flex items-center gap-3">
-								{isHost && (
-									<Button
-										variant="ghost"
-										size="sm"
-										onClick={() => onLockScratchPad(!permissions?.allowScratchPad)}
-										className={`h-9 px-4 rounded-xl border transition-all text-xs font-semibold gap-2 ${
-											permissions?.allowScratchPad 
-												? 'bg-sky-500/10 text-sky-400 border-sky-500/20 hover:bg-sky-500/20' 
-												: 'bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20'
-										}`}
-									>
-										{permissions?.allowScratchPad ? <Lock className="h-3.5 w-3.5" /> : <ShieldCheck className="h-3.5 w-3.5" />}
-										{permissions?.allowScratchPad ? 'Lock for Participants' : 'Allow Participants to Edit'}
-									</Button>
-								)}
-								<div className="w-px h-6 bg-white/10 mx-1" />
-								<Button
-									variant="ghost"
-									size="sm"
-									onClick={() => setShowScratchPad(false)}
-									className="h-9 w-9 p-0 text-white/40 hover:text-white hover:bg-white/10 rounded-xl transition-all"
-								>
-									<X className="h-5 w-5" />
-								</Button>
-							</div>
-						</div>
-
-						{/* Editor Canvas */}
-						<div className="flex-1 min-h-0 relative bg-zinc-950">
-							<ScratchPad
-								roomId={sessionData?.id || 'default'}
-								room={room}
-								isHost={isHost}
-								canEdit={isHost || permissions?.allowScratchPad}
-								roomTitle={sessionData?.id || 'Meeting'}
-								enabled={showScratchPad}
-							/>
-						</div>
-					</div>
-				</div>
+			{/* Flash Message Overlay - shown to all participants when host broadcasts a flash */}
+			{activeFlashMessage && (
+				<FlashMessageOverlay
+					message={activeFlashMessage}
+					onDismiss={onDismissFlashMessage ?? (() => { })}
+					isHost={isHost}
+					onDismissForAll={onFlashDismissForAll}
+				/>
 			)}
 
 			{/* Remote Control Consent UI (Screen Sharer Side) */}
@@ -4661,10 +4541,6 @@ const VideoRoomContent = memo(function VideoRoomContent({
 					</div>
 				</div>
 			)}
-
-			{/* Hidden elements for Canvas Bridge PiP */}
-			<canvas ref={bridgeCanvasRef} className="hidden" aria-hidden="true" />
-			<video ref={bridgeVideoRef} className="hidden" aria-hidden="true" muted playsInline />
 		</>
 	)
 })
@@ -4677,11 +4553,14 @@ function ParticipantList({
 	onEnableVideoParticipant: _onEnableVideoParticipant, // Unused
 	onLockUserAudio: _onLockUserAudio, // Unused
 	onLockUserVideo: _onLockUserVideo, // Unused
+	onLockUserChatAudience,
 	onRequestAudioOn,
 	onRequestVideoOn,
+	participantChatLocks,
 	pendingParticipantRequests,
 	onApproveAudioRequest,
 	onApproveVideoRequest,
+	onPromoteToCohost,
 }: {
 	isHost: boolean
 	onMuteParticipant?: (targetUserId: string) => void
@@ -4690,11 +4569,21 @@ function ParticipantList({
 	onEnableVideoParticipant?: (targetUserId: string) => void
 	onLockUserAudio?: (targetUserId: string, locked: boolean) => void
 	onLockUserVideo?: (targetUserId: string, locked: boolean) => void
+	onLockUserChatAudience?: (
+		targetUserId: string,
+		audience: 'everyone' | 'host' | 'user',
+		locked: boolean,
+	) => void
 	onRequestAudioOn?: (targetUserId: string) => void
 	onRequestVideoOn?: (targetUserId: string) => void
+	participantChatLocks?: Record<string, ParticipantChatLocks>
 	pendingParticipantRequests?: ParticipantPermissionRequest[]
 	onApproveAudioRequest?: (userId: string, accepted: boolean) => void
 	onApproveVideoRequest?: (userId: string, accepted: boolean) => void
+	onPromoteToCohost?: (
+		participantIdentity: string,
+		role: 'PARTICIPANT' | 'COHOST',
+	) => void
 }) {
 	const participants = useParticipants()
 	const { localParticipant } = useLocalParticipant()
@@ -4751,6 +4640,11 @@ function ParticipantList({
 				const hasAReq = hasAudioRequest(participant.identity)
 				const hasVReq = hasVideoRequest(participant.identity)
 				const canControl = isHost && !isLocal
+				const chatLocks = participantChatLocks?.[participant.identity] || {
+					everyone: false,
+					host: false,
+					user: false,
+				}
 				const gradient = getAvatarColor(participant.identity)
 
 				// Helper to get avatar
@@ -4758,7 +4652,7 @@ function ParticipantList({
 					if (!participant.metadata) return null
 					try {
 						return JSON.parse(participant.metadata).avatar
-					} catch (err) { return null }
+					} catch { return null }
 				}
 				const avatarUrl = getAvatar()
 
@@ -4897,6 +4791,67 @@ function ParticipantList({
 									>
 										{isMicOn ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
 									</button>
+									{canControl && (
+										<div className="ml-1 flex items-center gap-1">
+											<button
+												onClick={() =>
+													onPromoteToCohost?.(participant.identity, 'COHOST')
+												}
+												className="px-1.5 py-1 rounded text-[9px] font-semibold bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30"
+												title="Make cohost"
+											>
+												Co
+											</button>
+											<button
+												onClick={() =>
+													onLockUserChatAudience?.(
+														participant.identity,
+														'everyone',
+														!chatLocks.everyone,
+													)
+												}
+												className={`px-1.5 py-1 rounded text-[9px] font-semibold ${chatLocks.everyone
+													? 'bg-red-500/20 text-red-300'
+													: 'bg-white/10 text-white/60 hover:text-white'
+													}`}
+												title="Restrict messages to Everyone"
+											>
+												E
+											</button>
+											<button
+												onClick={() =>
+													onLockUserChatAudience?.(
+														participant.identity,
+														'host',
+														!chatLocks.host,
+													)
+												}
+												className={`px-1.5 py-1 rounded text-[9px] font-semibold ${chatLocks.host
+													? 'bg-red-500/20 text-red-300'
+													: 'bg-white/10 text-white/60 hover:text-white'
+													}`}
+												title="Restrict messages to Host"
+											>
+												H
+											</button>
+											<button
+												onClick={() =>
+													onLockUserChatAudience?.(
+														participant.identity,
+														'user',
+														!chatLocks.user,
+													)
+												}
+												className={`px-1.5 py-1 rounded text-[9px] font-semibold ${chatLocks.user
+													? 'bg-red-500/20 text-red-300'
+													: 'bg-white/10 text-white/60 hover:text-white'
+													}`}
+												title="Restrict messages to specific users"
+											>
+												U
+											</button>
+										</div>
+									)}
 								</div>
 							)}
 						</div>
@@ -4912,13 +4867,11 @@ function PermissionRequestModal({
 	type,
 	onAccept,
 	onDeny,
-	onMediaError,
 	onDismiss,
 }: {
 	type: 'audio' | 'video'
 	onAccept: () => void
 	onDeny: () => void
-	onMediaError?: (mediaType: 'audio' | 'video', err: unknown) => void
 	onDismiss?: () => void
 }) {
 	const { localParticipant } = useLocalParticipant()
@@ -4932,8 +4885,7 @@ function PermissionRequestModal({
 			}
 			onAccept()
 		} catch (err) {
-			onMediaError?.(type, err)
-
+			onDeny()
 		}
 	}
 
