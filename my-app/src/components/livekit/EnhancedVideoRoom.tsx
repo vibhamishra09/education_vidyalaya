@@ -4023,7 +4023,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 					<div className="flex min-w-0 shrink-0 items-center justify-end gap-1.5 sm:gap-2">
 						<div className="relative shrink-0">
 							<Button
-								onClick={() => setShowEndMenu(!showEndMenu)}
+								onClick={isHost ? () => setShowEndMenu(!showEndMenu) : onLeave}
 								className={`
 							h-11 md:h-11 px-4 md:px-6 rounded-lg md:rounded-xl font-semibold text-xs md:text-sm transition-all duration-200
 							flex items-center gap-1.5 md:gap-2 shadow-lg active:scale-95
@@ -4034,7 +4034,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						`}
 							>
 								<PhoneOff className="h-4 w-4 md:h-4 md:w-4" />
-								<span className="hidden sm:inline">End</span>
+								<span className="hidden sm:inline">{isHost ? 'End' : 'Leave'}</span>
 							</Button>
 
 							{showEndMenu && (
