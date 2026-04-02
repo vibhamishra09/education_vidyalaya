@@ -49,29 +49,6 @@ export interface ParticipantPermissionRequest {
   timestamp: number;
 }
 
-// Flash Message interfaces
-export interface FlashMessage {
-  id: string;
-  type: 'QUESTION' | 'AD_HOC' | 'MEDIA';
-  content: string;
-  options?: string[];
-  duration?: number;
-  position?: 'top' | 'center' | 'bottom';
-  fontSize?: 'sm' | 'md' | 'lg' | 'xl';
-  timestamp: number;
-}
-
-export interface FlashQuestion {
-  id: string;
-  text: string;
-  options?: string[];
-  type?: 'MULTIPLE_CHOICE' | 'TRUE_FALSE' | 'OPEN';
-  order?: number;
-  duration?: number;
-  position?: 'top' | 'center' | 'bottom';
-  fontSize?: 'sm' | 'md' | 'lg' | 'xl';
-}
-
 export function useSessionModeration({ sessionId, sessionType, isHost: _isHost, token, userId, enabled = true } : { sessionId: string | null; sessionType: 'studyRoom' | 'peerSession' | null; isHost: boolean; token: string | null; userId?: string | null; enabled?: boolean }) {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -119,10 +96,6 @@ export function useSessionModeration({ sessionId, sessionType, isHost: _isHost, 
   // Pending requests from participants (for host to see)
   const [pendingParticipantRequests, setPendingParticipantRequests] = useState<ParticipantPermissionRequest[]>([]);
 
-  // Flash Message state
-  const [activeFlashMessage, setActiveFlashMessage] = useState<FlashMessage | null>(null);
-  const [flashQuestions, setFlashQuestions] = useState<FlashQuestion[]>([]);
-
   const connectingRef = useRef(false);
   const userIdRef = useRef(userId);
   
@@ -158,8 +131,6 @@ export function useSessionModeration({ sessionId, sessionType, isHost: _isHost, 
       permissions: RoomPermissions;
       roomSettings: RoomSettings;
       isHost: boolean;
-      flashQuestions?: FlashQuestion[];
-      activeFlashMessage?: FlashMessage;
     }) => {
       console.log('[moderation] sync-permissions:', data);
       if (data.permissions) {
@@ -171,13 +142,6 @@ export function useSessionModeration({ sessionId, sessionType, isHost: _isHost, 
         setRoomSettings(data.roomSettings);
       }
       setIsHostFromServer(data.isHost);
-      
-      if (data.flashQuestions) {
-        setFlashQuestions(data.flashQuestions);
-      }
-      if (data.activeFlashMessage) {
-        setActiveFlashMessage(data.activeFlashMessage);
-      }
     });
 
     // Room settings updated (for host UI)
@@ -294,15 +258,6 @@ export function useSessionModeration({ sessionId, sessionType, isHost: _isHost, 
           toast.error('Host denied your video request');
         }
       }
-    });
-
-    // Flash Message Events
-    s.on('flash-message', (data: { message: FlashMessage | null }) => {
-      setActiveFlashMessage(data.message);
-    });
-
-    s.on('flash-questions-updated', (data: { questions: FlashQuestion[] }) => {
-      setFlashQuestions(data.questions);
     });
 
     s.on('moderation-error', (data: { message?: string }) => {
@@ -482,54 +437,6 @@ export function useSessionModeration({ sessionId, sessionType, isHost: _isHost, 
     setPendingParticipantRequests(prev => prev.filter(r => !(r.userId === userId && r.type === type)));
   }, []);
 
-  // Flash Message methods
-  const flashUploadList = useCallback((questions: Omit<FlashQuestion, 'id'>[]) => {
-    if (!socket || !sessionId || !sessionType) return;
-    socket.emit('flash-upload-list', { sessionId, sessionType, questions });
-  }, [socket, sessionId, sessionType]);
-
-  const flashUpdateQuestion = useCallback((id: string, updates: Partial<FlashQuestion>) => {
-    if (!socket || !sessionId || !sessionType) return;
-    socket.emit('flash-update-question', { sessionId, sessionType, id, updates });
-  }, [socket, sessionId, sessionType]);
-
-  const flashReorder = useCallback((ids: string[]) => {
-    if (!socket || !sessionId || !sessionType) return;
-    socket.emit('flash-reorder', { sessionId, sessionType, ids });
-  }, [socket, sessionId, sessionType]);
-
-  const flashDeleteQuestion = useCallback((id: string) => {
-    if (!socket || !sessionId || !sessionType) return;
-    socket.emit('flash-delete-question', { sessionId, sessionType, id });
-  }, [socket, sessionId, sessionType]);
-
-  const flashShowQuestion = useCallback((id: string, duration?: number) => {
-    if (!socket || !sessionId || !sessionType) return;
-    socket.emit('flash-show-question', { sessionId, sessionType, id, duration });
-  }, [socket, sessionId, sessionType]);
-
-  const flashShowAdHoc = useCallback((content: string, type: 'AD_HOC' | 'MEDIA', duration?: number) => {
-    if (!socket || !socket.connected || !sessionId || !sessionType) {
-      console.warn('Cannot show flash message: socket not connected');
-      return;
-    }
-    socket.emit('flash-show-adhoc', { sessionId, sessionType, content, type, duration });
-  }, [socket, sessionId, sessionType]);
-
-  const flashDismiss = useCallback(() => {
-    if (!socket || !sessionId || !sessionType) return;
-    socket.emit('flash-dismiss', { sessionId, sessionType });
-  }, [socket, sessionId, sessionType]);
-
-  const flashGetList = useCallback(() => {
-    if (!socket || !sessionId || !sessionType) return;
-    socket.emit('flash-get-list', { sessionId, sessionType });
-  }, [socket, sessionId, sessionType]);
-
-  const dismissFlashMessage = useCallback(() => {
-    setActiveFlashMessage(null);
-  }, []);
-
   return {
     socket,
     isConnected,
@@ -573,18 +480,5 @@ export function useSessionModeration({ sessionId, sessionType, isHost: _isHost, 
     pendingParticipantRequests,
     clearParticipantRequest,
     participantChatLocks,
-    // Flash message state
-    activeFlashMessage,
-    flashQuestions,
-    // Flash message actions
-    flashUploadList,
-    flashUpdateQuestion,
-    flashReorder,
-    flashDeleteQuestion,
-    flashShowQuestion,
-    flashShowAdHoc,
-    flashDismiss,
-    flashGetList,
-    dismissFlashMessage,
   };
 }

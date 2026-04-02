@@ -1,6 +1,6 @@
 import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { AccessToken, VideoGrant, EgressClient, S3Upload, RoomServiceClient } from 'livekit-server-sdk';
+import { AccessToken, VideoGrant, EgressClient, S3Upload, RoomServiceClient, EncodedFileType } from 'livekit-server-sdk';
 
 @Injectable()
 export class LivekitService {
@@ -91,9 +91,10 @@ export class LivekitService {
       // Use EncodedFileOutput format directly (SDK checks for filepath/fileType)
       const fileOutput: any = {
         filepath: output.filepath,
+        fileType: EncodedFileType.MP4,
         output: {
-          case: 's3',
-          value: output.s3,
+          $case: 's3' as const,
+          s3: output.s3,
         },
       };
 

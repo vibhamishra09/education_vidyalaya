@@ -193,7 +193,7 @@ export function AchievementBadge({
             {isUnlocked && achievement.unlockedAt && (
               <div className="flex items-center gap-1.5 pt-2 border-t border-border mt-2">
                 <Check className="h-3 w-3 text-green-500" />
-                <span className="text-xs text-muted-foreground">
+                <span className="text-xs text-muted-foreground" suppressHydrationWarning>
                   Unlocked {new Date(achievement.unlockedAt).toLocaleDateString()}
                 </span>
               </div>
