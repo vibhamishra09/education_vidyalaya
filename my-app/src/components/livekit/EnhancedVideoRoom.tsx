@@ -2185,8 +2185,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			if ('documentPictureInPicture' in window && !isAuto) {
 				try {
 					const pipWindow = await (window as any).documentPictureInPicture.requestWindow({
-						width: 480,
-						height: 270,
+						width: 384,
+						height: 216,
 					})
 					pipWindowRef.current = pipWindow
 
