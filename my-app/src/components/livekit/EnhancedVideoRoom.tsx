@@ -1948,24 +1948,23 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			// Find ALL remote participants first (exclude local participant from mirrored view)
 			const remoteParticipants = allParticipants.filter((p: any) => p.identity !== localParticipant?.identity)
 			
-			// Priority 1: Remote Screen Share (Teacher/Host preferred)
+			// Priority 1: Remote Screen Share (preferred if someone else is presenting)
 			const remoteScreenShare = remoteParticipants
 				.map((p: any) => Array.from(p.videoTrackPublications.values()).find((pub: any) => pub.source === Track.Source.ScreenShare && pub.track))
 				.find((pub: any) => !!pub)
 			if (remoteScreenShare) return (remoteScreenShare as any).track
 
-			// Priority 2: Remote Camera (Teacher/Host preferred)
+			// Priority 2: Remote Camera (Avoid local screen share to prevent infinite mirror)
 			const remoteCamera = remoteParticipants
 				.map((p: any) => Array.from(p.videoTrackPublications.values()).find((pub: any) => pub.source === Track.Source.Camera && pub.track))
 				.find((pub: any) => !!pub)
 			if (remoteCamera) return (remoteCamera as any).track
 
-			// Priority 3: Local Camera (NEVER local screen share to avoid mirroring)
+			// Priority 3: Local Camera
 			const localCamera = Array.from(localParticipant?.videoTrackPublications.values() || [])
 				.find(pub => pub.source === Track.Source.Camera && pub.track)
 			if (localCamera) return (localCamera as any).track
 
-			// EXPLICIT: Never ever show local screen share in PiP for the presenter
 			return null
 		}
 
@@ -2110,6 +2109,10 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			const video = persistentPipVideoRef.current
 			if (!video || pipSyncRef.current.syncing) return
 
+			// Allow Chrome to automatically handle PiP transitions if possible
+			video.setAttribute('autoPictureInPicture', 'true');
+			video.disablePictureInPicture = false;
+
 			pipSyncRef.current.syncing = true
 			try {
 				// 1. Get Best Candidate (Screen > Remote Camera > Local Camera)
@@ -2169,90 +2172,108 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		try {
 			if (isMobileViewport) return
 
-			// If already in PiP, close it
+			// If already in PiP, close it (handle both types)
 			if (document.pictureInPictureElement || pipWindowRef.current) {
 				if (document.pictureInPictureElement) await document.exitPictureInPicture()
 				if (pipWindowRef.current) pipWindowRef.current.close()
+				setIsPiPActive(false)
 				return
 			}
 
-			// 1. Determine if we should use Document PiP (Manual clicks only)
+			// 1. CHROME ONLY: Clean Mini-Window (Option 2 - No Badge, No Line)
+			// Priority for manual clicks in Chrome to allow for a perfectly clean UI
 			if ('documentPictureInPicture' in window && !isAuto) {
 				try {
 					const pipWindow = await (window as any).documentPictureInPicture.requestWindow({
-						width: 400,
-						height: 300,
+						width: 480,
+						height: 270,
 					})
 					pipWindowRef.current = pipWindow
 
-					// Proxy styles
-					document.querySelectorAll('style, link[rel="stylesheet"]').forEach((s) => {
-						pipWindow.document.head.appendChild(s.cloneNode(true))
-					})
+					const doc = pipWindow.document
+					doc.title = 'Webyalaya Session'
+					doc.body.style.background = '#000'
+					doc.body.style.margin = '0'
+					doc.body.style.padding = '0'
+					doc.body.style.overflow = 'hidden'
+					doc.body.style.display = 'flex'
+					doc.body.style.alignItems = 'center'
+					doc.body.style.justifyContent = 'center'
 
-					const container = pipWindow.document.createElement('div')
-					container.style.cssText = 'width:100vw; height:100vh; background:#000; display:flex; align-items:center; justify-content:center; overflow:hidden;'
-					pipWindow.document.body.appendChild(container)
+					// INJECT CSS: This is the ONLY way to remove the "LIVE" badge and blue line in Chrome
+					const style = doc.createElement('style')
+					style.textContent = `
+						video::-webkit-media-controls { display: none !important; }
+						video::-webkit-media-controls-enclosure { display: none !important; }
+						video { width: 100%; height: 100%; object-fit: contain; }
+						* { -webkit-user-select: none; user-select: none; cursor: default; }
+					`
+					doc.head.appendChild(style)
 
-					const video = pipWindow.document.createElement('video')
+					const video = doc.createElement('video')
 					video.autoplay = true
 					video.muted = true
 					video.playsInline = true
-					video.style.cssText = 'width:100%; height:100%; object-fit:cover;'
 					
-					// Re-use current "best" selection for Doc PiP too
+					// Selection logic (Already fixed for "Square One" mirror issue)
 					const trackToUse = getTrackFromReference(null, true)
 					if (trackToUse) {
 						const isLocalCamera = trackToUse.source === Track.Source.Camera && (trackToUse as any).isLocal
-						if (isLocalCamera) video.style.transform = 'scaleX(-1)'
+						video.style.transform = isLocalCamera ? 'scaleX(-1)' : ''
 						trackToUse.attach(video)
-					} else {
-						const remoteWithAvatar = allParticipants.find((p: any) => p.identity !== localParticipant?.identity) || localParticipant
-						if (remoteWithAvatar) {
-							const stream = await drawAvatarToCanvas(remoteWithAvatar)
-							video.srcObject = stream
-						}
 					}
+
+					doc.body.appendChild(video)
 					
-					container.appendChild(video)
+					// Ensure immediate playback
+					setTimeout(() => video.play().catch(() => {}), 150)
+
 					setIsPiPActive(true)
 
 					pipWindow.addEventListener('pagehide', () => {
 						setIsPiPActive(false)
 						pipWindowRef.current = null
 					})
-					return
+					return // Task Complete for Chrome manual click
 				} catch (docPipErr) {
-					console.warn('[PiP] Document PiP failed, falling back to Video PiP:', docPipErr)
+					console.warn('[PiP] Document PiP failed, falling back to Native PiP:', docPipErr)
 				}
 			}
 
-			// 2. Standard Video PiP (PROACTIVE: No async, just request)
+			// 2. FALLBACK/SAFARI/AUTO-PIP: Native rounded overlay
 			const video = persistentPipVideoRef.current
 			if (!video) return
 
-			// Emergency Prep: If the background sync hasn't made the video "ready" yet,
-			// we do a quick synchronous setup here while still in the user gesture tick.
-			if (video.readyState < 2 && !video.srcObject) {
+			// Ensure native attributes are set for auto-PiP
+			video.setAttribute('autoPictureInPicture', 'true')
+			video.disablePictureInPicture = false
+			video.playsInline = true
+			video.muted = true
+
+			// HARDENED READINESS CHECK: Ensure video is actually ready for PiP
+			if (!video.srcObject || video.readyState < 2) {
 				const trackToUse = getTrackFromReference(null, true)
-				if (trackToUse) trackToUse.attach(video)
-			}
-
-			// Synchronous play is usually required right before PiP in some browsers
-			if (video.paused) {
-				await video.play().catch(() => {})
-			}
-
-			// Set MediaSession for brand/Live control
-			if ('mediaSession' in navigator) {
-				try {
-					navigator.mediaSession.metadata = new MediaMetadata({
-						title: 'Live Session - Webyalaya',
-						artist: 'Meeting Room',
-						artwork: []
+				if (trackToUse) {
+					trackToUse.attach(video)
+					// Robust wait for metadata/playability
+					await new Promise(resolve => {
+						const onReady = () => {
+							video.removeEventListener('loadedmetadata', onReady);
+							video.removeEventListener('canplay', onReady);
+							resolve(null);
+						};
+						video.addEventListener('loadedmetadata', onReady);
+						video.addEventListener('canplay', onReady);
+						setTimeout(onReady, 600); // Fail-safe
 					});
-					navigator.mediaSession.playbackState = 'playing';
-				} catch (e) {}
+				}
+			}
+
+			// Ensure it is actually playing before calling PiP
+			try {
+				await video.play()
+			} catch (e) {
+				console.warn('[PiP] Play failed, but requesting PiP anyway:', e)
 			}
 
 			if (video.requestPictureInPicture) {
@@ -2262,7 +2283,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		} catch (error) {
 			console.error('PiP Error:', error)
 		}
-	}, [isMobileViewport, allParticipants, localParticipant, getTrackFromReference, drawAvatarToCanvas])
+	}, [isMobileViewport, allParticipants, localParticipant, getTrackFromReference])
 
 	// Auto-trigger PiP on visibility change (like Google Meet)
 	useEffect(() => {
@@ -2272,28 +2293,19 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			const isHidden = document.hidden;
 			const isVisible = !document.hidden;
 
-			if (isHidden && !document.pictureInPictureElement && !pipWindowRef.current) {
-				// Use the priority-aware logic for auto-PiP too
-				const trackToUse = getTrackFromReference(focusedTrack, true)
-				let streamToUse: MediaStream | null = null
-
-				if (!trackToUse && focusedTrack?.participant) {
-					streamToUse = await drawAvatarToCanvas(focusedTrack.participant)
-				} else if (!trackToUse) {
-					return
-				}
-
+			if (isHidden && !document.pictureInPictureElement) {
 				try {
-					await new Promise(resolve => setTimeout(resolve, 150));
-					// For auto-PiP, we pass isAuto: true
+					// Small delay to ensure browser transition is settled
+					await new Promise(resolve => setTimeout(resolve, 200));
+					// For chrome, the autoPictureInPicture attribute handles the transition
+					// but we still call togglePiP to ensure state consistency
 					await togglePiP(true);
 				} catch (error) {
 					console.warn('[PiP] Auto-PiP failed:', error);
 				}
-			} else if (isVisible && (document.pictureInPictureElement || pipWindowRef.current)) {
+			} else if (isVisible && document.pictureInPictureElement) {
 				try {
-					if (document.pictureInPictureElement) await document.exitPictureInPicture();
-					if (pipWindowRef.current) pipWindowRef.current.close();
+					await document.exitPictureInPicture();
 					setIsPiPActive(false);
 				} catch (error) { }
 			}
