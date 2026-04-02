@@ -56,18 +56,24 @@ export function TestimonialsSlider() {
     { page: 1, limit: 20 },
     { refetchInterval: REVIEWS_REFRESH_INTERVAL_MS, refetchIntervalInBackground: true }
   );
-  console.log(reviewsData);
-  
+  const negativeWords = ["bad", "worst", "poor", "terrible"];
+
   const baseTestimonials = useMemo<Testimonial[]>(() => {
     const reviews = reviewsData?.reviews ?? [];
 
     return reviews
       .filter((review) => {
-        const trimmedReview = review.review?.trim();
-        if (!trimmedReview) return false;
-        // Only show reviews with more than 3 words
-        return trimmedReview;
-      })
+          const text = review.review?.trim();
+          if (!text) return false;
+
+          const lower = text.toLowerCase();
+
+          const isNegative = negativeWords.some(word =>
+            lower.includes(word)
+          );
+
+          return text.length > 5 && !isNegative;
+        })
       .map((review) => ({
         id: review.id,
         reviewerId: review.reviewer.id,
