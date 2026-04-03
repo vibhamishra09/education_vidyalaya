@@ -24,7 +24,7 @@
 **Component**: `src/app/sign-up/page.tsx`  
 **Purpose**: User registration  
 **Auth**: Public  
-**Description**: Clerk sign-up interface, redirects to onboarding after sign-up
+**Description**: Clerk sign-up interface, redirects to dashboard after sign-up
 
 ---
 
@@ -73,14 +73,7 @@
 
 ---
 
-#### GET `/onboarding`
-**Component**: `src/app/onboarding/page.tsx`  
-**Purpose**: User onboarding flow  
-**Auth**: Required (new users)  
-**Role**: Users who haven't completed onboarding  
-**Description**: Multi-step onboarding (profile, skills I have, skills I want)
-
----
+ ---
 
 #### GET `/studyroom/[roomId]`
 **Component**: `src/app/studyroom/[roomId]/page.tsx`  
@@ -189,7 +182,6 @@ export default clerkMiddleware((auth, req) => {
 #### Protected Routes
 - `/dashboard`
 - `/profile` (own profile)
-- `/onboarding`
 - `/studyroom/[roomId]`
 - `/sessions/[sessionId]`
 - `/request-session/[userId]`
@@ -211,10 +203,6 @@ Currently, all authenticated users have the same access. Future enhancements:
 ```
 Landing Page (/)
   ↓ (Sign Up)
-Sign Up (/sign-up)
-  ↓ (Complete)
-Onboarding (/onboarding)
-  ↓ (Complete)
 Dashboard (/dashboard)
   ↓ (Browse)
 Browse (/browse)
@@ -236,9 +224,6 @@ Dashboard (/dashboard)
 - Redirects to `/dashboard` (or previous page if exists)
 
 #### After Sign Up
-- Redirects to `/onboarding`
-
-#### After Onboarding
 - Redirects to `/dashboard`
 
 #### Unauthenticated Access to Protected Routes

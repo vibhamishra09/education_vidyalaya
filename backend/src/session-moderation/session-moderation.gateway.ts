@@ -421,45 +421,50 @@ export class SessionModerationGateway
     }
 
     try {
-      // Verify host
       const clerkId = client.data.userId;
+      const startTime = Date.now();
 
-      if (sessionType === 'studyRoom') {
-        // Check if already completed to avoid duplicate completion
-        const roomDetails =
-          await this.studyRoomsService.getStudyRoomDetails(sessionId);
-        if (
-          roomDetails.sessionStatus !== 'DONE' &&
-          roomDetails.sessionStatus !== 'NOT_COMPLETED' &&
-          roomDetails.sessionStatus !== 'CANCELLED'
-        ) {
-          await this.studyRoomsService.completeStudyRoom(sessionId, clerkId);
-        }
-      } else {
-        // Check if already completed to avoid duplicate completion
-        const sessionDetails =
-          await this.peerSessionsService.getPeerSessionDetails(sessionId);
-        if (
-          sessionDetails.sessionStatus !== 'DONE' &&
-          sessionDetails.sessionStatus !== 'NOT_COMPLETED' &&
-          sessionDetails.sessionStatus !== 'CANCELLED'
-        ) {
-          await this.peerSessionsService.completePeerSession(
-            sessionId,
-            clerkId,
-          );
-        }
-      }
-
-      // Cleanup Redis permissions for this session
-      await this.permissionsService.cleanupSession(sessionId);
-
-      // Broadcast meeting ended to all in the room
+      // 1. BROADCAST IMMEDIATELY for 1s response time goal
       this.server
         .to(sessionId)
         .emit('meeting-ended', { sessionId, sessionType, endedBy: clerkId });
 
       client.emit('end-meeting:ok', { message: 'Meeting ended' });
+
+      this.logger.log(`⚡ [handleEndMeeting] Initial events emitted in ${Date.now() - startTime}ms`);
+
+      // 2. Background all service calls and cleanup (non-awaited)
+      (async () => {
+        try {
+          this.logger.debug(`🚀 [handleEndMeeting] Starting background cleanup for ${sessionId}`);
+          
+          if (sessionType === 'studyRoom') {
+            const roomDetails = await this.studyRoomsService.getStudyRoomDetails(sessionId);
+            if (
+              roomDetails.sessionStatus !== 'DONE' &&
+              roomDetails.sessionStatus !== 'NOT_COMPLETED' &&
+              roomDetails.sessionStatus !== 'CANCELLED'
+            ) {
+              await this.studyRoomsService.completeStudyRoom(sessionId, clerkId);
+            }
+          } else {
+            const sessionDetails = await this.peerSessionsService.getPeerSessionDetails(sessionId);
+            if (
+              sessionDetails.sessionStatus !== 'DONE' &&
+              sessionDetails.sessionStatus !== 'NOT_COMPLETED' &&
+              sessionDetails.sessionStatus !== 'CANCELLED'
+            ) {
+              await this.peerSessionsService.completePeerSession(sessionId, clerkId);
+            }
+          }
+
+          // Cleanup Redis permissions for this session
+          await this.permissionsService.cleanupSession(sessionId);
+          this.logger.log(`✅ [handleEndMeeting] Background cleanup completed for ${sessionId} in ${Date.now() - startTime}ms`);
+        } catch (bgError) {
+          this.logger.error(`❌ [handleEndMeeting] Background cleanup failed for ${sessionId}:`, bgError);
+        }
+      })();
     } catch (error: any) {
       this.logger.error('Error ending meeting:', error);
       client.emit('moderation-error', {

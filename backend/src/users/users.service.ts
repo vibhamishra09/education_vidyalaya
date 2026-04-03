@@ -133,6 +133,10 @@ export class UsersService {
           clerkId,
           name: existingByEmail.name || displayName,
           avatar: existingByEmail.avatar || avatar,
+          // Automatically onboard even if they existed as a placeholder
+          onboarded: true,
+          // Give coins if they never had any (newly onboarded)
+          ...(existingByEmail.onboarded ? {} : { coins: { increment: 1000 } }),
         },
         select: {
           id: true,
@@ -149,7 +153,8 @@ export class UsersService {
           email: normalizedEmail,
           name: displayName,
           avatar,
-          onboarded: false,
+          onboarded: true,
+          coins: 1000, // Award welcome coins automatically
         },
         select: {
           id: true,
@@ -759,134 +764,4 @@ export class UsersService {
     }));
   }
 
-  async completeOnboarding(
-    clerkId: string,
-    data: {
-      name: string;
-      email: string;
-      avatar?: string;
-      bio?: string;
-      location?: string;
-      school?: string;
-      hourlyRate?: number;
-      skillsIHave: string[];
-      skillsIWant: string[];
-    },
-  ) {
-    // Create user with onboarding data (on-demand user creation)
-    this.logger.debug('🔍 Completing onboarding for user:', clerkId);
-    const normalizedHourlyRate = data.hourlyRate ?? 0;
-    const normalizedEmail = data.email.trim().toLowerCase();
-    const userPayload = {
-      name: data.name,
-      email: normalizedEmail,
-      avatar: data.avatar,
-      bio: data.bio,
-      location: data.location,
-      school: data.school,
-      hourlyRate: normalizedHourlyRate,
-      coins: 1000, // Award 1000 coins for completing onboarding
-      onboarded: true,
-    };
-
-    const existingByClerkId = await this.prisma.user.findUnique({
-      where: { clerkId },
-      select: { id: true },
-    });
-
-    const existingByEmail = existingByClerkId
-      ? null
-      : await this.prisma.user.findUnique({
-        where: { email: normalizedEmail },
-        select: { id: true },
-      });
-
-    const user = (existingByClerkId
-      ? await this.prisma.user.update({
-        where: { clerkId },
-        data: userPayload,
-      })
-      : existingByEmail
-        ? await this.prisma.user.update({
-          where: { id: existingByEmail.id },
-          data: {
-            ...userPayload,
-            clerkId,
-          },
-        })
-        : await this.prisma.user.create({
-          data: {
-            clerkId,
-            ...userPayload,
-          },
-        }));
-
-    this.logger.debug('🔍 User created:', user);
-
-    await this.syncClerkMetadata(clerkId, user.id);
-
-    // Process skills - first ensure they exist in the Skill table
-    const allSkills = [...data.skillsIHave, ...data.skillsIWant];
-    for (const skillName of allSkills) {
-      await this.prisma.skill.upsert({
-        where: { name: skillName },
-        update: {},
-        create: { name: skillName },
-      });
-    }
-
-    // Clear existing user skills
-    await this.prisma.userSkill.deleteMany({
-      where: { userId: user.id },
-    });
-
-    // Add "HAS" skills
-    for (const skillName of data.skillsIHave) {
-      const skill = await this.prisma.skill.findUnique({
-        where: { name: skillName },
-      });
-
-      if (skill) {
-        await this.prisma.userSkill.create({
-          data: {
-            userId: user.id,
-            skillId: skill.id,
-            type: 'HAS',
-          },
-        });
-      }
-    }
-
-    // Add "WANTS" skills
-    for (const skillName of data.skillsIWant) {
-      const skill = await this.prisma.skill.findUnique({
-        where: { name: skillName },
-      });
-
-      if (skill) {
-        await this.prisma.userSkill.create({
-          data: {
-            userId: user.id,
-            skillId: skill.id,
-            type: 'WANTS',
-          },
-        });
-      }
-    }
-
-    return {
-      success: true,
-      user: {
-        id: user.id,
-        clerkId: user.clerkId,
-        name: user.name,
-        email: user.email,
-        avatar: user.avatar,
-        bio: user.bio,
-        hourlyRate: user.hourlyRate,
-        coins: user.coins,
-        onboarded: user.onboarded,
-      },
-    };
-  }
 }
