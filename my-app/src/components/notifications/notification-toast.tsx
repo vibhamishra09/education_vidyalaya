@@ -17,8 +17,11 @@ interface NotificationToastProps {
     actionType?: string;
     peerSessionId?: string;
     studyRoomId?: string;
+    debateRoomId?: string;
     sessionId?: string;
     sessionType?: string;
+    followerUserId?: string;
+    profileUserId?: string;
     notificationId?: string;
   };
   onDismiss: (id: string) => void;
@@ -93,10 +96,26 @@ export function NotificationToast({
       case 'STUDYROOM_REMINDER_24H':
       case 'STUDYROOM_REMINDER_1H':
       case 'STUDYROOM_REMINDER_5M':
+      case 'FOLLOWING_STUDYROOM_CREATED':
         if (notificationData.studyRoomId) {
           return `/studyroom/${notificationData.studyRoomId}`;
         } else if (notificationData.sessionId && notificationData.sessionType === 'studyRoom') {
           return `/studyroom/${notificationData.sessionId}`;
+        }
+        return '/dashboard';
+
+      case 'FOLLOWING_DEBATE_CREATED':
+        if (notificationData.debateRoomId) {
+          return `/debateroom/${notificationData.debateRoomId}`;
+        }
+        return '/dashboard';
+
+      case 'USER_FOLLOWED':
+        if (notificationData.followerUserId) {
+          return `/profile/${notificationData.followerUserId}`;
+        }
+        if (notificationData.profileUserId) {
+          return `/profile/${notificationData.profileUserId}`;
         }
         return '/dashboard';
 
@@ -154,9 +173,17 @@ export function NotificationToast({
           </div>
         );
       case 'STUDYROOM_JOINED':
+      case 'FOLLOWING_STUDYROOM_CREATED':
         return (
           <div className="w-10 h-10 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center">
             <UserPlus className={`${iconClass} text-green-600 dark:text-green-400`} />
+          </div>
+        );
+      case 'FOLLOWING_DEBATE_CREATED':
+      case 'USER_FOLLOWED':
+        return (
+          <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
+            <UserPlus className={`${iconClass} text-blue-600 dark:text-blue-400`} />
           </div>
         );
       case 'SESSION_REMINDER_24H':

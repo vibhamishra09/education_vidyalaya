@@ -6,7 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { createClerkClient } from '@clerk/backend';
-import { Prisma, SessionStatus } from '../generated/prisma/client';
+import { Prisma, SessionStatus, NotifType } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 /** Generated Prisma `User` / `UserFindUniqueArgs` are unreliable here; infer delegate args instead. */
@@ -48,6 +48,7 @@ type UserOnboardingResult = {
 };
 import { UpdateUserDto } from './dto/user.dto';
 import { CacheService } from '../redis/cache.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import {
   isConnectionError,
   withQueryTimeout,
@@ -64,6 +65,7 @@ export class UsersService {
   constructor(
     private prisma: PrismaService,
     private readonly cacheService: CacheService,
+    private readonly notificationsService: NotificationsService,
   ) { }
 
   private buildClerkDisplayName(clerkUser: any): string {
@@ -201,6 +203,51 @@ export class UsersService {
     }
   }
 
+  private async resolveDbUser(userIdOrClerkId: string) {
+    const existingUser = await this.findUserByIdOrClerkId(userIdOrClerkId, {
+      select: {
+        id: true,
+        clerkId: true,
+        name: true,
+      },
+    });
+
+    if (existingUser) {
+      return existingUser as {
+        id: string;
+        clerkId: string;
+        name: string | null;
+      };
+    }
+
+    if (userIdOrClerkId.startsWith('user_')) {
+      const ensuredUser = await this.ensureUserFromClerk(userIdOrClerkId);
+      return {
+        id: ensuredUser.id,
+        clerkId: ensuredUser.clerkId,
+        name: ensuredUser.name ?? null,
+      };
+    }
+
+    throw new NotFoundException('User not found');
+  }
+
+  private async invalidateSocialCaches(
+    cacheRefs: Array<string | null | undefined>,
+  ) {
+    const uniqueRefs = Array.from(
+      new Set(cacheRefs.filter((value): value is string => Boolean(value))),
+    );
+
+    await Promise.all(
+      uniqueRefs.flatMap((ref) => [
+        this.cacheService.deletePattern(`user:current:*${ref}*`),
+        this.cacheService.deletePattern(`user:public:*${ref}*`),
+        this.cacheService.deletePattern(`dashboard:feed:*${ref}*`),
+      ]),
+    );
+  }
+
   async getCurrentUser(userIdOrClerkId: string) {
     // Cache for 60 seconds - user profile changes infrequently
     const cacheKey = this.cacheService.createKey('user:current', {
@@ -285,6 +332,8 @@ export class UsersService {
             reviewStats,
             peerSessionsAsLearner,
             studyRoomsAsLearner,
+            followerCount,
+            followingCount,
           ] = await withQueryTimeout(
             Promise.all([
               // Count peer sessions where user is the teacher (received)
@@ -334,6 +383,12 @@ export class UsersService {
                   },
                 },
               }),
+              this.prisma.userFollow.count({
+                where: { followingId: fullUser.id },
+              }),
+              this.prisma.userFollow.count({
+                where: { followerId: fullUser.id },
+              }),
             ]),
             25000, // 25 second timeout
             `getCurrentUser - Promise.all stats for user ${userIdOrClerkId}`,
@@ -364,6 +419,9 @@ export class UsersService {
               hasSkills,
               wantSkills,
               socialLinks: (fullUser.socialLinks as any[]) || [],
+              followerCount,
+              followingCount,
+              isFollowing: false,
               publicStats: {
                 sessionsTaught,
                 sessionsAttendedAsLearner,
@@ -517,20 +575,30 @@ export class UsersService {
       this.cacheService.createKey('user:current', { userIdOrClerkId: userId }),
     );
     await this.cacheService.deletePattern(`user:public:${userId}*`);
+    await this.cacheService.deletePattern(`dashboard:feed:*${currentUser.id}*`);
 
     // Return updated user with skills
     return this.getCurrentUser(currentUser.id);
   }
 
-  async getPublicUserProfile(userId: string) {
+  async getPublicUserProfile(userId: string, viewerIdOrClerkId?: string) {
     // Cache for 2 minutes - public profiles change less frequently
-    const cacheKey = this.cacheService.createKey('user:public', { userId });
+    const cacheKey = this.cacheService.createKey('user:public', {
+      userId,
+      viewerId: viewerIdOrClerkId || 'anonymous',
+    });
     const cacheTTL = 120;
 
     return this.cacheService.getOrSet(
       cacheKey,
       async () => {
         try {
+          const viewer = viewerIdOrClerkId
+            ? await this.findUserByIdOrClerkId(viewerIdOrClerkId, {
+                select: { id: true },
+              })
+            : null;
+
           const user = await withQueryTimeout(
             this.prisma.user.findUnique({
               where: { id: userId },
@@ -573,6 +641,9 @@ export class UsersService {
             reviewStats,
             peerSessionsAsLearner,
             studyRoomsAsLearner,
+            followerCount,
+            followingCount,
+            followState,
           ] = await withQueryTimeout(
             Promise.all([
               this.prisma.peerSession.count({
@@ -614,6 +685,23 @@ export class UsersService {
                   },
                 },
               }),
+              this.prisma.userFollow.count({
+                where: { followingId: profile.id },
+              }),
+              this.prisma.userFollow.count({
+                where: { followerId: profile.id },
+              }),
+              viewer?.id
+                ? this.prisma.userFollow.findUnique({
+                    where: {
+                      followerId_followingId: {
+                        followerId: viewer.id,
+                        followingId: profile.id,
+                      },
+                    },
+                    select: { id: true },
+                  })
+                : Promise.resolve(null),
             ]),
             25000, // 25 second timeout
             `getPublicUserProfile - Promise.all stats for user ${userId}`,
@@ -641,6 +729,9 @@ export class UsersService {
             hasSkills,
             wantSkills,
             socialLinks: (profile.socialLinks as any[]) || [],
+            followerCount,
+            followingCount,
+            isFollowing: Boolean(followState),
             publicStats: {
               sessionsTaught,
               sessionsAttendedAsLearner,
@@ -757,6 +848,111 @@ export class UsersService {
         description: us.skill.description,
       },
     }));
+  }
+
+  async followUser(followerIdOrClerkId: string, targetUserId: string) {
+    const [follower, target] = await Promise.all([
+      this.resolveDbUser(followerIdOrClerkId),
+      this.resolveDbUser(targetUserId),
+    ]);
+
+    if (follower.id === target.id) {
+      throw new ConflictException('You cannot follow yourself');
+    }
+
+    await this.prisma.userFollow.upsert({
+      where: {
+        followerId_followingId: {
+          followerId: follower.id,
+          followingId: target.id,
+        },
+      },
+      update: {},
+      create: {
+        followerId: follower.id,
+        followingId: target.id,
+      },
+    });
+
+    const [followerCount, followingCount] = await Promise.all([
+      this.prisma.userFollow.count({
+        where: { followingId: target.id },
+      }),
+      this.prisma.userFollow.count({
+        where: { followerId: follower.id },
+      }),
+    ]);
+
+    await this.invalidateSocialCaches([
+      follower.id,
+      follower.clerkId,
+      target.id,
+      target.clerkId,
+    ]);
+
+    await this.notificationsService.createAndPushNotification(
+      target.id,
+      `${follower.name || 'A learner'} followed you.`,
+      'New follower',
+      NotifType.NORMAL,
+      {
+        actionType: 'USER_FOLLOWED',
+        actionData: {
+          followerUserId: follower.id,
+          profileUserId: target.id,
+        },
+      },
+    );
+
+    return {
+      success: true,
+      targetUserId: target.id,
+      isFollowing: true,
+      followerCount,
+      followingCount,
+    };
+  }
+
+  async unfollowUser(followerIdOrClerkId: string, targetUserId: string) {
+    const [follower, target] = await Promise.all([
+      this.resolveDbUser(followerIdOrClerkId),
+      this.resolveDbUser(targetUserId),
+    ]);
+
+    if (follower.id === target.id) {
+      throw new ConflictException('You cannot unfollow yourself');
+    }
+
+    await this.prisma.userFollow.deleteMany({
+      where: {
+        followerId: follower.id,
+        followingId: target.id,
+      },
+    });
+
+    const [followerCount, followingCount] = await Promise.all([
+      this.prisma.userFollow.count({
+        where: { followingId: target.id },
+      }),
+      this.prisma.userFollow.count({
+        where: { followerId: follower.id },
+      }),
+    ]);
+
+    await this.invalidateSocialCaches([
+      follower.id,
+      follower.clerkId,
+      target.id,
+      target.clerkId,
+    ]);
+
+    return {
+      success: true,
+      targetUserId: target.id,
+      isFollowing: false,
+      followerCount,
+      followingCount,
+    };
   }
 
   async completeOnboarding(

@@ -19,6 +19,11 @@ export const userKeys = {
     [...userKeys.all, 'skills', id, type] as const,
 };
 
+function invalidateSocialQueries(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: userKeys.all });
+  queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+}
+
 // Get current user
 export function useCurrentUser() {
   const { isLoaded, isSignedIn } = useAuth();
@@ -79,5 +84,45 @@ export function useUserSkills(userId: string, type?: 'HAS' | 'WANTS') {
     queryKey: userKeys.skills(userId, type),
     queryFn: () => usersApi.getUserSkills(userId, type),
     enabled: !!userId,
+  });
+}
+
+export function useFollowUser() {
+  const queryClient = useQueryClient();
+  const { getToken, isLoaded } = useAuth();
+
+  return useMutation({
+    mutationFn: async (userId: string) => {
+      if (isLoaded) {
+        const token = await getToken();
+        if (token) {
+          setAuthToken(token);
+        }
+      }
+      return usersApi.followUser(userId);
+    },
+    onSuccess: () => {
+      invalidateSocialQueries(queryClient);
+    },
+  });
+}
+
+export function useUnfollowUser() {
+  const queryClient = useQueryClient();
+  const { getToken, isLoaded } = useAuth();
+
+  return useMutation({
+    mutationFn: async (userId: string) => {
+      if (isLoaded) {
+        const token = await getToken();
+        if (token) {
+          setAuthToken(token);
+        }
+      }
+      return usersApi.unfollowUser(userId);
+    },
+    onSuccess: () => {
+      invalidateSocialQueries(queryClient);
+    },
   });
 }

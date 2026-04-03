@@ -11,6 +11,7 @@ import { SessionsChart } from "@/components/stats/sessions-chart";
 import { AchievementShowcaseConnected } from "@/components/achievements/achievement-showcase-connected";
 import { StreakTrackerConnected } from "@/components/profile/streak-tracker-connected";
 import { SessionList } from "@/components/dashboard/session-list";
+import { ActivityFeed } from "@/components/dashboard/activity-feed";
 import { SkillsAndSuggestions } from "@/components/dashboard/skills-and-suggestions";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
@@ -313,6 +314,8 @@ export function DashboardClient() {
                 )}
               </div>
             </div>
+
+            <ActivityFeed />
 
             {/* Sessions List */}
             <div className="space-y-4">
