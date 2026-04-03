@@ -20,11 +20,11 @@ async function handlePopups(page: Page) {
 test.describe.configure({timeout: 60000,})
 
 test("Check Profile and Edit feature test" ,async ({page})=> {
-    await page.goto('http://localhost:3000/profile', {
+    await page.goto('/profile', {
         waitUntil: 'networkidle'
     })
 
-    await expect(page.getByRole('heading', { name: 'PlayWright' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Yash Saxena' })).toBeVisible()
     // await page.getByRole('button', {name :'Edit Profile'}).click()
     // await page.getByRole('textbox', {name :'Display Name'}).click()
     // await page.getByRole('textbox', {name :'Display Name'}).fill('EditedName')
@@ -37,7 +37,7 @@ test("Check Profile and Edit feature test" ,async ({page})=> {
 })
 
 test("Check existing study rooms, peers,webinars", async ({page}) => {
-    await page.goto('http://localhost:3000/profile', {
+    await page.goto('/profile', {
         waitUntil: 'networkidle'
     })
 
@@ -64,7 +64,7 @@ test("Check existing study rooms, peers,webinars", async ({page}) => {
 
 test("Attempt to create a room, join it and chat", async ({page}) => {
     handlePopups(page)
-    await page.goto('http://localhost:3000/create-study-room', {
+    await page.goto('/create-study-room', {
         waitUntil: 'networkidle'
     })
     await page.getByRole('textbox', { name: 'Room Name' }).fill('auto-generated-room');
@@ -112,7 +112,7 @@ test("Attempt to create a recurring room, test chat and remove rooms", async ({p
         await dialog.accept();
     }
     });
-    await page.goto('http://localhost:3000/create-study-room', {
+    await page.goto('/create-study-room', {
         waitUntil: 'networkidle'
     })
     await page.getByRole('textbox', { name: 'Room Name' }).fill('recurring-auto-generated');
@@ -156,7 +156,7 @@ test("Attempt to create a recurring room, test chat and remove rooms", async ({p
 test.describe("Debate room creation and chat testing", () => {
     test.describe.configure({mode: 'serial'})
     test("Debate room creation by moderator", async ({page}) => {
-        await page.goto('http://localhost:3000/', {
+        await page.goto('/', {
             waitUntil: 'networkidle'
         })
         handlePopups(page)
@@ -177,7 +177,7 @@ test.describe("Debate room creation and chat testing", () => {
         test.use({ storageState: 'storageState.participant.json' });
 
         test("Joining as For and confirm chats", async ({ page }) => {
-            await page.goto('http://localhost:3000/', { waitUntil: 'networkidle' })
+            await page.goto('/', { waitUntil: 'networkidle' })
             handlePopups(page)
             await page.getByRole('link', { name: 'Browse' }).click();
             await page.getByRole('button', { name: 'Debate Rooms' }).click();
@@ -187,6 +187,16 @@ test.describe("Debate room creation and chat testing", () => {
             await page.getByRole('button', { name: 'Chat' }).click();
             await expect(page.getByText('Message from Moderator')).toBeVisible()
         })
+    })
+
+    test("Cleanup the debate room", async ({page}) => {
+        await page.goto('/', { waitUntil: 'networkidle' })
+        handlePopups(page)
+        await page.getByRole('link', { name: 'Browse' }).click();
+        await page.getByRole('button', { name: 'Debate Rooms' }).click();
+        await page.getByText('Social media ban below 16').first().click()
+        await page.getByRole('button', { name: 'Cancel Debate' }).click();
+        await page.getByRole('button', { name: 'Cancel Debate' }).click();
     })
 
 })
