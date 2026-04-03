@@ -18,7 +18,8 @@ import {
   ArrowRight,
   Eye,
   Pencil,
-  PencilLine
+  PencilLine,
+  Video
 } from "lucide-react";
 import { LucideIcon } from "lucide-react";
 import { SessionSummaryModal } from "./session-summary-modal";
