@@ -1942,7 +1942,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	const [isPiPActive, setIsPiPActive] = useState(false)
 
 	// Helper to get actual Track object from a TrackReference or Placeholder object
-	// Updated for PiP Priority: Remote Screen > Remote Camera > Local Camera
+	// Updated for PiP Priority: Remote Screen > Remote Camera > Local Screen Share > Local Camera
 	const getTrackFromReference = useCallback((ref: any, pipMode = false): Track | null => {
 		if (pipMode) {
 			// Find ALL remote participants first (exclude local participant from mirrored view)
@@ -1954,13 +1954,20 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				.find((pub: any) => !!pub)
 			if (remoteScreenShare) return (remoteScreenShare as any).track
 
-			// Priority 2: Remote Camera (Avoid local screen share to prevent infinite mirror)
+			// Priority 2: Remote Camera
 			const remoteCamera = remoteParticipants
 				.map((p: any) => Array.from(p.videoTrackPublications.values()).find((pub: any) => pub.source === Track.Source.Camera && pub.track))
 				.find((pub: any) => !!pub)
 			if (remoteCamera) return (remoteCamera as any).track
 
-			// Priority 3: Local Camera
+			// Priority 3: Local Screen Share (show your own presentation in PiP, like Google Meet)
+			// Safe for both native PiP and Document PiP since they use a raw <video> element
+			// with the MediaStreamTrack directly — no recursive page embedding.
+			const localScreenShare = Array.from(localParticipant?.videoTrackPublications.values() || [])
+				.find(pub => pub.source === Track.Source.ScreenShare && pub.track)
+			if (localScreenShare) return (localScreenShare as any).track
+
+			// Priority 4: Local Camera
 			const localCamera = Array.from(localParticipant?.videoTrackPublications.values() || [])
 				.find(pub => pub.source === Track.Source.Camera && pub.track)
 			if (localCamera) return (localCamera as any).track
@@ -1974,7 +1981,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		if (ref.publication?.track) return ref.publication.track as Track
 		const pubs = Array.from(ref.participant.videoTrackPublications.values()) as any[]
 		return pubs.find(p => p.track)?.track || null
-	}, [allParticipants, localParticipant])
+	}, [allParticipants, localParticipant, isScreenShareEnabled])
 
 	// Helper to draw participant avatar to a canvas for PiP streaming when no camera is active
 	const drawAvatarToCanvas = useCallback(async (participant: any): Promise<MediaStream | null> => {
@@ -2166,7 +2173,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			isMounted = false
 			clearTimeout(timer)
 		}
-	}, [isMobileViewport, allParticipants, localParticipant, getTrackFromReference, drawAvatarToCanvas])
+	}, [isMobileViewport, allParticipants, localParticipant, getTrackFromReference, drawAvatarToCanvas, isScreenShareEnabled])
 
 	const togglePiP = useCallback(async (isAuto = false) => {
 		try {
@@ -2289,37 +2296,48 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	useEffect(() => {
 		if (isMobileViewport) return
 
-		const handleVisibilityChange = async (e?: Event) => {
-			const isHidden = document.hidden;
-			const isVisible = !document.hidden;
+		const handleVisibilityChange = async () => {
+			if (document.hidden) {
+				// Page is going hidden — activate PiP if not already active
+				// Check both native PiP and Document PiP window
+				if (document.pictureInPictureElement || pipWindowRef.current) return
 
-			if (isHidden && !document.pictureInPictureElement) {
 				try {
-					// Small delay to ensure browser transition is settled
-					await new Promise(resolve => setTimeout(resolve, 200));
-					// For chrome, the autoPictureInPicture attribute handles the transition
-					// but we still call togglePiP to ensure state consistency
+					// Small delay to let the browser complete the tab transition
+					await new Promise(resolve => setTimeout(resolve, 150));
+					// Guard: user may have already returned during the delay
+					if (!document.hidden) return;
 					await togglePiP(true);
 				} catch (error) {
 					console.warn('[PiP] Auto-PiP failed:', error);
 				}
-			} else if (isVisible && document.pictureInPictureElement) {
+			} else {
+				// Page is becoming visible again — close any active PiP
 				try {
-					await document.exitPictureInPicture();
+					// Close native PiP if active
+					if (document.pictureInPictureElement) {
+						await document.exitPictureInPicture();
+					}
+					// Close Document PiP window if active
+					if (pipWindowRef.current) {
+						pipWindowRef.current.close();
+						pipWindowRef.current = null;
+					}
 					setIsPiPActive(false);
-				} catch (error) { }
+				} catch (error) {
+					// Ignore exit errors (PiP may already be closing)
+				}
 			}
 		}
 
+		// When native PiP exits (user clicks X on PiP window, or we call exitPictureInPicture),
+		// just update the state. Do NOT destroy or detach the persistent video element —
+		// it must stay warm so auto-PiP can reactivate instantly on the next tab switch.
 		const handlePiPExit = () => {
 			setIsPiPActive(false)
-			const videoElement = pipVideoRef.current
-			if (videoElement) {
-				const trackToUse = getTrackFromReference(focusedTrack, true)
-				if (trackToUse) trackToUse.detach(videoElement)
-				videoElement.remove()
-			}
-			pipVideoRef.current = null
+			// Note: we intentionally do NOT detach tracks from persistentPipVideoRef
+			// or remove the video element. The persistent video must stay alive
+			// with its stream attached so auto-PiP works on next tab switch.
 		}
 
 		document.addEventListener('visibilitychange', handleVisibilityChange)
@@ -2329,7 +2347,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			document.removeEventListener('visibilitychange', handleVisibilityChange)
 			document.removeEventListener('leavepictureinpicture', handlePiPExit)
 		}
-	}, [isMobileViewport, focusedTrack, localParticipant, togglePiP, getTrackFromReference, drawAvatarToCanvas])
+	}, [isMobileViewport, togglePiP])
 
 	// Mobile: Restore mic/camera after Android tab switch
 	// Android browsers suspend media tracks when the page is hidden.
