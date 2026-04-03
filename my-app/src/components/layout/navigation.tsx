@@ -2,68 +2,17 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { useUser, useAuth, SignInButton, SignUpButton } from "@clerk/nextjs";
+import { useUser, useAuth } from "@clerk/nextjs";
+import { AuthPromptButtons } from "@/components/auth/auth-prompt-buttons";
 import { NotificationDropdown } from "./notification-dropdown";
 import { UserDropdown } from "./user-dropdown";
 import { CoinDropdown } from "./coin-dropdown";
 import { useCurrentUser } from "@/hooks/use-users";
 import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-// Separate component for search params dependent functionality
-function AuthButtons({ pathname }: { pathname: string }) {
-  const searchParams = useSearchParams();
-  
-  // Build redirect URL for sign-in/sign-up to return users to current page
-  const redirectUrl = useMemo(() => {
-    const search = searchParams.toString();
-    return search ? `${pathname}?${search}` : pathname;
-  }, [pathname, searchParams]);
-
-  return (
-    <div className="flex items-center gap-2">
-      <SignInButton mode="modal" forceRedirectUrl={redirectUrl}>
-        <Button variant="default" size="sm" className="bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 shadow-none">
-          Sign In
-        </Button>
-      </SignInButton>
-      <SignUpButton mode="modal" forceRedirectUrl={redirectUrl}>
-        <Button
-          variant="default"
-          size="sm"
-          className="bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 shadow-none"
-        >
-          Sign Up
-        </Button>
-      </SignUpButton>
-    </div>
-  );
-}
-
-// Fallback auth buttons without redirect URL
-function AuthButtonsFallback() {
-  return (
-    <div className="flex items-center gap-2">
-      <SignInButton mode="modal">
-        <Button variant="default" size="sm" className="bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 shadow-none">
-          Sign In
-        </Button>
-      </SignInButton>
-      <SignUpButton mode="modal">
-        <Button
-          variant="default"
-          size="sm"
-          className="bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 shadow-none"
-        >
-          Sign Up
-        </Button>
-      </SignUpButton>
-    </div>
-  );
-}
 
 export function Navigation() {
   const { isSignedIn, user } = useUser();
@@ -173,9 +122,7 @@ export function Navigation() {
                   <UserDropdown user={user} signOut={signOut} />
                 </>
               ) : (
-                <Suspense fallback={<AuthButtonsFallback />}>
-                  <AuthButtons pathname={pathname} />
-                </Suspense>
+                <AuthPromptButtons />
               )}
             </div>
 
@@ -236,11 +183,9 @@ export function Navigation() {
                       Sign out
                     </Button>
                 ) : (
-                  <Suspense fallback={<AuthButtonsFallback />}>
-                    <div className="w-full flex justify-end">
-                       <AuthButtons pathname={pathname} />
-                    </div>
-                  </Suspense>
+                  <div className="w-full flex justify-end">
+                    <AuthPromptButtons />
+                  </div>
                 )}
               </div>
             </div>

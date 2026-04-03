@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Users, Loader2, Play, Calendar, Clock, Pencil } from "lucide-react";
 import { motion } from "framer-motion";
 import { ShareButton } from "@/components/share/share-button";
+import { getStudyRoomShareUrl } from "@/lib/utils/study-room-share";
 import { cn } from "@/lib/utils";
 import { formatDate } from "@/lib/utils/date-time";
 import { SessionStatus } from "@/types";
@@ -49,7 +50,8 @@ interface StudyRoomCardProps {
   skillNames?: string[];
   /** Room timezone from API (improves schedule editing accuracy) */
   timezone?: string | null;
-  slug: string
+  /** URL segment for /studyroom/[slug]; defaults to roomId */
+  slug?: string;
 }
 
 export function StudyRoomCard({
@@ -74,8 +76,9 @@ export function StudyRoomCard({
   joiningFee = 0,
   skillNames,
   timezone: roomTimezone,
-  slug
+  slug,
 }: StudyRoomCardProps) {
+  const pathSegment = slug ?? roomId;
   const router = useRouter();
   const [editOpen, setEditOpen] = useState(false);
   const statusIsLive = status === "live";
@@ -141,12 +144,12 @@ export function StudyRoomCard({
         theme.hoverBorder
       )}>
         {/* Header: category left; LIVE/SCHEDULED + Edit stacked right with shared alignment */}
-        <div className="mb-3 flex items-start justify-between gap-2">
-          <Badge variant="secondary" className={cn(
-            "text-xs font-bold px-2 py-0.5 transition-colors uppercase tracking-wider rounded-lg border-0 shrink-0",
-            theme.badge
+          <div className="mb-3 flex items-start justify-between gap-2 min-w-0">          
+            <Badge variant="secondary" className={cn(
+              "text-xs font-bold px-2 py-0.5 transition-colors uppercase tracking-wider rounded-lg border-0 shrink-0",
+              theme.badge
           )}>
-            {category}
+            {category.length > 15 ? category.slice(0, 15) + "…" : category}
           </Badge>
 
           <div className="flex min-w-0 flex-col items-end gap-2 shrink-0">
@@ -181,7 +184,7 @@ export function StudyRoomCard({
         <div className="flex-1 space-y-1.5 mb-4">
           <h3
             className={cn("text-2xl font-bold leading-tight text-foreground tracking-tight transition-colors line-clamp-2 cursor-pointer", theme.titleHover)}
-            onClick={() => router.push(`/studyroom/${slug || roomId}`)}
+            onClick={() => router.push(`/studyroom/${slug}`)}
           >
             {title}
           </h3>
@@ -257,7 +260,7 @@ export function StudyRoomCard({
           {/* Actions: Share & CTA Button */}
           <div className="flex items-center gap-2">
              <ShareButton
-                url={`${typeof window !== "undefined" ? window.location.origin : ""}/studyroom/${slug || roomId}`}
+                url={getStudyRoomShareUrl(pathSegment)}
                 title={title}
                 description={description}
                 image={imageUrl}

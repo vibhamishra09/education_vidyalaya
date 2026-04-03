@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useAuth } from '@clerk/nextjs';
+import { useAuth, useUser } from '@clerk/nextjs';
 import { usersApi } from '@/lib/api';
 import { setAuthToken } from '@/lib/api-client';
 import { UpdateUserDto } from '@/types/api.types';
@@ -12,7 +12,8 @@ import { isAuthError } from '@/lib/utils/error-handling';
 // Query Keys
 export const userKeys = {
   all: ['users'] as const,
-  current: () => [...userKeys.all, 'current'] as const,
+  current: (clerkUserId?: string | null) =>
+    [...userKeys.all, 'current', clerkUserId ?? 'anonymous'] as const,
   detail: (id: string) => [...userKeys.all, 'detail', id] as const,
   skills: (id: string, type?: 'HAS' | 'WANTS') =>
     [...userKeys.all, 'skills', id, type] as const,
@@ -21,14 +22,16 @@ export const userKeys = {
 // Get current user
 export function useCurrentUser() {
   const { isLoaded, isSignedIn } = useAuth();
+  const { user } = useUser();
+  const clerkUserId = user?.id ?? null;
 
   return useQuery({
-    queryKey: userKeys.current(),
+    queryKey: userKeys.current(clerkUserId),
     // Token is set by AuthTokenSync before this fires; interceptor handles the rest
     queryFn: () => usersApi.getCurrentUser(),
-    enabled: isLoaded && !!isSignedIn,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    refetchOnWindowFocus: false,
+    enabled: isLoaded && !!isSignedIn && !!clerkUserId,
+    staleTime: 60 * 1000,
+    refetchOnWindowFocus: true,
     retry: (failureCount, error) => {
       if (isAuthError(error)) {
         return false;
@@ -55,7 +58,7 @@ export function useUpdateUserProfile() {
       return usersApi.updateUserProfile(data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: userKeys.current() });
+      queryClient.invalidateQueries({ queryKey: userKeys.all });
     },
   });
 }

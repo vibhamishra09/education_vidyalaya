@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
+
 import { Card, CardContent } from "@/components/ui/card";
 import { Bell, AlertCircle } from "lucide-react";
 import { usePushNotifications } from "@/hooks";

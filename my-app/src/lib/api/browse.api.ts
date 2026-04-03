@@ -59,4 +59,35 @@ export const browseApi = {
     });
     return response.data;
   },
+
+  // Get ranked peer matches based on Skills, Availability, and Ratings
+  getPeerMatches: async (page?: number, limit?: number): Promise<{
+    matches: Array<{
+      id: string;
+      name: string;
+      avatar?: string;
+      bio?: string;
+      skills: string[];
+      matchedSkills: string[];
+      rating: number | null;
+      reviewCount: number;
+      totalSessions: number;
+      matchScore: number;
+      skillScore: number;
+      availabilityScore: number;
+      ratingScore: number;
+    }>;
+    pagination: {
+      total: number;
+      page: number;
+      limit: number;
+      totalPages: number;
+      hasMore: boolean;
+    };
+  }> => {
+    const response = await apiClient.get('/api/browse/peer-matches', {
+      params: { page, limit },
+    });
+    return response.data;
+  },
 };

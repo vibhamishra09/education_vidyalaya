@@ -169,7 +169,8 @@ export const SessionsTab = memo(function SessionsTab({ publicStats, isLoading = 
     ];
     console.log('📊 [Sessions] Combined past sessions:', combined.length);
     return combined.sort(
-      (a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()
+      (a: { date: string | Date }, b: { date: string | Date }) => 
+        new Date(b.date).getTime() - new Date(a.date).getTime()
     );
   }, [dashboardData, formatPeerSession, formatStudyRoom]);
 

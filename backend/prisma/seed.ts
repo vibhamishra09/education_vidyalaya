@@ -2,9 +2,19 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
+import 'dotenv/config';
 import { PrismaClient } from '../src/generated/prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
 
-const prisma = new PrismaClient();
+if (!process.env.DATABASE_URL) {
+  throw new Error('DATABASE_URL is not set in backend/.env');
+}
+
+const adapter = new PrismaPg({
+  connectionString: process.env.DATABASE_URL,
+});
+
+const prisma = new PrismaClient({ adapter });
 
 async function main() {
   console.log('🌱 Starting achievements seed...');
@@ -24,7 +34,7 @@ async function main() {
         category: 'STREAK',
         rarity: 'COMMON',
         maxProgress: 1,
-        coinReward: 5,
+        pointReward: 5,
       },
     }),
     prisma.achievement.upsert({
@@ -38,7 +48,7 @@ async function main() {
         category: 'STREAK',
         rarity: 'COMMON',
         maxProgress: 3,
-        coinReward: 15,
+        pointReward: 15,
       },
     }),
     prisma.achievement.upsert({
@@ -52,7 +62,7 @@ async function main() {
         category: 'STREAK',
         rarity: 'RARE',
         maxProgress: 7,
-        coinReward: 50,
+        pointReward: 50,
       },
     }),
     prisma.achievement.upsert({
@@ -66,7 +76,7 @@ async function main() {
         category: 'STREAK',
         rarity: 'RARE',
         maxProgress: 14,
-        coinReward: 100,
+        pointReward: 100,
       },
     }),
     prisma.achievement.upsert({
@@ -80,7 +90,7 @@ async function main() {
         category: 'STREAK',
         rarity: 'EPIC',
         maxProgress: 30,
-        coinReward: 250,
+        pointReward: 250,
       },
     }),
     prisma.achievement.upsert({
@@ -94,7 +104,7 @@ async function main() {
         category: 'STREAK',
         rarity: 'EPIC',
         maxProgress: 60,
-        coinReward: 500,
+        pointReward: 500,
       },
     }),
     prisma.achievement.upsert({
@@ -108,7 +118,7 @@ async function main() {
         category: 'STREAK',
         rarity: 'LEGENDARY',
         maxProgress: 100,
-        coinReward: 1000,
+        pointReward: 1000,
       },
     }),
 
@@ -124,7 +134,7 @@ async function main() {
         category: 'MILESTONE',
         rarity: 'COMMON',
         maxProgress: 1,
-        coinReward: 10,
+        pointReward: 10,
       },
     }),
     prisma.achievement.upsert({
@@ -138,7 +148,7 @@ async function main() {
         category: 'LEARNING',
         rarity: 'COMMON',
         maxProgress: 5,
-        coinReward: 25,
+        pointReward: 25,
       },
     }),
     prisma.achievement.upsert({
@@ -152,7 +162,7 @@ async function main() {
         category: 'LEARNING',
         rarity: 'RARE',
         maxProgress: 25,
-        coinReward: 100,
+        pointReward: 100,
       },
     }),
     prisma.achievement.upsert({
@@ -166,7 +176,7 @@ async function main() {
         category: 'LEARNING',
         rarity: 'EPIC',
         maxProgress: 50,
-        coinReward: 250,
+        pointReward: 250,
       },
     }),
     prisma.achievement.upsert({
@@ -180,7 +190,7 @@ async function main() {
         category: 'LEARNING',
         rarity: 'LEGENDARY',
         maxProgress: 100,
-        coinReward: 500,
+        pointReward: 500,
       },
     }),
 
@@ -196,7 +206,7 @@ async function main() {
         category: 'TEACHING',
         rarity: 'COMMON',
         maxProgress: 1,
-        coinReward: 15,
+        pointReward: 15,
       },
     }),
     prisma.achievement.upsert({
@@ -210,7 +220,7 @@ async function main() {
         category: 'TEACHING',
         rarity: 'RARE',
         maxProgress: 10,
-        coinReward: 50,
+        pointReward: 50,
       },
     }),
     prisma.achievement.upsert({
@@ -224,7 +234,7 @@ async function main() {
         category: 'TEACHING',
         rarity: 'LEGENDARY',
         maxProgress: 50,
-        coinReward: 500,
+        pointReward: 500,
       },
     }),
 
@@ -240,7 +250,7 @@ async function main() {
         category: 'SOCIAL',
         rarity: 'RARE',
         maxProgress: 20,
-        coinReward: 75,
+        pointReward: 75,
       },
     }),
   ]);

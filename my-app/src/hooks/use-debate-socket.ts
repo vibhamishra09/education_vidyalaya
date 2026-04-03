@@ -7,7 +7,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import {
   DebateState,
   DebateStatus,
-  DebateSide,
   TurnStartedEvent,
   TurnEndedEvent,
   PrepStartedEvent,
@@ -47,14 +46,14 @@ interface UseDebateSocketReturn {
   teamChatMessages: TeamChatMessage[];
   buzzerQueue: BuzzerPressedEvent[];
   prepCountdown: number | null;
-  
+
   // Actions
   joinRoom: () => void;
   leaveRoom: () => void;
   pressBuzzer: () => void;
   sendTeamChat: (message: string) => void;
   sendTranscript: (text: string, isFinal: boolean) => void;
-  
+
   // For moderators
   startPrep: () => void;
   advanceTurn: () => void;
@@ -138,7 +137,7 @@ export function useDebateSocket({
         const authToken = await getToken();
         if (!authToken || !mounted) return;
 
-        const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:3001';
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:3002';
 
         const newSocket = io(`${baseUrl}/debate`, {
           transports: ['websocket'],
@@ -156,14 +155,14 @@ export function useDebateSocket({
           }
         });
 
-        newSocket.on('disconnect', (reason) => {
+        newSocket.on('disconnect', (_reason) => {
           if (mounted) {
             setIsConnected(false);
           }
         });
 
-        newSocket.on('connect_error', (err) => {
-          callbacksRef.current.onError?.(`Connection failed: ${err.message}`);
+        newSocket.on('connect_error', (_err) => {
+          callbacksRef.current.onError?.(`Connection failed: ${_err.message}`);
         });
 
         // Debate events
@@ -222,11 +221,11 @@ export function useDebateSocket({
             setDebateState((prev) =>
               prev
                 ? {
-                    ...prev,
-                    currentSpeakerId: event.participantId,
-                    turnStartedAt: event.startedAt,
-                    currentTurnIndex: event.turnIndex,
-                  }
+                  ...prev,
+                  currentSpeakerId: event.participantId,
+                  turnStartedAt: event.startedAt,
+                  currentTurnIndex: event.turnIndex,
+                }
                 : prev
             );
           }
@@ -314,7 +313,7 @@ export function useDebateSocket({
           callbacksRef.current.onMicDisabled?.(event);
         });
 
-      } catch (err) {
+      } catch (_err) {
         // Connection failed
       } finally {
         connectingRef.current = false;

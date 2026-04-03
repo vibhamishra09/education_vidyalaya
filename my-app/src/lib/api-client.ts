@@ -57,13 +57,13 @@ function resolveApiBaseURL(): string {
       return env;
     }
     // Same-origin `/api/*` → next.config rewrites to Nest. Avoids CORS when the app is opened
-    // as http://127.0.0.1:3000 while NEXT_PUBLIC_API_URL was http://localhost:3001 (or unset).
+    // as http://127.0.0.1:3000 while NEXT_PUBLIC_API_URL was http://localhost:3002 (or unset).
     return "";
   }
 
   return (
     process.env.BACKEND_URL?.trim().replace(/\/$/, "") ||
-    "http://127.0.0.1:3001"
+    "http://127.0.0.1:3002"
   );
 }
 
@@ -109,7 +109,7 @@ apiClient.interceptors.request.use(
       // Token already set, use it
       return config;
     }
-    
+      
     // Check if token is set in defaults (set via setAuthToken)
     if (apiClient.defaults.headers && apiClient.defaults.headers.common && apiClient.defaults.headers.common.Authorization) {
       const defaultToken = apiClient.defaults.headers.common.Authorization as string;

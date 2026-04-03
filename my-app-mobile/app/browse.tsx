@@ -1,21 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Image, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { ChevronRight, Menu, Search, Swords } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { clsx } from 'clsx';
-import { twMerge } from 'tailwind-merge';
 import { PeerCard } from '../components/cards/PeerCard';
 import { StudyRoomCard } from '../components/ui/study-room-card';
 import { useSidebar } from '../lib/SidebarContext';
 import { getErrorMessage } from '../lib/api';
 import { useApi } from '../lib/use-api';
 import { ApiPeer, ApiStudyRoom, BrowseResponse } from '../types/api';
-
-function cn(...inputs: Array<string | undefined | null | false>) {
-  return twMerge(clsx(inputs));
-}
 
 export default function BrowseScreen() {
   const router = useRouter();
@@ -176,29 +170,27 @@ export default function BrowseScreen() {
             <View className="mb-6 flex-row rounded-2xl bg-zinc-100 p-1">
               <TouchableOpacity
                 onPress={() => setActiveTab('peers')}
-                className={cn(
-                  'flex-1 flex-row items-center justify-center gap-2 rounded-xl py-2.5',
-                  activeTab === 'peers' && 'bg-emerald-600 shadow-sm',
-                )}
+                style={[
+                  styles.tabButton,
+                  activeTab === 'peers' && styles.tabButtonActive,
+                ]}
               >
-                <Text className={cn(
-                  "text-sm font-bold",
-                  activeTab === 'peers' ? "text-white" : "text-zinc-500"
-                )}>
+                <Text style={[
+                  styles.tabButtonText,
+                  activeTab === 'peers' && styles.tabButtonTextActive,
+                ]}>
                   Peers
                 </Text>
                 <View
-                  className={cn(
-                    'rounded px-1.5',
-                    activeTab === 'peers' ? 'bg-white/20' : 'bg-emerald-100',
-                  )}
+                  style={[
+                    styles.tabCountBadge,
+                    activeTab === 'peers' ? styles.tabCountBadgeActive : styles.tabCountBadgeInactive,
+                  ]}
                 >
-                  <Text
-                    className={cn(
-                      'text-[10px] font-bold',
-                      activeTab === 'peers' ? 'text-white' : 'text-emerald-700',
-                    )}
-                  >
+                  <Text style={[
+                    styles.tabCountText,
+                    activeTab === 'peers' ? styles.tabCountTextActive : styles.tabCountTextInactive,
+                  ]}>
                     {counts.peers}
                   </Text>
                 </View>
@@ -206,29 +198,27 @@ export default function BrowseScreen() {
 
               <TouchableOpacity
                 onPress={() => setActiveTab('studyRooms')}
-                className={cn(
-                  "flex-1 flex-row items-center justify-center py-2.5 rounded-xl gap-2",
-                  activeTab === 'studyRooms' ? "bg-emerald-600 shadow-sm" : ""
-                )}
+                style={[
+                  styles.tabButton,
+                  activeTab === 'studyRooms' && styles.tabButtonActive,
+                ]}
               >
-                <Text className={cn(
-                  "text-sm font-bold",
-                  activeTab === 'studyRooms' ? "text-white" : "text-zinc-500"
-                )}>
+                <Text style={[
+                  styles.tabButtonText,
+                  activeTab === 'studyRooms' && styles.tabButtonTextActive,
+                ]}>
                   Study Rooms
                 </Text>
                 <View
-                  className={cn(
-                    'rounded px-1.5',
-                    activeTab === 'studyRooms' ? 'bg-white/20' : 'bg-emerald-100',
-                  )}
+                  style={[
+                    styles.tabCountBadge,
+                    activeTab === 'studyRooms' ? styles.tabCountBadgeActive : styles.tabCountBadgeInactive,
+                  ]}
                 >
-                  <Text
-                    className={cn(
-                      'text-[10px] font-bold',
-                      activeTab === 'studyRooms' ? 'text-white' : 'text-emerald-700',
-                    )}
-                  >
+                  <Text style={[
+                    styles.tabCountText,
+                    activeTab === 'studyRooms' ? styles.tabCountTextActive : styles.tabCountTextInactive,
+                  ]}>
                     {counts.studyRooms}
                   </Text>
                 </View>
@@ -312,3 +302,46 @@ export default function BrowseScreen() {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  tabButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: 12,
+    paddingVertical: 10,
+  },
+  tabButtonActive: {
+    backgroundColor: '#059669',
+  },
+  tabButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#71717a',
+  },
+  tabButtonTextActive: {
+    color: '#ffffff',
+  },
+  tabCountBadge: {
+    borderRadius: 6,
+    paddingHorizontal: 6,
+  },
+  tabCountBadgeActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  tabCountBadgeInactive: {
+    backgroundColor: '#d1fae5',
+  },
+  tabCountText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  tabCountTextActive: {
+    color: '#ffffff',
+  },
+  tabCountTextInactive: {
+    color: '#047857',
+  },
+});

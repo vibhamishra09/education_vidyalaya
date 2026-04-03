@@ -9,7 +9,7 @@ import {
   DebateSide,
   ParticipantStatus,
 } from '@/types/debate.types';
-import { Users, Mic, MicOff, Crown, Shield } from 'lucide-react';
+import { Users, Mic, } from 'lucide-react';
 
 interface DebateTeamsDisplayProps {
   teams: DebateTeam[];

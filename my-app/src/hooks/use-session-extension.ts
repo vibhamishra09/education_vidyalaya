@@ -54,7 +54,7 @@ export function useSessionExtension({
 
     const connectSocket = () => {
       try {
-        const url = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:3001';
+        const url = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:3002';
 
         socketInstance = io(url, {
           transports: ['websocket'],
@@ -74,11 +74,11 @@ export function useSessionExtension({
           socketInstance?.emit('join-session', { sessionId, sessionType });
         });
 
-        socketInstance.on('disconnect', (reason) => {
+        socketInstance.on('disconnect', (_reason) => {
           setIsConnected(false);
         });
 
-        socketInstance.on('connect_error', (err) => {
+        socketInstance.on('connect_error', (_err) => {
           setError('Failed to connect to extension service');
         });
 
@@ -110,7 +110,7 @@ export function useSessionExtension({
         });
 
         // Handle extension request sent confirmation
-        socketInstance.on('extension-request-sent', (data: { message: string }) => {
+        socketInstance.on('extension-request-sent', (_data) => {
           // Request sent confirmation
         });
 
@@ -119,7 +119,7 @@ export function useSessionExtension({
           setError(data.message);
         });
 
-      } catch (err) {
+      } catch (_err) {
         setError('Failed to initialize extension service');
       }
     };

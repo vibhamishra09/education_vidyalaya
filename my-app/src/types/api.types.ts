@@ -284,8 +284,12 @@ export interface StudyRoomCard {
   seriesRootId?: string | null;
   occurrenceIndex?: number | null;
   timezone?: string | null;
-  slug: string;
+  slug?: string;
+  /** Public registration path segment for webinars (`/webinar/register/[slug]`). */
+  webinarRegistrationSlug?: string | null;
 }
+
+export type StudyRoomSessionMode = 'STANDARD' | 'WEBINAR';
 
 export interface StudyRoom extends StudyRoomCard {
   participants: (PublicUser & { role?: 'PARTICIPANT' | 'COHOST'; clerkId?: string })[];
@@ -297,29 +301,18 @@ export interface StudyRoom extends StudyRoomCard {
     livekitIdentity: string;
   }>;
   role: 'teacher' | 'learner' | 'empty';
-  allowExternalUsers?: boolean;
-  externalAutoAccept?: boolean;
-  externalPasscode?: string | null;
-  externalInvites?: Array<{ email: string; role: 'PARTICIPANT' | 'COHOST' }>;
-  pendingExternalJoinRequests?: number;
   cohostCount?: number;
-  emailDelivery?: {
-    attempted: number;
-    sent: number;
-    failed: number;
-    failures: Array<{
-      email: string;
-      role: 'PARTICIPANT' | 'COHOST';
-      errorCode?: string;
-      errorMessage?: string;
-    }>;
-  };
   reviews: ReviewCard[];
   summary?: string;
   chatChannelId?: string | null;
   occurrencesCreated?: number;
   hostDetailsUpdatedAt?: string | null;
-  slug: string
+  sessionMode?: StudyRoomSessionMode;
+  webinarConfig?: unknown;
+  webinarRegistrationSlug?: string | null;
+  webinarRegistrationUrl?: string | null;
+  /** Stable URL segment when set (browse / links); falls back to id in routes. */
+  slug: string;
 }
 
 export enum StudyRoomRecurrenceMode {
@@ -354,10 +347,8 @@ export interface CreateStudyRoomDto {
   joiningFee?: number;
   timezone: string;
   recurrence?: StudyRoomRecurrenceDto;
-  allowExternalUsers?: boolean;
-  externalAutoAccept?: boolean;
-  externalPasscode?: string;
-  externalInvites?: Array<{ email: string; role: 'PARTICIPANT' | 'COHOST' }>;
+  sessionMode?: StudyRoomSessionMode;
+  webinarConfig?: Record<string, unknown>;
 }
 
 export interface UpdateStudyRoomDto {
@@ -374,10 +365,6 @@ export interface UpdateStudyRoomDto {
   timezone?: string;
   editScope?: StudyRoomEditScope;
   recurrence?: StudyRoomRecurrenceDto;
-  allowExternalUsers?: boolean;
-  externalAutoAccept?: boolean;
-  externalPasscode?: string;
-  externalInvites?: Array<{ email: string; role: 'PARTICIPANT' | 'COHOST' }>;
 }
 
 // Peer Session Types
@@ -492,19 +479,26 @@ export interface BrowsePeer {
   avatar?: string;
   bio?: string;
   skills: string[];
+  matchedSkills?: string[];
   rating?: number | null;
   reviewCount?: number;
   totalSessions?: number;
   socialLinks?: SocialLink[];
+  matchScore?: number;
+  skillScore?: number;
+  availabilityScore?: number;
+  ratingScore?: number;
 }
 
 export interface BrowseResponse {
   peers: BrowsePeer[];
   studyRooms: StudyRoomCard[];
   trendingStudyRooms?: StudyRoomCard[];
+  trendingWebinars?: StudyRoomCard[];
   counts: {
     peers: number;
     studyRooms: number;
+    webinars?: number;
   };
   pagination: Pagination;
 }
@@ -607,6 +601,7 @@ export interface DashboardData {
     totalUnlocked: number;
     totalAvailable: number;
   };
+  engagement?: DashboardEngagementSummary;
 }
 
 // Pagination Types
@@ -692,13 +687,14 @@ export interface NotificationFilters extends PaginationQuery {
 }
 
 export interface BrowseFilters extends PaginationQuery {
-  tab: 'peers' | 'studyRooms';
+  tab: 'peers' | 'studyRooms' | 'webinars';
   search?: string;
   skills?: string[];
   peerHasSocialLinks?: boolean;
-  studyStatus?: SessionStatus.UPCOMING | SessionStatus.ONGOING;
+  studyStatus?: SessionStatus;
   studyFreeOnly?: boolean;
   includeTrendingStudyRooms?: boolean;
+  includeTrendingWebinars?: boolean;
   trendingLimit?: number;
   [key: string]: unknown;
 }
@@ -718,10 +714,14 @@ export interface DashboardQuery {
 // Transaction History Types
 export interface TransactionHistoryItem {
   id: string;
-  type: 'PAYMENT_MADE' | 'PAYMENT_RECEIVED' | 'REFUND_RECEIVED';
+  type:
+    | 'PAYMENT_MADE'
+    | 'PAYMENT_RECEIVED'
+    | 'REFUND_RECEIVED'
+    | 'BONUS_EARNED';
   amount: number;
   description: string;
-  status: PaymentStatus;
+  status: PaymentStatus | 'BONUS';
   date: Date | string;
   relatedUser?: {
     id: string;
@@ -785,7 +785,7 @@ export interface Achievement {
   rarity: AchievementRarity;
   maxProgress: number;
   progress: number;
-  coinReward: number;
+  pointReward: number;
   unlocked: boolean;
   unlockedAt?: Date | string | null;
 }
@@ -811,6 +811,39 @@ export interface MonthlyTopUsersResponse {
   topTeacher: MonthlyTopUser | null;
   month: number;
   year: number;
+}
+
+export type DashboardMissionStatus = 'ready' | 'completed' | 'locked';
+
+export interface DashboardMission {
+  id: string;
+  title: string;
+  description: string;
+  rewardPoints: number;
+  status: DashboardMissionStatus;
+  progressLabel: string;
+  actionLabel: string;
+  actionHref: string;
+}
+
+export interface RewardActivityItem {
+  id: string;
+  rewardType: string;
+  title: string;
+  description?: string | null;
+  pointsAmount: number;
+  createdAt: string | Date;
+}
+
+export interface DashboardEngagementSummary {
+  headline: string;
+  subtitle: string;
+  completedCount: number;
+  totalCount: number;
+  weeklyPoints: number;
+  totalPoints: number;
+  missions: DashboardMission[];
+  recentRewards: RewardActivityItem[];
 }
 
 // Session Feedback Types (Post-session survey)

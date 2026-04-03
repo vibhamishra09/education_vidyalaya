@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import StudyRoomClient from "./study-room-client";
 
 // Type for skill in API response
@@ -29,13 +30,17 @@ interface StudyRoomData {
 // Server-side function to fetch room data for metadata
 async function getStudyRoomData(roomId: string): Promise<StudyRoomData | null> {
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+    const baseUrl =
+      process.env.BACKEND_URL ||
+      process.env.NEXT_PUBLIC_API_URL ||
+      'http://127.0.0.1:3002';
     const response = await fetch(`${baseUrl}/api/study-rooms/${roomId}`, {
       next: { revalidate: 60 }, // Cache for 60 seconds
     });
+    const res = await response.json()
     
     if (!response.ok) return null;
-    return response.json();
+    return res;
   } catch (error) {
     console.error("Error fetching study room for metadata:", error);
     return null;
@@ -130,5 +135,15 @@ export default async function StudyRoomPage({
   const { roomId } = await params;
   
   const room = await getStudyRoomData(roomId);
-  return <StudyRoomClient roomId={room?.id ?? roomId} />;
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-[40vh] flex items-center justify-center text-muted-foreground text-sm">
+          Loading…
+        </div>
+      }
+    >
+      <StudyRoomClient roomId={room?.id!} slug={room?.slug!} />
+    </Suspense>
+  );
 }

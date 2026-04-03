@@ -1,5 +1,5 @@
 import React from 'react';
-import { Calendar, Layers, X, ArrowRight, LogOut, AlertCircle } from 'lucide-react';
+import { Calendar, Layers, X, ArrowRight, LogOut } from 'lucide-react';
 
 interface RecurringActionModalProps {
   isOpen: boolean;

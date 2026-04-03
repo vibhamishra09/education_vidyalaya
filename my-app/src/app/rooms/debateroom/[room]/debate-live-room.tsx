@@ -12,7 +12,7 @@ import {
   isTrackReference,
   useSpeakingParticipants,
 } from '@livekit/components-react';
-import { Track, RoomOptions, VideoPresets, RemoteParticipant } from 'livekit-client';
+import { Track, RoomOptions, VideoPresets, RemoteParticipant as _RemoteParticipant } from 'livekit-client';
 import { io, Socket } from 'socket.io-client';
 import type { TrackReferenceOrPlaceholder } from '@livekit/components-react';
 import '@livekit/components-styles';
@@ -27,6 +27,7 @@ import {
   Mic,
   MicOff,
   PhoneOff,
+  X,
   Users,
   MessageSquare,
   Clock,
@@ -44,7 +45,7 @@ import {
   Grid2X2,
   Focus,
   Send,
-  Bell,
+  Bell as _Bell,
   Zap,
   Play,
   Loader2,
@@ -53,7 +54,9 @@ import {
   MousePointer,
   Pin,
   PinOff,
+  PencilLine,
 } from 'lucide-react';
+import { ScratchPad } from '@/components/scratch-pad/ScratchPad';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
@@ -71,9 +74,9 @@ import {
 import {
   SimpleTimer,
   PrepCountdown,
-  DebateBuzzer,
-  DebateTeamChat,
-  CompactTeamsDisplay,
+  DebateBuzzer as _DebateBuzzer,
+  DebateTeamChat as _DebateTeamChat,
+  CompactTeamsDisplay as _CompactTeamsDisplay,
   ModeratorEvaluationPanel,
 } from '@/components/debate';
 import { useDebateMicControl } from '@/hooks/use-debate-mic-control';
@@ -154,7 +157,7 @@ export function DebateLiveRoom({
       return '';
     };
 
-    const handlePopState = (e: PopStateEvent) => {
+    const handlePopState = (_e: PopStateEvent) => {
       if (isNavigatingRef.current || debateStatusRef.current === DebateStatus.ENDED) return;
       if (window.confirm('Are you sure you want to leave the room? Your progress might be lost.')) {
         isNavigatingRef.current = true;
@@ -359,11 +362,11 @@ function DebateLiveContent({
   userSide,
   userId,
   debateState,
-  teamChatMessages,
+  teamChatMessages: _teamChatMessages,
   buzzerQueue,
   prepCountdown,
   onPressBuzzer,
-  onSendTeamChat,
+  onSendTeamChat: _onSendTeamChat,
   onAdvanceTurn,
   onEndDebate,
   onStartDebate,
@@ -379,6 +382,9 @@ function DebateLiveContent({
   const [sidebarTab, setSidebarTab] = useState<'teams' | 'chat' | 'evaluation'>('teams');
   const [isAudioOutputEnabled, setIsAudioOutputEnabled] = useState(true);
   const [viewMode, setViewMode] = useState<'speaker' | 'grid'>('speaker');
+  const isHost = userRole === 'host';
+  const [showScratchPad, setShowScratchPad] = useState(false);
+  const [allowScratchPadEdit, setAllowScratchPadEdit] = useState(isHost);
   const [isRoomConnected, setIsRoomConnected] = useState(false);
   const [pinnedParticipantId, setPinnedParticipantId] = useState<string | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -390,13 +396,11 @@ function DebateLiveContent({
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
-  const isHost = userRole === 'host';
-
   // Remote Control Hook
   const {
     isControlling,
     isRequestPending,
-    targetScreenShareId,
+    targetScreenShareId: _targetScreenShareId,
     requestControl,
     stopControl,
     sendInputEvent,
@@ -503,7 +507,7 @@ function DebateLiveContent({
       });
       socket.close();
     };
-  }, [debateRoom.id, userId, userRole, userSide]);
+  }, [debateRoom.id, userId, userRole, userSide, API_URL]);
 
   // Load chat history from API
   useEffect(() => {
@@ -561,7 +565,7 @@ function DebateLiveContent({
     };
 
     loadMessages();
-  }, [debateRoom.id, userRole, userSide, getToken]);
+  }, [debateRoom.id, userRole, userSide, getToken, API_URL]);
 
   // LiveKit hooks
   const room = useRoomContext();
@@ -619,31 +623,6 @@ function DebateLiveContent({
     };
   }, [room]);
 
-  // Apply Krisp AI noise suppression (browser-only; package uses Worker — must not load on SSR)
-  useEffect(() => {
-    if (!localParticipant || typeof window === 'undefined') return;
-    let cancelled = false;
-    const trackRef: { current: { stopProcessor: () => Promise<void> } | null } = { current: null };
-
-    void import('@livekit/krisp-noise-filter')
-      .then(({ KrispNoiseFilter, isKrispNoiseFilterSupported }) => {
-        if (cancelled || !localParticipant || !isKrispNoiseFilterSupported()) return;
-        const micPublication = localParticipant.getTrackPublication(Track.Source.Microphone);
-        const micTrack = micPublication?.audioTrack;
-        if (!micTrack) return;
-        trackRef.current = micTrack;
-        const filter = KrispNoiseFilter();
-        micTrack.setProcessor(filter).catch(() => {});
-      })
-      .catch(() => {});
-
-    return () => {
-      cancelled = true;
-      trackRef.current?.stopProcessor().catch(() => {});
-      trackRef.current = null;
-    };
-  }, [localParticipant]);
-
   // Log a concise connection snapshot in development only.
   useEffect(() => {
     if (process.env.NODE_ENV !== 'development' || !room || !localParticipant) return;
@@ -668,7 +647,7 @@ function DebateLiveContent({
     try {
       const metadata = JSON.parse(participant.metadata);
       return metadata.avatar || null;
-    } catch (e) {
+    } catch (_e) {
       return null;
     }
   }, []);
@@ -727,7 +706,7 @@ function DebateLiveContent({
     } catch (err) {
       console.error('[DebateRoom] Failed to send chat message:', err);
     }
-  }, [chatInput, userRole, userSide, isModeratorOnly, debateRoom.id, getToken]);
+  }, [chatInput, userRole, userSide, isModeratorOnly, debateRoom.id, getToken, API_URL]);
 
   // Clear chat history (moderators only)
   const clearChatHistory = useCallback(async () => {
@@ -770,13 +749,13 @@ function DebateLiveContent({
       } else {
         console.error('[DebateRoom] Failed to clear chat history:', response.status, response.statusText);
       }
-    } catch (err) {
-      console.error('[DebateRoom] Failed to clear chat history:', err);
+    } catch (_e) {
+      console.error('[DebateRoom] Failed to clear chat history:', _e);
     }
-  }, [userRole, debateRoom.id, getToken]);
+  }, [userRole, debateRoom.id, getToken, API_URL]);
 
   // Toggle camera with proper error handling
-  const toggleCamera = useCallback(async () => {
+  const _toggleCamera = useCallback(async () => {
     if (!localParticipant) return;
 
     try {
@@ -1135,7 +1114,27 @@ function DebateLiveContent({
                     <VideoTrack trackRef={activeScreenShare} className="w-auto h-auto max-w-full max-h-[75vh] object-contain rounded-lg" />
                   )}
                   
-                  {/* Remote Control Overlay */}
+                  {/* Scratch Pad Overlay */}
+                {showScratchPad && (
+                  <div className="absolute inset-0 z-[100] p-4 bg-[#1a1a1a]">
+                    <ScratchPad 
+                      roomId={debateRoom.id} 
+                      room={room}
+                      isHost={isHost}
+                      canEdit={isHost || allowScratchPadEdit}
+                    />
+                    <Button 
+                      onClick={() => setShowScratchPad(false)}
+                      variant="ghost" 
+                      size="sm"
+                      className="absolute top-8 right-8 z-[101] h-10 w-10 rounded-full bg-black/60 hover:bg-black/80 border border-white/10 text-white"
+                    >
+                      <X className="h-5 w-5" />
+                    </Button>
+                  </div>
+                )}
+
+                {/* Main Content Areas */}
                   <RemoteControlOverlay
                     isControlling={isControlling}
                     isSharing={activeScreenShare.participant.identity === localParticipant?.identity}
@@ -2026,6 +2025,25 @@ function DebateLiveContent({
             : <MonitorUp className="h-6 w-6" />}
         </Button>
 
+        {/* Scratch Pad Toggle */}
+        <Button
+          onClick={() => {
+            if (!showScratchPad) setShowSidebar(false);
+            setShowScratchPad(!showScratchPad);
+          }}
+          variant="ghost"
+          size="lg"
+          className={cn(
+            'h-10 w-10 sm:h-12 sm:w-12 rounded-full transition-all p-0',
+            showScratchPad 
+              ? 'bg-purple-600 hover:bg-purple-700 text-white' 
+              : 'bg-white/10 hover:bg-white/20 text-white'
+          )}
+          title="Collaborative Scratch Pad"
+        >
+          <PencilLine className="h-5 w-5 sm:h-6 sm:w-6" />
+        </Button>
+
         {/* Leave Button */}
         <Button
           onClick={async () => {
@@ -2111,7 +2129,7 @@ function TeamVideoGrid({
           try {
             const metadata = JSON.parse(trackRef.participant.metadata);
             avatarUrl = metadata.avatar || undefined;
-          } catch (e) {
+          } catch (_e) {
             // Silently handle parsing errors
           }
         }

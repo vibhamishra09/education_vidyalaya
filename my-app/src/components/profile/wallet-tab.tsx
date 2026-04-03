@@ -24,7 +24,12 @@ export const WalletTab = memo(function WalletTab({ coins, hourlyRate, isLoading 
 
   // Calculate earnings stats (include both payments received and refunds received)
   const totalEarned = transactions
-    .filter(t => t.type === 'PAYMENT_RECEIVED' || t.type === 'REFUND_RECEIVED')
+    .filter(
+      (t) =>
+        t.type === 'PAYMENT_RECEIVED' ||
+        t.type === 'REFUND_RECEIVED' ||
+        t.type === 'BONUS_EARNED'
+    )
     .reduce((sum, t) => sum + t.amount, 0);
 
   return (
@@ -137,6 +142,8 @@ export const WalletTab = memo(function WalletTab({ coins, hourlyRate, isLoading 
                       className={`p-2.5 rounded-full flex-shrink-0 ${
                         transaction.type === 'PAYMENT_RECEIVED'
                           ? 'bg-green-100 text-green-600'
+                          : transaction.type === 'BONUS_EARNED'
+                          ? 'bg-amber-100 text-amber-600'
                           : transaction.type === 'REFUND_RECEIVED'
                           ? 'bg-blue-100 text-blue-600'
                           : 'bg-red-100 text-red-600'
@@ -144,6 +151,8 @@ export const WalletTab = memo(function WalletTab({ coins, hourlyRate, isLoading 
                     >
                       {transaction.type === 'PAYMENT_RECEIVED' ? (
                         <ArrowDownLeft className="h-4 w-4" />
+                      ) : transaction.type === 'BONUS_EARNED' ? (
+                        <Coins className="h-4 w-4" />
                       ) : transaction.type === 'REFUND_RECEIVED' ? (
                         <RefreshCw className="h-4 w-4" />
                       ) : (
@@ -168,6 +177,8 @@ export const WalletTab = memo(function WalletTab({ coins, hourlyRate, isLoading 
                       className={`text-lg font-semibold ${
                         transaction.type === 'PAYMENT_MADE'
                           ? 'text-red-600'
+                          : transaction.type === 'BONUS_EARNED'
+                          ? 'text-amber-600'
                           : 'text-green-600'
                       }`}
                     >
@@ -177,14 +188,16 @@ export const WalletTab = memo(function WalletTab({ coins, hourlyRate, isLoading 
                     <Badge
                       variant="outline"
                       className={`text-xs ${
-                        transaction.status === PaymentStatus.RECEIVED
+                        transaction.status === 'BONUS'
+                          ? 'border-amber-200 text-amber-700 bg-amber-50'
+                          : transaction.status === PaymentStatus.RECEIVED
                           ? 'border-green-200 text-green-700 bg-green-50'
                           : transaction.status === PaymentStatus.ESCROW
                           ? 'border-yellow-200 text-yellow-700 bg-yellow-50'
                           : 'border-red-200 text-red-700 bg-red-50'
                       }`}
                     >
-                      {transaction.status}
+                      {transaction.status === 'BONUS' ? 'BONUS' : transaction.status}
                     </Badge>
                   </div>
                 </div>

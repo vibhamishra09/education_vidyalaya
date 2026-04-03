@@ -27,7 +27,7 @@ export class UsersController {
     @CurrentUser('dbUserId') dbUserId: string | undefined,
     @CurrentUser('clerkId') clerkUserId: string,
   ) {
-    return this.usersService.getCurrentUser(dbUserId ?? clerkUserId);
+    return this.usersService.getCurrentUser(clerkUserId || dbUserId || '');
   }
 
   @Patch('users/me')
@@ -37,7 +37,10 @@ export class UsersController {
     @CurrentUser('clerkId') clerkUserId: string,
     @Body() updateDto: UpdateUserDto,
   ) {
-    return this.usersService.updateUserProfile(dbUserId ?? clerkUserId, updateDto);
+    return this.usersService.updateUserProfile(
+      clerkUserId || dbUserId || '',
+      updateDto,
+    );
   }
 
   @Get('users/check-username')
@@ -54,7 +57,7 @@ export class UsersController {
     try {
       return await this.usersService.checkUsernameAvailability(
         username,
-        dbUserId ?? clerkUserId,
+        clerkUserId || dbUserId,
       );
     } catch (error) {
       this.logger.debug(

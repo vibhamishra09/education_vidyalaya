@@ -1,5 +1,14 @@
 import { Body, Controller, Post, Req, UseGuards } from '@nestjs/common';
 import { LivekitService } from './livekit.service';
+
+/** Browsers need wss:// (or ws:// for local dev); avoid https:// from copy-paste. */
+function normalizeLiveKitUrl(url: string): string {
+  let u = url.trim();
+  while (u.endsWith('/')) u = u.slice(0, -1);
+  if (/^https:\/\//i.test(u)) return 'wss://' + u.slice(8);
+  if (/^http:\/\//i.test(u)) return 'ws://' + u.slice(7);
+  return u;
+}
 import { PrismaService } from '../prisma/prisma.service';
 import { ClerkAuthGuard } from '../common/guards/clerk-auth.guard';
 import { StudyRoomsService } from '../study-rooms/study-rooms.service';
@@ -23,6 +32,7 @@ export class LivekitController {
       roomName: string;
       publish?: boolean;
       subscribe?: boolean;
+      publishData?: boolean;
       metadata?: string;
     },
     @Req() req: any,
@@ -31,7 +41,20 @@ export class LivekitController {
 
     // Fetch user's display name and avatar from database
     const user = await this.usersService.ensureUserFromClerk(identity);
-    
+
+    let publish = body.publish ?? true;
+    let publishData = body.publishData ?? true;
+    if (body.roomName?.startsWith('studyroom-')) {
+      const roomId = body.roomName.replace(/^studyroom-/, '');
+      const policy =
+        await this.studyRoomsService.getLivekitPublishPolicyForStudyRoom(
+          roomId,
+          identity,
+        );
+      publish = policy.publish;
+      publishData = policy.publishData;
+    }
+
     // Include avatar URL in metadata for display in video room
     const userMetadata = JSON.stringify({
       avatar: user?.avatar || null,
@@ -43,10 +66,16 @@ export class LivekitController {
       identity,
       name: user?.name || undefined,
       metadata: userMetadata,
-      publish: body.publish,
-      subscribe: body.subscribe,
+      publish,
+      subscribe: body.subscribe ?? true,
+      publishData,
     });
-    return { token };
+    const livekitUrl = process.env.LIVEKIT_URL?.trim();
+    const normalizedUrl = livekitUrl ? normalizeLiveKitUrl(livekitUrl) : '';
+    return {
+      token,
+      ...(normalizedUrl ? { livekitUrl: normalizedUrl } : {}),
+    };
   }
 
   @Post('guest-token')
@@ -70,22 +99,31 @@ export class LivekitController {
       guest: true,
       role: guestToken.guestParticipant.role,
     });
-    const token = await this.livekit.createToken({
+    const policy =
+      await this.studyRoomsService.getLivekitPublishPolicyForWebinarGuest(
+        guestToken.studyRoomId,
+        guestToken.guestParticipant.id,
+      );
+    const jwt = await this.livekit.createToken({
       roomName: body.roomName,
       identity: guestToken.guestParticipant.livekitIdentity,
       name: guestToken.guestParticipant.name,
       metadata,
-      publish: false,
+      publish: policy.publish,
       subscribe: true,
+      publishData: policy.publishData,
     });
 
+    const livekitUrl = process.env.LIVEKIT_URL?.trim();
+    const normalizedUrl = livekitUrl ? normalizeLiveKitUrl(livekitUrl) : '';
     return {
-      token,
+      token: jwt,
       role: guestToken.guestParticipant.role,
       isHost:
         guestToken.guestParticipant.role === StudyRoomParticipantRole.COHOST,
       identity: guestToken.guestParticipant.livekitIdentity,
       name: guestToken.guestParticipant.name,
+      ...(normalizedUrl ? { livekitUrl: normalizedUrl } : {}),
     };
   }
 }

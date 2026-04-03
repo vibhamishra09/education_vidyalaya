@@ -20,6 +20,7 @@ export interface RoomSettings {
   chatDisabled: boolean;
   hideParticipantList: boolean;
   chatRestrictToHostOnly: boolean;
+  lockScratchPad: boolean;
 }
 
 export interface UserPermissions {
@@ -39,6 +40,7 @@ export interface ComputedPermissions {
   allowChatHost: boolean;
   allowChatUser: boolean;
   allowParticipantList: boolean;
+  allowScratchPad: boolean;
 }
 
 export interface FlashQuestion {
@@ -88,6 +90,7 @@ export class PermissionsService {
         chatDisabled: settings.chatDisabled === 'true',
         hideParticipantList: settings.hideParticipantList === 'true',
         chatRestrictToHostOnly: settings.chatRestrictToHostOnly === 'true',
+        lockScratchPad: settings.lockScratchPad === 'true',
       };
     } catch (error) {
       this.logger.error(`Error getting room settings for ${sessionId}:`, error);
@@ -98,6 +101,7 @@ export class PermissionsService {
         chatDisabled: false,
         hideParticipantList: false,
         chatRestrictToHostOnly: false,
+        lockScratchPad: false,
       };
     }
   }
@@ -128,6 +132,9 @@ export class PermissionsService {
       if (settings.chatRestrictToHostOnly !== undefined) {
         updates.chatRestrictToHostOnly =
           settings.chatRestrictToHostOnly.toString();
+      }
+      if (settings.lockScratchPad !== undefined) {
+        updates.lockScratchPad = settings.lockScratchPad.toString();
       }
 
       if (Object.keys(updates).length > 0) {
@@ -238,6 +245,37 @@ export class PermissionsService {
   }
 
   /**
+   * Remove specific fields from a user's permission hash so they fall back to room defaults.
+   */
+  async removeUserPermissionFields(
+    sessionId: string,
+    userId: string,
+    fields: Array<'canAudio' | 'canVideo' | 'canChat' | 'canChatEveryone' | 'canChatHost' | 'canChatUser'>,
+  ): Promise<void> {
+    if (fields.length === 0) return;
+    try {
+      const key = this.getUserPermissionsKey(sessionId, userId);
+      for (const field of fields) {
+        await redisClient.hDel(key, field);
+      }
+      const remaining = await redisClient.hKeys(key);
+      if (remaining.length === 0) {
+        await redisClient.del(key);
+      }
+      this.logger.debug(
+        `Removed permission fields for ${sessionId}/${userId}:`,
+        fields,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Error removing permission fields for ${sessionId}/${userId}:`,
+        error,
+      );
+      throw error;
+    }
+  }
+
+  /**
    * Clear user-specific permissions (reset to global defaults)
    */
   async clearUserPermissions(sessionId: string, userId: string): Promise<void> {
@@ -278,6 +316,7 @@ export class PermissionsService {
           allowChatHost: true,
           allowChatUser: true,
           allowParticipantList: true,
+          allowScratchPad: true,
         };
       }
 
@@ -322,6 +361,7 @@ export class PermissionsService {
         allowChatHost,
         allowChatUser,
         allowParticipantList: !roomSettings.hideParticipantList,
+        allowScratchPad: !roomSettings.lockScratchPad,
       };
     } catch (error) {
       this.logger.error(
@@ -337,6 +377,7 @@ export class PermissionsService {
         allowChatHost: true,
         allowChatUser: true,
         allowParticipantList: true,
+        allowScratchPad: true,
       };
     }
   }

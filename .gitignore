@@ -52,3 +52,12 @@ coverage/
 # pnpm-lock.yaml
 
 .clerk/
+my-app/storageState.moderator.json
+my-app/storageState.participant.json
+my-app/test-results.json
+
+dev-e2e/node_modules/
+dev-e2e/playwright-report/
+dev-e2e/test-results.json
+dev-e2e/storageState.*.json
+dev-e2e/test-results
