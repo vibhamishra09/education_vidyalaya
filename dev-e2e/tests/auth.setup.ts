@@ -1,7 +1,7 @@
 import { test as setup, expect } from '@playwright/test';
 
 setup('authenticate', async ({ page }) => {
-    await page.goto('http://localhost:3000', {waitUntil:'domcontentloaded'})
+    await page.goto('/', {waitUntil:'domcontentloaded'})
     await page.waitForTimeout(3000)
 
     await page.getByRole('button', { name: 'Sign In' }).click();

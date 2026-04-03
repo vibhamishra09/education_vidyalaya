@@ -240,7 +240,7 @@ jobs:
         env:
           BASE_URL: https://dev.webyalaya.com
         run: |
-          npx playwright test true
+          npx playwright test
 
       - name: Check 50% pass threshold
         working-directory: ./dev-e2e
