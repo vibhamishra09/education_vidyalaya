@@ -6,7 +6,7 @@ setup('authenticate', async ({ page }) => {
 
     await page.getByRole('button', { name: 'Sign In' }).click();
     await page.getByRole('textbox', { name: 'Email address' }).click();
-    await page.getByRole('textbox', { name: 'Email address' }).fill('test@gmail.com');
+    await page.getByRole('textbox', { name: 'Email address' }).fill('saxenay117@gmail.com');
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
     await page.getByRole('textbox', { name: 'Password' }).click();
     await page.getByRole('textbox', { name: 'Password' }).fill('WEBYALAYA123#');

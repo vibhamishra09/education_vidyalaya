@@ -24,7 +24,7 @@ test("Check Profile and Edit feature test" ,async ({page})=> {
         waitUntil: 'networkidle'
     })
 
-    await expect(page.getByRole('heading', { name: 'PlayWright' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Yash Saxena' })).toBeVisible()
     // await page.getByRole('button', {name :'Edit Profile'}).click()
     // await page.getByRole('textbox', {name :'Display Name'}).click()
     // await page.getByRole('textbox', {name :'Display Name'}).fill('EditedName')
