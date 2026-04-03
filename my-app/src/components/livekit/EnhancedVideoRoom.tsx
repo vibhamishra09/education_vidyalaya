@@ -1949,28 +1949,33 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			const remoteParticipants = allParticipants.filter((p: any) => p.identity !== localParticipant?.identity)
 			
 			// Priority 1: Remote Screen Share (preferred if someone else is presenting)
-			const remoteScreenShare = remoteParticipants
-				.map((p: any) => Array.from(p.videoTrackPublications.values()).find((pub: any) => pub.source === Track.Source.ScreenShare && pub.track))
-				.find((pub: any) => !!pub)
-			if (remoteScreenShare) return (remoteScreenShare as any).track
+			// Ensure we find the first available SUBSCRIBED screen share track
+			for (const p of remoteParticipants) {
+				const screenPub = Array.from(p.videoTrackPublications.values())
+					.find((pub: any) => pub.source === Track.Source.ScreenShare && pub.track && pub.isSubscribed)
+				if (screenPub?.track) return screenPub.track as Track
+			}
 
-			// Priority 2: Remote Camera
-			const remoteCamera = remoteParticipants
-				.map((p: any) => Array.from(p.videoTrackPublications.values()).find((pub: any) => pub.source === Track.Source.Camera && pub.track))
-				.find((pub: any) => !!pub)
-			if (remoteCamera) return (remoteCamera as any).track
+			// Priority 2: Remote Camera (any active remote camera)
+			for (const p of remoteParticipants) {
+				const camPub = Array.from(p.videoTrackPublications.values())
+					.find((pub: any) => pub.source === Track.Source.Camera && pub.track && pub.isSubscribed)
+				if (camPub?.track) return camPub.track as Track
+			}
 
-			// Priority 3: Local Screen Share (show your own presentation in PiP, like Google Meet)
-			// Safe for both native PiP and Document PiP since they use a raw <video> element
-			// with the MediaStreamTrack directly — no recursive page embedding.
-			const localScreenShare = Array.from(localParticipant?.videoTrackPublications.values() || [])
-				.find(pub => pub.source === Track.Source.ScreenShare && pub.track)
-			if (localScreenShare) return (localScreenShare as any).track
+			// Priority 3: Local Screen Share (show your own presentation, like Google Meet)
+			if (localParticipant) {
+				const localScreenPub = Array.from(localParticipant.videoTrackPublications.values())
+					.find(pub => pub.source === Track.Source.ScreenShare && pub.track)
+				if (localScreenPub?.track) return localScreenPub.track as Track
+			}
 
 			// Priority 4: Local Camera
-			const localCamera = Array.from(localParticipant?.videoTrackPublications.values() || [])
-				.find(pub => pub.source === Track.Source.Camera && pub.track)
-			if (localCamera) return (localCamera as any).track
+			if (localParticipant) {
+				const localCamPub = Array.from(localParticipant.videoTrackPublications.values())
+					.find(pub => pub.source === Track.Source.Camera && pub.track)
+				if (localCamPub?.track) return localCamPub.track as Track
+			}
 
 			return null
 		}
@@ -2139,8 +2144,9 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				const currentSid = (trackToUse ? trackToUse.sid : (streamToUse ? 'avatar-stream' : null)) || null
 				
 				if (currentSid !== pipSyncRef.current.lastTrackSid) {
-					// Detach previous if needed
-					if (video.srcObject) video.srcObject = null
+					// 2. Attach and Warm Up only if changed
+					// CRITICAL: NEVER set video.srcObject = null because it closes active PiP windows.
+					// track.attach(video) handles the replacement seamlessly.
 					
 					if (trackToUse) {
 						const isLocalCamera = trackToUse.source === Track.Source.Camera && (trackToUse as any).isLocal
@@ -2258,29 +2264,32 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			video.muted = true
 
 			// HARDENED READINESS CHECK: Ensure video is actually ready for PiP
+			// If sync is working, video should ALREADY be ready.
 			if (!video.srcObject || video.readyState < 2) {
 				const trackToUse = getTrackFromReference(null, true)
 				if (trackToUse) {
 					trackToUse.attach(video)
-					// Robust wait for metadata/playability
-					await new Promise(resolve => {
-						const onReady = () => {
-							video.removeEventListener('loadedmetadata', onReady);
-							video.removeEventListener('canplay', onReady);
-							resolve(null);
-						};
-						video.addEventListener('loadedmetadata', onReady);
-						video.addEventListener('canplay', onReady);
-						setTimeout(onReady, 600); // Fail-safe
-					});
+					// Skip delay if it's an auto-trigger to satisfy browser gesture constraints
+					if (!isAuto) {
+						await new Promise(resolve => {
+							const onReady = () => {
+								video.removeEventListener('loadedmetadata', onReady);
+								video.removeEventListener('canplay', onReady);
+								resolve(null);
+							};
+							video.addEventListener('loadedmetadata', onReady);
+							video.addEventListener('canplay', onReady);
+							setTimeout(onReady, 300); // Shorter fallback
+						});
+					}
 				}
 			}
 
 			// Ensure it is actually playing before calling PiP
 			try {
-				await video.play()
+				if (video.paused) await video.play()
 			} catch (e) {
-				console.warn('[PiP] Play failed, but requesting PiP anyway:', e)
+				if (!isAuto) console.warn('[PiP] Play failed:', e)
 			}
 
 			if (video.requestPictureInPicture) {
@@ -2303,13 +2312,16 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				if (document.pictureInPictureElement || pipWindowRef.current) return
 
 				try {
-					// Small delay to let the browser complete the tab transition
-					await new Promise(resolve => setTimeout(resolve, 150));
-					// Guard: user may have already returned during the delay
+					// Guard: check if browser or Document PiP already activated it
+					if (document.pictureInPictureElement || pipWindowRef.current) return
+
+					// Small delay to let the browser complete the tab transition and track warm-up
+					await new Promise(resolve => setTimeout(resolve, 200));
 					if (!document.hidden) return;
+					
 					await togglePiP(true);
 				} catch (error) {
-					console.warn('[PiP] Auto-PiP failed:', error);
+					console.warn('[PiP] Auto-PiP trigger failed:', error);
 				}
 			} else {
 				// Page is becoming visible again — close any active PiP
@@ -4667,7 +4679,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				</div>
 			)}
 
-			{/* Hidden Video for Persistent PiP activation - Pre-initialized within VideoRoomContent scope */}
+			{/* Hidden Video for Persistent PiP activation - MUST be somewhat visible for browsers to allow Auto-PiP */}
 			<video 
 				ref={persistentPipVideoRef}
 				autoPlay
@@ -4675,9 +4687,9 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				playsInline
 				style={{ 
 					position: 'fixed', 
-					width: '1px', 
-					height: '1px', 
-					opacity: 0.01, 
+					width: '8px', 
+					height: '8px', 
+					opacity: 0.1, 
 					bottom: 0, 
 					right: 0, 
 					pointerEvents: 'none', 
