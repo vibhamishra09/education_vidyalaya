@@ -256,8 +256,13 @@ export function SessionList({
                       const timeDifferenceMs = sessionTime.getTime() - now.getTime();
                       const minutesBeforeStart = timeDifferenceMs / (1000 * 60);
 
+<<<<<<< HEAD
                       const canJoin =
                         isPeerSession &&
+=======
+                      const canJoin = 
+                        isPeerSession && 
+>>>>>>> f449d42 (WIP: session updates)
                         (session.sessionStatus === "UPCOMING" || session.sessionStatus === "ONGOING") &&
                         minutesBeforeStart <= 5;
 
