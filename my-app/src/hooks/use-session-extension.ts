@@ -54,7 +54,7 @@ export function useSessionExtension({
 
     const connectSocket = () => {
       try {
-        const url = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:3001';
+        const url = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:3002';
 
         socketInstance = io(url, {
           transports: ['websocket'],

@@ -1,5 +1,16 @@
 import type { NextConfig } from "next";
 
+function getHostname(value?: string): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) return undefined;
+
+  try {
+    return new URL(trimmed).hostname;
+  } catch {
+    return trimmed.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+  }
+}
+
 /**
  * Nest API target for same-origin /api/* rewrites (when the browser hits localhost:3000/api/...).
  * Use BACKEND_URL so this is never confused with the Next site URL; do not omit on Vercel if you rely on rewrites.
@@ -7,9 +18,26 @@ import type { NextConfig } from "next";
 const backendOrigin =
   process.env.BACKEND_URL?.trim().replace(/\/$/, "") ||
   process.env.NEXT_PUBLIC_API_URL?.trim().replace(/\/$/, "") ||
-  "http://127.0.0.1:3001";
+  "http://127.0.0.1:3002";
+
+const allowedDevOrigins = Array.from(
+  new Set(
+    [
+      "localhost",
+      "127.0.0.1",
+      getHostname(process.env.NEXT_PUBLIC_SITE_URL),
+      getHostname(process.env.NEXT_PUBLIC_API_URL),
+      getHostname(process.env.NEXT_PUBLIC_CHAT_WS_URL),
+      ...(process.env.ALLOWED_DEV_ORIGINS
+        ?.split(",")
+        .map((origin) => getHostname(origin))
+        .filter(Boolean) ?? []),
+    ].filter((value): value is string => Boolean(value)),
+  ),
+);
 
 const nextConfig: NextConfig = {
+  allowedDevOrigins,
   /**
    * Forward /api/* to Nest so browser calls like PATCH /api/peer-sessions/:id work when
    * NEXT_PUBLIC_API_URL is empty or matches the site origin (same-origin + Bearer token).

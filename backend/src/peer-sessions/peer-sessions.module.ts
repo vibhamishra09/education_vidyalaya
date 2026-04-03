@@ -7,6 +7,7 @@ import { AvailabilityModule } from '../availability/availability.module';
 import { StreaksModule } from '../streaks/streaks.module';
 import { AchievementsModule } from '../achievements/achievements.module';
 import { TranscriptsModule } from '../transcripts/transcripts.module';
+import { EngagementModule } from '../engagement/engagement.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { TranscriptsModule } from '../transcripts/transcripts.module';
     StreaksModule,
     AchievementsModule,
     TranscriptsModule,
+    EngagementModule,
   ],
   controllers: [PeerSessionsController],
   providers: [PeerSessionsService],

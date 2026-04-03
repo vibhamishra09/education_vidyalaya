@@ -144,12 +144,12 @@ export function StudyRoomCard({
         theme.hoverBorder
       )}>
         {/* Header: category left; LIVE/SCHEDULED + Edit stacked right with shared alignment */}
-        <div className="mb-3 flex items-start justify-between gap-2">
-          <Badge variant="secondary" className={cn(
-            "text-xs font-bold px-2 py-0.5 transition-colors uppercase tracking-wider rounded-lg border-0 shrink-0",
-            theme.badge
+          <div className="mb-3 flex items-start justify-between gap-2 min-w-0">          
+            <Badge variant="secondary" className={cn(
+              "text-xs font-bold px-2 py-0.5 transition-colors uppercase tracking-wider rounded-lg border-0 shrink-0",
+              theme.badge
           )}>
-            {category}
+            {category.length > 15 ? category.slice(0, 15) + "…" : category}
           </Badge>
 
           <div className="flex min-w-0 flex-col items-end gap-2 shrink-0">

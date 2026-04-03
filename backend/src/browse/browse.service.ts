@@ -205,7 +205,7 @@ export class BrowseService {
           const hostAvgRating =
             hostReviews.length > 0
               ? hostReviews.reduce((sum, r) => sum + r.rating, 0) /
-                hostReviews.length
+              hostReviews.length
               : null;
           const hostTotalSessions =
             room.createdBy._count.studyRooms +
@@ -334,8 +334,8 @@ export class BrowseService {
             sessionStatus: studyStatus
               ? studyStatus
               : {
-                  in: [SessionStatus.UPCOMING, SessionStatus.ONGOING],
-                },
+                in: [SessionStatus.UPCOMING, SessionStatus.ONGOING],
+              },
           };
           if (search) {
             studyRoomWhere.OR = [
@@ -400,9 +400,9 @@ export class BrowseService {
               },
               orderBy: peerSortMostActive
                 ? [
-                    { reviewsReceived: { _count: 'desc' } },
-                    { name: 'asc' },
-                  ]
+                  { reviewsReceived: { _count: 'desc' } },
+                  { name: 'asc' },
+                ]
                 : { name: 'asc' },
             });
 
@@ -412,7 +412,7 @@ export class BrowseService {
                 const avgRating =
                   reviews.length > 0
                     ? reviews.reduce((sum, r) => sum + r.rating, 0) /
-                      reviews.length
+                    reviews.length
                     : null;
                 const totalSessions =
                   user._count.peerSessionsRequested +
@@ -503,7 +503,7 @@ export class BrowseService {
               const hostAvgRating =
                 hostReviews.length > 0
                   ? hostReviews.reduce((sum, r) => sum + r.rating, 0) /
-                    hostReviews.length
+                  hostReviews.length
                   : null;
               const hostTotalSessions =
                 room.createdBy._count.studyRooms +
@@ -572,33 +572,33 @@ export class BrowseService {
             const emptyResult =
               tab === 'peers'
                 ? {
-                    peers: [],
-                    studyRooms: [],
-                    trendingStudyRooms: [],
-                    trendingWebinars: [],
-                    counts: { peers: 0, studyRooms: 0, webinars: 0 },
-                    pagination: {
-                      total: 0,
-                      page,
-                      limit,
-                      totalPages: 0,
-                      hasMore: false,
-                    },
-                  }
+                  peers: [],
+                  studyRooms: [],
+                  trendingStudyRooms: [],
+                  trendingWebinars: [],
+                  counts: { peers: 0, studyRooms: 0, webinars: 0 },
+                  pagination: {
+                    total: 0,
+                    page,
+                    limit,
+                    totalPages: 0,
+                    hasMore: false,
+                  },
+                }
                 : {
-                    peers: [],
-                    studyRooms: [],
-                    trendingStudyRooms: [],
-                    trendingWebinars: [],
-                    counts: { peers: 0, studyRooms: 0, webinars: 0 },
-                    pagination: {
-                      total: 0,
-                      page,
-                      limit,
-                      totalPages: 0,
-                      hasMore: false,
-                    },
-                  };
+                  peers: [],
+                  studyRooms: [],
+                  trendingStudyRooms: [],
+                  trendingWebinars: [],
+                  counts: { peers: 0, studyRooms: 0, webinars: 0 },
+                  pagination: {
+                    total: 0,
+                    page,
+                    limit,
+                    totalPages: 0,
+                    hasMore: false,
+                  },
+                };
 
             return emptyResult;
           }
@@ -623,7 +623,7 @@ export class BrowseService {
         take: limit,
         select: {
           id: true,
-          slug:true,
+          slug: true,
           title: true,
           description: true,
           sessionStatus: true,
@@ -672,7 +672,7 @@ export class BrowseService {
         const hostAvgRating =
           hostReviews.length > 0
             ? hostReviews.reduce((sum, r) => sum + r.rating, 0) /
-              hostReviews.length
+            hostReviews.length
             : null;
         const hostTotalSessions =
           room.createdBy._count.studyRooms +

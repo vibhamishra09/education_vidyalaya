@@ -37,7 +37,7 @@ export class NotificationsController {
     const viewedBool = viewed !== undefined ? viewed === 'true' : undefined;
 
     return this.notificationsService.getNotifications(
-      userId ?? clerkUserId,
+      clerkUserId || userId || '',
       type,
       viewedBool,
       page || 1,
@@ -53,7 +53,7 @@ export class NotificationsController {
   ) {
     return this.notificationsService.markNotificationAsRead(
       notificationId,
-      userId ?? clerkUserId,
+      clerkUserId || userId || '',
     );
   }
 
@@ -63,7 +63,7 @@ export class NotificationsController {
     @CurrentUser('clerkId') clerkUserId: string,
   ) {
     return this.notificationsService.markAllNotificationsAsRead(
-      userId ?? clerkUserId,
+      clerkUserId || userId || '',
     );
   }
 
@@ -75,7 +75,7 @@ export class NotificationsController {
   ) {
     return this.notificationsService.markNotificationsAsRead(
       body.notificationIds,
-      userId ?? clerkUserId,
+      clerkUserId || userId || '',
     );
   }
 
@@ -93,7 +93,7 @@ export class NotificationsController {
     @Body('subscription') subscription: PushSubscriptionDto,
   ) {
     await this.pushNotificationService.subscribeToPush(
-      userId ?? clerkUserId,
+      clerkUserId || userId || '',
       subscription,
     );
     return { success: true };
@@ -106,7 +106,7 @@ export class NotificationsController {
     @Body('endpoint') endpoint: string,
   ) {
     await this.pushNotificationService.unsubscribeFromPush(
-      userId ?? clerkUserId,
+      clerkUserId || userId || '',
       endpoint,
     );
     return { success: true };

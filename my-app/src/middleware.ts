@@ -20,6 +20,8 @@ const isPublicRoute = createRouteMatcher([
   '/terms-of-use',
   '/privacy-policy',
   '/careers',
+  '/offline',
+  '/manifest.json',
   '/(.*).webmanifest'
 ]);
 const isApiRoute = createRouteMatcher(['/api(.*)']);
@@ -81,8 +83,8 @@ export default clerkMiddleware(async (auth, req: NextRequest) => {
 export const config = {
   matcher: [
     // Skip Next.js internals and all static files, unless found in search params
-    // Exclude: static assets, metadata routes (sitemap.xml, robots.txt), and Next.js internals
-    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest|xml|txt)).*)',
+    // Exclude: static assets, metadata routes (sitemap.xml, robots.txt, manifest.json), and Next.js internals
+    '/((?!_next|[^?]*\\.(?:html?|css|js|json|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest|xml|txt)).*)',
     // Always run for API routes
     '/(api|trpc)(.*)',
   ],

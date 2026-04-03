@@ -158,7 +158,7 @@ export class StudyRoomsController {
     @CurrentUser('dbUserId') dbUserId: string | undefined,
     @CurrentUser('clerkId') clerkUserId: string,
   ) {
-    const actorKey = dbUserId ?? clerkUserId;
+    const actorKey = clerkUserId || dbUserId;
     if (!actorKey) {
       throw new UnauthorizedException('User identity missing');
     }
@@ -176,7 +176,7 @@ export class StudyRoomsController {
     @CurrentUser('dbUserId') dbUserId: string | undefined,
     @CurrentUser('clerkId') clerkUserId: string,
   ) {
-    const actorKey = dbUserId ?? clerkUserId;
+    const actorKey = clerkUserId || dbUserId;
     if (!actorKey) {
       throw new UnauthorizedException('User identity missing');
     }
@@ -195,7 +195,7 @@ export class StudyRoomsController {
     @CurrentUser('dbUserId') dbUserId: string | undefined,
     @CurrentUser('clerkId') clerkUserId: string,
   ) {
-    const actorKey = dbUserId ?? clerkUserId;
+    const actorKey = clerkUserId || dbUserId;
     if (!actorKey) {
       throw new UnauthorizedException('User identity missing');
     }
@@ -229,7 +229,7 @@ export class StudyRoomsController {
   ) {
     return this.studyRoomsService.getStudyRoomDetails(
       studyRoomId,
-      userId ?? clerkUserId,
+      clerkUserId || userId,
     );
   }
 
@@ -245,7 +245,7 @@ export class StudyRoomsController {
       createDto,
     });
     return this.studyRoomsService.createStudyRoom(
-      userId ?? clerkUserId,
+      clerkUserId || userId || '',
       createDto,
     );
   }
@@ -262,7 +262,7 @@ export class StudyRoomsController {
       createDto,
     });
     return this.studyRoomsService.createRecurringRoom(
-      userId ?? clerkUserId,
+      clerkUserId || userId || '',
       createDto,
     );
   }
@@ -276,7 +276,7 @@ export class StudyRoomsController {
     @Body() updateDto: UpdateStudyRoomDto,
   ) {
     // Match createStudyRoom: JWT may omit metadata.dbUserId; resolve user by Clerk id in service.
-    const actorKey = dbUserId ?? clerkUserId;
+    const actorKey = clerkUserId || dbUserId;
     if (!actorKey) {
       throw new UnauthorizedException('User identity missing');
     }
@@ -294,7 +294,7 @@ export class StudyRoomsController {
     @CurrentUser('dbUserId') dbUserId: string | undefined,
     @CurrentUser('clerkId') clerkUserId: string,
   ) {
-    const actorKey = dbUserId ?? clerkUserId;
+    const actorKey = clerkUserId || dbUserId;
     if (!actorKey) {
       throw new UnauthorizedException('User identity missing');
     }
@@ -309,7 +309,7 @@ export class StudyRoomsController {
     @CurrentUser('dbUserId') dbUserId: string,
     @CurrentUser('clerkId') clerkUserId?: string,
   ) {
-    const actorKey = dbUserId ?? clerkUserId;
+    const actorKey = clerkUserId || dbUserId;
     if (!actorKey) {
       throw new UnauthorizedException('User identity missing');
     }
@@ -325,7 +325,7 @@ export class StudyRoomsController {
     @CurrentUser('dbUserId') dbUserId: string,
     @Body() dto: { scope: 'ALL' | 'THIS' | 'FOLLOWING' }
   ) {
-    const actorKey = dbUserId ?? clerkUserId;
+    const actorKey = clerkUserId || dbUserId;
     if (!actorKey) {
       throw new UnauthorizedException('User identity missing');
     }
@@ -341,7 +341,7 @@ export class StudyRoomsController {
     @CurrentUser('dbUserId') dbUserId: string,
     @Body() dto: PromoteParticipantRoleDto,
   ) {
-     const actorKey = dbUserId ?? clerkUserId;
+    const actorKey = clerkUserId || dbUserId;
     if (!actorKey) {
       throw new UnauthorizedException('User identity missing');
     }
@@ -362,7 +362,7 @@ export class StudyRoomsController {
     @CurrentUser('dbUserId') userId: string,
     @Body('editScope') editScope?: StudyRoomEditScope,
   ) {
-    const actorKey = userId ?? clerkUserId;
+    const actorKey = clerkUserId || userId;
     if (!actorKey) {
       throw new UnauthorizedException('User identity missing');
     }
@@ -381,7 +381,7 @@ export class StudyRoomsController {
     @CurrentUser('clerkId') clerkUserId: string,
     @CurrentUser('dbUserId') userId: string,
   ) {
-    const actorKey = userId ?? clerkUserId;
+    const actorKey = clerkUserId || userId;
     if (!actorKey) {
       throw new UnauthorizedException('User identity missing');
     }
@@ -407,7 +407,7 @@ export class StudyRoomsController {
     @CurrentUser('clerkId') clerkUserId: string,
     @CurrentUser('dbUserId') userId: string,
   ) {
-    const actorKey = userId ?? clerkUserId;
+    const actorKey = clerkUserId || userId;
     if (!actorKey) {
       throw new UnauthorizedException('User identity missing');
     }
@@ -416,7 +416,7 @@ export class StudyRoomsController {
       studyRoomId,
       actorKey,
     });
-    return this.studyRoomsService.markNotCompleted(studyRoomId, userId);
+    return this.studyRoomsService.markNotCompleted(studyRoomId, actorKey);
   }
 
   @Get(':studyRoomId/is-host')
@@ -442,7 +442,7 @@ export class StudyRoomsController {
     @CurrentUser('dbUserId') userId: string,
     @Body() feedbackDto: SessionFeedbackDto,
   ) {
-    const actorKey = userId ?? clerkUserId;
+    const actorKey = clerkUserId || userId;
     if (!actorKey) {
       throw new UnauthorizedException('User identity missing');
     }

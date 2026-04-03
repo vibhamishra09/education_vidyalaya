@@ -57,13 +57,13 @@ function resolveApiBaseURL(): string {
       return env;
     }
     // Same-origin `/api/*` → next.config rewrites to Nest. Avoids CORS when the app is opened
-    // as http://127.0.0.1:3000 while NEXT_PUBLIC_API_URL was http://localhost:3001 (or unset).
+    // as http://127.0.0.1:3000 while NEXT_PUBLIC_API_URL was http://localhost:3002 (or unset).
     return "";
   }
 
   return (
     process.env.BACKEND_URL?.trim().replace(/\/$/, "") ||
-    "http://127.0.0.1:3001"
+    "http://127.0.0.1:3002"
   );
 }
 

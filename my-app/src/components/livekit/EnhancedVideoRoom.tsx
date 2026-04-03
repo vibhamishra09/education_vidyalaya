@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react'
+import React, { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react'
 import dynamic from 'next/dynamic'
 import { LiveKitRoom, useParticipants, useTracks, RoomAudioRenderer, useSpeakingParticipants, VideoTrack, useLocalParticipant, isTrackReference, useRoomContext } from '@livekit/components-react'
 import { Track, RoomOptions, VideoPresets, LocalVideoTrack } from 'livekit-client'
@@ -43,7 +43,7 @@ import { useSpeechRecognition } from '@/hooks/use-speech-recognition'
 import { useSessionExtension } from '@/hooks/use-session-extension'
 import { ExtensionRequestDialog } from '@/components/study-room/extension-request-dialog'
 import { EndMeetingDialog } from '@/components/study-room/end-meeting-dialog'
-import { useSessionModeration, RoomPermissions, PermissionRequest, ParticipantPermissionRequest, ParticipantChatLocks, RoomSettings } from '@/hooks/use-session-moderation'
+import { useSessionModeration, RoomPermissions, PermissionRequest, ParticipantPermissionRequest, ParticipantChatLocks, RoomSettings, FlashMessage, FlashQuestion } from '@/hooks/use-session-moderation'
 import { ChatRecipient } from '@/components/chat/MessageInput'
 import { useRemoteControl } from '@/hooks/use-remote-control'
 import { RemoteControlOverlay } from '@/components/livekit/RemoteControlOverlay'
@@ -118,7 +118,10 @@ interface EnhancedVideoRoomProps {
 	hostUser?: ChatIdentity | null
 	currentUserDbId?: string | null
 	externalAccessToken?: string | null
+	guestLivekitIdentity?: string | null
 	onParticipantListChange?: (participantIdentities: string[]) => void
+	webinarAttendeeMinimalUi?: boolean
+	sessionUuid?: string | null
 }
 
 export function EnhancedVideoRoom({
@@ -131,7 +134,10 @@ export function EnhancedVideoRoom({
 	hostUser,
 	currentUserDbId,
 	externalAccessToken,
+	guestLivekitIdentity = null,
 	onParticipantListChange,
+	webinarAttendeeMinimalUi = false,
+	sessionUuid = null,
 }: EnhancedVideoRoomProps) {
 	const isGuest = !!externalAccessToken
 	const [showChat, setShowChat] = useState(false) // Start hidden on mobile
@@ -142,6 +148,8 @@ export function EnhancedVideoRoom({
 	const [showWarning, setShowWarning] = useState(false)
 	const [isMobileViewport, setIsMobileViewport] = useState(false)
 	const [isMobileDevice, setIsMobileDevice] = useState(false)
+	const [hasResolvedMediaContext, setHasResolvedMediaContext] = useState(false)
+	const [isSecureMediaContext, setIsSecureMediaContext] = useState(false)
 	const router = useRouter()
 	const { showSuccess, showError, showInfo } = useToast()
 	const { getToken } = useAuth()
@@ -209,6 +217,16 @@ export function EnhancedVideoRoom({
 		setIsMobileDevice(mobileByUa || mobileByTouch)
 	}, [])
 
+	useEffect(() => {
+		if (typeof window === 'undefined') return
+		setIsSecureMediaContext(
+			window.isSecureContext &&
+				typeof window.navigator.mediaDevices?.getUserMedia === 'function',
+		)
+		setHasResolvedMediaContext(true)
+	}, [])
+
+	const isNavigatingRef = useRef(false)
 	useEffect(() => {
 		let timeoutId: NodeJS.Timeout
 		const handleActivity = () => {
@@ -452,14 +470,37 @@ export function EnhancedVideoRoom({
 		pendingParticipantRequests,
 		clearParticipantRequest,
 		participantChatLocks,
+		// Flash message state
+		activeFlashMessage,
+		flashQuestions,
+		// Flash message actions
+		flashUploadList,
+		flashUpdateQuestion,
+		flashReorder,
+		flashDeleteQuestion,
+		flashShowQuestion,
+		flashShowAdHoc,
+		flashDismiss,
+		flashGetList,
+		dismissFlashMessage,
+		lockScratchPad,
 	} = useSessionModeration({
 		sessionId: sessionData?.id || null,
 		sessionType: sessionData?.sessionType || null,
 		isHost,
 		token: authToken,
 		userId: user?.id,
-		enabled: !!sessionData?.id,
+		enabled: !!sessionData?.id && (!isGuest || !!guestLivekitIdentity),
 	})
+
+	const webinarChat = useMemo(() => {
+		// Mode from permissions if studyRoom/webinar
+		const mode = permissions.allowChatEveryone ? 'everyone' : (permissions.allowChatHost ? 'host' : 'disabled')
+		return {
+			chatLive: permissions.allowChat,
+			chatMode: mode as 'everyone' | 'host' | 'disabled',
+		}
+	}, [permissions])
 
 	// Redirect all clients when server signals meeting ended
 	useEffect(() => {
@@ -653,7 +694,7 @@ export function EnhancedVideoRoom({
 				const authToken = await getToken()
 				if (!authToken) return
 
-				const url = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:3001'
+				const url = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:3002'
 
 				socket = io(url, {
 					transports: ['websocket'],
@@ -733,11 +774,42 @@ export function EnhancedVideoRoom({
 		},
 	} as RoomOptions), [isMobileDevice])
 
+	const liveConnectOptions = useMemo(
+		() => ({ peerConnectionTimeout: 30_000 }),
+		[],
+	)
+
+	const [shouldConnectToRoom, setShouldConnectToRoom] = useState(false)
+	useEffect(() => {
+		if (!hasResolvedMediaContext || !token?.trim() || !serverUrl?.trim()) {
+			setShouldConnectToRoom(false)
+			return
+		}
+		const t = window.setTimeout(() => setShouldConnectToRoom(true), 200)
+		return () => {
+			window.clearTimeout(t)
+			setShouldConnectToRoom(false)
+		}
+	}, [hasResolvedMediaContext, token, serverUrl])
+
+	const mediaCaptureBlockedReason = !hasResolvedMediaContext
+		? null
+		: !isSecureMediaContext
+			? 'insecure_context'
+			: null
 	return (
 		<div className="h-screen w-screen flex flex-col bg-[#202124] overflow-hidden fixed inset-0">
+			{mediaCaptureBlockedReason === 'insecure_context' && (
+				<div className="absolute left-4 right-4 top-4 z-[70] rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100 backdrop-blur-md">
+					<div className="font-medium text-amber-50">Microphone and camera need HTTPS on mobile web</div>
+					<div className="mt-1 text-amber-100/90">
+						This room opened over HTTP, so the browser joined in listen-only mode. Open the site over HTTPS or use the mobile app to speak or turn on video.
+					</div>
+				</div>
+			)}
 			<LiveKitRoom
 				video={false}
-				audio={true}
+				audio={isSecureMediaContext}
 				token={token}
 				serverUrl={serverUrl}
 				connect={true}
@@ -781,13 +853,23 @@ export function EnhancedVideoRoom({
 					onEnableVideoParticipant={enableVideoParticipant}
 					onToggleChat={toggleChatDisabled}
 					chatDisabled={chatDisabled}
-					permissions={permissions}
+					webinarChatMode={
+						sessionData?.sessionMode === 'WEBINAR'
+							? webinarChat.chatMode
+							: undefined
+					}
+					webinarChatLive={
+						sessionData?.sessionMode === 'WEBINAR'
+							? webinarChat.chatLive
+							: undefined
+					}
 					roomSettings={roomSettings}
 					onLockAudio={lockAudio}
 					onLockVideo={lockVideo}
 					onLockChat={lockChat}
 					onRestrictChatToHostOnly={restrictChatToHostOnly}
 					onHideParticipantList={hideParticipantList}
+					onLockScratchPad={lockScratchPad}
 					onLockUserAudio={lockUserAudio}
 					onLockUserVideo={lockUserVideo}
 					onLockUserChatAudience={lockUserChatAudience}
@@ -803,14 +885,14 @@ export function EnhancedVideoRoom({
 					hostRespondParticipantVideo={hostRespondParticipantVideo}
 					pendingParticipantRequests={pendingParticipantRequests}
 					clearParticipantRequest={clearParticipantRequest}
-					participantChatLocks={participantChatLocks}
 					isMobileViewport={isMobileViewport}
 					chatRecipients={chatRecipients}
 					hostUser={hostUser}
 					currentUserDbId={currentUserDbId}
 					onParticipantListChange={onParticipantListChange}
 					isGuest={isGuest}
-					guestToken={isGuest ? externalAccessToken : undefined}
+					guestToken={externalAccessToken}
+					participantChatLocks={participantChatLocks}
 					onPromoteToCohost={async (participantIdentity, role) => {
 						if (sessionData?.sessionType !== 'studyRoom' || !sessionData?.id) return
 						const authTokenValue = await getToken()
@@ -830,6 +912,23 @@ export function EnhancedVideoRoom({
 							'Participant role updated',
 						)
 					}}
+					webinarAttendeeMinimalUi={webinarAttendeeMinimalUi}
+					sessionInfo={sessionData}
+					webinarChatEnabledUi={webinarChat.chatLive}
+					activeFlashMessage={activeFlashMessage}
+					flashQuestions={flashQuestions}
+					onFlashUploadList={flashUploadList}
+					onFlashUpdateQuestion={flashUpdateQuestion}
+					onFlashReorder={flashReorder}
+					onFlashDeleteQuestion={flashDeleteQuestion}
+					onFlashShowQuestion={flashShowQuestion}
+					onFlashShowAdHoc={flashShowAdHoc}
+					onFlashDismiss={flashDismiss}
+					onFlashGetList={flashGetList}
+					onDismissFlashMessage={dismissFlashMessage}
+					mediaCaptureBlockedReason={mediaCaptureBlockedReason}
+					sessionStableId={sessionUuid}
+					sessionData={sessionData}
 				/>
 			</LiveKitRoom>
 
@@ -993,6 +1092,26 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	guestToken,
 	participantChatLocks,
 	onPromoteToCohost,
+	onLockScratchPad,
+	webinarAttendeeMinimalUi: _webinarAttendeeMinimalUi = false,
+	sessionInfo = null,
+	webinarChatEnabledUi = true,
+	activeFlashMessage,
+	flashQuestions = [],
+	onFlashUploadList,
+	onFlashUpdateQuestion,
+	onFlashReorder,
+	onFlashDeleteQuestion,
+	onFlashShowQuestion,
+	onFlashShowAdHoc,
+	onFlashDismiss,
+	onFlashGetList: _onFlashGetList,
+	onDismissFlashMessage,
+	mediaCaptureBlockedReason = null,
+	sessionStableId,
+	sessionData: _sessionData,
+	webinarChatMode,
+	webinarChatLive,
 }: {
 	isUserActive: boolean
 	showChat: boolean
@@ -1037,6 +1156,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	onLockChat?: (locked: boolean) => void
 	onRestrictChatToHostOnly?: (restricted: boolean) => void
 	onHideParticipantList?: (hidden: boolean) => void
+	onLockScratchPad: (locked: boolean) => void
 	onLockUserAudio?: (targetUserId: string, locked: boolean) => void
 	onLockUserVideo?: (targetUserId: string, locked: boolean) => void
 	onLockUserChatAudience?: (
@@ -1068,6 +1188,25 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		participantIdentity: string,
 		role: 'PARTICIPANT' | 'COHOST',
 	) => void
+	webinarAttendeeMinimalUi?: boolean
+	sessionInfo?: SessionData | null
+	webinarChatEnabledUi?: boolean
+	activeFlashMessage?: FlashMessage | null
+	flashQuestions?: FlashQuestion[]
+	onFlashUploadList?: (questions: FlashQuestion[]) => void
+	onFlashUpdateQuestion?: (questionId: string, updates: Partial<Omit<FlashQuestion, 'id'>>) => void
+	onFlashReorder?: (orderedIds: string[]) => void
+	onFlashDeleteQuestion?: (id: string) => void
+	onFlashShowQuestion?: (id: string, duration?: number) => void
+	onFlashShowAdHoc?: (content: string, type: 'AD_HOC' | 'MEDIA', duration?: number) => void
+	onFlashDismiss?: () => void
+	onFlashGetList?: () => void
+	onDismissFlashMessage?: () => void
+	sessionData?: SessionData | null
+	mediaCaptureBlockedReason?: 'insecure_context' | null
+	sessionStableId?: string | null
+	webinarChatMode?: string
+	webinarChatLive?: boolean
 }) {
 	// Room context removed to avoid race conditions, using localParticipant hook instead
 	const room = useRoomContext()
@@ -1113,6 +1252,151 @@ const VideoRoomContent = memo(function VideoRoomContent({
 
 	// Get local participant state directly - most reliable source of truth
 	const { localParticipant, isCameraEnabled, isMicrophoneEnabled, isScreenShareEnabled } = useLocalParticipant()
+	const lkRoom = useRoomContext()
+	const insecureMediaTitle = useMemo(
+		() =>
+			isMobileViewport || isGuest
+				? 'Microphone and camera need HTTPS'
+				: 'Microphone and camera unavailable on HTTP',
+		[isGuest, isMobileViewport],
+	)
+	const insecureMediaDescription =
+		'This page is open over HTTP, and browsers only allow microphone and camera access in a secure HTTPS context. Reopen the site over HTTPS or use the mobile app.'
+
+	const showMediaError = useCallback(
+		(kind: 'mic' | 'cam', err: unknown, enabling: boolean) => {
+			if (enabling && mediaCaptureBlockedReason === 'insecure_context') {
+				showError(insecureMediaTitle, insecureMediaDescription)
+				return
+			}
+			const name =
+				err instanceof DOMException
+					? err.name
+					: typeof err === 'object' &&
+							err !== null &&
+							'name' in err &&
+							typeof (err as { name: unknown }).name === 'string'
+						? (err as { name: string }).name
+						: ''
+			if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+				showError(
+					`${kind === 'mic' ? 'Microphone' : 'Camera'} blocked`,
+					`Allow ${kind === 'mic' ? 'microphone' : 'camera'} access for this site in your browser settings, then try again.`,
+				)
+			} else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+				showError(
+					`No ${kind === 'mic' ? 'microphone' : 'camera'}`,
+					'Connect a device or choose a different input in your system settings.',
+				)
+			} else if (
+				name === 'NotReadableError' ||
+				name === 'TrackStartError' ||
+				name === 'AbortError'
+			) {
+				showError(
+					`${kind === 'mic' ? 'Microphone' : 'Camera'} busy`,
+					'Another app or tab may be using the device. Close it and try again.',
+				)
+			} else {
+				showError(
+					`${kind === 'mic' ? 'Microphone' : 'Camera'}`,
+					enabling
+						? `Could not turn ${kind === 'mic' ? 'the microphone' : 'the camera'} on. Try again or reload the page.`
+						: `Could not turn ${kind === 'mic' ? 'the microphone' : 'the camera'} off.`,
+				)
+			}
+		},
+		[mediaCaptureBlockedReason, insecureMediaDescription, insecureMediaTitle, showError],
+	)
+	const insecureMediaToastShownRef = useRef(false)
+	useEffect(() => {
+		if (mediaCaptureBlockedReason !== 'insecure_context') return
+		if (insecureMediaToastShownRef.current) return
+		insecureMediaToastShownRef.current = true
+		showWarning(insecureMediaTitle, 'You joined muted because this room is open over HTTP. Switch to HTTPS or the mobile app to use your microphone and camera.')
+	}, [mediaCaptureBlockedReason, insecureMediaTitle, showWarning])
+
+	const handleToggleMicrophone = useCallback(async () => {
+		if (!localParticipant) {
+			showError('Not connected', 'Wait until the room finishes connecting, then try again.')
+			return
+		}
+		const newState = !localParticipant.isMicrophoneEnabled
+		if (newState && mediaCaptureBlockedReason === 'insecure_context') {
+			showError(insecureMediaTitle, insecureMediaDescription)
+			return
+		}
+		if (newState && !isHost && permissions && !permissions.allowAudio) {
+			participantRequestAudio?.()
+			return
+		}
+		try {
+			await localParticipant.setMicrophoneEnabled(newState)
+		} catch (err) {
+			if (newState) {
+				try {
+					await new Promise((r) => setTimeout(r, 350))
+					await localParticipant.setMicrophoneEnabled(true)
+					return
+				} catch (retryErr) {
+					showMediaError('mic', retryErr, true)
+					return
+				}
+			}
+			showMediaError('mic', err, false)
+		}
+	}, [
+		localParticipant,
+		isHost,
+		permissions,
+		participantRequestAudio,
+		showError,
+		showMediaError,
+		mediaCaptureBlockedReason,
+		insecureMediaDescription,
+		insecureMediaTitle,
+	])
+
+	const handleToggleCamera = useCallback(async () => {
+		if (!localParticipant) {
+			showError('Not connected', 'Wait until the room finishes connecting, then try again.')
+			return
+		}
+		const newState = !localParticipant.isCameraEnabled
+		if (newState && mediaCaptureBlockedReason === 'insecure_context') {
+			showError(insecureMediaTitle, insecureMediaDescription)
+			return
+		}
+		if (newState && !isHost && permissions && !permissions.allowVideo) {
+			participantRequestVideo?.()
+			return
+		}
+		try {
+			await localParticipant.setCameraEnabled(newState)
+		} catch (err) {
+			if (newState) {
+				try {
+					await new Promise((r) => setTimeout(r, 350))
+					await localParticipant.setCameraEnabled(true)
+					return
+				} catch (retryErr) {
+					showMediaError('cam', retryErr, true)
+					return
+				}
+			}
+			showMediaError('cam', err, false)
+		}
+	}, [
+		localParticipant,
+		isHost,
+		permissions,
+		participantRequestVideo,
+		showError,
+		showMediaError,
+		mediaCaptureBlockedReason,
+		insecureMediaDescription,
+		insecureMediaTitle,
+	])
 
 	// Track pending requests to show toast when new requests arrive
 	const prevRequestCountRef = useRef(0)
@@ -1951,14 +2235,14 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			// Priority 1: Remote Screen Share (preferred if someone else is presenting)
 			// Ensure we find the first available SUBSCRIBED screen share track
 			for (const p of remoteParticipants) {
-				const screenPub = Array.from(p.videoTrackPublications.values())
+				const screenPub = Array.from(p.videoTrackPublications.values() as IterableIterator<any>)
 					.find((pub: any) => pub.source === Track.Source.ScreenShare && pub.track && pub.isSubscribed)
 				if (screenPub?.track) return screenPub.track as Track
 			}
 
 			// Priority 2: Remote Camera (any active remote camera)
 			for (const p of remoteParticipants) {
-				const camPub = Array.from(p.videoTrackPublications.values())
+				const camPub = Array.from(p.videoTrackPublications.values() as IterableIterator<any>)
 					.find((pub: any) => pub.source === Track.Source.Camera && pub.track && pub.isSubscribed)
 				if (camPub?.track) return camPub.track as Track
 			}
