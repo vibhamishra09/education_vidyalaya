@@ -111,6 +111,8 @@ model StudyRoom {
   skills          StudyRoomSkill[]
   feedbacks       SessionFeedback[]
   webinarRegistrations WebinarRegistration[]
+  recordings          Recording[]
+
 
   @@index([createdById])
   @@index([sessionStatus, date])
@@ -804,4 +806,22 @@ model DebateReport {
   participant     DebateParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
   
   @@index([debateRoomId])
+}
+model Recording {
+  id          String   @id @default(cuid())
+  egressId    String   @unique
+  roomId      String
+  createdById String
+  url         String?
+  status      String
+  isPublic    Boolean  @default(false)
+  allowedUsers String[] @default([])
+  duration     Int?
+  estimatedCost Decimal? @db.Decimal(10, 4)
+  autoDeleteAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  room        StudyRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@index([roomId])
 }

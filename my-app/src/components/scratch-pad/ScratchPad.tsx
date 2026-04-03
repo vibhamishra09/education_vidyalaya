@@ -66,34 +66,36 @@ export const ScratchPad = memo(function ScratchPad({ roomId, room, isHost, canEd
             {/* Header with Title and Save Action */}
             <div className="h-12 bg-white/5 border-b border-white/5 flex items-center justify-between px-4 z-[9999]">
                 <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2 text-xs font-semibold text-white/60">
-                        <div className="h-6 w-6 rounded-lg bg-purple-500/10 flex items-center justify-center">
+                    <div className="flex items-center gap-2">
+                        <div className="h-7 w-7 rounded-lg bg-white/5 flex items-center justify-center border border-white/5">
                             {mode === 'personal' ? (
-                                <User className="h-3.5 w-3.5 text-purple-400" />
+                                <User className="h-4 w-4 text-purple-400" />
                             ) : (
-                                <Users className="h-3.5 w-3.5 text-blue-400" />
+                                <Users className="h-4 w-4 text-sky-400" />
                             )}
                         </div>
-                        {mode === 'personal' ? 'Personal Workspace' : 'Meeting Whiteboard'}
+                        <span className="text-sm font-bold text-white/90 tracking-tight">
+                            {mode === 'personal' ? 'Personal Workspace' : 'Meeting Whiteboard'}
+                        </span>
                     </div>
 
                     {/* Sync Status Indicator */}
-                    <div className="flex items-center gap-2 transition-all duration-500">
+                    <div className="flex items-center gap-3 transition-all duration-500 ml-2">
                         {isSaving && (
-                            <div className="flex items-center gap-1.5 text-[10px] font-medium text-sky-400/80 animate-pulse">
-                                <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                            <div className="flex items-center gap-1.5 text-[10px] font-bold text-sky-400 tracking-widest uppercase">
+                                <Loader2 className="h-3 w-3 animate-spin" />
                                 SAVING...
                             </div>
                         )}
                         {syncStatus === 'saved' && (
-                            <div className="flex items-center gap-1.5 text-[10px] font-medium text-green-400/80">
-                                <Check className="h-2.5 w-2.5" />
+                            <div className="flex items-center gap-1.5 text-[10px] font-bold text-[#00DC6E] tracking-widest uppercase">
+                                <Check className="h-3 w-3" />
                                 CHANGES SAVED
                             </div>
                         )}
                         {syncStatus === 'error' && (
-                            <div className="flex items-center gap-1.5 text-[10px] font-medium text-red-400/80">
-                                <div className="h-1 w-1 rounded-full bg-red-500" />
+                            <div className="flex items-center gap-1.5 text-[10px] font-bold text-red-400 tracking-widest uppercase">
+                                <div className="h-1.5 w-1.5 rounded-full bg-red-500" />
                                 SYNC ERROR
                             </div>
                         )}

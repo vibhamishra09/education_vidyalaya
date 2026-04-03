@@ -49,12 +49,16 @@ export class SentryExceptionFilter implements ExceptionFilter {
     }
 
     // Send response to client
+    const isDev = process.env.NODE_ENV === 'development';
+    
     response.status(status).json({
       statusCode: status,
       timestamp: new Date().toISOString(),
       path: request.url,
-      message: typeof message === 'string' ? message : (message as any).message,
-      ...(process.env.NODE_ENV === 'development' && {
+      message: isDev 
+        ? (exception instanceof Error ? exception.message : (message as any).message || String(message))
+        : (typeof message === 'string' ? message : (message as any).message),
+      ...(isDev && {
         error: exception instanceof Error ? exception.stack : exception,
       }),
     });
