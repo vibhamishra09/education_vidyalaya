@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { LucideIcon } from "lucide-react";
 import { SessionSummaryModal } from "./session-summary-modal";
+import { getStudyRoomPagePath } from "@/lib/utils/study-room-share";
 
 interface Session {
   id: string;
@@ -232,7 +233,7 @@ export function SessionList({
                       href={
                         isPeerSession
                           ? `/sessions/${session.id}`
-                          : `/studyroom/${session.slug || session.id}`
+                          : getStudyRoomPagePath(session.slug || session.id)
                       }
                       className="flex-1"
                     >
