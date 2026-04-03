@@ -1,0 +1,102 @@
+
+================================================================================
+Time (UTC): 2026-04-02T13:15:41.795Z
+Transport: ses
+From: notifications@webyalaya.com
+To: vibhamishra.outr@gmail.com
+Subject: New Session Request
+Status: FAILED
+Error: Could not load credentials from any providers
+--- HTML ---
+
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Webyalaya Notification</title>
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h1 style="color: #2c3e50; margin-top: 0;">Webyalaya Notification</h1>
+          </div>
+          <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0;">
+            <p style="margin-top: 0;">Hello Vibha Mishra,</p>
+            <div style="margin: 12px 0;">Vibha Mishra has requested a peer session with you</div>
+            <p style="margin-bottom: 0;">Best regards,<br>The Webyalaya Team</p>
+          </div>
+          <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; text-align: center; font-size: 12px; color: #666;">
+            <p style="margin: 0;">This is an automated notification from Webyalaya.</p>
+            <p style="margin: 5px 0 0 0;">© 2026 Webyalaya. All rights reserved.</p>
+          </div>
+        </body>
+      </html>
+    
+
+================================================================================
+Time (UTC): 2026-04-03T08:31:45.808Z
+Transport: ses
+From: notifications@webyalaya.com
+To: vibhamishra.outr@gmail.com
+Subject: New Session Request
+Status: FAILED
+Error: Could not load credentials from any providers
+--- HTML ---
+
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Webyalaya Notification</title>
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h1 style="color: #2c3e50; margin-top: 0;">Webyalaya Notification</h1>
+          </div>
+          <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0;">
+            <p style="margin-top: 0;">Hello Vibha Mishra,</p>
+            <div style="margin: 12px 0;">Vibha Mishra has requested a peer session with you</div>
+            <p style="margin-bottom: 0;">Best regards,<br>The Webyalaya Team</p>
+          </div>
+          <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; text-align: center; font-size: 12px; color: #666;">
+            <p style="margin: 0;">This is an automated notification from Webyalaya.</p>
+            <p style="margin: 5px 0 0 0;">© 2026 Webyalaya. All rights reserved.</p>
+          </div>
+        </body>
+      </html>
+    
+
+================================================================================
+Time (UTC): 2026-04-03T10:57:47.437Z
+Transport: ses
+From: notifications@webyalaya.com
+To: vibhamishra.outr@gmail.com
+Subject: New Session Request
+Status: FAILED
+Error: Could not load credentials from any providers
+--- HTML ---
+
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Webyalaya Notification</title>
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h1 style="color: #2c3e50; margin-top: 0;">Webyalaya Notification</h1>
+          </div>
+          <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0;">
+            <p style="margin-top: 0;">Hello Vibha Mishra,</p>
+            <div style="margin: 12px 0;">Vibha Mishra has requested a peer session with you</div>
+            <p style="margin-bottom: 0;">Best regards,<br>The Webyalaya Team</p>
+          </div>
+          <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; text-align: center; font-size: 12px; color: #666;">
+            <p style="margin: 0;">This is an automated notification from Webyalaya.</p>
+            <p style="margin: 5px 0 0 0;">© 2026 Webyalaya. All rights reserved.</p>
+          </div>
+        </body>
+      </html>
+    
