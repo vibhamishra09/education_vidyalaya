@@ -369,25 +369,7 @@ export default function PeerSessionPage({
                </div>
             </div>
 
-            {/* Gmeet */}
-            {session.gmeetLink && (
-                 <div className="space-y-1">
-                   <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Meeting</span>
-                   {!session.gmeetLink || session.gmeetLink === "https://meet.google.com/your-meeting-code" ? (
-                      <span className="text-muted-foreground text-sm">Not provided</span>
-                    ) : (
-                      <a 
-                        href={session.gmeetLink} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-2 text-primary font-medium hover:underline text-sm"
-                      >
-                        <ExternalLink className="h-3 w-3" />
-                         Join
-                      </a>
-                    )}
-                </div>
-            )}
+
         </div>
 
         {/* Status Alerts (Banner style) */}
