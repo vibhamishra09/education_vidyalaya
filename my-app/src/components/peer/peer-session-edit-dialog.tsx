@@ -19,8 +19,6 @@ import { useToast } from "@/contexts/toast-context";
 import { extractHttpErrorMessage } from "@/lib/utils/error-handling";
 import type { PeerSession } from "@/types/api.types";
 
-const PLACEHOLDER_GMEET = "https://meet.google.com/your-meeting-code";
-
 function sessionDateToDatetimeLocal(value: Date | string): string {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "";
@@ -48,7 +46,6 @@ export function PeerSessionEditDialog({
   const [description, setDescription] = useState("");
   const [scheduledLocal, setScheduledLocal] = useState("");
   const [duration, setDuration] = useState("60");
-  const [gmeetLink, setGmeetLink] = useState("");
   const [skillsText, setSkillsText] = useState("");
 
   useEffect(() => {
@@ -57,10 +54,6 @@ export function PeerSessionEditDialog({
     setDescription(session.description ?? "");
     setScheduledLocal(sessionDateToDatetimeLocal(session.date));
     setDuration(String(session.duration));
-    const link = session.gmeetLink ?? "";
-    setGmeetLink(
-      !link || link === PLACEHOLDER_GMEET ? "" : link,
-    );
     setSkillsText(session.skills.map((s) => s.name).join(", "));
   }, [open, session]);
 
@@ -100,7 +93,6 @@ export function PeerSessionEditDialog({
           duration: dur,
           scheduledAt: start.toISOString(),
           skills: skills.length > 0 ? skills : ["Communication"],
-          gmeetLink: gmeetLink.trim(),
         },
       });
       showSuccess("Updated", "Session details saved.");
@@ -119,7 +111,7 @@ export function PeerSessionEditDialog({
         <DialogHeader>
           <DialogTitle>Edit session</DialogTitle>
           <DialogDescription>
-            As the session provider, you can update the title, schedule, meet link, and topics until
+            As the session provider, you can update the title, schedule, and topics until
             the session is completed, cancelled, or marked not completed.
           </DialogDescription>
         </DialogHeader>
@@ -163,15 +155,7 @@ export function PeerSessionEditDialog({
               onChange={(e) => setDuration(e.target.value)}
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor={fieldId("meet")}>Google Meet link</Label>
-            <Input
-              id={fieldId("meet")}
-              value={gmeetLink}
-              onChange={(e) => setGmeetLink(e.target.value)}
-              placeholder="https://meet.google.com/… or leave empty to clear"
-            />
-          </div>
+
           <div className="space-y-2">
             <Label htmlFor={fieldId("skills")}>Topics / skills</Label>
             <Input

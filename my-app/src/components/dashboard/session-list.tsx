@@ -18,7 +18,8 @@ import {
  
   Eye,
   Pencil,
-  PencilLine
+  PencilLine,
+  Video
 } from "lucide-react";
 import { LucideIcon } from "lucide-react";
 import { SessionSummaryModal } from "./session-summary-modal";
@@ -30,6 +31,7 @@ interface Session {
   duration: number;
   skills?: Array<{ name: string } | string>;
   status?: string;
+  sessionStatus?: string;
   participantCount?: number;
   maxParticipants?: number;
   requestedBy?: unknown;
@@ -234,7 +236,7 @@ export function SessionList({
                       }
                       className="flex-1"
                     >
-                      <Button className="w-full gap-2" size="sm">
+                      <Button variant="outline" className="w-full gap-2" size="sm">
                         <BookOpen className="h-4 w-4 shrink-0" />
                         <span className="flex-1 text-center sm:text-left">View details</span>
                         {session.detailsEditedForViewer ? (
@@ -247,6 +249,32 @@ export function SessionList({
                         ) : null}
                       </Button>
                     </Link>
+
+                    {(() => {
+                      const now = new Date();
+                      const sessionTime = new Date(session.date);
+                      const timeDifferenceMs = sessionTime.getTime() - now.getTime();
+                      const minutesBeforeStart = timeDifferenceMs / (1000 * 60);
+
+                      const canJoin = 
+                        isPeerSession && 
+                        (session.sessionStatus === "UPCOMING" || session.sessionStatus === "ONGOING") &&
+                        minutesBeforeStart <= 5;
+
+                      if (!canJoin) return null;
+
+                      return (
+                        <Link
+                          href={`/rooms/studyroom/peersession-${session.id}`}
+                          className="flex-1"
+                        >
+                          <Button className="w-full gap-2 bg-green-600 hover:bg-green-700 text-white" size="sm">
+                            <Video className="h-4 w-4 shrink-0" />
+                            <span className="flex-1 text-center sm:text-left">Join Live</span>
+                          </Button>
+                        </Link>
+                      );
+                    })()}
                   </div>
                 )}
                 {showSummaryButton && onViewSummary && (
