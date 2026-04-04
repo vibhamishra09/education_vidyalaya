@@ -659,6 +659,7 @@ export interface ActivityFeedResponse {
 
 export interface ActivityFeedQuery extends PaginationQuery {
   mode?: FeedMode;
+  [key: string]: unknown;
 }
 
 export interface FollowMutationResponse {
