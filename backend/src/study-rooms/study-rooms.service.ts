@@ -243,7 +243,7 @@ export class StudyRoomsService {
   private async resolveUserIdentity(userIdOrClerkId: string) {
     const byId = await this.prisma.user.findUnique({
       where: { id: userIdOrClerkId },
-      select: { id: true, clerkId: true },
+      select: { id: true, clerkId: true, name: true },
     });
 
     if (byId) {
@@ -252,7 +252,7 @@ export class StudyRoomsService {
 
     const byClerkId = await this.prisma.user.findUnique({
       where: { clerkId: userIdOrClerkId },
-      select: { id: true, clerkId: true },
+      select: { id: true, clerkId: true, name: true },
     });
 
     if (byClerkId) {
@@ -275,6 +275,50 @@ export class StudyRoomsService {
     }
 
     throw new NotFoundException('User not found');
+  }
+
+  private async notifyFollowersAboutStudyRoom(opts: {
+    hostId: string;
+    hostName: string | null;
+    roomId: string;
+    roomTitle: string;
+    startsAt: Date;
+    isLive: boolean;
+  }) {
+    const followers = await this.prisma.userFollow.findMany({
+      where: { followingId: opts.hostId },
+      select: { followerId: true },
+    });
+
+    if (followers.length === 0) {
+      return;
+    }
+
+    const hostName = opts.hostName || 'Someone you follow';
+    const message = opts.isLive
+      ? `${hostName} started ${opts.roomTitle}. Join now.`
+      : `${hostName} scheduled ${opts.roomTitle}.`;
+
+    await Promise.all(
+      followers.map((follow) =>
+        this.notificationsService.createAndPushNotification(
+          follow.followerId,
+          message,
+          'New study room from someone you follow',
+          NotifType.NORMAL,
+          {
+            actionType: 'FOLLOWING_STUDYROOM_CREATED',
+            studyRoomId: opts.roomId,
+            actionData: {
+              studyRoomId: opts.roomId,
+              hostUserId: opts.hostId,
+              startsAt: opts.startsAt.toISOString(),
+              isLive: opts.isLive,
+            },
+          },
+        ),
+      ),
+    );
   }
 
   private isSlug(key: string) {
@@ -1445,6 +1489,15 @@ export class StudyRoomsService {
     }
 
     const firstRoom = createdRooms[0];
+    await this.notifyFollowersAboutStudyRoom({
+      hostId: creator.id,
+      hostName: creator.name ?? null,
+      roomId: firstRoom.id,
+      roomTitle: createDto.title,
+      startsAt: firstRoom.date,
+      isLive: firstRoom.date.getTime() <= now.getTime(),
+    });
+
     const appPublicUrl = this.resolveAppPublicBaseUrl();
     return {
       id: firstRoom.id,

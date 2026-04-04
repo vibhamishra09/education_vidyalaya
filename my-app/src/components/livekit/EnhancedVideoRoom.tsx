@@ -47,6 +47,7 @@ import { useSessionModeration, RoomPermissions, PermissionRequest, ParticipantPe
 import { ChatRecipient } from '@/components/chat/MessageInput'
 import { useRemoteControl } from '@/hooks/use-remote-control'
 import { RemoteControlOverlay } from '@/components/livekit/RemoteControlOverlay'
+import { useBluetoothMicRecovery } from '@/hooks/use-bluetooth-mic-recovery'
 // Stable virtual backgrounds constant to avoid re-creating array each render
 const VIRTUAL_BACKGROUNDS = [
 	{
@@ -1309,6 +1310,11 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		[mediaCaptureBlockedReason, insecureMediaDescription, insecureMediaTitle, showError],
 	)
 	const insecureMediaToastShownRef = useRef(false)
+	useBluetoothMicRecovery({
+		room: lkRoom,
+		localParticipant,
+		enabled: mediaCaptureBlockedReason !== 'insecure_context',
+	})
 	useEffect(() => {
 		if (mediaCaptureBlockedReason !== 'insecure_context') return
 		if (insecureMediaToastShownRef.current) return
