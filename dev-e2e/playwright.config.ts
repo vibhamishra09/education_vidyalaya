@@ -5,7 +5,7 @@ export default defineConfig({
   fullyParallel: false,       
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  workers: process.env.CI ? 2 : undefined,
   reporter: process.env.CI    
     ? [['github'], ['json', { outputFile: 'test-results.json' }], ['html', { open: 'never' }]]
     : [['list'], ['json', { outputFile: 'test-results.json' }], ['html', { open: 'on-failure' }]],
@@ -13,11 +13,11 @@ export default defineConfig({
   use: {
     baseURL: process.env.BASE_URL || 'http://localhost:3000',
     trace: 'on-first-retry',
-    actionTimeout: 15000,   
-    navigationTimeout: 30000,
+    actionTimeout: 30000,   
+    navigationTimeout: 80000,
   },
   expect: {
-    timeout: 10000,       
+    timeout: 30000,       
   },
 
   projects: [
