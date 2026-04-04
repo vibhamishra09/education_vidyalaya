@@ -19,17 +19,17 @@ import Image from 'next/image'
 import { useSessionTimer } from '@/hooks/use-session-timer'
 import { SessionEndWarningDialog } from '@/components/study-room/session-end-warning-dialog'
 
-// Use dynamic import with ssr: false to avoid tldraw library duplication and hydration errors
-const ScratchPad = dynamic(() => import('@/components/scratch-pad/ScratchPad').then(mod => mod.ScratchPad), {
-	ssr: false,
-	loading: () => (
-		<div className="flex h-full w-full items-center justify-center bg-[#0f0f0f]">
-			<div className="flex flex-col items-center gap-3">
-				<div className="h-8 w-8 border-4 border-sky-500/30 border-t-sky-500 animate-spin rounded-full" />
-				<span className="text-white/40 text-sm font-medium">Initializing Whiteboard...</span>
-			</div>
-		</div>
-	)
+// Type the dynamic import to ensure props like roomId are recognized
+const ScratchPad = dynamic<any>(() => import('@/components/scratch-pad/ScratchPad').then(mod => mod.ScratchPad), { 
+    ssr: false,
+    loading: () => (
+        <div className="flex h-full w-full items-center justify-center bg-[#0f0f0f]">
+            <div className="flex flex-col items-center gap-3">
+                <div className="h-8 w-8 border-4 border-sky-500/30 border-t-sky-500 animate-spin rounded-full" />
+                <span className="text-white/40 text-sm font-medium">Initializing Whiteboard...</span>
+            </div>
+        </div>
+    )
 })
 
 import { useToast } from '@/contexts/toast-context'
@@ -1478,8 +1478,9 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	const blurAmountRef = useRef(blurAmount)
 	const selectedVirtualBgRef = useRef(selectedVirtualBg)
 	const backgroundModeRef = useRef(backgroundMode)
-	// CRITICAL: Store localParticipant in ref to avoid callback recreation on every audio level update
+	// CRITICAL: Store participants in refs to avoid callback recreation and infinite loops
 	const localParticipantRef = useRef(localParticipant)
+	const allParticipantsRef = useRef(allParticipants)
 	// Prevent concurrent effect applications
 	const isApplyingEffectRef = useRef(false)
 	// Krisp noise filter ref for cleanup
@@ -1500,8 +1501,16 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	useEffect(() => { blurAmountRef.current = blurAmount }, [blurAmount])
 	useEffect(() => { selectedVirtualBgRef.current = selectedVirtualBg }, [selectedVirtualBg])
 	useEffect(() => { backgroundModeRef.current = backgroundMode }, [backgroundMode])
-	// CRITICAL: Keep localParticipant ref in sync
+	// CRITICAL: Keep participant refs in sync
 	useEffect(() => { localParticipantRef.current = localParticipant }, [localParticipant])
+	useEffect(() => { allParticipantsRef.current = allParticipants }, [allParticipants])
+	
+	// Native Auto-PiP attribute enforcer (fixes React type errors)
+	useEffect(() => {
+		if (persistentPipVideoRef.current) {
+			persistentPipVideoRef.current.setAttribute('autoPictureInPicture', 'true');
+		}
+	}, []);
 
 	// Listen for moderation socket events and apply local actions
 	useEffect(() => {
@@ -2629,12 +2638,25 @@ const VideoRoomContent = memo(function VideoRoomContent({
 					// Guard: check if browser or Document PiP already activated it
 					if (document.pictureInPictureElement || pipWindowRef.current) return
 
+<<<<<<< HEAD
 					// Small delay to let the browser complete transition signals
 					await new Promise(resolve => setTimeout(resolve, 50));
 					// Double check it's still blurred or hidden before triggering
 					if (!document.hidden && document.hasFocus()) return;
 
 					await togglePiP(true);
+=======
+					// Small delay to let the browser complete the tab transition and track warm-up
+					await new Promise(resolve => setTimeout(resolve, 300));
+					if (!document.hidden) return;
+					
+					// autoPictureInPicture attribute handles the toggle automatically
+					// We just ensure it's unmuted for warmth.
+					if (persistentPipVideoRef.current) {
+						persistentPipVideoRef.current.volume = 0.001;
+						persistentPipVideoRef.current.muted = false;
+					}
+>>>>>>> 390b8bc (scratch pad deployment fix)
 				} catch (error) {
 					console.warn('[PiP] Auto-PiP activation failed:', error);
 				}
@@ -4944,28 +4966,6 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				</div>
 			)}
 
-			{/* Permission Request Modal - Shows when host asks participant to enable audio/video */}
-			{/* Guests don't need microphone/camera permissions as they won't be using them */}
-			{!isHost && !isGuest && pendingPermissionRequest && (
-				<PermissionRequestModal
-					type={pendingPermissionRequest.type}
-					onAccept={() => {
-						if (pendingPermissionRequest.type === 'audio') {
-							respondToAudioRequest?.(true)
-						} else {
-							respondToVideoRequest?.(true)
-						}
-					}}
-					onDeny={() => {
-						if (pendingPermissionRequest.type === 'audio') {
-							respondToAudioRequest?.(false)
-						} else {
-							respondToVideoRequest?.(false)
-						}
-					}}
-					onDismiss={dismissPermissionRequest}
-				/>
-			)}
 
 
 			{/* Remote Control Consent UI (Screen Sharer Side) */}

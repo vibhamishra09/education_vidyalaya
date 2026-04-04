@@ -20,7 +20,7 @@ async function runTest() {
     console.log('\n--- Case 1: Brand New User ---');
     const newUser = await prisma.user.create({
       data: {
-        clerkId,
+        clerkId: clerkId + '_case1', // Use unique clerkId
         email: testEmail,
         name: displayName,
         onboarded: true,
@@ -28,7 +28,7 @@ async function runTest() {
       },
     });
     console.log(`✅ User created: onboarded=${newUser.onboarded}, coins=${newUser.coins}`);
-    if (newUser.onboarded === true && newUser.coins === 1000) {
+    if (newUser.onboarded === true && Number(newUser.coins) === 1000) {
       console.log('✨ CASE 1 SUCCESS');
     } else {
       console.error('❌ CASE 1 FAILED');
@@ -40,6 +40,7 @@ async function runTest() {
     await prisma.user.deleteMany({ where: { email: testEmail } });
     const placeholderUser = await prisma.user.create({
       data: {
+        clerkId: 'placeholder_' + Date.now(), // satisfy required @unique clerkId
         email: testEmail,
         name: 'Placeholder',
         onboarded: false,
@@ -57,11 +58,11 @@ async function runTest() {
         // Automatically onboard even if they existed as a placeholder
         onboarded: true,
         // Give coins if they never had any (newly onboarded)
-        ...(placeholderUser.onboarded ? {} : { coins: { increment: 1000 } }),
+        ...(Number(placeholderUser.coins) > 0 ? {} : { coins: { increment: 1000 } }),
       },
     });
     console.log(`✅ User updated: onboarded=${updatedUser.onboarded}, coins=${updatedUser.coins}`);
-    if (updatedUser.onboarded === true && updatedUser.coins === 1000) {
+    if (updatedUser.onboarded === true && Number(updatedUser.coins) === 1000) {
       console.log('✨ CASE 2 SUCCESS');
     } else {
       console.error('❌ CASE 2 FAILED');
