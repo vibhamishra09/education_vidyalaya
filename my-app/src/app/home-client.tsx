@@ -21,6 +21,7 @@ import { DebateStatus } from "@/types/debate.types";
 import type { StudyRoomCard as StudyRoomCardType } from "@/types/api.types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { studyRoomCardDisplayLive } from "@/lib/utils/study-room-edit";
+import { getStudyRoomPagePath } from "@/lib/utils/study-room-share";
 
 export function HomeClient() {
   const router = useRouter();
@@ -52,7 +53,7 @@ export function HomeClient() {
 
   const handleJoinRoom = (room: StudyRoomCardType) => {
     //doing this to allow for the new choice modal in joining a room
-    router.push(`/studyroom/${room.slug || room.id}`)
+    router.push(getStudyRoomPagePath(room.slug || room.id))
     // requireAuth(async () => {
     //   try {
     //     setJoiningRoomId(room.id);

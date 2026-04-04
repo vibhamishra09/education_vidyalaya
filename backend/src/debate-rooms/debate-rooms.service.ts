@@ -74,6 +74,49 @@ export class DebateRoomsService {
     this.logger.setContext(DebateRoomsService.name);
   }
 
+  private async notifyFollowersAboutDebateRoom(opts: {
+    hostId: string;
+    hostName: string | null;
+    roomId: string;
+    topic: string;
+    scheduledAt: Date | null;
+    isLive: boolean;
+  }) {
+    const followers = await this.prisma.userFollow.findMany({
+      where: { followingId: opts.hostId },
+      select: { followerId: true },
+    });
+
+    if (followers.length === 0) {
+      return;
+    }
+
+    const hostName = opts.hostName || 'Someone you follow';
+    const message = opts.isLive
+      ? `${hostName} started a debate on ${opts.topic}.`
+      : `${hostName} scheduled a debate on ${opts.topic}.`;
+
+    await Promise.all(
+      followers.map((follow) =>
+        this.notificationsService.createAndPushNotification(
+          follow.followerId,
+          message,
+          'New debate from someone you follow',
+          NotifType.NORMAL,
+          {
+            actionType: 'FOLLOWING_DEBATE_CREATED',
+            actionData: {
+              debateRoomId: opts.roomId,
+              hostUserId: opts.hostId,
+              scheduledAt: opts.scheduledAt?.toISOString() ?? null,
+              isLive: opts.isLive,
+            },
+          },
+        ),
+      ),
+    );
+  }
+
   /**
    * Create a new debate room
    */
@@ -139,6 +182,15 @@ export class DebateRoomsService {
       JSON.stringify(initialState),
       { EX: 86400 }, // 24 hour TTL
     );
+
+    await this.notifyFollowersAboutDebateRoom({
+      hostId: user.id,
+      hostName: user.name ?? null,
+      roomId: debateRoom.id,
+      topic: dto.topic,
+      scheduledAt,
+      isLive: !scheduledAt,
+    });
 
     this.logger.log(`Debate room created: ${debateRoom.id} by user ${user.id}`);
     return this.mapToResponse(debateRoom);

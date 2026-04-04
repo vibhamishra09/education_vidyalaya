@@ -268,6 +268,7 @@ export function MessageInput({
 						(audienceType === 'HOST' && !canSendHost) ||
 						(audienceType === 'USER' && !canSendUser)
 					}
+					name='send'
 					className="h-10 w-10 md:h-auto md:w-auto md:px-4 md:py-2.5 bg-primary hover:bg-primary/90 disabled:opacity-30 disabled:cursor-not-allowed text-primary-foreground rounded-full md:rounded-lg transition-all p-0 flex-shrink-0"
 				>
 					<Send className="h-4 w-4" />

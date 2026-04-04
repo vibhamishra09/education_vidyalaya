@@ -19,7 +19,8 @@ export type DashboardSessionCard = {
   requestedBy?: unknown;
   detailsEditedForViewer?: boolean;
   peerSessionEditable?: boolean;
-  slug: string | null
+  slug: string | null;
+  sessionStatus?: string;
 };
 
 export function isPeerSessionEditable(status: string | undefined): boolean {
@@ -77,7 +78,8 @@ export function peerDashboardCard(
     ...(withPeerEdit && {
       peerSessionEditable: isPeerSessionEditable(s.sessionStatus),
     }),
-    slug: null
+    slug: null,
+    sessionStatus: s.sessionStatus,
   };
 }
 
@@ -100,7 +102,8 @@ export function studyRoomDashboardCard(
       myUserId &&
       sr.createdBy?.id !== myUserId
     ),
-    slug: sr.slug
+    slug: sr.slug,
+    sessionStatus: (sr as any).status || (sr as any).roomStatus,
   };
 }
 
