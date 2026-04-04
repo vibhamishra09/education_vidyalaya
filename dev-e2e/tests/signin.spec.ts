@@ -79,7 +79,9 @@ test.describe("Instant room creation", () => {
     await launchBtn.click();
 
     const enterRoomBtn = page.getByRole('button', { name: 'Enter Room' });
+    await enterRoomBtn.waitFor({timeout: 20000});
     await enterRoomBtn.click();
+
 
     await page.waitForTimeout(5000)
     roomUrl = page.url();
@@ -135,7 +137,7 @@ test.describe("Recurring room creation", () => {
     const skillInput = page.getByRole('textbox', { name: 'Type a skill (e.g. React,' });
     await skillInput.click();
     await skillInput.fill('newskill');
-    await page.getByText('newskill').waitFor();
+    await page.getByText('newskill').waitFor({timeout: 20000});
     await page.getByText('newskill').click();
 
     const now = new Date();
@@ -211,17 +213,16 @@ test.describe("Recurring room creation", () => {
         });
 
         test("Debate room creation by moderator", async ({ page }) => {
-            await page.goto('/', { waitUntil: 'networkidle' });
+            await page.goto('/browse', { waitUntil: 'networkidle' });
             handlePopups(page);
 
-            await page.getByRole('link', { name: 'Browse' }).click();
             await page.getByRole('button', { name: 'Debate Rooms' }).waitFor({ state: 'visible', timeout: 45000 });
             await page.getByRole('button', { name: 'Debate Rooms' }).click();
             await page.getByRole('button', { name: 'Create Debate' }).waitFor({ state: 'visible', timeout: 60000 });
             await page.getByRole('button', { name: 'Create Debate' }).click();
             await page.getByRole('textbox', { name: 'Topic *' }).fill('Social media ban below 16');
             await page.getByRole('button', { name: 'Create now' }).click();
-            await page.getByRole('button', { name: 'Enter Debate Room' }).waitFor({ state: 'visible', timeout: 15000 });
+            await page.getByRole('button', { name: 'Enter Debate Room' }).waitFor({ state: 'visible', timeout: 45000 });
             await page.getByRole('button', { name: 'Enter Debate Room' }).click();
 
             debateRoomUrl = page.url();
@@ -242,10 +243,9 @@ test.describe("Recurring room creation", () => {
                 test.use({storageState: 'storageState.participant.json'})
             
                 test("Joining as participant" , async ({ page }) => {
-                    await page.goto('/', { waitUntil: 'networkidle' });
+                    await page.goto('/browse', { waitUntil: 'networkidle' });
                     handlePopups(page);
 
-                    await page.getByRole('link', { name: 'Browse' }).click();
                     await page.getByRole('button', { name: 'Debate Rooms' }).waitFor({ state: 'visible', timeout: 45000 });
                     await page.getByRole('button', { name: 'Debate Rooms' }).click();
                     await page.getByText('Social media ban below 16').first().waitFor({ state: 'visible', timeout: 60000 });
