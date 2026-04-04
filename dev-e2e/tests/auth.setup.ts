@@ -3,7 +3,7 @@ import { test as setup, expect } from '@playwright/test';
 setup.describe.configure({timeout: 180000})
 
 setup('authenticate', async ({ page }) => {
-    await page.goto('/', {waitUntil:'networkidle'})
+    await page.goto('/', {waitUntil:'domcontentloaded'})
     await page.waitForTimeout(3000)
 
     await page.getByRole('button', { name: 'Sign In' }).click();
