@@ -9,7 +9,10 @@ import { Button } from "@/components/ui/button";
 import { Users, Loader2, Play, Calendar, Clock, Pencil } from "lucide-react";
 import { motion } from "framer-motion";
 import { ShareButton } from "@/components/share/share-button";
-import { getStudyRoomShareUrl } from "@/lib/utils/study-room-share";
+import {
+  getStudyRoomPagePath,
+  getStudyRoomShareUrl,
+} from "@/lib/utils/study-room-share";
 import { cn } from "@/lib/utils";
 import { formatDate } from "@/lib/utils/date-time";
 import { SessionStatus } from "@/types";
@@ -184,7 +187,7 @@ export function StudyRoomCard({
         <div className="flex-1 space-y-1.5 mb-4">
           <h3
             className={cn("text-2xl font-bold leading-tight text-foreground tracking-tight transition-colors line-clamp-2 cursor-pointer", theme.titleHover)}
-            onClick={() => router.push(`/studyroom/${slug}`)}
+            onClick={() => router.push(getStudyRoomPagePath(pathSegment))}
           >
             {title}
           </h3>
