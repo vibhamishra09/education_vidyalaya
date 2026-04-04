@@ -218,6 +218,9 @@ export interface User {
   hourlyRate?: number | string; // Hourly rate in coins for teaching sessions
   hasSkills?: string[];
   wantSkills?: string[];
+  followerCount?: number;
+  followingCount?: number;
+  isFollowing?: boolean;
   publicStats?: PublicUserStats;
   // Social media profile links (flexible array structure)
   socialLinks?: SocialLink[];
@@ -602,6 +605,68 @@ export interface DashboardData {
     totalAvailable: number;
   };
   engagement?: DashboardEngagementSummary;
+}
+
+export type FeedMode = 'for_you' | 'following';
+
+export type ActivityFeedReason =
+  | 'following'
+  | 'trending'
+  | 'free'
+  | 'low_cost'
+  | 'new'
+  | 'limited_seats'
+  | 'live'
+  | 'upcoming'
+  | 'mentor'
+  | 'interest_match';
+
+export interface ActivityFeedItem {
+  id: string;
+  entityId: string;
+  entityType: 'study_room' | 'debate_room';
+  headline: string;
+  subheadline: string;
+  title: string;
+  description?: string | null;
+  href: string;
+  ctaLabel: string;
+  reasons: ActivityFeedReason[];
+  trendScore: number;
+  participantCount: number;
+  maxParticipants: number;
+  seatsLeft?: number | null;
+  price?: number | null;
+  startsAt?: string | null;
+  status: string;
+  isLive: boolean;
+  host: {
+    id: string;
+    name: string;
+    avatar?: string | null;
+    isFollowed: boolean;
+    avgRating: number;
+    reviewCount: number;
+  };
+}
+
+export interface ActivityFeedResponse {
+  items: ActivityFeedItem[];
+  pagination: Pagination & {
+    mode: FeedMode;
+  };
+}
+
+export interface ActivityFeedQuery extends PaginationQuery {
+  mode?: FeedMode;
+}
+
+export interface FollowMutationResponse {
+  success: boolean;
+  targetUserId: string;
+  isFollowing: boolean;
+  followerCount: number;
+  followingCount: number;
 }
 
 // Pagination Types

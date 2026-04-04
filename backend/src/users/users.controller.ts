@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Logger,
   UnauthorizedException,
@@ -12,6 +13,7 @@ import {
 } from '@nestjs/common';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { ClerkAuthGuard } from '../common/guards/clerk-auth.guard';
+import { OptionalClerkAuthGuard } from '../common/guards/optional-clerk-auth.guard';
 import { UsersService } from './users.service';
 import { CompleteOnboardingDto, UpdateUserDto } from './dto/user.dto';
 
@@ -69,8 +71,16 @@ export class UsersController {
   }
 
   @Get('users/:userId')
-  async getPublicUserProfile(@Param('userId') userId: string) {
-    return this.usersService.getPublicUserProfile(userId);
+  @UseGuards(OptionalClerkAuthGuard)
+  async getPublicUserProfile(
+    @Param('userId') userId: string,
+    @CurrentUser('dbUserId') dbUserId?: string,
+    @CurrentUser('clerkId') clerkUserId?: string,
+  ) {
+    return this.usersService.getPublicUserProfile(
+      userId,
+      clerkUserId || dbUserId || undefined,
+    );
   }
 
   @Get('users/:userId/skills')
@@ -79,6 +89,29 @@ export class UsersController {
     @Query('type') type?: 'HAS' | 'WANTS',
   ) {
     return this.usersService.getUserSkills(userId, type);
+  }
+
+  @Post('users/:userId/follow')
+  @UseGuards(ClerkAuthGuard)
+  async followUser(
+    @Param('userId') userId: string,
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
+  ) {
+    return this.usersService.followUser(clerkUserId || dbUserId || '', userId);
+  }
+
+  @Delete('users/:userId/follow')
+  @UseGuards(ClerkAuthGuard)
+  async unfollowUser(
+    @Param('userId') userId: string,
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
+  ) {
+    return this.usersService.unfollowUser(
+      clerkUserId || dbUserId || '',
+      userId,
+    );
   }
 
   @Post('users/onboarding')

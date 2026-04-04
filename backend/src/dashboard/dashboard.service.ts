@@ -6,7 +6,11 @@
  
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { SessionStatus } from '../generated/prisma/client';
+import {
+  DebateStatus,
+  Prisma,
+  SessionStatus,
+} from '../generated/prisma/client';
 import { StreaksService } from '../streaks/streaks.service';
 import { AchievementsService } from '../achievements/achievements.service';
 import { EngagementService } from '../engagement/engagement.service';
@@ -26,6 +30,61 @@ export interface WalletActivityDataPoint {
   earned: number;
   spent: number;
   net: number;
+}
+
+export type ActivityFeedMode = 'for_you' | 'following';
+
+export type ActivityFeedReason =
+  | 'following'
+  | 'trending'
+  | 'free'
+  | 'low_cost'
+  | 'new'
+  | 'limited_seats'
+  | 'live'
+  | 'upcoming'
+  | 'mentor'
+  | 'interest_match';
+
+export interface ActivityFeedItem {
+  id: string;
+  entityId: string;
+  entityType: 'study_room' | 'debate_room';
+  headline: string;
+  subheadline: string;
+  title: string;
+  description: string | null;
+  href: string;
+  ctaLabel: string;
+  reasons: ActivityFeedReason[];
+  trendScore: number;
+  participantCount: number;
+  maxParticipants: number;
+  seatsLeft: number | null;
+  price: number | null;
+  startsAt: string | null;
+  status: string;
+  isLive: boolean;
+  host: {
+    id: string;
+    name: string;
+    avatar: string | null;
+    isFollowed: boolean;
+    avgRating: number;
+    reviewCount: number;
+  };
+}
+
+export interface ActivityFeedResponse {
+  items: ActivityFeedItem[];
+  pagination: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+    hasMore: boolean;
+    mode: ActivityFeedMode;
+  };
 }
 
 @Injectable()
@@ -583,6 +642,476 @@ export class DashboardService {
       },
       cacheTTL,
     );
+  }
+
+  async getActivityFeed(
+    userId: string,
+    mode: ActivityFeedMode = 'for_you',
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<ActivityFeedResponse> {
+    const cacheKey = this.cacheService.createKey('dashboard:feed', {
+      userId,
+      mode,
+      page,
+      limit,
+    });
+    const cacheTTL = 30;
+
+    return this.cacheService.getOrSet(
+      cacheKey,
+      async () => {
+        const now = new Date();
+        const studyPastCutoff = new Date(now.getTime() - 6 * 60 * 60 * 1000);
+        const debatePastCutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        const futureCutoff = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+
+        const viewer = await this.prisma.user.findUnique({
+          where: { id: userId },
+          select: {
+            id: true,
+            userSkills: {
+              include: {
+                skill: {
+                  select: { name: true },
+                },
+              },
+            },
+            following: {
+              select: { followingId: true },
+            },
+          },
+        });
+
+        if (!viewer) {
+          throw new NotFoundException('User not found');
+        }
+
+        const interestNames = Array.from(
+          new Set(
+            viewer.userSkills
+              .map((userSkill) => userSkill.skill.name.trim().toLowerCase())
+              .filter(Boolean),
+          ),
+        );
+        const followingIds = new Set(
+          viewer.following.map((follow) => follow.followingId),
+        );
+
+        const [studyRooms, debateRooms] = await Promise.all([
+          this.prisma.studyRoom.findMany({
+            where: {
+              sessionStatus: {
+                in: [SessionStatus.UPCOMING, SessionStatus.ONGOING],
+              },
+              OR: [
+                {
+                  date: {
+                    gte: studyPastCutoff,
+                    lte: futureCutoff,
+                  },
+                },
+                { sessionStatus: SessionStatus.ONGOING },
+              ],
+            },
+            take: 60,
+            orderBy: { date: 'asc' },
+            include: {
+              createdBy: {
+                select: {
+                  id: true,
+                  name: true,
+                  avatar: true,
+                  reviewsReceived: {
+                    select: { rating: true },
+                  },
+                },
+              },
+              skills: {
+                include: {
+                  skill: {
+                    select: { name: true },
+                  },
+                },
+              },
+              learners: {
+                select: { id: true },
+              },
+            },
+          }),
+          this.prisma.debateRoom.findMany({
+            where: {
+              status: {
+                in: [DebateStatus.WAITING, DebateStatus.PREP, DebateStatus.LIVE],
+              },
+              OR: [
+                {
+                  scheduledAt: {
+                    gte: debatePastCutoff,
+                    lte: futureCutoff,
+                  },
+                },
+                {
+                  createdAt: {
+                    gte: debatePastCutoff,
+                  },
+                },
+                {
+                  status: {
+                    in: [DebateStatus.PREP, DebateStatus.LIVE],
+                  },
+                },
+              ],
+            },
+            take: 60,
+            orderBy: [{ scheduledAt: 'asc' }, { createdAt: 'desc' }],
+            include: {
+              host: {
+                select: {
+                  id: true,
+                  name: true,
+                  avatar: true,
+                  reviewsReceived: {
+                    select: { rating: true },
+                  },
+                },
+              },
+              teams: {
+                select: {
+                  participants: {
+                    select: { id: true },
+                  },
+                },
+              },
+            },
+          }),
+        ]);
+
+        const studyItems = studyRooms
+          .map((room) =>
+            this.buildStudyRoomFeedItem(room, followingIds, interestNames, now),
+          )
+          .filter((item): item is ActivityFeedItem => Boolean(item));
+        const debateItems = debateRooms
+          .map((room) =>
+            this.buildDebateRoomFeedItem(room, followingIds, interestNames, now),
+          )
+          .filter((item): item is ActivityFeedItem => Boolean(item));
+
+        const rankedItems = [...studyItems, ...debateItems]
+          .filter((item) =>
+            mode === 'following' ? item.reasons.includes('following') : true,
+          )
+          .sort((left, right) => {
+            if (right.trendScore !== left.trendScore) {
+              return right.trendScore - left.trendScore;
+            }
+
+            const leftTime = left.startsAt
+              ? new Date(left.startsAt).getTime()
+              : Number.MAX_SAFE_INTEGER;
+            const rightTime = right.startsAt
+              ? new Date(right.startsAt).getTime()
+              : Number.MAX_SAFE_INTEGER;
+            return leftTime - rightTime;
+          });
+
+        const total = rankedItems.length;
+        const safeLimit = Math.max(1, limit);
+        const safePage = Math.max(1, page);
+        const skip = (safePage - 1) * safeLimit;
+        const pagedItems = rankedItems.slice(skip, skip + safeLimit);
+
+        return {
+          items: pagedItems,
+          pagination: {
+            total,
+            page: safePage,
+            limit: safeLimit,
+            totalPages: Math.ceil(total / safeLimit),
+            hasMore: skip + safeLimit < total,
+            mode,
+          },
+        };
+      },
+      cacheTTL,
+    );
+  }
+
+  private toNumber(
+    value: Prisma.Decimal | number | string | null | undefined,
+  ): number {
+    if (value === null || value === undefined) {
+      return 0;
+    }
+
+    return Number(value);
+  }
+
+  private averageRatings(
+    reviews: Array<{ rating: number }> | undefined,
+  ): { avgRating: number; reviewCount: number } {
+    const safeReviews = reviews ?? [];
+    const reviewCount = safeReviews.length;
+    const avgRating =
+      reviewCount > 0
+        ? safeReviews.reduce((total, review) => total + review.rating, 0) /
+          reviewCount
+        : 0;
+
+    return { avgRating, reviewCount };
+  }
+
+  private countSkillMatches(skills: string[], interests: string[]): number {
+    if (skills.length === 0 || interests.length === 0) {
+      return 0;
+    }
+
+    const normalizedSkills = new Set(
+      skills.map((skill) => skill.trim().toLowerCase()).filter(Boolean),
+    );
+    return interests.filter((interest) => normalizedSkills.has(interest)).length;
+  }
+
+  private countKeywordMatches(text: string, interests: string[]): number {
+    const normalizedText = text.trim().toLowerCase();
+    if (!normalizedText || interests.length === 0) {
+      return 0;
+    }
+
+    return interests.filter((interest) => normalizedText.includes(interest)).length;
+  }
+
+  private buildSubheadline(parts: Array<string | null | undefined>): string {
+    return parts.filter(Boolean).join(' • ');
+  }
+
+  private buildStudyRoomFeedItem(
+    room: any,
+    followingIds: Set<string>,
+    interests: string[],
+    now: Date,
+  ): ActivityFeedItem | null {
+    const startAt = new Date(room.date);
+    const endsAt = new Date(startAt.getTime() + room.duration * 60 * 1000);
+    if (endsAt.getTime() < now.getTime() - 30 * 60 * 1000) {
+      return null;
+    }
+
+    const participantCount = room.learners.length;
+    const seatsLeft = Math.max(room.maxParticipants - participantCount, 0);
+    const price = this.toNumber(room.joiningFee);
+    const isFollowed = followingIds.has(room.createdBy.id);
+    const isLive =
+      room.sessionStatus === SessionStatus.ONGOING ||
+      (startAt.getTime() <= now.getTime() && endsAt.getTime() > now.getTime());
+    const skillNames = room.skills.map((skillLink: any) => skillLink.skill.name);
+    const interestMatches = this.countSkillMatches(skillNames, interests);
+    const { avgRating, reviewCount } = this.averageRatings(
+      room.createdBy.reviewsReceived,
+    );
+    const trendingThreshold = Math.max(4, Math.ceil(room.maxParticipants * 0.45));
+
+    const reasons: ActivityFeedReason[] = [];
+    if (isFollowed) reasons.push('following');
+    if (isLive) reasons.push('live');
+    if (participantCount >= trendingThreshold) reasons.push('trending');
+    if (price === 0) reasons.push('free');
+    else if (price > 0 && price <= 99) reasons.push('low_cost');
+    if (seatsLeft > 0 && seatsLeft <= 2) reasons.push('limited_seats');
+    if (avgRating >= 4.6 && reviewCount >= 5) reasons.push('mentor');
+    if (interestMatches > 0) reasons.push('interest_match');
+    if (!isLive && startAt.getTime() > now.getTime()) reasons.push('upcoming');
+
+    const trendScore =
+      participantCount * 6 +
+      interestMatches * 16 +
+      (isFollowed ? 90 : 0) +
+      (isLive ? 34 : 0) +
+      (price === 0 ? 20 : price <= 99 ? 10 : 0) +
+      (seatsLeft > 0 && seatsLeft <= 2 ? 18 : 0) +
+      (avgRating >= 4.6 && reviewCount >= 5 ? 15 : 0) +
+      (participantCount >= trendingThreshold ? 24 : 0) -
+      Math.max(0, Math.floor((startAt.getTime() - now.getTime()) / 3_600_000));
+
+    let headline = `${room.createdBy.name} started ${room.title}`;
+    if (isFollowed && isLive) {
+      headline = `${room.createdBy.name} is live in ${room.title}`;
+    } else if (isFollowed) {
+      headline = `${room.createdBy.name} is hosting ${room.title}`;
+    } else if (seatsLeft > 0 && seatsLeft <= 2) {
+      headline = `Only ${seatsLeft} seats remaining in ${room.title}`;
+    } else if (participantCount >= trendingThreshold) {
+      headline = `Trending: ${participantCount} people joined ${room.title}`;
+    } else if (price === 0) {
+      headline = `₹0 Study Room - ${room.title}`;
+    } else if (avgRating >= 4.6 && reviewCount >= 5) {
+      headline = `${room.createdBy.name} is hosting ${room.title}`;
+    } else if (isLive) {
+      headline = `${room.title} is live now`;
+    }
+
+    return {
+      id: `study-room:${room.id}`,
+      entityId: room.id,
+      entityType: 'study_room',
+      headline,
+      subheadline: this.buildSubheadline([
+        isLive
+          ? 'Live now'
+          : startAt.toLocaleString('en-IN', {
+              month: 'short',
+              day: 'numeric',
+              hour: 'numeric',
+              minute: '2-digit',
+            }),
+        `${participantCount}/${room.maxParticipants} joined`,
+        seatsLeft > 0 && seatsLeft <= 2 ? `${seatsLeft} seats left` : null,
+        price === 0 ? 'Free' : `₹${price}`,
+        interestMatches > 0
+          ? `${interestMatches} interest match${interestMatches > 1 ? 'es' : ''}`
+          : null,
+      ]),
+      title: room.title,
+      description: room.description ?? null,
+      href: `/studyroom/${encodeURIComponent(room.slug || room.id)}`,
+      ctaLabel: isLive ? 'Join now' : 'View room',
+      reasons,
+      trendScore,
+      participantCount,
+      maxParticipants: room.maxParticipants,
+      seatsLeft,
+      price,
+      startsAt: startAt.toISOString(),
+      status: room.sessionStatus,
+      isLive,
+      host: {
+        id: room.createdBy.id,
+        name: room.createdBy.name,
+        avatar: room.createdBy.avatar ?? null,
+        isFollowed,
+        avgRating,
+        reviewCount,
+      },
+    };
+  }
+
+  private buildDebateRoomFeedItem(
+    room: any,
+    followingIds: Set<string>,
+    interests: string[],
+    now: Date,
+  ): ActivityFeedItem | null {
+    const startsAt = room.scheduledAt ? new Date(room.scheduledAt) : null;
+    const participantCount = room.teams.reduce(
+      (total: number, team: any) => total + team.participants.length,
+      0,
+    );
+    const maxParticipants = room.maxParticipants * 2;
+    const seatsLeft = Math.max(maxParticipants - participantCount, 0);
+    const isFollowed = followingIds.has(room.host.id);
+    const isLive =
+      room.status === DebateStatus.LIVE || room.status === DebateStatus.PREP;
+    const keywordMatches = this.countKeywordMatches(
+      `${room.topic} ${room.description || ''}`,
+      interests,
+    );
+    const { avgRating, reviewCount } = this.averageRatings(
+      room.host.reviewsReceived,
+    );
+
+    const reasons: ActivityFeedReason[] = [];
+    if (isFollowed) reasons.push('following');
+    if (isLive) reasons.push('live');
+    if (participantCount >= Math.max(4, Math.ceil(maxParticipants * 0.4))) {
+      reasons.push('trending');
+    }
+    if (startsAt && startsAt.getTime() > now.getTime()) reasons.push('upcoming');
+    if (
+      room.createdAt &&
+      now.getTime() - new Date(room.createdAt).getTime() <= 12 * 60 * 60 * 1000
+    ) {
+      reasons.push('new');
+    }
+    if (avgRating >= 4.6 && reviewCount >= 5) reasons.push('mentor');
+    if (keywordMatches > 0) reasons.push('interest_match');
+
+    const trendScore =
+      participantCount * 7 +
+      keywordMatches * 14 +
+      (isFollowed ? 96 : 0) +
+      (isLive ? 32 : 0) +
+      (reasons.includes('trending') ? 26 : 0) +
+      (reasons.includes('new') ? 16 : 0) +
+      (avgRating >= 4.6 && reviewCount >= 5 ? 14 : 0);
+
+    let headline = `${room.host.name} started a debate on ${room.topic}`;
+    if (isFollowed && isLive) {
+      headline = `${room.host.name} is live with ${room.topic}`;
+    } else if (isFollowed && startsAt) {
+      headline = `${room.host.name} scheduled a debate on ${room.topic}`;
+    } else if (reasons.includes('trending')) {
+      headline = `Trending: ${participantCount} people joined ${room.topic}`;
+    } else if (isLive) {
+      headline = `${room.topic} is live now`;
+    } else if (startsAt) {
+      headline = `Upcoming debate: ${room.topic}`;
+    }
+
+    const liveOrPlannedEnd = room.debateSlotEndsAt
+      ? new Date(room.debateSlotEndsAt)
+      : null;
+    if (
+      liveOrPlannedEnd &&
+      liveOrPlannedEnd.getTime() < now.getTime() - 30 * 60 * 1000
+    ) {
+      return null;
+    }
+
+    return {
+      id: `debate-room:${room.id}`,
+      entityId: room.id,
+      entityType: 'debate_room',
+      headline,
+      subheadline: this.buildSubheadline([
+        isLive
+          ? 'Live debate'
+          : startsAt
+            ? startsAt.toLocaleString('en-IN', {
+                month: 'short',
+                day: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+              })
+            : 'Open now',
+        `${participantCount}/${maxParticipants} joined`,
+        seatsLeft > 0 ? `${seatsLeft} seats left` : 'Full lobby',
+        keywordMatches > 0
+          ? `${keywordMatches} topic match${keywordMatches > 1 ? 'es' : ''}`
+          : null,
+      ]),
+      title: room.topic,
+      description: room.description ?? null,
+      href: `/debateroom/${room.id}`,
+      ctaLabel: isLive ? 'Join debate' : 'View debate',
+      reasons,
+      trendScore,
+      participantCount,
+      maxParticipants,
+      seatsLeft,
+      price: 0,
+      startsAt: startsAt?.toISOString() ?? room.createdAt?.toISOString() ?? null,
+      status: room.status,
+      isLive,
+      host: {
+        id: room.host.id,
+        name: room.host.name,
+        avatar: room.host.avatar ?? null,
+        isFollowed,
+        avgRating,
+        reviewCount,
+      },
+    };
   }
 
   /**

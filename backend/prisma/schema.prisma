@@ -46,6 +46,8 @@ model User {
   peerSessionsReceived  PeerSession[]          @relation("RequestedTo")
   reviewsReceived       Review[]               @relation("ReviewsReceived")
   reviewsWritten        Review[]               @relation("ReviewsWritten")
+  followers             UserFollow[]           @relation("FollowedUser")
+  following             UserFollow[]           @relation("FollowerUser")
   studyRooms            StudyRoom[]            @relation("UserOwnsStudyRooms")
   participating         StudyRoomParticipant[]
   userSkills            UserSkill[]
@@ -65,6 +67,20 @@ model User {
   debateChatMessages    DebateChatMessage[]    @relation("DebateChatMessages")
   debateModeratorEvaluations DebateModeratorEvaluation[] @relation("DebateModeratorEvaluations")
   peerSessionsLastEdited      PeerSession[]          @relation("PeerSessionLastEditor")
+}
+
+model UserFollow {
+  id          String   @id @default(cuid())
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  follower    User     @relation("FollowerUser", fields: [followerId], references: [id], onDelete: Cascade)
+  following   User     @relation("FollowedUser", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@index([followerId])
+  @@index([followingId])
 }
 
 model StudyRoom {
