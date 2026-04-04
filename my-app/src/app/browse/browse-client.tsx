@@ -630,9 +630,9 @@ function BrowsePageContent() {
                 <Skeleton key={index} className="h-8 w-20 rounded-full" />
               ))
             ) : (
-              skills.slice(0, 6).map((skill) => (
+              skills.slice(0, 6).map((skill, index) => (
                 <Badge
-                  key={skill.id}
+                  key={`browse-skill-${index}-${skill.id ?? skill.name}`}
                   variant="outline"
                   className={cn(
                     "cursor-pointer text-xs py-1.5 px-3 rounded-full hover:bg-green-50 hover:text-green-700 hover:border-green-200 transition-all",
@@ -653,9 +653,9 @@ function BrowsePageContent() {
               <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mr-2">
                 Active:
               </span>
-              {selectedSkills.map((skill) => (
+              {selectedSkills.map((skill, index) => (
                 <Badge
-                  key={skill.id}
+                  key={`browse-selected-${index}-${skill.id ?? skill.name}`}
                   className="cursor-pointer text-xs py-1 px-2.5 rounded-full bg-green-100 text-green-800 hover:bg-green-200 border-green-200 gap-1 pl-3"
                   onClick={() => removeSkill(skill.id)}
                 >

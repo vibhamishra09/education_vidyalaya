@@ -80,7 +80,7 @@ function resolveApiBaseURL(): string {
       if (process.env.NODE_ENV === "development") {
         // eslint-disable-next-line no-console -- intentional misconfiguration hint
         console.warn(
-          "[api-client] NEXT_PUBLIC_API_URL is set to the public webyalaya.com site while running on localhost. API calls will use same-origin /api (proxied via next.config BACKEND_URL). Fix .env.local: set NEXT_PUBLIC_API_URL=http://127.0.0.1:3001",
+          "[api-client] NEXT_PUBLIC_API_URL points at the public webyalaya.com site on localhost. Same-origin /api is proxied to Nest via BACKEND_URL in next.config (defaults to http://127.0.0.1:3002). Set BACKEND_URL and NEXT_PUBLIC_API_URL to your Nest URL, e.g. http://127.0.0.1:3001",
         );
       }
       return "";

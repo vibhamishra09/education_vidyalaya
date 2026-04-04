@@ -166,13 +166,27 @@ export class ChatService {
       // Build where clause based on viewer type
       let where: any = { channelId };
 
-      if (guestEmail) {
-        // Guest user: show EVERYONE messages + their own messages (by email)
+      const ge = guestEmail?.trim();
+
+      if (ge && viewerUserId) {
+        // Guest link opened while also signed in: union guest + member visibility so EVERYONE
+        // (e.g. host) and both identities' private threads stay consistent.
         where = {
           channelId,
           OR: [
             { audienceType: MessageAudienceType.EVERYONE },
-            { guestEmail, audienceType: MessageAudienceType.HOST }, // Guest's messages to host
+            { guestEmail: ge, audienceType: MessageAudienceType.HOST },
+            { senderId: viewerUserId },
+            { targetUserId: viewerUserId },
+          ],
+        };
+      } else if (ge) {
+        // Guest only: EVERYONE + this guest's messages to the host
+        where = {
+          channelId,
+          OR: [
+            { audienceType: MessageAudienceType.EVERYONE },
+            { guestEmail: ge, audienceType: MessageAudienceType.HOST },
           ],
         };
       } else if (viewerUserId) {
@@ -377,8 +391,8 @@ export class ChatService {
   }
 
   /**
-   * Send a message from a guest user
-   * Guest messages are always sent to HOST and include guest email for history matching
+   * Send a message from a guest user (study room / webinar join link).
+   * EVERYONE is stored and delivered like a signed-in member so all sockets in the channel stay in sync.
    */
   async sendGuestMessage(
     channelId: string,
@@ -386,17 +400,32 @@ export class ChatService {
     guestEmail: string,
     guestName: string,
     content: string,
-    targetUserId: string, // Host user ID
+    audienceType: MessageAudienceType = MessageAudienceType.EVERYONE,
+    targetUserId?: string | null,
   ) {
+    const at = audienceType ?? MessageAudienceType.EVERYONE;
+    let resolvedTarget: string | null = null;
+    if (at === MessageAudienceType.HOST) {
+      if (!targetUserId?.trim()) {
+        throw new BadRequestException('Host target required for HOST audience');
+      }
+      resolvedTarget = targetUserId.trim();
+    } else if (at === MessageAudienceType.USER) {
+      if (!targetUserId?.trim()) {
+        throw new BadRequestException('targetUserId required for USER audience');
+      }
+      resolvedTarget = targetUserId.trim();
+    }
+
     return this.prisma.message.create({
       data: {
         channelId,
-        senderId: null, // No User record for guests
+        senderId: null,
         guestSenderId: guestParticipantId,
         guestEmail,
         content,
-        audienceType: MessageAudienceType.HOST,
-        targetUserId,
+        audienceType: at,
+        targetUserId: resolvedTarget,
       },
       include: {
         sender: {

@@ -372,8 +372,18 @@ export class BrowseService {
           const [peerCount] = await Promise.all([
             this.prisma.user.count({ where: peerWhere }),
           ]);
-          const studyRoomCount = ((await this.prisma.studyRoom.groupBy({ by:'slug', where: studyRoomWhere }))).length
           if (tab === 'peers') {
+            const [studyRoomCount, webinarRowCountPeers] = await Promise.all([
+              this.prisma.studyRoom
+                .groupBy({ by: ['slug'], where: studyRoomWhere })
+                .then((rows) => rows.length),
+              this.prisma.studyRoom.count({
+                where: {
+                  ...studyRoomWhere,
+                  sessionMode: StudyRoomSessionMode.WEBINAR,
+                },
+              }),
+            ]);
             const peerSortMostActive = !search && !(skills && skills.length > 0);
             const users = await this.prisma.user.findMany({
               where: peerWhere,
@@ -436,6 +446,7 @@ export class BrowseService {
               counts: {
                 peers: peerCount,
                 studyRooms: studyRoomCount,
+                webinars: webinarRowCountPeers,
               },
               pagination: {
                 total: peerCount,
@@ -446,9 +457,32 @@ export class BrowseService {
               },
             };
           } else {
+            // Webinars: each row is its own event — never dedupe by `slug` (collisions / null slug
+            // would hide rooms). Study rooms tab: dedupe recurring series via distinct slug.
+            const standardWhere: Record<string, unknown> = {
+              ...studyRoomWhere,
+              sessionMode: StudyRoomSessionMode.STANDARD,
+            };
+            const webinarWhere: Record<string, unknown> = {
+              ...studyRoomWhere,
+              sessionMode: StudyRoomSessionMode.WEBINAR,
+            };
+
+            const [standardSeriesCount, webinarRowCount] = await Promise.all([
+              this.prisma.studyRoom
+                .groupBy({ by: ['slug'], where: standardWhere })
+                .then((rows) => rows.length),
+              this.prisma.studyRoom.count({ where: webinarWhere }),
+            ]);
+
+            const listWhere =
+              tab === 'webinars' ? webinarWhere : standardWhere;
+            const studyRoomCount =
+              tab === 'webinars' ? webinarRowCount : standardSeriesCount;
+
             const studyRooms = await this.prisma.studyRoom.findMany({
-              where: studyRoomWhere,
-              distinct: ["slug"],
+              where: listWhere,
+              ...(tab === 'webinars' ? {} : { distinct: ['slug'] }),
               skip,
               take: limit,
               select: {
@@ -549,7 +583,8 @@ export class BrowseService {
               trendingWebinars,
               counts: {
                 peers: peerCount,
-                studyRooms: studyRoomCount,
+                studyRooms: standardSeriesCount,
+                webinars: webinarRowCount,
               },
               pagination: {
                 total: studyRoomCount,

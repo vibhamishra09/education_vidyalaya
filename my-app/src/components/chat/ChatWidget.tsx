@@ -23,6 +23,15 @@ type Message = ChatMessageRow
 
 const channelMessageCache = new Map<string, Message[]>()
 
+function pickTrimmedUserId(
+	primary: string | null | undefined,
+	fallback: string | null | undefined,
+): string | null {
+	const a = typeof primary === 'string' && primary.trim() ? primary.trim() : ''
+	const b = typeof fallback === 'string' && fallback.trim() ? fallback.trim() : ''
+	return a || b || null
+}
+
 interface ChatWidgetProps {
 	channelId: string | null | undefined
 	className?: string
@@ -49,14 +58,21 @@ export function ChatWidget({
 	const { user, isLoaded } = useUser()
 	const { getToken } = useAuth()
 	const userId = user?.id
-	/** Guest link chat only when not signed in; stray ?guestAccessToken= would otherwise use an expired token and the server would disconnect the socket. */
-	const isGuestMode = Boolean(guestToken && !userId)
+	/**
+	 * If the URL includes a guest join token, always use guest chat (socket + history).
+	 * Otherwise a signed-in joinee would connect as their Clerk user while the API still
+	 * resolved guest email from the token — mismatched rooms/history vs host EVERYONE broadcasts.
+	 */
+	const isGuestMode = Boolean(guestToken?.trim())
 	const channelIdRef = useRef<string | null | undefined>(channelId)
 	channelIdRef.current = channelId
 	const [viewerGuestEmail, setViewerGuestEmail] = useState<string | null>(
 		() => guestEmail ?? null,
 	)
 	const viewerDbUserIdRef = useRef(currentUserDbId)
+	/** Latest prop for dedupe when ref is cleared before `/api/users/me` or socket runs. */
+	const currentUserDbIdPropRef = useRef(currentUserDbId)
+	currentUserDbIdPropRef.current = currentUserDbId
 	const viewerGuestEmailRef = useRef<string | null>(guestEmail ?? null)
 	useEffect(() => {
 		viewerDbUserIdRef.current = currentUserDbId
@@ -158,6 +174,10 @@ export function ChatWidget({
 
 				const historyMessages = collapseNearDuplicateChatRows(
 					rawList.map(normalizeChatMessage),
+					pickTrimmedUserId(
+						viewerDbUserIdRef.current,
+						currentUserDbIdPropRef.current,
+					),
 				)
 				// Replace server history for this channel only — do not merge with prior room’s list.
 				if (channelIdRef.current !== activeChannelId) return
@@ -293,7 +313,10 @@ export function ChatWidget({
 						if (prev.some((m) => m.id === normalized.id)) {
 							return prev
 						}
-						const viewerId = viewerDbUserIdRef.current ?? null
+						const viewerId = pickTrimmedUserId(
+							viewerDbUserIdRef.current,
+							currentUserDbIdPropRef.current,
+						)
 						let removedOneOptimistic = false
 						const withoutMatchingOptimistic = prev.filter((m) => {
 							if (!isOptimisticMessageId(m.id)) return true
@@ -313,6 +336,7 @@ export function ChatWidget({
 						})
 						const next = collapseNearDuplicateChatRows(
 							mergeMessages(withoutMatchingOptimistic, [normalized]),
+							viewerId,
 						)
 						channelMessageCache.set(activeChannelId, next)
 						return next

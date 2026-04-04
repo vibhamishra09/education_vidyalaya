@@ -172,22 +172,28 @@ export function useFormPersistence<T extends object>(
     initialDataRef.current = initialData;
   });
 
+  const storageKey = `form_${formKey}`;
+
   const [formData, setFormDataInternal, clearForm] = useLocalStorage<T>(
-    `form_${formKey}`,
+    storageKey,
     initialData,
     { expiresIn }
   );
 
-  // Check if there's stored data on mount
-  const [hasStoredData, setHasStoredData] = useState(() => {
-    if (typeof window !== "undefined") {
-      return !!window.localStorage.getItem(`form_${formKey}`);
+  /** Must match server first paint (false); sync from localStorage after mount to avoid hydration mismatch. */
+  const [hasStoredData, setHasStoredData] = useState(false);
+
+  useEffect(() => {
+    try {
+      setHasStoredData(!!window.localStorage.getItem(storageKey));
+    } catch {
+      setHasStoredData(false);
     }
-    return false;
-  });
+  }, [storageKey]);
 
   const setFormData = useCallback(
     (data: T | ((prev: T) => T)) => {
+      setHasStoredData(true);
       setFormDataInternal(data);
     },
     [setFormDataInternal]
@@ -195,6 +201,7 @@ export function useFormPersistence<T extends object>(
 
   const updateField = useCallback(
     <K extends keyof T>(field: K, value: T[K]) => {
+      setHasStoredData(true);
       setFormDataInternal((prev) => ({
         ...prev,
         [field]: value,

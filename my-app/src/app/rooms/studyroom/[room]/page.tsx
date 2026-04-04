@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@clerk/nextjs'
-import axios from 'axios'
+import { isAxiosError } from 'axios'
 import { EnhancedVideoRoom } from '@/components/livekit/EnhancedVideoRoom'
 import apiClient from '@/lib/api-client'
 import { normalizeLiveKitServerUrl } from '@/lib/livekit-url'
@@ -89,10 +89,9 @@ export default function RoomPage() {
 	}, [])
 
 	const refreshChatRecipients = useCallback(async () => {
-		// Guests don't have authenticated chat channels in this flow.
-		if (guestAccessToken) return
-		const clerkToken = await getToken()
-		if (!clerkToken || !roomName) return
+		if (!roomName) return
+		const clerkToken = guestAccessToken ? null : await getToken()
+		if (!guestAccessToken && !clerkToken) return
 
 		const isStudyRoom = roomName.startsWith('studyroom-')
 		const isPeerSession = roomName.startsWith('peersession-')
@@ -108,7 +107,7 @@ export default function RoomPage() {
 				? `/api/study-rooms/${roomId}`
 				: `/api/peer-sessions/${roomId}`
 			const response = await apiClient.get(endpoint, {
-				headers: { Authorization: `Bearer ${clerkToken}` },
+				headers: clerkToken ? { Authorization: `Bearer ${clerkToken}` } : {},
 			})
 			if (!isMountedRef.current || !response.data) return
 			const chatTargets = extractChatTargets(
@@ -165,14 +164,14 @@ export default function RoomPage() {
 
 				// Fetch LiveKit token, channel ID, and session data
 				const promises: Promise<{ data: { token?: string; channelId?: string; [key: string]: unknown } } | null>[] = [
-					axios.post(
-						`${process.env.NEXT_PUBLIC_API_URL}/api/livekit/${guestAccessToken ? 'guest-token' : 'token'}`,
+					apiClient.post(
+						`/api/livekit/${guestAccessToken ? 'guest-token' : 'token'}`,
 						guestAccessToken ? { roomName, guestAccessToken } : { roomName },
 						{
 							headers: {
 								...(clerkToken ? { Authorization: `Bearer ${clerkToken}` } : {}),
 							},
-						}
+						},
 					),
 					clerkToken
 						? apiClient.get(`/api/chat/channel-by-room/${roomName}`, {
@@ -284,7 +283,7 @@ export default function RoomPage() {
 				}
 			} catch (e: unknown) {
 				if (!mounted) return
-				const errorMessage = axios.isAxiosError(e)
+				const errorMessage = isAxiosError(e)
 					? ((typeof e.response?.data === 'object' &&
 							e.response?.data &&
 							'message' in e.response.data
@@ -424,14 +423,6 @@ export default function RoomPage() {
 		)
 	}
 
-	const sessionMode = sessionData && 'sessionMode' in sessionData
-		? (sessionData as { sessionMode?: string }).sessionMode
-		: undefined
-	const webinarAttendeeMinimalUi =
-		!!guestAccessToken &&
-		sessionMode === 'WEBINAR' &&
-		!isHost
-
 	// Extract stable UUID for consistent scratch pad identification
 	const isStudyRoom = roomName?.startsWith('studyroom-')
 	const isPeerSession = roomName?.startsWith('peersession-')
@@ -441,6 +432,12 @@ export default function RoomPage() {
 			? roomName.slice('peersession-'.length)
 			: roomName?.includes('-') ? roomName.split('-')[1] : roomName
 
+	const liveSessionKind: 'studyRoom' | 'peerSession' | undefined = isStudyRoom
+		? 'studyRoom'
+		: isPeerSession
+			? 'peerSession'
+			: undefined
+
 	return (
 		<EnhancedVideoRoom
 			token={token}
@@ -448,6 +445,7 @@ export default function RoomPage() {
 			channelId={channelId}
 			sessionData={sessionData}
 			sessionUuid={extractedUuid}
+			liveSessionKind={liveSessionKind}
 			isHost={isHost}
 			chatRecipients={chatRecipients}
 			hostUser={hostUser}
@@ -455,7 +453,6 @@ export default function RoomPage() {
 			externalAccessToken={guestAccessToken}
 			guestLivekitIdentity={guestLivekitIdentity}
 			onParticipantListChange={handleParticipantListChange}
-			webinarAttendeeMinimalUi={webinarAttendeeMinimalUi}
 		/>
 	)
 }
