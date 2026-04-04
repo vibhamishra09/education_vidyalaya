@@ -21,6 +21,7 @@ import {
   DebateRoom,
 } from '@/types/debate.types';
 import { debateRoomKeys } from './use-debate-rooms';
+import { getSocketIoBaseUrl } from '@/lib/socket-base-url';
 
 interface UseDebateSocketOptions {
   roomId: string;
@@ -137,7 +138,7 @@ export function useDebateSocket({
         const authToken = await getToken();
         if (!authToken || !mounted) return;
 
-        const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:3002';
+        const baseUrl = getSocketIoBaseUrl();
 
         const newSocket = io(`${baseUrl}/debate`, {
           transports: ['websocket'],

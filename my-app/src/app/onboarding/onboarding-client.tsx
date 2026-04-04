@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useUser, useAuth } from "@clerk/nextjs";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -26,7 +26,6 @@ const RANDOM_AVATARS = [
 export function OnboardingClient() {
   const { user } = useUser();
   const { getToken } = useAuth();
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [step, setStep] = useState<OnboardingStep>("profile");
   const [loading, setLoading] = useState(false);
@@ -112,11 +111,21 @@ export function OnboardingClient() {
       // Reload the user's data from the Clerk API to get updated metadata
       await user.reload();
 
-      // Get the redirect URL from search params or default to dashboard
-      const redirectUrl = searchParams.get('redirect_url') || '/dashboard';
-
-      // Redirect immediately after onboarding completion
-      router.push(redirectUrl);
+      const raw = searchParams.get("redirect_url") || "/dashboard";
+      let target: string;
+      try {
+        const u = new URL(raw, window.location.origin);
+        if (u.origin === window.location.origin) {
+          const path = u.pathname + u.search + u.hash;
+          target = path.length ? path : "/";
+        } else {
+          window.location.assign(raw);
+          return;
+        }
+      } catch {
+        target = raw.startsWith("/") ? raw : "/dashboard";
+      }
+      window.location.assign(target);
     } catch (error) {
       console.error("Error completing onboarding:", error);
       alert("Failed to complete onboarding. Please try again.");

@@ -41,6 +41,25 @@ const getClerkToken = async (): Promise<string | null> => {
   }
 };
 
+function isLocalDevHostname(hostname: string): boolean {
+  return (
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "[::1]"
+  );
+}
+
+/** Public website origin — not the Nest API. Using it as NEXT_PUBLIC_API_URL breaks local dev. */
+function looksLikeWebyalayaMarketingOrigin(url: string): boolean {
+  try {
+    const u = new URL(url);
+    const host = u.hostname.replace(/^www\./i, "");
+    return host === "webyalaya.com" && (u.pathname === "" || u.pathname === "/");
+  } catch {
+    return false;
+  }
+}
+
 /**
  * If NEXT_PUBLIC_API_URL equals the browser origin (e.g. both http://localhost:3000),
  * PATCH/POST would hit Next.js and return "Cannot PATCH /api/...". Use same-origin
@@ -51,6 +70,19 @@ function resolveApiBaseURL(): string {
 
   if (typeof window !== "undefined") {
     if (env && env === window.location.origin) {
+      return "";
+    }
+    if (
+      env &&
+      isLocalDevHostname(window.location.hostname) &&
+      looksLikeWebyalayaMarketingOrigin(env)
+    ) {
+      if (process.env.NODE_ENV === "development") {
+        // eslint-disable-next-line no-console -- intentional misconfiguration hint
+        console.warn(
+          "[api-client] NEXT_PUBLIC_API_URL is set to the public webyalaya.com site while running on localhost. API calls will use same-origin /api (proxied via next.config BACKEND_URL). Fix .env.local: set NEXT_PUBLIC_API_URL=http://127.0.0.1:3001",
+        );
+      }
       return "";
     }
     if (env) {

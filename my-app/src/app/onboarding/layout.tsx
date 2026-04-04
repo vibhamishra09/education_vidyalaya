@@ -1,14 +1,8 @@
-import { auth } from '@clerk/nextjs/server';
-import { redirect } from 'next/navigation';
-
-export default async function OnboardingLayout({ 
-  children 
-}: { 
-  children: React.ReactNode 
+export default function OnboardingLayout({
+  children,
+}: {
+  children: React.ReactNode;
 }) {
-  if ((await auth()).sessionClaims?.metadata?.onboardingComplete === true) {
-    redirect('/');
-  }
-
+  // Completed users: middleware handles redirect (with redirect_url + cookie bridge).
   return <>{children}</>;
 }

@@ -48,6 +48,7 @@ import { useRemoteControl } from '@/hooks/use-remote-control'
 
 import { RemoteControlOverlay } from '@/components/livekit/RemoteControlOverlay'
 import { ScratchPad } from '@/components/scratch-pad/ScratchPad'
+import { getSocketIoBaseUrl } from '@/lib/socket-base-url'
 
 // Stable virtual backgrounds constant to avoid re-creating array each render
 const VIRTUAL_BACKGROUNDS = [
@@ -303,6 +304,18 @@ export function EnhancedVideoRoom({
 			chatLive: runtime.chatEnabled !== false,
 		}
 	}, [sessionData?.webinarConfig])
+
+	/** Participant mic disabled at create time → join muted unless host (LiveKit publish). */
+	const webinarJoineeMicOffByConfig = useMemo(() => {
+		if (sessionData?.sessionMode !== 'WEBINAR') return false
+		const perms = (
+			(sessionData.webinarConfig || {}) as { permissions?: { mic?: string } }
+		).permissions
+		return perms?.mic === 'disabled'
+	}, [sessionData?.sessionMode, sessionData?.webinarConfig])
+
+	const liveKitInitialAudio =
+		isSecureMediaContext && (!webinarJoineeMicOffByConfig || isHost)
 
 	const sessionStartTimestamp = sessionStartTime ? sessionStartTime.getTime() : 0
 
@@ -587,7 +600,7 @@ export function EnhancedVideoRoom({
 				const authToken = await getToken()
 				if (!authToken) return
 
-				const url = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:3002'
+				const url = getSocketIoBaseUrl()
 
 				socket = io(url, {
 					transports: ['websocket'],
@@ -697,7 +710,7 @@ export function EnhancedVideoRoom({
 			)}
 			<LiveKitRoom
 				video={false}
-				audio={isSecureMediaContext}
+				audio={liveKitInitialAudio}
 				token={token}
 				serverUrl={serverUrl}
 				connect={shouldConnectToRoom}

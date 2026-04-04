@@ -89,7 +89,15 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    return NextResponse.json(data);
+    const res = NextResponse.json(data);
+    res.cookies.set('onboarding_completed', 'true', {
+      path: '/',
+      maxAge: 60 * 60 * 24 * 30,
+      sameSite: 'lax',
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+    });
+    return res;
   } catch (error) {
     console.error("❌ Onboarding failed at some step:", error instanceof Error ? error.message : error);
     console.error("❌ Stack:", error instanceof Error ? error.stack : 'no stack');

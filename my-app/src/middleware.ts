@@ -38,6 +38,11 @@ function isNextServerActionRequest(req: NextRequest): boolean {
 
 export default clerkMiddleware(async (auth, req: NextRequest) => {
   const { isAuthenticated, sessionClaims, redirectToSignIn } = await auth();
+  const onboardingCookieBypass =
+    req.cookies.get('onboarding_completed')?.value === 'true';
+  const onboardingCompleteJwt =
+    sessionClaims?.metadata?.onboardingComplete === true;
+  const onboardingComplete = onboardingCompleteJwt || onboardingCookieBypass;
 
   // Allow all API routes to pass through without onboarding checks
   if (isApiRoute(req)) {
@@ -48,9 +53,20 @@ export default clerkMiddleware(async (auth, req: NextRequest) => {
   // - If they have already completed onboarding, redirect them away (e.g., to home).
   // - Otherwise, let them proceed so they can finish onboarding.
   if (isAuthenticated && isOnboardingRoute(req)) {
-    if (sessionClaims?.metadata?.onboardingComplete) {
-      // If onboarding is complete, redirect away from onboarding page
-      return NextResponse.redirect(new URL('/', req.url));
+    if (onboardingComplete) {
+      const redirectParam = req.nextUrl.searchParams.get('redirect_url');
+      let destination = '/';
+      if (redirectParam) {
+        try {
+          const u = new URL(redirectParam, req.url);
+          if (u.origin === new URL(req.url).origin) {
+            destination = u.pathname + u.search + u.hash || '/';
+          }
+        } catch {
+          /* keep default */
+        }
+      }
+      return NextResponse.redirect(new URL(destination, req.url));
     }
     // Otherwise, let the user proceed to onboarding
     return NextResponse.next();
@@ -64,7 +80,7 @@ export default clerkMiddleware(async (auth, req: NextRequest) => {
   // Catch authenticated users who haven't completed onboarding.
   // Redirect them to /onboarding — this applies to ALL routes (public and private)
   // so that new users landing on "/" are also caught.
-  if (isAuthenticated && !sessionClaims?.metadata?.onboardingComplete) {
+  if (isAuthenticated && !onboardingComplete) {
     if (isNextServerActionRequest(req)) {
       return NextResponse.next();
     }

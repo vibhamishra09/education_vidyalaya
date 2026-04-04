@@ -1,3 +1,5 @@
+import { getPublicAppOrigin } from "@/lib/utils/public-url";
+
 /**
  * Public study room URLs: one path shape, optional join intent for shared links.
  * Shared links use ?join=1 so after sign-in we can join in one step without extra clicks.
@@ -17,9 +19,6 @@ export function getStudyRoomPagePathWithJoinIntent(roomId: string): string {
 /** Absolute URL for copy / Web Share API — includes ?join=1 for recipients. */
 export function getStudyRoomShareUrl(roomId: string): string {
   const path = getStudyRoomPagePathWithJoinIntent(roomId);
-  if (typeof window !== "undefined") {
-    return `${window.location.origin}${path}`;
-  }
-  const base = (process.env.NEXT_PUBLIC_BASE_URL || "").replace(/\/$/, "");
-  return base ? `${base}${path}` : path;
+  const origin = getPublicAppOrigin();
+  return origin ? `${origin}${path}` : path;
 }

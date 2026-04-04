@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
+import { getSocketIoBaseUrl } from '@/lib/socket-base-url';
 
 interface ExtensionRequest {
   userId: string;
@@ -54,7 +55,7 @@ export function useSessionExtension({
 
     const connectSocket = () => {
       try {
-        const url = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:3002';
+        const url = getSocketIoBaseUrl();
 
         socketInstance = io(url, {
           transports: ['websocket'],
