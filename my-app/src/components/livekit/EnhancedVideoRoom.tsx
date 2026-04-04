@@ -2644,25 +2644,16 @@ const VideoRoomContent = memo(function VideoRoomContent({
 					// Guard: check if browser or Document PiP already activated it
 					if (document.pictureInPictureElement || pipWindowRef.current) return
 
-<<<<<<< HEAD
-					// Small delay to let the browser complete transition signals
-					await new Promise(resolve => setTimeout(resolve, 50));
-					// Double check it's still blurred or hidden before triggering
-					if (!document.hidden && document.hasFocus()) return;
-
-					await togglePiP(true);
-=======
 					// Small delay to let the browser complete the tab transition and track warm-up
 					await new Promise(resolve => setTimeout(resolve, 300));
-					if (!document.hidden) return;
-					
-					// autoPictureInPicture attribute handles the toggle automatically
-					// We just ensure it's unmuted for warmth.
-					if (persistentPipVideoRef.current) {
-						persistentPipVideoRef.current.volume = 0.001;
-						persistentPipVideoRef.current.muted = false;
+					if (document.hidden) {
+						// autoPictureInPicture attribute handles the toggle automatically
+						// We just ensure it's unmuted for warmth.
+						if (persistentPipVideoRef.current) {
+							persistentPipVideoRef.current.volume = 0.001;
+							persistentPipVideoRef.current.muted = false;
+						}
 					}
->>>>>>> 390b8bc (scratch pad deployment fix)
 				} catch (error) {
 					console.warn('[PiP] Auto-PiP activation failed:', error);
 				}
