@@ -15,7 +15,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { ClerkAuthGuard } from '../common/guards/clerk-auth.guard';
 import { OptionalClerkAuthGuard } from '../common/guards/optional-clerk-auth.guard';
 import { UsersService } from './users.service';
-import { CompleteOnboardingDto, UpdateUserDto } from './dto/user.dto';
+import { UpdateUserDto } from './dto/user.dto';
 
 @Controller('api')
 export class UsersController {
@@ -112,32 +112,5 @@ export class UsersController {
       clerkUserId || dbUserId || '',
       userId,
     );
-  }
-
-  @Post('users/onboarding')
-  @UseGuards(ClerkAuthGuard)
-  async completeOnboarding(
-    @CurrentUser() clerkUserId: string,
-    @Body() body: CompleteOnboardingDto,
-  ) {
-    if (!clerkUserId) {
-      throw new UnauthorizedException(
-        'Authenticated Clerk user could not be resolved for onboarding.',
-      );
-    }
-
-    this.logger.debug('Completing onboarding for Clerk user:', clerkUserId);
-
-    return this.usersService.completeOnboarding(clerkUserId, {
-      name: body.name,
-      email: body.email,
-      avatar: body.avatar,
-      bio: body.bio,
-      location: body.location,
-      school: body.school,
-      hourlyRate: body.hourlyRate,
-      skillsIHave: body.skillsIHave || [],
-      skillsIWant: body.skillsIWant || [],
-    });
   }
 }

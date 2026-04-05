@@ -27,8 +27,8 @@ import Image from 'next/image'
 import { useSessionTimer } from '@/hooks/use-session-timer'
 import { SessionEndWarningDialog } from '@/components/study-room/session-end-warning-dialog'
 
-// Use dynamic import with ssr: false to avoid tldraw library duplication and hydration errors
-const ScratchPad = dynamic(() => import('@/components/scratch-pad/ScratchPad').then(mod => mod.ScratchPad), { 
+// Type the dynamic import to ensure props like roomId are recognized
+const ScratchPad = dynamic<any>(() => import('@/components/scratch-pad/ScratchPad').then(mod => mod.ScratchPad), { 
     ssr: false,
     loading: () => (
         <div className="flex h-full w-full items-center justify-center bg-[#0f0f0f]">
@@ -209,7 +209,7 @@ export function EnhancedVideoRoom({
 		if (typeof window === 'undefined') return
 		setIsSecureMediaContext(
 			window.isSecureContext &&
-				typeof window.navigator.mediaDevices?.getUserMedia === 'function',
+			typeof window.navigator.mediaDevices?.getUserMedia === 'function',
 		)
 		setHasResolvedMediaContext(true)
 	}, [])
@@ -1183,9 +1183,9 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				err instanceof DOMException
 					? err.name
 					: typeof err === 'object' &&
-							err !== null &&
-							'name' in err &&
-							typeof (err as { name: unknown }).name === 'string'
+						err !== null &&
+						'name' in err &&
+						typeof (err as { name: unknown }).name === 'string'
 						? (err as { name: string }).name
 						: ''
 			if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
@@ -1380,6 +1380,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	const [pinnedParticipantId, setPinnedParticipantId] = useState<string | null>(null)
 
 	const [isAudioEnabled, setIsAudioEnabled] = useState(true)
+	const [isPipPrimed, setIsPipPrimed] = useState(false)
 
 	// Background effects state - use refs for values that don't need to trigger re-renders
 	const [backgroundMode, setBackgroundMode] = useState<'none' | 'blur' | 'virtual'>('none')
@@ -1392,8 +1393,9 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	const blurAmountRef = useRef(blurAmount)
 	const selectedVirtualBgRef = useRef(selectedVirtualBg)
 	const backgroundModeRef = useRef(backgroundMode)
-	// CRITICAL: Store localParticipant in ref to avoid callback recreation on every audio level update
+	// CRITICAL: Store participants in refs to avoid callback recreation and infinite loops
 	const localParticipantRef = useRef(localParticipant)
+	const allParticipantsRef = useRef(allParticipants)
 	// Prevent concurrent effect applications
 	const isApplyingEffectRef = useRef(false)
 	// Krisp noise filter ref for cleanup
@@ -1414,8 +1416,16 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	useEffect(() => { blurAmountRef.current = blurAmount }, [blurAmount])
 	useEffect(() => { selectedVirtualBgRef.current = selectedVirtualBg }, [selectedVirtualBg])
 	useEffect(() => { backgroundModeRef.current = backgroundMode }, [backgroundMode])
-	// CRITICAL: Keep localParticipant ref in sync
+	// CRITICAL: Keep participant refs in sync
 	useEffect(() => { localParticipantRef.current = localParticipant }, [localParticipant])
+	useEffect(() => { allParticipantsRef.current = allParticipants }, [allParticipants])
+	
+	// Native Auto-PiP attribute enforcer (fixes React type errors)
+	useEffect(() => {
+		if (persistentPipVideoRef.current) {
+			persistentPipVideoRef.current.setAttribute('autoPictureInPicture', 'true');
+		}
+	}, []);
 
 	// Listen for moderation socket events and apply local actions
 	useEffect(() => {
@@ -2172,7 +2182,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		if (pipMode) {
 			// Find ALL remote participants first (exclude local participant from mirrored view)
 			const remoteParticipants = allParticipants.filter((p: any) => p.identity !== localParticipant?.identity)
-			
+
 			// Priority 1: Remote Screen Share (preferred if someone else is presenting)
 			// Ensure we find the first available SUBSCRIBED screen share track
 			for (const p of remoteParticipants) {
@@ -2236,7 +2246,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 					// Timeout to ensure we don't block PiP opening
 					setTimeout(() => reject(new Error('Image load timeout')), 2000)
 				})
-				
+
 				// Clear background and draw circular avatar over initials
 				ctx.clearRect(0, 0, 512, 512)
 				const gradient = ctx.createLinearGradient(0, 0, 0, 512)
@@ -2285,7 +2295,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		ctx.textAlign = 'center'
 		ctx.textBaseline = 'middle'
 		ctx.fillText(initials, 256, 256)
-		
+
 		// Draw Name at bottom
 		ctx.font = '30px Inter, sans-serif'
 		ctx.fillText(name, 256, 420)
@@ -2367,12 +2377,12 @@ const VideoRoomContent = memo(function VideoRoomContent({
 
 				// 2. Attach and Warm Up only if changed
 				const currentSid = (trackToUse ? trackToUse.sid : (streamToUse ? 'avatar-stream' : null)) || null
-				
+
 				if (currentSid !== pipSyncRef.current.lastTrackSid) {
 					// 2. Attach and Warm Up only if changed
 					// CRITICAL: NEVER set video.srcObject = null because it closes active PiP windows.
 					// track.attach(video) handles the replacement seamlessly.
-					
+
 					if (trackToUse) {
 						const isLocalCamera = trackToUse.source === Track.Source.Camera && (trackToUse as any).isLocal
 						video.style.transform = isLocalCamera ? 'scaleX(-1)' : ''
@@ -2381,7 +2391,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						video.style.transform = ''
 						video.srcObject = streamToUse
 					}
-					
+
 					pipSyncRef.current.lastTrackSid = currentSid
 				}
 
@@ -2390,6 +2400,20 @@ const VideoRoomContent = memo(function VideoRoomContent({
 					await video.play().catch(e => {
 						if (e.name !== 'AbortError') console.warn('[PiP-Sync] Play failed:', e)
 					})
+					// Small wait to ensure hardware decoder has a frame after play starts
+					await new Promise(resolve => setTimeout(resolve, 50))
+				}
+
+				// 4. Force DOM properties for Chrome Auto-PiP natively bypassing React attributes
+				try {
+					if (!(video as any).autoPictureInPicture) {
+						(video as any).autoPictureInPicture = true;
+					}
+					if (video.disablePictureInPicture) {
+						video.disablePictureInPicture = false;
+					}
+				} catch (e) {
+					// Ignore if browser doesn't support the property
 				}
 			} catch (err) {
 				console.warn('[PiP-Sync] Background warm-up failed:', err)
@@ -2398,9 +2422,9 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			}
 		}
 
-		// Use a small delay to avoid thrashing during rapid participant changes
-		const timer = setTimeout(syncPipBackground, 300)
-		return () => { 
+		// Use a very small delay to keep the background sync responsive to track changes
+		const timer = setTimeout(syncPipBackground, 100)
+		return () => {
 			isMounted = false
 			clearTimeout(timer)
 		}
@@ -2452,7 +2476,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 					video.autoplay = true
 					video.muted = true
 					video.playsInline = true
-					
+
 					// Selection logic (Already fixed for "Square One" mirror issue)
 					const trackToUse = getTrackFromReference(null, true)
 					if (trackToUse) {
@@ -2462,9 +2486,9 @@ const VideoRoomContent = memo(function VideoRoomContent({
 					}
 
 					doc.body.appendChild(video)
-					
+
 					// Ensure immediate playback
-					setTimeout(() => video.play().catch(() => {}), 150)
+					setTimeout(() => video.play().catch(() => { }), 150)
 
 					setIsPiPActive(true)
 
@@ -2512,15 +2536,26 @@ const VideoRoomContent = memo(function VideoRoomContent({
 
 			// Ensure it is actually playing before calling PiP
 			try {
-				if (video.paused) await video.play()
+				if (video.paused) {
+					await video.play().catch(() => { })
+					// Brief pause after play to satisfy some browser state requirements
+					if (isAuto) await new Promise(resolve => setTimeout(resolve, 100))
+				}
 			} catch (e) {
 				if (!isAuto) console.warn('[PiP] Play failed:', e)
 			}
 
 			// Tab-hide path uses isAuto; Chromium requires a user gesture unless autoPictureInPicture fires.
 			if (video.requestPictureInPicture && !isAuto) {
-				await video.requestPictureInPicture()
-				setIsPiPActive(true)
+				const callRequest = async () => {
+					try {
+						await video.requestPictureInPicture()
+						setIsPiPActive(true)
+					} catch (e) {
+						console.error('[PiP] Manual activation failed:', e)
+					}
+				}
+				await callRequest()
 			}
 		} catch (error) {
 			console.error('PiP Error:', error)
@@ -2542,12 +2577,17 @@ const VideoRoomContent = memo(function VideoRoomContent({
 					if (document.pictureInPictureElement || pipWindowRef.current) return
 
 					// Small delay to let the browser complete the tab transition and track warm-up
-					await new Promise(resolve => setTimeout(resolve, 200));
-					if (!document.hidden) return;
-					
-					await togglePiP(true);
+					await new Promise(resolve => setTimeout(resolve, 300));
+					if (document.hidden) {
+						// autoPictureInPicture attribute handles the toggle automatically
+						// We just ensure it's unmuted for warmth.
+						if (persistentPipVideoRef.current) {
+							persistentPipVideoRef.current.volume = 0.001;
+							persistentPipVideoRef.current.muted = false;
+						}
+					}
 				} catch (error) {
-					console.warn('[PiP] Auto-PiP trigger failed:', error);
+					console.warn('[PiP] Auto-PiP activation failed:', error);
 				}
 			} else {
 				// Page is becoming visible again — close any active PiP
@@ -2568,21 +2608,57 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			}
 		}
 
-		// When native PiP exits (user clicks X on PiP window, or we call exitPictureInPicture),
-		// just update the state. Do NOT destroy or detach the persistent video element —
-		// it must stay warm so auto-PiP can reactivate instantly on the next tab switch.
 		const handlePiPExit = () => {
 			setIsPiPActive(false)
-			// Note: we intentionally do NOT detach tracks from persistentPipVideoRef
-			// or remove the video element. The persistent video must stay alive
-			// with its stream attached so auto-PiP works on next tab switch.
+		}
+
+		// Handle the case where the browser's native engine triggers PiP automatically 
+		const video = persistentPipVideoRef.current
+		const handleAutoEnter = () => setIsPiPActive(true)
+		if (video) {
+			video.addEventListener('enterpictureinpicture', handleAutoEnter)
+
+			// Optional: Update MediaSession for conferencing mode
+			if ('mediaSession' in navigator) {
+				navigator.mediaSession.metadata = new MediaMetadata({
+					title: 'Webyalaya Session',
+					artist: 'Live Session',
+				});
+
+				// CRITICAL: Chrome looks for this exact handler to authorize Auto-PiP on tab switches
+				try {
+					const mediaSessionAny = navigator.mediaSession as any;
+					mediaSessionAny.setActionHandler('enterpictureinpicture', async () => {
+						try {
+							// When Chrome's background engine decides it's time for auto-PiP, 
+							// it will fire this handler. Calling requestPictureInPicture here 
+							// is "blessed" and will not throw a NotAllowedError.
+							if (video && video.requestPictureInPicture) {
+								await video.requestPictureInPicture();
+								setIsPiPActive(true);
+							}
+						} catch (e) {
+							console.warn('[PiP] Action handler failed:', e);
+						}
+					});
+				} catch (e) {
+					// Browser doesn't support the 'enterpictureinpicture' action handler
+				}
+			}
 		}
 
 		document.addEventListener('visibilitychange', handleVisibilityChange)
+		window.addEventListener('blur', handleVisibilityChange)
+		window.addEventListener('focus', handleVisibilityChange)
 		document.addEventListener('leavepictureinpicture', handlePiPExit)
 
 		return () => {
+			if (video) {
+				video.removeEventListener('enterpictureinpicture', handleAutoEnter)
+			}
 			document.removeEventListener('visibilitychange', handleVisibilityChange)
+			window.removeEventListener('blur', handleVisibilityChange)
+			window.removeEventListener('focus', handleVisibilityChange)
 			document.removeEventListener('leavepictureinpicture', handlePiPExit)
 		}
 	}, [isMobileViewport, togglePiP])
@@ -3669,8 +3745,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 												<div className="absolute top-4 right-4 flex items-center gap-2 z-20">
 													<div
 														className={`w-8 h-8 rounded-full flex items-center justify-center ${focusedParticipantForDisplay.isMicrophoneEnabled
-																? 'bg-black/60 border border-white/20'
-																: 'bg-sky-500'
+															? 'bg-black/60 border border-white/20'
+															: 'bg-sky-500'
 															}`}
 														title={focusedParticipantForDisplay.isMicrophoneEnabled ? 'Unmuted' : 'Muted'}
 													>
@@ -3695,8 +3771,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 															size="sm"
 															onClick={togglePinFocused}
 															className={`h-9 px-4 rounded-lg border ${pinnedParticipantId === focusedParticipantForDisplay.identity
-																	? 'bg-[#3b82f6] text-white hover:bg-[#2563eb] border-[#3b82f6]'
-																	: 'bg-black/60 text-white hover:bg-black/80 border-white/10 backdrop-blur-sm'
+																? 'bg-[#3b82f6] text-white hover:bg-[#2563eb] border-[#3b82f6]'
+																: 'bg-black/60 text-white hover:bg-black/80 border-white/10 backdrop-blur-sm'
 																}`}
 															title={pinnedParticipantId === focusedParticipantForDisplay.identity ? 'Unpin' : 'Pin this video'}
 														>
@@ -4160,7 +4236,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 								</button>
 							</div>
 						)}
-						
+
 						{/* Scratch Pad */}
 						<div className="flex flex-col items-center justify-center group">
 							<button
@@ -4216,6 +4292,30 @@ const VideoRoomContent = memo(function VideoRoomContent({
 											{allParticipants.length}
 										</span>
 									)}
+								</button>
+							</div>
+						)}
+
+						{/* PiP Setup Widget - Only show if not primed and screen shared or camera on */}
+						{!isPipPrimed && !isMobileViewport && (isScreenShareEnabled || isCameraEnabled) && (
+							<div className="hidden lg:flex items-center mr-2 animate-in fade-in slide-in-from-bottom-2 duration-500">
+								<button
+									onClick={async () => {
+										// Priming: Just calling togglePiP once with a gesture 
+										// "Unlocks" the browser's trust for subsequent auto-triggers.
+										await togglePiP();
+										setIsPipPrimed(true);
+									}}
+									className="group flex items-center gap-2 px-3 py-1.5 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 rounded-full transition-all active:scale-95"
+								>
+									<span className="relative flex h-2 w-2">
+										<span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
+										<span className="relative inline-flex rounded-full h-2 w-2 bg-sky-500"></span>
+									</span>
+									<span className="text-[11px] font-medium text-sky-400 whitespace-nowrap">Enable Auto-PiP</span>
+									<div className="hidden group-hover:block absolute bottom-full mb-3 left-1/2 -translate-x-1/2 w-48 p-2 bg-[#1a1a1a] border border-white/10 rounded-lg shadow-2xl text-[10px] text-white/70 leading-relaxed z-[60]">
+										Chrome requires a manual click to authorize automatic transitions. Click here once to enable.
+									</div>
 								</button>
 							</div>
 						)}
@@ -4431,7 +4531,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 										</div>
 										<Timer className="absolute -top-1 -right-1 h-8 w-8 text-sky-400 bg-[#1a1a1a] rounded-full p-1.5 border border-white/10 shadow-lg" />
 									</div>
-									
+
 									<div className="space-y-2">
 										<h3 className="text-white font-semibold text-lg">Session Clock</h3>
 										<p className="text-white/50 text-sm max-w-[200px]">
@@ -4819,7 +4919,6 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				/>
 			)}
 
-
 			{/* Remote Control Consent UI (Screen Sharer Side) */}
 			{pendingRequestFrom && (
 				<div className="fixed top-20 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-top-4 fade-in duration-300">
@@ -4858,11 +4957,11 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			{showScratchPad && (
 				<div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8">
 					{/* Backdrop */}
-					<div 
-						className="absolute inset-0 bg-black/80 backdrop-blur-md transition-opacity duration-300" 
+					<div
+						className="absolute inset-0 bg-black/80 backdrop-blur-md transition-opacity duration-300"
 						onClick={() => setShowScratchPad(false)}
 					/>
-					
+
 					{/* Modal Container */}
 					<div className="relative w-full h-full max-w-7xl max-h-[90vh] bg-[#141414] rounded-[32px] border border-white/10 shadow-[0_32px_64px_-12px_rgba(0,0,0,0.8)] overflow-hidden flex flex-col animate-in fade-in zoom-in duration-300">
 						{/* Modal Header (Darker Top bar from screenshot) */}
@@ -4879,7 +4978,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 									</div>
 								</div>
 							</div>
-							
+
 							<Button
 								variant="ghost"
 								size="icon"
@@ -4907,22 +5006,24 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			)}
 
 			{/* Hidden Video for Persistent PiP activation - MUST be somewhat visible for browsers to allow Auto-PiP */}
-			<video 
+			<video
 				ref={persistentPipVideoRef}
 				autoPlay
 				muted
 				playsInline
-				style={{ 
-					position: 'fixed', 
-					width: '8px', 
-					height: '8px', 
-					opacity: 0.1, 
-					bottom: 0, 
-					right: 0, 
-					pointerEvents: 'none', 
-					zIndex: -1 
+				// @ts-ignore
+				autopictureinpicture="true"
+				disablePictureInPicture={false}
+				style={{
+					position: 'fixed',
+					width: '200px',
+					height: '200px',
+					opacity: 1,
+					bottom: 0,
+					right: 0,
+					pointerEvents: 'none',
+					zIndex: -99
 				}}
-				aria-hidden="true"
 			/>
 		</>
 	)
