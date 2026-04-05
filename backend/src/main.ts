@@ -47,6 +47,11 @@ async function bootstrap() {
     optionsSuccessStatus: 204,
   });
 
+  // Increase payload limits for large whiteboard data
+  const express = require('express');
+  app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
   logger.log(`🌐 CORS enabled for origins: ${JSON.stringify(allowedOrigins)}`);
 
   // Sentry error tracking

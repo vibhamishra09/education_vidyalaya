@@ -3361,119 +3361,101 @@ export class StudyRoomsService {
     });
     this.logger.log('✅ [completeStudyRoom] Study room status updated to DONE');
 
-    // Get all participants for streak tracking
-    const participants = await this.prisma.studyRoomParticipant.findMany({
-      where: { studyRoomId: studyRoom.id },
-      select: { userId: true },
-    });
+    // Background the rest of the post-session processing
+    (async () => {
+      try {
+        this.logger.debug(`🚀 [completeStudyRoom] Starting background post-session processing for ${studyRoomId}`);
+        
+        // Get all participants for streak tracking
+        const participants = await this.prisma.studyRoomParticipant.findMany({
+          where: { studyRoomId: studyRoom.id },
+          select: { userId: true },
+        });
 
-    this.logger.debug(
-      `👥 [completeStudyRoom] Found ${participants.length} participants`,
-    );
+        this.logger.debug(
+          `👥 [completeStudyRoom] Found ${participants.length} participants to process`,
+        );
 
-    // Update streak for the creator (host/teacher)
-    this.logger.debug(
-      '🔥 [completeStudyRoom] Updating streak for creator (teacher)',
-      studyRoom.createdById,
-    );
-    await this.streaksService.updateUserActivity(
-      studyRoom.createdById,
-      studyRoom.date,
-      studyRoom.duration,
-      'teacher',
-      0,
-    );
+        // 1. Process creator updates (host/teacher)
+        this.logger.debug('🔥 [completeStudyRoom] Background: Updating creator data');
+        await Promise.all([
+          this.streaksService.updateUserActivity(
+            studyRoom.createdById,
+            studyRoom.date,
+            studyRoom.duration,
+            'teacher',
+            0,
+          ),
+          this.achievementsService.checkSessionAchievements(
+            studyRoom.createdById,
+            'teacher',
+          ),
+          this.engagementService.awardFirstMeaningfulActionBonus(
+            studyRoom.createdById,
+            studyRoom.date,
+            'session_completion',
+          ),
+          this.engagementService.awardFirstTeachingSessionOfWeekBonus(
+            studyRoom.createdById,
+            studyRoom.date,
+          ),
+        ]).catch(err => this.logger.error('Error in background creator updates:', err));
 
-    // Check achievements for creator
-    await this.achievementsService.checkSessionAchievements(
-      studyRoom.createdById,
-      'teacher',
-    );
+        const creatorStreak = await this.streaksService.getUserStreak(studyRoom.createdById);
+        await this.achievementsService.checkStreakAchievements(
+          studyRoom.createdById,
+          creatorStreak.currentStreak,
+        ).catch(err => this.logger.error('Error in background creator streak achievements:', err));
 
-    // Check streak achievements for creator
-    const creatorStreak = await this.streaksService.getUserStreak(
-      studyRoom.createdById,
-    );
-    await this.achievementsService.checkStreakAchievements(
-      studyRoom.createdById,
-      creatorStreak.currentStreak,
-    );
+        // 2. Process participant updates (learners) in chunks to avoid overwhelming the DB
+        this.logger.debug('🚀 [completeStudyRoom] Background: Updating participant data in chunks');
+        const CHUNK_SIZE = 5;
+        for (let i = 0; i < participants.length; i += CHUNK_SIZE) {
+          const chunk = participants.slice(i, i + CHUNK_SIZE);
+          this.logger.debug(`📦 [completeStudyRoom] Background: Processing participant chunk ${Math.floor(i/CHUNK_SIZE) + 1}/${Math.ceil(participants.length/CHUNK_SIZE)}`);
+          
+          await Promise.all(chunk.map(async (participant) => {
+            try {
+              await this.streaksService.updateUserActivity(
+                participant.userId,
+                studyRoom.date,
+                studyRoom.duration,
+                'learner',
+                0,
+              );
+              await Promise.all([
+                this.achievementsService.checkSessionAchievements(participant.userId, 'learner'),
+                this.engagementService.awardFirstMeaningfulActionBonus(participant.userId, studyRoom.date, 'session_completion'),
+              ]);
+              const pStreak = await this.streaksService.getUserStreak(participant.userId);
+              await this.achievementsService.checkStreakAchievements(participant.userId, pStreak.currentStreak);
+            } catch (err) {
+              this.logger.error(`[completeStudyRoom] Background: Participant update failed for ${participant.userId}:`, err);
+            }
+          }));
+        }
 
-    await this.engagementService.awardFirstMeaningfulActionBonus(
-      studyRoom.createdById,
-      studyRoom.date,
-      'session_completion',
-    );
-    await this.engagementService.awardFirstTeachingSessionOfWeekBonus(
-      studyRoom.createdById,
-      studyRoom.date,
-    );
-
-    // Update streak for all participants (learners)
-    for (let i = 0; i < participants.length; i++) {
-      const participant = participants[i];
-
-      await this.streaksService.updateUserActivity(
-        participant.userId,
-        studyRoom.date,
-        studyRoom.duration,
-        'learner',
-        0,
-      );
-
-      // Check achievements for participant
-      await this.achievementsService.checkSessionAchievements(
-        participant.userId,
-        'learner',
-      );
-
-      // Check streak achievements for participant
-      const participantStreak = await this.streaksService.getUserStreak(
-        participant.userId,
-      );
-      await this.achievementsService.checkStreakAchievements(
-        participant.userId,
-        participantStreak.currentStreak,
-      );
-
-      await this.engagementService.awardFirstMeaningfulActionBonus(
-        participant.userId,
-        studyRoom.date,
-        'session_completion',
-      );
-    }
-
-    // Generate AI summary from transcripts
-    let summary: string | null = null;
-    try {
-      this.logger.debug(
-        '🤖 [completeStudyRoom] Generating AI summary for study room',
-        studyRoomId,
-      );
-      summary = await this.transcriptsService.compileAndSummarize(studyRoom.id);
-
-      // Store summary in database
-      await this.prisma.studyRoom.update({
-        where: { id: studyRoom.id },
-        data: { summary },
-      });
-      this.logger.log(
-        '✅ [completeStudyRoom] AI summary generated and stored successfully',
-      );
-    } catch (error) {
-      this.logger.error(
-        '⚠️ [completeStudyRoom] Failed to generate summary',
-        error instanceof Error ? error.stack : undefined,
-        `studyRoomId: ${studyRoomId}, error: ${error instanceof Error ? error.message : String(error)}`,
-      );
-      // Continue execution even if summary generation fails
-    }
+        // 3. Generate AI summary
+        this.logger.debug('🤖 [completeStudyRoom] Background: Starting AI summary generation');
+        const summary = await this.transcriptsService.compileAndSummarize(studyRoom.id);
+        if (summary) {
+          await this.prisma.studyRoom.update({
+            where: { id: studyRoom.id },
+            data: { summary },
+          });
+          this.logger.log('✅ [completeStudyRoom] Background: AI summary stored successfully');
+        }
+        
+        this.logger.debug(`✅ [completeStudyRoom] Background processing completed for ${studyRoomId}`);
+      } catch (error) {
+        this.logger.error(`❌ [completeStudyRoom] Fatal error in background processing for ${studyRoomId}:`, error);
+      }
+    })();
 
     return {
       success: true,
-      message: 'Study room marked as completed',
+      message: 'Study room marked as completed. Processing data in background.',
       studyRoom: updatedRoom,
-      summary,
     };
   }
 
