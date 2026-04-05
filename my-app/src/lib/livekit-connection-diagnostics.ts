@@ -1,4 +1,3 @@
-import type { JoinResponse, SubscriptionResponse } from '@livekit/protocol'
 import type { RemoteParticipant, Room } from 'livekit-client'
 import {
 	ConnectionState,
@@ -6,6 +5,19 @@ import {
 	EngineEvent,
 	RoomEvent,
 } from 'livekit-client'
+
+/** Signal payload shapes — avoid `@livekit/protocol` as a direct app dependency (Vercel/tsc). */
+type LkJoinResponse = {
+	serverVersion?: string
+	serverRegion?: string
+	room?: { sid?: string; name?: string }
+}
+
+type LkSubscriptionErrorResponse = {
+	trackSid?: string
+	err?: unknown
+	message?: string
+}
 
 /** Console filter: `[LiveKit:RTC]` — signal, engine, WebRTC PC, and room lifecycle. */
 const TAG = '[LiveKit:RTC]'
@@ -31,19 +43,19 @@ function disconnectReasonLabel(reason: DisconnectReason | undefined): string {
 }
 
 function connectionStateLabel(state: ConnectionState): string {
-	const named = ConnectionState[state]
-	return typeof named === 'string' ? named : String(state)
+	// ConnectionState is a string enum — use the value directly for logs.
+	return String(state)
 }
 
-function subscriptionErrorSummary(resp: SubscriptionResponse): Record<string, unknown> {
+function subscriptionErrorSummary(resp: LkSubscriptionErrorResponse): Record<string, unknown> {
 	return {
 		trackSid: resp.trackSid,
 		err: resp.err,
-		message: (resp as { message?: string }).message,
+		message: resp.message,
 	}
 }
 
-function joinResponseSummary(j: JoinResponse): Record<string, unknown> {
+function joinResponseSummary(j: LkJoinResponse): Record<string, unknown> {
 	return {
 		serverVersion: j.serverVersion,
 		serverRegion: j.serverRegion,
@@ -114,13 +126,12 @@ export function attachLiveKitConnectionDiagnostics(
 	const onTrackSubscriptionFailed = (
 		trackSid: string,
 		participant: RemoteParticipant,
-		error: Error,
+		reason?: unknown,
 	) => {
 		logWarn('track_subscription_failed', {
 			trackSid,
 			participantIdentity: participant.identity,
-			errorName: error?.name,
-			errorMessage: error?.message,
+			reason: reason ?? null,
 		})
 	}
 
@@ -185,7 +196,7 @@ export function attachLiveKitConnectionDiagnostics(
 		logPcSnapshot(role, pc)
 	}
 
-	const onEngineConnected = (joinResp: JoinResponse) => {
+	const onEngineConnected = (joinResp: LkJoinResponse) => {
 		log('engine_connected', joinResponseSummary(joinResp))
 	}
 
@@ -202,7 +213,7 @@ export function attachLiveKitConnectionDiagnostics(
 	const onEngineResuming = () => log('engine_resuming')
 	const onEngineResumed = () => log('engine_resumed')
 
-	const onSubscriptionError = (resp: SubscriptionResponse) => {
+	const onSubscriptionError = (resp: LkSubscriptionErrorResponse) => {
 		logWarn('engine_subscription_error', subscriptionErrorSummary(resp))
 	}
 
