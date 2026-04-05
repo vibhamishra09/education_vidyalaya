@@ -1,8 +1,16 @@
 'use client'
+import '@/lib/livekit-benign-log-filter'
 import React, { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react'
 import dynamic from 'next/dynamic'
 import { LiveKitRoom, useParticipants, useTracks, RoomAudioRenderer, useSpeakingParticipants, VideoTrack, useLocalParticipant, isTrackReference, useRoomContext } from '@livekit/components-react'
-import { Track, RoomOptions, VideoPresets, LocalVideoTrack } from 'livekit-client'
+import {
+	Track,
+	RoomOptions,
+	VideoPresets,
+	LocalVideoTrack,
+	RoomEvent,
+	DisconnectReason,
+} from 'livekit-client'
 import '@livekit/components-styles'
 import { BackgroundProcessor, BackgroundBlur, VirtualBackground, BackgroundOptions } from '@livekit/track-processors'
 import { ChatWidget } from '@/components/chat/ChatWidget'
@@ -43,10 +51,15 @@ import { useSpeechRecognition } from '@/hooks/use-speech-recognition'
 import { useSessionExtension } from '@/hooks/use-session-extension'
 import { ExtensionRequestDialog } from '@/components/study-room/extension-request-dialog'
 import { EndMeetingDialog } from '@/components/study-room/end-meeting-dialog'
+import { WebinarHostPanel } from '@/components/study-room/webinar-host-panel'
 import { useSessionModeration, RoomPermissions, PermissionRequest, ParticipantPermissionRequest, ParticipantChatLocks, RoomSettings, FlashMessage, FlashQuestion } from '@/hooks/use-session-moderation'
 import { ChatRecipient } from '@/components/chat/MessageInput'
 import { useRemoteControl } from '@/hooks/use-remote-control'
 import { RemoteControlOverlay } from '@/components/livekit/RemoteControlOverlay'
+import { getSocketIoBaseUrl } from '@/lib/socket-base-url'
+import { shouldApplyKrispNoiseFilter } from '@/lib/livekit-url'
+import { attachLiveKitConnectionDiagnostics } from '@/lib/livekit-connection-diagnostics'
+import apiClient from '@/lib/api-client'
 import { useBluetoothMicRecovery } from '@/hooks/use-bluetooth-mic-recovery'
 // Stable virtual backgrounds constant to avoid re-creating array each render
 const VIRTUAL_BACKGROUNDS = [
@@ -92,6 +105,7 @@ interface SessionData {
 	date: string;
 	duration: number;
 	sessionType: 'studyRoom' | 'peerSession';
+	sessionMode?: string;
 	[key: string]: unknown;
 }
 
@@ -99,14 +113,6 @@ interface ChatIdentity {
 	id: string
 	name: string
 	avatar?: string | null
-}
-
-interface ExternalJoinRequestItem {
-	id: string
-	name: string
-	email: string
-	status: 'PENDING' | 'APPROVED' | 'REJECTED'
-	createdAt: string
 }
 
 interface EnhancedVideoRoomProps {
@@ -121,8 +127,9 @@ interface EnhancedVideoRoomProps {
 	externalAccessToken?: string | null
 	guestLivekitIdentity?: string | null
 	onParticipantListChange?: (participantIdentities: string[]) => void
-	webinarAttendeeMinimalUi?: boolean
 	sessionUuid?: string | null
+	/** From URL (`studyroom-` / `peersession-`); used if `sessionData` is missing ids during navigation */
+	liveSessionKind?: 'studyRoom' | 'peerSession'
 }
 
 export function EnhancedVideoRoom({
@@ -137,8 +144,8 @@ export function EnhancedVideoRoom({
 	externalAccessToken,
 	guestLivekitIdentity = null,
 	onParticipantListChange,
-	webinarAttendeeMinimalUi = false,
 	sessionUuid = null,
+	liveSessionKind,
 }: EnhancedVideoRoomProps) {
 	const isGuest = !!externalAccessToken
 	const [showChat, setShowChat] = useState(false) // Start hidden on mobile
@@ -148,42 +155,30 @@ export function EnhancedVideoRoom({
 	const [isFullscreen, setIsFullscreen] = useState(false)
 	const [showWarning, setShowWarning] = useState(false)
 	const [isMobileViewport, setIsMobileViewport] = useState(false)
-	const [isMobileDevice, setIsMobileDevice] = useState(false)
+	/** Must be correct on first client render — if it flips after mount, LiveKitRoom recreates Room() and drops the first connection. */
+	const [isMobileDevice] = useState(() => {
+		if (typeof window === 'undefined') return false
+		const mobileByUa =
+			/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+				window.navigator.userAgent,
+			)
+		const mobileByTouch =
+			window.navigator.maxTouchPoints > 1 && window.screen.width <= 1024
+		return mobileByUa || mobileByTouch
+	})
 	const [hasResolvedMediaContext, setHasResolvedMediaContext] = useState(false)
 	const [isSecureMediaContext, setIsSecureMediaContext] = useState(false)
 	const router = useRouter()
-	const { showSuccess, showError, showInfo } = useToast()
+	const { showSuccess, showError } = useToast()
 	const { getToken } = useAuth()
 	const { user } = useUser()
 	const queryClient = useQueryClient()
-	const [externalJoinRequests, setExternalJoinRequests] = useState<ExternalJoinRequestItem[]>([])
-	const [activeExternalJoinRequest, setActiveExternalJoinRequest] = useState<ExternalJoinRequestItem | null>(null)
-	const [resolvingExternalJoinRequest, setResolvingExternalJoinRequest] = useState(false)
-	const seenExternalJoinRequestIdsRef = useRef<Set<string>>(new Set())
-	const audioContextRef = useRef<AudioContext | null>(null)
 
-	const playJoinRequestAlertSound = useCallback(() => {
-		if (typeof window === 'undefined') return
-		try {
-			const AudioCtx = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
-			if (!AudioCtx) return
-			if (!audioContextRef.current) {
-				audioContextRef.current = new AudioCtx()
-			}
-			const context = audioContextRef.current
-			const oscillator = context.createOscillator()
-			const gainNode = context.createGain()
-			oscillator.type = 'sine'
-			oscillator.frequency.value = 880
-			gainNode.gain.value = 0.06
-			oscillator.connect(gainNode)
-			gainNode.connect(context.destination)
-			oscillator.start()
-			oscillator.stop(context.currentTime + 0.14)
-		} catch {
-			// Best-effort alert sound; ignore if browser blocks autoplay/audio context.
-		}
-	}, [])
+	/** Prevents double `router.push` when leave + LiveKit disconnect both fire */
+	const feedbackNavigatedRef = useRef(false)
+	useEffect(() => {
+		feedbackNavigatedRef.current = false
+	}, [sessionData?.id])
 
 	// Socket.io for transcripts
 	const [transcriptSocket, setTranscriptSocket] = useState<Socket | null>(null)
@@ -208,14 +203,6 @@ export function EnhancedVideoRoom({
 		updateViewport()
 		mediaQuery.addEventListener('change', updateViewport)
 		return () => mediaQuery.removeEventListener('change', updateViewport)
-	}, [])
-
-	useEffect(() => {
-		if (typeof window === 'undefined') return
-		const mobileByUa = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(window.navigator.userAgent)
-		const mobileByTouch = window.navigator.maxTouchPoints > 1 && window.screen.width <= 1024
-		// Keep a stable device signal so orientation changes don't reconfigure media pipelines.
-		setIsMobileDevice(mobileByUa || mobileByTouch)
 	}, [])
 
 	useEffect(() => {
@@ -266,129 +253,17 @@ export function EnhancedVideoRoom({
 		fetchToken()
 	}, [getToken, externalAccessToken])
 
-	useEffect(() => {
-		if (!isHost || sessionData?.sessionType !== 'studyRoom' || !sessionData?.id) return
+	/** Participant mic disabled at create time → join muted unless host (LiveKit publish). */
+	const webinarJoineeMicOffByConfig = useMemo(() => {
+		if (sessionData?.sessionMode !== 'WEBINAR') return false
+		const perms = (
+			(sessionData.webinarConfig || {}) as { permissions?: { mic?: string } }
+		).permissions
+		return perms?.mic === 'disabled'
+	}, [sessionData?.sessionMode, sessionData?.webinarConfig])
 
-		let cancelled = false
-
-		const fetchPendingExternalJoinRequests = async () => {
-			try {
-				const authTokenValue = await getToken()
-				if (!authTokenValue || cancelled) return
-				const response = await fetch(
-					`${process.env.NEXT_PUBLIC_API_URL}/api/study-rooms/${sessionData.id}/external/requests`,
-					{
-						method: 'GET',
-						headers: {
-							Authorization: `Bearer ${authTokenValue}`,
-						},
-					},
-				)
-				if (!response.ok || cancelled) return
-
-				const data = (await response.json()) as { requests?: ExternalJoinRequestItem[] }
-				const pendingRequests = (data.requests || []).filter(
-					(request) => request.status === 'PENDING',
-				)
-				setExternalJoinRequests(pendingRequests)
-
-				const newPendingRequests = pendingRequests.filter(
-					(request) => !seenExternalJoinRequestIdsRef.current.has(request.id),
-				)
-
-				for (const request of pendingRequests) {
-					seenExternalJoinRequestIdsRef.current.add(request.id)
-				}
-
-				if (newPendingRequests.length > 0) {
-					const latest = newPendingRequests[newPendingRequests.length - 1]
-					showInfo(
-						'New join request',
-						`${latest.name} (${latest.email}) wants to join this session.`,
-					)
-					playJoinRequestAlertSound()
-				}
-
-				if (!activeExternalJoinRequest && pendingRequests.length > 0) {
-					setActiveExternalJoinRequest(pendingRequests[0])
-				}
-			} catch {
-				// Ignore polling errors and retry on next interval.
-			}
-		}
-
-		fetchPendingExternalJoinRequests()
-		const interval = setInterval(fetchPendingExternalJoinRequests, 5000)
-
-		return () => {
-			cancelled = true
-			clearInterval(interval)
-		}
-	}, [
-		isHost,
-		sessionData?.sessionType,
-		sessionData?.id,
-		getToken,
-		activeExternalJoinRequest,
-		showInfo,
-		playJoinRequestAlertSound,
-	])
-
-	const handleResolveExternalJoinRequest = useCallback(
-		async (approve: boolean) => {
-			if (!activeExternalJoinRequest || sessionData?.sessionType !== 'studyRoom' || !sessionData?.id) {
-				return
-			}
-			try {
-				setResolvingExternalJoinRequest(true)
-				const authTokenValue = await getToken()
-				if (!authTokenValue) {
-					showError('Not authenticated', 'Please sign in again to review join requests.')
-					return
-				}
-
-				const response = await fetch(
-					`${process.env.NEXT_PUBLIC_API_URL}/api/study-rooms/${sessionData.id}/external/requests/${activeExternalJoinRequest.id}/resolve`,
-					{
-						method: 'POST',
-						headers: {
-							'Content-Type': 'application/json',
-							Authorization: `Bearer ${authTokenValue}`,
-						},
-						body: JSON.stringify({ approve }),
-					},
-				)
-
-				if (!response.ok) {
-					showError('Action failed', 'Could not update join request. Please try again.')
-					return
-				}
-
-				const resolvedRequest = activeExternalJoinRequest
-				const remaining = externalJoinRequests.filter((request) => request.id !== resolvedRequest.id)
-				setExternalJoinRequests(remaining)
-				setActiveExternalJoinRequest(remaining[0] || null)
-
-				showSuccess(
-					approve ? 'Guest approved' : 'Guest rejected',
-					`${resolvedRequest.name} has been ${approve ? 'allowed to join' : 'rejected'}.`,
-				)
-			} catch {
-				showError('Action failed', 'Could not update join request. Please try again.')
-			} finally {
-				setResolvingExternalJoinRequest(false)
-			}
-		},
-		[
-			activeExternalJoinRequest,
-			externalJoinRequests,
-			getToken,
-			sessionData?.id,
-			sessionData?.sessionType,
-			showError,
-			showSuccess,
-		],
-	)
+	const liveKitInitialAudio =
+		isSecureMediaContext && (!webinarJoineeMicOffByConfig || isHost)
 
 	// Store showSuccess in ref to avoid recreating handleWarning callback
 	const showSuccessRef = useRef(showSuccess)
@@ -503,12 +378,41 @@ export function EnhancedVideoRoom({
 		}
 	}, [permissions])
 
+	const pushSessionFeedback = useCallback(
+		(force?: boolean) => {
+			const feedbackId = sessionData?.id ?? sessionUuid ?? ''
+			const feedbackType =
+				sessionData?.sessionType ?? liveSessionKind ?? null
+			if (!feedbackId || !feedbackType) return
+			if (!force && feedbackNavigatedRef.current) return
+			feedbackNavigatedRef.current = true
+			const path = `/session-feedback/${encodeURIComponent(feedbackId)}?type=${feedbackType}&isHost=${isHost}`
+			// Hard navigation: client router.push often fails to leave the LiveKit/fullscreen stack reliably
+			if (typeof window !== 'undefined') {
+				window.location.assign(`${window.location.origin}${path}`)
+			} else {
+				router.push(path)
+			}
+		},
+		[
+			router,
+			sessionData?.id,
+			sessionData?.sessionType,
+			isHost,
+			sessionUuid,
+			liveSessionKind,
+		],
+	)
+
 	// Redirect all clients when server signals meeting ended
 	useEffect(() => {
 		if (!meetingEnded) return
-		const redirectUrl = `/session-feedback/${sessionData?.id}?type=${sessionData?.sessionType}&isHost=${isHost}`
-		router.push(redirectUrl)
-	}, [meetingEnded, sessionData?.id, sessionData?.sessionType, isHost, router])
+		pushSessionFeedback(true)
+	}, [meetingEnded, pushSessionFeedback])
+
+	const onLiveKitRoomClosedByServer = useCallback(() => {
+		pushSessionFeedback(true)
+	}, [pushSessionFeedback])
 
 	// Wrapper functions for request actions with toast notifications
 	const handleRequestAudioOn = useCallback((targetUserId: string) => {
@@ -552,21 +456,25 @@ export function EnhancedVideoRoom({
 				const authTokenValue = await getToken()
 
 				if (sessionData.sessionType === 'studyRoom') {
-					await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/study-rooms/${sessionData.id}/complete`, {
-						method: 'POST',
-						headers: {
-							'Content-Type': 'application/json',
-							'Authorization': `Bearer ${authTokenValue}`,
+					await apiClient.post(
+						`/api/study-rooms/${sessionData.id}/complete`,
+						{},
+						{
+							headers: {
+								Authorization: `Bearer ${authTokenValue}`,
+							},
 						},
-					})
+					)
 				} else if (sessionData.sessionType === 'peerSession') {
-					await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/peer-sessions/${sessionData.id}/complete`, {
-						method: 'PATCH',
-						headers: {
-							'Content-Type': 'application/json',
-							'Authorization': `Bearer ${authTokenValue}`,
+					await apiClient.patch(
+						`/api/peer-sessions/${sessionData.id}/complete`,
+						{},
+						{
+							headers: {
+								Authorization: `Bearer ${authTokenValue}`,
+							},
 						},
-					})
+					)
 				}
 
 				// Invalidate queries
@@ -581,12 +489,16 @@ export function EnhancedVideoRoom({
 		// End meeting for all participants via socket
 		endMeetingForAll()
 
-		// Fallback: If socket event doesn't trigger redirect within 3 seconds, redirect manually (host only)
-		setTimeout(() => {
-			const redirectUrl = `/session-feedback/${sessionData?.id}?type=${sessionData?.sessionType}&isHost=${isHost}`
-			router.push(redirectUrl)
-		}, 3000)
-	}, [sessionData?.id, sessionData?.sessionType, getToken, queryClient, endMeetingForAll, isHost, router])
+		// Go straight to review; do not wait on socket (joiners also get LiveKit room-closed backup)
+		pushSessionFeedback(true)
+	}, [
+		sessionData?.id,
+		sessionData?.sessionType,
+		getToken,
+		queryClient,
+		endMeetingForAll,
+		pushSessionFeedback,
+	])
 
 	const handleTimeUp = useCallback(async () => {
 		// Set loading state
@@ -598,29 +510,31 @@ export function EnhancedVideoRoom({
 				const authToken = await getToken()
 
 				if (sessionData.sessionType === 'studyRoom') {
-					// For study rooms, mark as completed
-					const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/study-rooms/${sessionData.id}/complete`, {
-						method: 'POST',
-						headers: {
-							'Content-Type': 'application/json',
-							'Authorization': `Bearer ${authToken}`,
-						},
-					})
-
-					if (!response.ok) {
+					try {
+						await apiClient.post(
+							`/api/study-rooms/${sessionData.id}/complete`,
+							{},
+							{
+								headers: {
+									Authorization: `Bearer ${authToken}`,
+								},
+							},
+						)
+					} catch {
 						// Failed to complete study room
 					}
 				} else if (sessionData.sessionType === 'peerSession') {
-					// For peer sessions, mark as completed (payment processed)
-					const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/peer-sessions/${sessionData.id}/complete`, {
-						method: 'PATCH',
-						headers: {
-							'Content-Type': 'application/json',
-							'Authorization': `Bearer ${authToken}`,
-						},
-					})
-
-					if (!response.ok) {
+					try {
+						await apiClient.patch(
+							`/api/peer-sessions/${sessionData.id}/complete`,
+							{},
+							{
+								headers: {
+									Authorization: `Bearer ${authToken}`,
+								},
+							},
+						)
+					} catch {
 						// Failed to complete peer session
 					}
 				}
@@ -634,10 +548,8 @@ export function EnhancedVideoRoom({
 			}
 		}
 
-		// Redirect to session feedback page for review
-		const redirectUrl = `/session-feedback/${sessionData?.id}?type=${sessionData?.sessionType}&isHost=${isHost}`
-		router.push(redirectUrl)
-	}, [sessionData?.id, sessionData?.sessionType, isHost, getToken, queryClient, router])
+		pushSessionFeedback(true)
+	}, [sessionData?.id, sessionData?.sessionType, isHost, getToken, queryClient, pushSessionFeedback])
 
 	const handleWarning = useCallback((minutes: number) => {
 		setShowWarning(true)
@@ -695,7 +607,7 @@ export function EnhancedVideoRoom({
 				const authToken = await getToken()
 				if (!authToken) return
 
-				const url = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:3002'
+				const url = getSocketIoBaseUrl()
 
 				socket = io(url, {
 					transports: ['websocket'],
@@ -752,8 +664,13 @@ export function EnhancedVideoRoom({
 	// Speech recognition status logging removed
 
 	const handleLeave = useCallback(() => {
+		// Joiners (not host): always offer review / feedback (including webinar guest links).
+		if (!isHost && sessionData?.id && sessionData?.sessionType) {
+			pushSessionFeedback(true)
+			return
+		}
 		router.back()
-	}, [router])
+	}, [router, isHost, sessionData?.id, sessionData?.sessionType, pushSessionFeedback])
 
 	// Memoize LiveKit room options to avoid passing a new object every render
 	const roomOptions = useMemo(() => ({
@@ -775,23 +692,15 @@ export function EnhancedVideoRoom({
 		},
 	} as RoomOptions), [isMobileDevice])
 
+	/** Passed to room.connect(); defaults were 15s PC / 15s WS — too aggressive on slower networks. */
 	const liveConnectOptions = useMemo(
-		() => ({ peerConnectionTimeout: 30_000 }),
+		() => ({
+			peerConnectionTimeout: 60_000,
+			websocketTimeout: 25_000,
+			maxRetries: 5,
+		}),
 		[],
 	)
-
-	const [shouldConnectToRoom, setShouldConnectToRoom] = useState(false)
-	useEffect(() => {
-		if (!hasResolvedMediaContext || !token?.trim() || !serverUrl?.trim()) {
-			setShouldConnectToRoom(false)
-			return
-		}
-		const t = window.setTimeout(() => setShouldConnectToRoom(true), 200)
-		return () => {
-			window.clearTimeout(t)
-			setShouldConnectToRoom(false)
-		}
-	}, [hasResolvedMediaContext, token, serverUrl])
 
 	const mediaCaptureBlockedReason = !hasResolvedMediaContext
 		? null
@@ -808,14 +717,26 @@ export function EnhancedVideoRoom({
 					</div>
 				</div>
 			)}
+			{isHost &&
+				sessionData?.sessionType === 'studyRoom' &&
+				sessionData.sessionMode === 'WEBINAR' &&
+				sessionData.id && (
+					<WebinarHostPanel
+						studyRoomId={sessionData.id}
+						guestParticipants={[]}
+						chatEnabled={webinarChat.chatLive}
+						hostEmail={user?.primaryEmailAddress?.emailAddress ?? null}
+					/>
+				)}
 			<LiveKitRoom
 				video={false}
-				audio={isSecureMediaContext}
+				audio={liveKitInitialAudio}
 				token={token}
 				serverUrl={serverUrl}
 				connect={true}
 				className="flex-1 flex flex-col overflow-hidden"
 				options={roomOptions}
+				connectOptions={liveConnectOptions}
 			>
 				<VideoRoomContent
 					isUserActive={isUserActive}
@@ -897,15 +818,13 @@ export function EnhancedVideoRoom({
 					onPromoteToCohost={async (participantIdentity, role) => {
 						if (sessionData?.sessionType !== 'studyRoom' || !sessionData?.id) return
 						const authTokenValue = await getToken()
-						await fetch(
-							`${process.env.NEXT_PUBLIC_API_URL}/api/study-rooms/${sessionData.id}/participants/role`,
+						await apiClient.post(
+							`/api/study-rooms/${sessionData.id}/participants/role`,
+							{ participantIdentity, role },
 							{
-								method: 'POST',
 								headers: {
-									'Content-Type': 'application/json',
 									...(authTokenValue ? { Authorization: `Bearer ${authTokenValue}` } : {}),
 								},
-								body: JSON.stringify({ participantIdentity, role }),
 							},
 						)
 						showSuccess(
@@ -913,7 +832,6 @@ export function EnhancedVideoRoom({
 							'Participant role updated',
 						)
 					}}
-					webinarAttendeeMinimalUi={webinarAttendeeMinimalUi}
 					sessionInfo={sessionData}
 					webinarChatEnabledUi={webinarChat.chatLive}
 					activeFlashMessage={activeFlashMessage}
@@ -930,6 +848,8 @@ export function EnhancedVideoRoom({
 					mediaCaptureBlockedReason={mediaCaptureBlockedReason}
 					sessionStableId={sessionUuid}
 					sessionData={sessionData}
+					liveKitServerUrl={serverUrl}
+					onLiveKitRoomClosedByServer={onLiveKitRoomClosedByServer}
 				/>
 			</LiveKitRoom>
 
@@ -959,52 +879,6 @@ export function EnhancedVideoRoom({
 					onConfirm={confirmEndMeeting}
 					onCancel={() => setShowEndConfirmation(false)}
 				/>
-			)}
-
-			{isHost && activeExternalJoinRequest && (
-				<div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/40 backdrop-blur-[2px] px-4">
-					<div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#141414] p-5 text-white shadow-2xl">
-						<p className="text-xs uppercase tracking-wide text-[#00DC6E] font-semibold">Join Request</p>
-						<h3 className="mt-1 text-lg font-semibold">Someone wants to join this session</h3>
-						<div className="mt-4 rounded-xl bg-white/5 border border-white/10 p-3 space-y-1">
-							<p className="text-sm">
-								<span className="text-white/60">Name:</span> {activeExternalJoinRequest.name}
-							</p>
-							<p className="text-sm break-all">
-								<span className="text-white/60">Email:</span> {activeExternalJoinRequest.email}
-							</p>
-						</div>
-						{externalJoinRequests.length > 1 && (
-							<p className="mt-3 text-xs text-white/60">
-								{externalJoinRequests.length - 1} more request(s) waiting.
-							</p>
-						)}
-						<div className="mt-5 flex items-center justify-end gap-2">
-							<Button
-								variant="outline"
-								className="border-red-400/50 text-red-300 hover:bg-red-500/10 hover:text-red-200"
-								onClick={() => handleResolveExternalJoinRequest(false)}
-								disabled={resolvingExternalJoinRequest}
-							>
-								Reject
-							</Button>
-							<Button
-								className="bg-[#00DC6E] text-black hover:bg-[#00c562]"
-								onClick={() => handleResolveExternalJoinRequest(true)}
-								disabled={resolvingExternalJoinRequest}
-							>
-								Approve & Let In
-							</Button>
-						</div>
-					</div>
-				</div>
-			)}
-			{isHost && externalJoinRequests.length > 0 && (
-				<div className="fixed top-4 right-4 z-[94]">
-					<div className="rounded-full bg-[#00DC6E] text-black text-xs font-semibold px-3 py-1 shadow-lg">
-						{externalJoinRequests.length} join request{externalJoinRequests.length > 1 ? 's' : ''}
-					</div>
-				</div>
 			)}
 
 			{/* Loading Overlay when ending meeting */}
@@ -1094,7 +968,6 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	participantChatLocks,
 	onPromoteToCohost,
 	onLockScratchPad,
-	webinarAttendeeMinimalUi: _webinarAttendeeMinimalUi = false,
 	sessionInfo = null,
 	webinarChatEnabledUi = true,
 	activeFlashMessage,
@@ -1113,6 +986,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	sessionData: _sessionData,
 	webinarChatMode,
 	webinarChatLive,
+	liveKitServerUrl = '',
+	onLiveKitRoomClosedByServer,
 }: {
 	isUserActive: boolean
 	showChat: boolean
@@ -1189,7 +1064,6 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		participantIdentity: string,
 		role: 'PARTICIPANT' | 'COHOST',
 	) => void
-	webinarAttendeeMinimalUi?: boolean
 	sessionInfo?: SessionData | null
 	webinarChatEnabledUi?: boolean
 	activeFlashMessage?: FlashMessage | null
@@ -1208,6 +1082,8 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	sessionStableId?: string | null
 	webinarChatMode?: string
 	webinarChatLive?: boolean
+	liveKitServerUrl?: string
+	onLiveKitRoomClosedByServer?: () => void
 }) {
 	// Room context removed to avoid race conditions, using localParticipant hook instead
 	const room = useRoomContext()
@@ -1231,7 +1107,13 @@ const VideoRoomContent = memo(function VideoRoomContent({
 
 	// Get participants list for name lookup
 	const allParticipants = useParticipants()
-	const canViewParticipantList = !isGuest && (isHost || permissions?.allowParticipantList !== false)
+	/** Webinar attendees often use guest join links; give them the same controls as a signed-in study-room joiner */
+	const isWebinarJoinee = !isHost && sessionInfo?.sessionMode === 'WEBINAR'
+	const studyRoomStyleJoinerChrome = !isGuest || isWebinarJoinee
+	const restrictGuestChatAudiences = isGuest && !isWebinarJoinee
+	const canViewParticipantList =
+		studyRoomStyleJoinerChrome &&
+		(isHost || permissions?.allowParticipantList !== false)
 	const participantIdentitiesKey = useMemo(
 		() => allParticipants.map((participant) => participant.identity).sort().join('|'),
 		[allParticipants],
@@ -1254,6 +1136,33 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	// Get local participant state directly - most reliable source of truth
 	const { localParticipant, isCameraEnabled, isMicrophoneEnabled, isScreenShareEnabled } = useLocalParticipant()
 	const lkRoom = useRoomContext()
+
+	useEffect(() => {
+		if (!lkRoom) return
+		return attachLiveKitConnectionDiagnostics(lkRoom, {
+			sessionStableId: sessionStableId ?? null,
+			liveKitServerUrl: liveKitServerUrl || undefined,
+		})
+	}, [lkRoom, sessionStableId, liveKitServerUrl])
+
+	// When the host ends the call, LiveKit closes the room; redirect if moderation socket missed `meeting-ended`.
+	useEffect(() => {
+		if (!lkRoom || !onLiveKitRoomClosedByServer) return
+		const handler = (reason?: DisconnectReason) => {
+			const serverEnded =
+				reason === DisconnectReason.ROOM_DELETED ||
+				reason === DisconnectReason.ROOM_CLOSED ||
+				reason === DisconnectReason.PARTICIPANT_REMOVED ||
+				reason === DisconnectReason.SERVER_SHUTDOWN
+			if (!serverEnded) return
+			onLiveKitRoomClosedByServer()
+		}
+		lkRoom.on(RoomEvent.Disconnected, handler)
+		return () => {
+			lkRoom.off(RoomEvent.Disconnected, handler)
+		}
+	}, [lkRoom, onLiveKitRoomClosedByServer])
+
 	const insecureMediaTitle = useMemo(
 		() =>
 			isMobileViewport || isGuest
@@ -1937,9 +1846,11 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		}
 	}, [localParticipant])
 
-	// Apply Krisp AI noise suppression to microphone track
+	// Apply Krisp AI noise suppression only when the LiveKit host exposes Krisp settings (Cloud, or explicit opt-in).
 	useEffect(() => {
 		if (!localParticipant || typeof window === 'undefined') return
+		if (!shouldApplyKrispNoiseFilter(liveKitServerUrl)) return
+
 		let cancelled = false
 		let cleanup: (() => void) | null = null
 
@@ -1956,7 +1867,9 @@ const VideoRoomContent = memo(function VideoRoomContent({
 
 				const filter = KrispNoiseFilter()
 				krispFilterRef.current = filter
-				await micTrack.setProcessor(filter)
+				await micTrack.setProcessor(filter).catch((err: unknown) => {
+					console.warn('[LiveKit] Krisp setProcessor failed; mic continues without Krisp:', err)
+				})
 				cleanup = () => {
 					micTrack.stopProcessor().catch(() => { })
 					krispFilterRef.current = null
@@ -1966,13 +1879,13 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			}
 		}
 
-		applyKrispFilter()
+		void applyKrispFilter().catch(() => {})
 
 		return () => {
 			cancelled = true
 			cleanup?.()
 		}
-	}, [localParticipant, isMicrophoneEnabled])
+	}, [localParticipant, isMicrophoneEnabled, liveKitServerUrl])
 
 	// Stable ordering system: Maintain positions for visible participants
 	// Only reorder when participants join/leave, not when speaking status changes
@@ -1980,40 +1893,62 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	const previousParticipantIdsRef = useRef<Set<string>>(new Set())
 	const hasInitializedParticipantListRef = useRef(false)
 	const joinAlertAudioContextRef = useRef<AudioContext | null>(null)
+	/** Browsers require a user gesture before AudioContext runs; avoid creating/resuming until then. */
+	const joinSoundUnlockedRef = useRef(false)
+
+	useEffect(() => {
+		if (typeof window === 'undefined') return
+		const unlock = () => {
+			joinSoundUnlockedRef.current = true
+		}
+		window.addEventListener('pointerdown', unlock, { passive: true })
+		window.addEventListener('keydown', unlock)
+		return () => {
+			window.removeEventListener('pointerdown', unlock)
+			window.removeEventListener('keydown', unlock)
+		}
+	}, [])
 
 	const playParticipantJoinedSound = useCallback(() => {
-		if (typeof window === 'undefined') return
-		try {
-			const AudioCtx =
-				window.AudioContext ||
-				(window as Window & { webkitAudioContext?: typeof AudioContext })
-					.webkitAudioContext
-			if (!AudioCtx) return
+		if (typeof window === 'undefined' || !joinSoundUnlockedRef.current) return
+		void (async () => {
+			try {
+				const AudioCtx =
+					window.AudioContext ||
+					(window as Window & { webkitAudioContext?: typeof AudioContext })
+						.webkitAudioContext
+				if (!AudioCtx) return
 
-			if (!joinAlertAudioContextRef.current) {
-				joinAlertAudioContextRef.current = new AudioCtx()
-			}
-			const context = joinAlertAudioContextRef.current
-			if (context.state === 'suspended') {
-				void context.resume().catch(() => { })
-			}
+				if (!joinAlertAudioContextRef.current) {
+					joinAlertAudioContextRef.current = new AudioCtx()
+				}
+				const context = joinAlertAudioContextRef.current
+				if (context.state === 'suspended') {
+					try {
+						await context.resume()
+					} catch {
+						return
+					}
+				}
+				if (context.state !== 'running') return
 
-			const startAt = context.currentTime
-			const oscillator = context.createOscillator()
-			const gainNode = context.createGain()
-			oscillator.type = 'triangle'
-			oscillator.frequency.setValueAtTime(740, startAt)
-			oscillator.frequency.exponentialRampToValueAtTime(920, startAt + 0.18)
-			gainNode.gain.setValueAtTime(0.0001, startAt)
-			gainNode.gain.exponentialRampToValueAtTime(0.045, startAt + 0.02)
-			gainNode.gain.exponentialRampToValueAtTime(0.0001, startAt + 0.2)
-			oscillator.connect(gainNode)
-			gainNode.connect(context.destination)
-			oscillator.start(startAt)
-			oscillator.stop(startAt + 0.2)
-		} catch {
-			// Best-effort join tone; ignore browsers that block audio context.
-		}
+				const startAt = context.currentTime
+				const oscillator = context.createOscillator()
+				const gainNode = context.createGain()
+				oscillator.type = 'triangle'
+				oscillator.frequency.setValueAtTime(740, startAt)
+				oscillator.frequency.exponentialRampToValueAtTime(920, startAt + 0.18)
+				gainNode.gain.setValueAtTime(0.0001, startAt)
+				gainNode.gain.exponentialRampToValueAtTime(0.045, startAt + 0.02)
+				gainNode.gain.exponentialRampToValueAtTime(0.0001, startAt + 0.2)
+				oscillator.connect(gainNode)
+				gainNode.connect(context.destination)
+				oscillator.start(startAt)
+				oscillator.stop(startAt + 0.2)
+			} catch {
+				// Best-effort join tone; ignore browsers that block audio context.
+			}
+		})()
 	}, [])
 
 	// Update stable order when participants join/leave (not on speaking status changes)
@@ -2610,19 +2545,16 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				if (!isAuto) console.warn('[PiP] Play failed:', e)
 			}
 
-			if (video.requestPictureInPicture) {
+			// Tab-hide path uses isAuto; Chromium requires a user gesture unless autoPictureInPicture fires.
+			if (video.requestPictureInPicture && !isAuto) {
 				const callRequest = async () => {
 					try {
 						await video.requestPictureInPicture()
 						setIsPiPActive(true)
 					} catch (e) {
-						if (!isAuto) console.error('[PiP] Manual activation failed:', e)
+						console.error('[PiP] Manual activation failed:', e)
 					}
 				}
-
-				// In Chrome, visibilitychange timing is sensitive. We try immediately, 
-				// and if it's an auto-trigger, we also rely on the browser's own 
-				// autoPictureInPicture attribute engine.
 				await callRequest()
 			}
 		} catch (error) {
@@ -4196,7 +4128,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 					{/* LEFT: Audio/Video Controls - Horizontal Group */}
 					<div className="flex items-center gap-1 md:gap-3">
 						{/* Audio Button Stack */}
-						{!isGuest && (
+						{studyRoomStyleJoinerChrome && (
 							<div className="flex flex-col items-center justify-center group relative">
 								<div className="flex items-center bg-white/5 rounded-lg md:rounded-xl p-0.5 md:p-1 border border-white/5">
 									<button
@@ -4222,7 +4154,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						)}
 
 						{/* Video Button Stack */}
-						{!isGuest && (
+						{studyRoomStyleJoinerChrome && (
 							<div className="flex flex-col items-center justify-center group relative">
 								<div className="flex items-center bg-white/5 rounded-lg md:rounded-xl p-0.5 md:p-1 border border-white/5">
 									<button
@@ -4263,7 +4195,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 					<div className="flex items-center gap-1 md:gap-3 flex-1 justify-center">
 
 						{/* Share Screen - hidden on mobile/guests (getDisplayMedia not supported) */}
-						{!isGuest && !isMobileViewport && (
+						{studyRoomStyleJoinerChrome && !isMobileViewport && (
 							<div className="flex flex-col items-center justify-center group">
 								<button
 									onClick={async () => {
@@ -4322,7 +4254,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						</div>
 
 						{/* Chat */}
-						<div className={`flex flex-col items-center justify-center group ${(!canViewParticipantList && !isGuest) ? 'hidden' : ''}`}>
+						<div className={`flex flex-col items-center justify-center group ${(!canViewParticipantList && !studyRoomStyleJoinerChrome) ? 'hidden' : ''}`}>
 							<button
 								onClick={() => {
 									if (!showChat) {
@@ -4338,7 +4270,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 							</button>
 						</div>
 
-						{!isGuest && (
+						{studyRoomStyleJoinerChrome && (
 							<div className="flex flex-col items-center justify-center group">
 								{/* Participants */}
 								<button
@@ -4636,13 +4568,15 @@ const VideoRoomContent = memo(function VideoRoomContent({
 										recipients={chatRecipients}
 										hostUserId={hostUser?.id}
 										currentUserDbId={currentUserDbId}
-										allowedAudiences={isGuest
-											? { HOST: true, EVERYONE: false, USER: false }
-											: {
-												EVERYONE: permissions?.allowChatEveryone ?? true,
-												HOST: permissions?.allowChatHost ?? true,
-												USER: permissions?.allowChatUser ?? true,
-											}}
+										allowedAudiences={
+											restrictGuestChatAudiences
+												? { HOST: true, EVERYONE: false, USER: false }
+												: {
+														EVERYONE: permissions?.allowChatEveryone ?? true,
+														HOST: permissions?.allowChatHost ?? true,
+														USER: permissions?.allowChatUser ?? true,
+													}
+										}
 										guestToken={guestToken}
 										guestEmail={isGuest ? (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('guestEmail') : null) : null}
 										className="flex-1 min-h-0 overflow-hidden"
@@ -4963,7 +4897,27 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				</div>
 			)}
 
-
+			{/* Permission Request Modal - Shows when host asks participant to enable audio/video */}
+			{!isHost && studyRoomStyleJoinerChrome && pendingPermissionRequest && (
+				<PermissionRequestModal
+					type={pendingPermissionRequest.type}
+					onAccept={() => {
+						if (pendingPermissionRequest.type === 'audio') {
+							respondToAudioRequest?.(true)
+						} else {
+							respondToVideoRequest?.(true)
+						}
+					}}
+					onDeny={() => {
+						if (pendingPermissionRequest.type === 'audio') {
+							respondToAudioRequest?.(false)
+						} else {
+							respondToVideoRequest?.(false)
+						}
+					}}
+					onDismiss={dismissPermissionRequest}
+				/>
+			)}
 
 			{/* Remote Control Consent UI (Screen Sharer Side) */}
 			{pendingRequestFrom && (

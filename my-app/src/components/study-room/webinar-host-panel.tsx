@@ -51,6 +51,14 @@ export function WebinarHostPanel({
     ).length;
   }, [guestParticipants, hostEmail]);
 
+  const pendingAdmitCount = useMemo(
+    () =>
+      waitingRoomEnabled
+        ? regs.filter((r) => r.approvalStatus === "pending").length
+        : 0,
+    [regs, waitingRoomEnabled],
+  );
+
   useEffect(() => {
     setToggleChat(chatEnabled);
   }, [chatEnabled]);
@@ -81,13 +89,13 @@ export function WebinarHostPanel({
     void load();
   }, [load]);
 
+  // Keep registration list fresh while the host is in the room (panel open or closed).
   useEffect(() => {
-    if (!open) return;
     const id = window.setInterval(() => {
       void load();
     }, POLL_MS);
     return () => window.clearInterval(id);
-  }, [open, load]);
+  }, [load]);
 
   const onRemoveGuest = async (guestId: string) => {
     setRemoving(guestId);
@@ -132,15 +140,27 @@ export function WebinarHostPanel({
           onClick={() => setOpen(true)}
           className={cn(
             "fixed left-0 top-0 z-[46]",
-            "flex items-center justify-center p-2.5",
+            "relative flex items-center justify-center p-2.5",
             "rounded-br-lg border-r border-b border-white/15 bg-[#141414]/95",
             "text-emerald-400 shadow-lg backdrop-blur-sm",
             "transition-colors hover:bg-[#1a1a1a] hover:text-emerald-300",
             "pointer-events-auto",
           )}
-          title="Webinar controls"
+          title={
+            pendingAdmitCount > 0
+              ? `Webinar controls — ${pendingAdmitCount} waiting to be admitted`
+              : "Webinar controls"
+          }
         >
           <Menu className="h-5 w-5" strokeWidth={2} />
+          {pendingAdmitCount > 0 && (
+            <span
+              className="absolute -right-0.5 -top-0.5 flex h-[1.125rem] min-w-[1.125rem] items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold text-black"
+              aria-hidden
+            >
+              {pendingAdmitCount > 9 ? "9+" : pendingAdmitCount}
+            </span>
+          )}
         </button>
       )}
 

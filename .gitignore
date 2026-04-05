@@ -23,6 +23,10 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# Local dev process output (`pnpm dev:log`) — keep logs/README.md in repo
+logs/*.log.txt
+logs/*.detail.txt
+
 # OS files
 .DS_Store
 Thumbs.db

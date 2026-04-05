@@ -3,168 +3,33 @@ import { useEffect, useRef, useState } from 'react'
 import { io, Socket } from 'socket.io-client'
 import { useUser, useAuth } from '@clerk/nextjs'
 import apiClient from '@/lib/api-client'
+import { getSocketIoBaseUrl } from '@/lib/socket-base-url'
 import { MessageList } from '@/components/chat/MessageList'
 import {
 	ChatRecipient,
 	MessageAudienceType,
 	MessageInput,
 } from '@/components/chat/MessageInput'
+import {
+	type ChatMessageRow,
+	collapseNearDuplicateChatRows,
+	isOptimisticMessageId,
+	mergeMessages,
+	normalizeChatMessage,
+	shouldRemoveOptimisticForEcho,
+} from '@/components/chat/chat-message-utils'
 
-type Message = {
-	id: string
-	senderId: string | null
-	audienceType?: MessageAudienceType
-	targetUserId?: string | null
-	content: string
-	createdAt: string
-	guestEmail?: string | null
-	guestSenderId?: string | null
-	sender?: {
-		id: string
-		name: string
-		avatar?: string | null
-	}
-	targetUser?: {
-		id: string
-		name: string
-		avatar?: string | null
-	} | null
-}
+type Message = ChatMessageRow
 
-function normalizeChatMessage(raw: unknown): Message {
-	const m =
-		raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
-	const createdRaw = m.createdAt
-	let createdAt: string
-	if (createdRaw instanceof Date) {
-		createdAt = createdRaw.toISOString()
-	} else if (typeof createdRaw === 'number' && Number.isFinite(createdRaw)) {
-		const d = new Date(createdRaw)
-		createdAt = Number.isNaN(d.getTime()) ? new Date(0).toISOString() : d.toISOString()
-	} else if (typeof createdRaw === 'string' && createdRaw.length > 0) {
-		const d = new Date(createdRaw)
-		createdAt = Number.isNaN(d.getTime()) ? new Date(0).toISOString() : d.toISOString()
-	} else {
-		createdAt = new Date(0).toISOString()
-	}
-
-	const guestEmail =
-		typeof m.guestEmail === 'string' && m.guestEmail.length > 0 ? m.guestEmail : null
-	const guestSenderId =
-		typeof m.guestSenderId === 'string' && m.guestSenderId.length > 0
-			? m.guestSenderId
-			: null
-
-	const baseSender = m.sender as Record<string, unknown> | null | undefined
-	let sender: Message['sender']
-	if (baseSender && typeof baseSender.name === 'string' && baseSender.name.length > 0) {
-		sender = {
-			id: String(baseSender.id ?? guestSenderId ?? 'unknown'),
-			name: baseSender.name,
-			avatar: (baseSender.avatar as string | null | undefined) ?? null,
-		}
-	} else if (guestEmail) {
-		const local = guestEmail.split('@')[0] || 'Guest'
-		sender = {
-			id: guestSenderId || 'guest',
-			name: local,
-			avatar: null,
-		}
-	} else {
-		sender = {
-			id: guestSenderId || (typeof m.senderId === 'string' ? m.senderId : '') || 'guest',
-			name: 'Guest',
-			avatar: null,
-		}
-	}
-
-	const senderId =
-		typeof m.senderId === 'string' && m.senderId.length > 0
-			? m.senderId
-			: guestSenderId || ''
-
-	return {
-		id: String(m.id ?? ''),
-		senderId,
-		audienceType: m.audienceType as Message['audienceType'],
-		targetUserId:
-			typeof m.targetUserId === 'string' || m.targetUserId === null
-				? (m.targetUserId as string | null)
-				: null,
-		content: typeof m.content === 'string' ? m.content : '',
-		createdAt,
-		guestEmail,
-		guestSenderId,
-		sender,
-		targetUser: m.targetUser as Message['targetUser'],
-	}
-}
-
-// Keep chat history in-memory per channel so closing/reopening the panel
-// does not wipe the current message list.
 const channelMessageCache = new Map<string, Message[]>()
 
-function mergeMessages(existing: Message[], incoming: Message[]): Message[] {
-	if (incoming.length === 0) return existing
-
-	const byId = new Map<string, Message>()
-	for (const message of existing) {
-		byId.set(message.id, message)
-	}
-	for (const message of incoming) {
-		byId.set(message.id, message)
-	}
-
-	return Array.from(byId.values()).sort((a, b) => {
-		const ta = new Date(a.createdAt).getTime()
-		const tb = new Date(b.createdAt).getTime()
-		const na = Number.isNaN(ta) ? 0 : ta
-		const nb = Number.isNaN(tb) ? 0 : tb
-		return na - nb
-	})
-}
-
-function isOptimisticMessageId(id: string): boolean {
-	return id.startsWith('optimistic-')
-}
-
-/** EVERYONE is often undefined on optimistic vs enum on server — compare consistently. */
-function normalizeAudience(a?: Message['audienceType']): string {
-	return (a ?? 'EVERYONE') as string
-}
-
-/**
- * Drop the optimistic row when the real `message:new` is the same send.
- * Host/viewer labels in the UI differ (e.g. “(Host)”) but senderId on the server echo must match.
- */
-function shouldRemoveOptimisticForEcho(
-	local: Message,
-	server: Message,
-	viewerDbUserId?: string | null,
-	viewerGuestEmail?: string | null,
-): boolean {
-	if (!isOptimisticMessageId(local.id)) return false
-	if (local.content !== server.content) return false
-	if (normalizeAudience(local.audienceType) !== normalizeAudience(server.audienceType)) {
-		return false
-	}
-	if ((local.targetUserId ?? null) !== (server.targetUserId ?? null)) return false
-
-	// Guest: match by email (viewer + server row)
-	const guestLocal = (local.guestEmail || viewerGuestEmail || '').trim().toLowerCase()
-	const guestServer = (server.guestEmail || '').trim().toLowerCase()
-	if (guestLocal.length > 0 && guestServer.length > 0 && guestLocal === guestServer) {
-		return true
-	}
-
-	// Signed-in: server echo is always from our DB user id (covers empty/wrong optimistic senderId)
-	if (viewerDbUserId && server.senderId && viewerDbUserId === server.senderId) {
-		return true
-	}
-	if (local.senderId && server.senderId && local.senderId === server.senderId) {
-		return true
-	}
-	return false
+function pickTrimmedUserId(
+	primary: string | null | undefined,
+	fallback: string | null | undefined,
+): string | null {
+	const a = typeof primary === 'string' && primary.trim() ? primary.trim() : ''
+	const b = typeof fallback === 'string' && fallback.trim() ? fallback.trim() : ''
+	return a || b || null
 }
 
 interface ChatWidgetProps {
@@ -193,18 +58,48 @@ export function ChatWidget({
 	const { user, isLoaded } = useUser()
 	const { getToken } = useAuth()
 	const userId = user?.id
-	/** Guest link chat only when not signed in; stray ?guestAccessToken= would otherwise use an expired token and the server would disconnect the socket. */
-	const isGuestMode = Boolean(guestToken && !userId)
+	/**
+	 * If the URL includes a guest join token, always use guest chat (socket + history).
+	 * Otherwise a signed-in joinee would connect as their Clerk user while the API still
+	 * resolved guest email from the token — mismatched rooms/history vs host EVERYONE broadcasts.
+	 */
+	const isGuestMode = Boolean(guestToken?.trim())
 	const channelIdRef = useRef<string | null | undefined>(channelId)
 	channelIdRef.current = channelId
 	const [viewerGuestEmail, setViewerGuestEmail] = useState<string | null>(
 		() => guestEmail ?? null,
 	)
 	const viewerDbUserIdRef = useRef(currentUserDbId)
+	/** Latest prop for dedupe when ref is cleared before `/api/users/me` or socket runs. */
+	const currentUserDbIdPropRef = useRef(currentUserDbId)
+	currentUserDbIdPropRef.current = currentUserDbId
 	const viewerGuestEmailRef = useRef<string | null>(guestEmail ?? null)
 	useEffect(() => {
 		viewerDbUserIdRef.current = currentUserDbId
 	}, [currentUserDbId])
+
+	/** Same as study-room page `/api/users/me` — fills ref when prop is still null; does not block send. */
+	useEffect(() => {
+		if (!channelId || !userId || isGuestMode || currentUserDbId) return
+		let cancelled = false
+		void (async () => {
+			try {
+				const token = await getToken()
+				if (!token || cancelled) return
+				const res = await apiClient.get<{ id?: string }>('/api/users/me', {
+					headers: { Authorization: `Bearer ${token}` },
+				})
+				const id = typeof res.data?.id === 'string' ? res.data.id : null
+				if (id && !cancelled) viewerDbUserIdRef.current = id
+			} catch {
+				/* ignore */
+			}
+		})()
+		return () => {
+			cancelled = true
+		}
+	}, [channelId, userId, isGuestMode, getToken, currentUserDbId])
+
 	useEffect(() => {
 		viewerGuestEmailRef.current = viewerGuestEmail ?? guestEmail ?? null
 	}, [viewerGuestEmail, guestEmail])
@@ -221,10 +116,6 @@ export function ChatWidget({
 	useEffect(() => {
 		setViewerGuestEmail(guestEmail ?? null)
 	}, [guestEmail])
-
-	useEffect(() => {
-		console.log('[ChatWidget] chatDisabled prop changed to:', chatDisabled)
-	}, [chatDisabled])
 
 	useEffect(() => {
 		if (!channelId) {
@@ -281,8 +172,13 @@ export function ChatWidget({
 					rawList = Array.isArray(res.data) ? res.data : []
 				}
 
-				const historyMessages = rawList.map(normalizeChatMessage)
-				console.log('Loaded messages:', historyMessages.length, 'messages')
+				const historyMessages = collapseNearDuplicateChatRows(
+					rawList.map(normalizeChatMessage),
+					pickTrimmedUserId(
+						viewerDbUserIdRef.current,
+						currentUserDbIdPropRef.current,
+					),
+				)
 				// Replace server history for this channel only — do not merge with prior room’s list.
 				if (channelIdRef.current !== activeChannelId) return
 				setMessages(historyMessages)
@@ -333,10 +229,7 @@ export function ChatWidget({
 
 				if (!isMounted) return
 
-				const url =
-					process.env.NEXT_PUBLIC_CHAT_WS_URL ||
-					process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') ||
-					'http://localhost:3002'
+				const url = getSocketIoBaseUrl()
 
 				console.log(
 					'[Chat] Preparing WebSocket connection:',
@@ -420,16 +313,31 @@ export function ChatWidget({
 						if (prev.some((m) => m.id === normalized.id)) {
 							return prev
 						}
+						const viewerId = pickTrimmedUserId(
+							viewerDbUserIdRef.current,
+							currentUserDbIdPropRef.current,
+						)
+						let removedOneOptimistic = false
 						const withoutMatchingOptimistic = prev.filter((m) => {
 							if (!isOptimisticMessageId(m.id)) return true
-							return !shouldRemoveOptimisticForEcho(
-								m,
-								normalized,
-								viewerDbUserIdRef.current,
-								viewerGuestEmailRef.current,
-							)
+							if (removedOneOptimistic) return true
+							if (
+								!shouldRemoveOptimisticForEcho(
+									m,
+									normalized,
+									viewerId,
+									viewerGuestEmailRef.current,
+								)
+							) {
+								return true
+							}
+							removedOneOptimistic = true
+							return false
 						})
-						const next = mergeMessages(withoutMatchingOptimistic, [normalized])
+						const next = collapseNearDuplicateChatRows(
+							mergeMessages(withoutMatchingOptimistic, [normalized]),
+							viewerId,
+						)
 						channelMessageCache.set(activeChannelId, next)
 						return next
 					})
@@ -594,7 +502,7 @@ export function ChatWidget({
 		)
 	}
 
-	const onSend = async (
+	const onSend = (
 		text: string,
 		audienceType: MessageAudienceType,
 		targetUserId?: string,
@@ -609,36 +517,21 @@ export function ChatWidget({
 		const trimmed = text.trim()
 		if (!trimmed) return
 
-		const optimisticId = `optimistic-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`}`
-		const now = new Date().toISOString()
-
-		let optimistic: Message
-		if (isGuestMode) {
-			const email = viewerGuestEmail || guestEmail || ''
-			const localName = email.split('@')[0] || 'Guest'
-			optimistic = {
-				id: optimisticId,
-				senderId: null,
-				audienceType,
-				targetUserId: targetUserId ?? null,
-				content: trimmed,
-				createdAt: now,
-				guestEmail: email || null,
-				guestSenderId: guestToken || null,
-				sender: {
-					id: guestToken || 'guest',
-					name: localName,
-					avatar: null,
-				},
-			}
-		} else {
-			const sid = currentUserDbId || ''
+		// Guests: no optimistic row. Signed-in: optimistic uses DB id from props/ref (no await — avoids send delay).
+		if (!isGuestMode) {
+			const optimisticId = `optimistic-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`}`
+			const now = new Date().toISOString()
+			const sid =
+				(currentUserDbId && String(currentUserDbId)) ||
+				(viewerDbUserIdRef.current && String(viewerDbUserIdRef.current)) ||
+				''
+			if (sid) viewerDbUserIdRef.current = sid
 			const displayName =
 				user?.fullName ||
 				[user?.firstName, user?.lastName].filter(Boolean).join(' ') ||
 				user?.primaryEmailAddress?.emailAddress?.split('@')[0] ||
 				'You'
-			optimistic = {
+			const optimistic: Message = {
 				id: optimisticId,
 				senderId: sid,
 				audienceType,
@@ -651,23 +544,20 @@ export function ChatWidget({
 					avatar: user?.imageUrl ?? null,
 				},
 			}
-		}
-
-		setMessages((prev) => {
-			const next = mergeMessages(prev, [optimistic])
-			if (channelId) channelMessageCache.set(channelId, next)
-			return next
-		})
-
-		// If the server never echoes (rare), drop the placeholder so the thread doesn’t lie forever.
-		window.setTimeout(() => {
 			setMessages((prev) => {
-				if (!prev.some((m) => m.id === optimisticId)) return prev
-				const next = prev.filter((m) => m.id !== optimisticId)
+				const next = mergeMessages(prev, [optimistic])
 				if (channelId) channelMessageCache.set(channelId, next)
 				return next
 			})
-		}, 20_000)
+			window.setTimeout(() => {
+				setMessages((prev) => {
+					if (!prev.some((m) => m.id === optimisticId)) return prev
+					const next = prev.filter((m) => m.id !== optimisticId)
+					if (channelId) channelMessageCache.set(channelId, next)
+					return next
+				})
+			}, 20_000)
+		}
 
 		s.emit('message:send', {
 			channelId,

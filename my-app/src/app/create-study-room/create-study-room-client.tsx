@@ -1443,14 +1443,16 @@ export function CreateStudyRoomClient() {
                     </p>
                     <div className="w-full relative flex items-center justify-between gap-1.5 p-1 pl-2 sm:p-1.5 sm:pl-3 rounded-lg sm:rounded-xl border border-input bg-muted/40 hover:bg-muted/60 transition-colors">
                     <span className="text-[10px] sm:text-xs text-foreground/70 truncate flex-1 font-mono text-center select-all">
-                      {window.location.origin + getStudyRoomPagePath(createdRoom.slug || createdRoom.id)}
+                      {getStudyRoomShareUrl(createdRoom.slug || createdRoom.id)}
                     </span>
                     <Button 
                       size="sm" 
                       variant="outline"
                       className="h-7 px-2 sm:h-8 sm:px-3 text-[9px] sm:text-[10px] uppercase tracking-wider font-bold rounded-md sm:rounded-lg bg-background shadow-sm border-border/60 hover:bg-accent hover:text-accent-foreground shrink-0"
                       onClick={() => {
-                         navigator.clipboard.writeText(window.location.origin + getStudyRoomPagePath(createdRoom.slug || createdRoom.id));
+                         navigator.clipboard.writeText(
+                           getStudyRoomShareUrl(createdRoom.slug || createdRoom.id),
+                         );
                          setIsCopied(true);
                          setTimeout(() => setIsCopied(false), 2000);
                       }}

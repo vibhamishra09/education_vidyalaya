@@ -4,5 +4,4 @@ export default function SSOCallbackPage() {
   return (
     <AuthenticateWithRedirectCallback signUpFallbackRedirectUrl="/dashboard" />
   );
-  return <AuthenticateWithRedirectCallback signUpFallbackRedirectUrl="/onboarding" signInFallbackRedirectUrl="/onboarding" />;
 }

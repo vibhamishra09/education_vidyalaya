@@ -43,7 +43,10 @@ export function SkillInput({
     setIsLoadingSkills(true);
     try {
       const response = await skillsApi.getAllSkills(search, undefined, 100, 0);
-      const skills = response.skills?.map(skill => skill.name) || [];
+      const skills =
+        response.skills
+          ?.map((s) => (typeof s?.name === "string" ? s.name.trim() : ""))
+          .filter((n) => n.length > 0) ?? [];
       setAvailableSkills(skills);
       setSkillsLoaded(true);
     } catch (_error) {
@@ -55,12 +58,15 @@ export function SkillInput({
   };
 
   // Filter suggestions based on input and exclude already selected skills
-  const filteredSuggestions = availableSkills.filter(
-    (skill) =>
-      skill.toLowerCase().includes(inputValue.toLowerCase()) &&
-      !selectedSkills.includes(skill) &&
-      inputValue.trim() !== ""
-  );
+  const filteredSuggestions = availableSkills.filter((skill) => {
+    if (typeof skill !== "string" || skill.trim() === "") return false;
+    const q = inputValue.trim();
+    if (q === "") return false;
+    return (
+      skill.toLowerCase().includes(q.toLowerCase()) &&
+      !selectedSkills.includes(skill)
+    );
+  });
 
   // Check if input value is a valid new skill
   const isValidNewSkill = inputValue.trim() !== "" && 

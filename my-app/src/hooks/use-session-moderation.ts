@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { toast } from 'sonner';
+import { getSocketIoBaseUrl } from '@/lib/socket-base-url';
 
 // Room permissions interface for the "Lock" system
 export interface RoomPermissions {
@@ -135,7 +136,7 @@ export function useSessionModeration({ sessionId, sessionType, isHost: _isHost, 
     if (!sessionId || !sessionType || !token || !enabled || connectingRef.current) return;
 
     connectingRef.current = true;
-    const url = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:3002';
+    const url = getSocketIoBaseUrl();
     const s = io(url, {
       transports: ['websocket'],
       auth: { token },
