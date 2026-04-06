@@ -8,6 +8,7 @@ import apiClient from '@/lib/api-client'
 import { normalizeLiveKitServerUrl } from '@/lib/livekit-url'
 import { Loader2, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useUser } from '@clerk/nextjs'
 
 type ChatIdentity = {
 	id: string
@@ -80,7 +81,11 @@ export default function RoomPage() {
 	const guestAccessToken = searchParams.get('guestAccessToken')
 	const isMountedRef = useRef(true)
 	const participantKeyRef = useRef<string>('')
-
+	const {user, isLoaded} = useUser()
+	const [sessionNotStarted, setSessionNotStarted] = useState(false)
+	const [notAParticipant, setNotaParticipant] = useState(false)
+	console.log(user);
+	
 	useEffect(() => {
 		isMountedRef.current = true
 		return () => {
@@ -132,7 +137,7 @@ export default function RoomPage() {
 	useEffect(() => {
 		if (!roomName) return
 		// Avoid racing Clerk: getToken() can be null before isLoaded, which used to show "Not authenticated".
-		if (!guestAccessToken && !clerkLoaded) return
+		if (!guestAccessToken && !clerkLoaded ) return
 
 		let mounted = true
 		async function initialize() {
@@ -204,6 +209,8 @@ export default function RoomPage() {
 				}
 
 				const results = await Promise.all(promises)
+				console.log(results);
+				
 
 				if (!mounted) return
 				const livekitPayload = results[0]?.data as
@@ -230,9 +237,46 @@ export default function RoomPage() {
 					setIsHost(Boolean((results[0] as { data?: { isHost?: boolean } }).data?.isHost))
 				}
 				if (results[2]?.data) {
+	
 					// Add session type to sessionData
-					const data = results[2].data as { id: string; date: string; duration: number; sessionStatus?: string; [key: string]: unknown };
+					const data = results[2].data as { id: string; date: string; duration: number; sessionStatus?: string; [key: string]: unknown; participants: any[]; createdBy: any};
+					const userId = user?.id
+					const dbId = user?.publicMetadata.dbUserId || currentUserDbId
+					const now = Date.now()
+					const sessionStart = new Date(data.date).getTime()
+					const isLearner = data.role === 'learner'
+					const buffer = 5 * 60 * 1000 // 5 min
+					const isSessionNotStarted = now < (sessionStart - buffer)
+
+					 if (!guestAccessToken && userId) {
+						const participants = data.participants || []
+
+						const isParticipant = participants.some(
+							(p: any) => p.clerkId === userId
+						)
+
+						const isHostUser = data.createdBy?.id === dbId
+
+						if (!isParticipant && !isHostUser) {
+							setNotaParticipant(true)
+							setSessionData({
+								...data,
+								sessionType: isStudyRoom ? 'studyRoom' : 'peerSession',
+							})
+							setLoading(false)
+							return
+						}
+					}
 					
+					if (isLearner && isSessionNotStarted) {
+						setSessionNotStarted(true)
+						setSessionData({
+							...data,
+							sessionType: isStudyRoom ? 'studyRoom' : 'peerSession',
+						})
+						setLoading(false)
+						return
+					}
 					// Check if session is already completed or not completed (expired)
 					if (data.sessionStatus === 'DONE' || data.sessionStatus === 'CANCELLED' || data.sessionStatus === 'NOT_COMPLETED') {
 						setSessionEnded(true)
@@ -353,6 +397,30 @@ export default function RoomPage() {
 		)
 	}
 
+	if (!token) {
+		return (
+			<div className="h-screen w-screen flex items-center justify-center bg-black">
+				<div className="text-center text-white">
+					<Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+					<p>Connecting...</p>
+				</div>
+			</div>
+		)
+	}
+
+	if (!serverUrl.trim()) {
+		return (
+			<div className="h-screen w-screen flex items-center justify-center bg-black px-6">
+				<div className="text-center text-red-400 max-w-md">
+					<p className="text-xl font-semibold mb-2 text-white">Video unavailable</p>
+					<p className="text-sm text-gray-400">
+						LiveKit URL is not configured. Set LIVEKIT_URL on the API server (it is returned with the join token), or set NEXT_PUBLIC_LIVEKIT_WS_URL for the web app.
+					</p>
+				</div>
+			</div>
+		)
+	}
+
 	if (sessionEnded) {
 		const isNotCompleted = sessionData?.sessionStatus === 'NOT_COMPLETED';
 		return (
@@ -399,25 +467,38 @@ export default function RoomPage() {
 		)
 	}
 
-	if (!token) {
+
+	if (notAParticipant) {
 		return (
-			<div className="h-screen w-screen flex items-center justify-center bg-black">
-				<div className="text-center text-white">
-					<Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-					<p>Connecting...</p>
+			<div className="h-screen w-screen flex items-center justify-center bg-[#0a0a0a]">
+				<div className="text-center text-white max-w-md">
+					<p className="text-2xl font-semibold mb-3">You are not Enrolled in this Study Room</p>
+					<p className="text-gray-400 mb-6">
+						Please enroll before joining the room
+					</p>
+
+					<Button onClick={() => router.replace(`/studyroom/${sessionData?.slug}/?join=1`)}>
+						Enroll
+					</Button>
 				</div>
 			</div>
 		)
 	}
 
-	if (!serverUrl.trim()) {
+	
+
+	if (sessionNotStarted) {
 		return (
-			<div className="h-screen w-screen flex items-center justify-center bg-black px-6">
-				<div className="text-center text-red-400 max-w-md">
-					<p className="text-xl font-semibold mb-2 text-white">Video unavailable</p>
-					<p className="text-sm text-gray-400">
-						LiveKit URL is not configured. Set LIVEKIT_URL on the API server (it is returned with the join token), or set NEXT_PUBLIC_LIVEKIT_WS_URL for the web app.
+			<div className="h-screen w-screen flex items-center justify-center bg-[#0a0a0a]">
+				<div className="text-center text-white max-w-md">
+					<p className="text-2xl font-semibold mb-3">Session Not Started Yet</p>
+					<p className="text-gray-400 mb-6">
+						This session hasn’t started yet. Please join at the scheduled time.
 					</p>
+
+					<Button onClick={() => router.replace(`/dashboard`)}>
+						Go to Dashboard
+					</Button>
 				</div>
 			</div>
 		)

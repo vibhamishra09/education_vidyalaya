@@ -418,10 +418,12 @@ export function DashboardClient() {
                   type: (s.requestedBy?.id && currentUser?.id && s.requestedBy.id === currentUser.id) ? "teaching" as const : "learning" as const,
                   participantName: s.peer?.name,
                   sessionType: "peer" as const,
+                  slug: null
                 })),
                 ...upcomingStudyRooms.map(sr => ({
                   id: sr.id,
                   title: sr.title,
+                  slug: sr.slug,
                   date: typeof sr.date === 'string' ? sr.date : sr.date.toISOString(),
                   duration: sr.duration,
                   type: (sr.createdBy?.id && currentUser?.id && sr.createdBy.id === currentUser.id) ? "teaching" as const : "learning" as const,
