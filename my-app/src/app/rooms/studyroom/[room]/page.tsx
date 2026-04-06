@@ -229,13 +229,18 @@ export default function RoomPage() {
 						? roomName.slice('peersession-'.length)
 						: roomName.split('-')[1]
 
-						// Fetch current user DB ID in parallel to enable self-message filtering
+				// Resolve DB user id before room/chat mount so ChatWidget can collapse optimistic+echo (avoids duplicate “hi”).
 				if (clerkToken) {
-					apiClient.get('/api/users/me', {
-						headers: { Authorization: `Bearer ${clerkToken}` },
-					}).then((res) => {
-						if (mounted && res.data?.id) setCurrentUserDbId(res.data.id as string)
-					}).catch(() => null)
+					try {
+						const meRes = await apiClient.get<{ id?: string }>('/api/users/me', {
+							headers: { Authorization: `Bearer ${clerkToken}` },
+						})
+						if (mounted && typeof meRes.data?.id === 'string' && meRes.data.id) {
+							setCurrentUserDbId(meRes.data.id)
+						}
+					} catch {
+						/* non-fatal — ChatWidget may still fetch /api/users/me */
+					}
 				}
 
 				// Fetch LiveKit token, channel ID, and session data

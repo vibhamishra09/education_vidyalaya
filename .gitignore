@@ -26,6 +26,10 @@ pnpm-debug.log*
 # Local dev process output (`pnpm dev:log`) — keep logs/README.md in repo
 logs/*.log.txt
 logs/*.detail.txt
+logs/chat-flow.txt
+
+# Next.js app dev logs (e.g. chat-flow via /api/dev/chat-flow-log; cwd = my-app/)
+my-app/logs/
 
 # OS files
 .DS_Store

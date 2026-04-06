@@ -131,49 +131,60 @@ export function isOptimisticMessageId(id: string): boolean {
 	return id.startsWith('optimistic-')
 }
 
+/**
+ * True when `inbound` is the server echo of `optimistic` (same send), so the optimistic row
+ * should be dropped. Handles Clerk vs DB display names/avatars — matching is id-based only.
+ */
+export function isOptimisticEchoOfInbound(
+	optimistic: ChatMessageRow,
+	inbound: ChatMessageRow,
+	viewerDbUserId: string | null,
+	viewerGuestEmail: string | null,
+): boolean {
+	if (!isOptimisticMessageId(optimistic.id)) return false
+	if (optimistic.content.trim() !== inbound.content.trim()) return false
+
+	const optAud = optimistic.audienceType ?? 'EVERYONE'
+	const realAud = inbound.audienceType ?? 'EVERYONE'
+	if (optAud !== realAud) return false
+
+	const optTarget = optimistic.targetUserId ?? null
+	const realTarget = inbound.targetUserId ?? null
+	if (optTarget !== realTarget) return false
+
+	const inSid = (inbound.senderId ?? '').trim()
+	const optSid = (optimistic.senderId ?? '').trim()
+	const v = (viewerDbUserId ?? '').trim()
+	const optSenderObj = (optimistic.sender?.id ?? '').trim()
+
+	// Same Prisma user id on both rows (strongest signal)
+	if (inSid && optSid && inSid === optSid) return true
+
+	// Echo sender id matches optimistic.sender.id (same user, different name in UI)
+	if (inSid && optSenderObj && inSid === optSenderObj) return true
+
+	// Real echo is from this viewer; optimistic may still be placeholder (sender.id "me", empty senderId)
+	if (v && inSid === v) {
+		if (!optSid || optSid === v || optSenderObj === 'me' || optSenderObj === v) {
+			return true
+		}
+	}
+
+	const ve = viewerGuestEmail?.trim().toLowerCase()
+	const og = optimistic.guestEmail?.trim().toLowerCase()
+	const ig = inbound.guestEmail?.trim().toLowerCase()
+	if (ve && og && ig && og === ve && ig === ve) return true
+
+	return false
+}
+
 export function shouldRemoveOptimisticForEcho(
 	optimistic: ChatMessageRow,
 	real: ChatMessageRow,
 	viewerDbUserId: string | null,
 	viewerGuestEmail: string | null,
 ): boolean {
-	if (!isOptimisticMessageId(optimistic.id)) return false
-	if (optimistic.content.trim() !== real.content.trim()) return false
-
-	const optAud = optimistic.audienceType ?? 'EVERYONE'
-	const realAud = real.audienceType ?? 'EVERYONE'
-	if (optAud !== realAud) return false
-
-	const optTarget = optimistic.targetUserId ?? null
-	const realTarget = real.targetUserId ?? null
-	if (optTarget !== realTarget) return false
-
-	const optSid = (optimistic.senderId ?? '').trim()
-	const realSid = (real.senderId ?? '').trim()
-	// Echo carries the same Prisma user id as the optimistic row — no need for viewerDbUserId
-	if (optSid && realSid && optSid === realSid) {
-		return true
-	}
-
-	if (viewerDbUserId && real.senderId === viewerDbUserId) {
-		const optObjId = optimistic.sender?.id
-		// Optimistic row may use Clerk display name while echo uses DB name — still same user
-		if (
-			!optSid ||
-			optSid === viewerDbUserId ||
-			optObjId === viewerDbUserId ||
-			optObjId === 'me'
-		) {
-			return true
-		}
-	}
-
-	const ve = viewerGuestEmail?.trim()
-	if (ve && optimistic.guestEmail && real.guestEmail) {
-		return optimistic.guestEmail === ve && real.guestEmail === ve
-	}
-
-	return false
+	return isOptimisticEchoOfInbound(optimistic, real, viewerDbUserId, viewerGuestEmail)
 }
 
 export function mergeMessages(
@@ -307,4 +318,102 @@ export function collapseNearDuplicateChatRows(
 	}
 
 	return sorted.filter((m) => !removeOptimisticIds.has(m.id))
+}
+
+/** For chat-flow file logs: who this browser session is in the room (study room / webinar). */
+export type ChatViewerSessionRole = 'host' | 'joinee' | 'guest'
+
+export function buildOutboundChatFlowMeta(
+	role: ChatViewerSessionRole,
+): { syncNote: string } {
+	switch (role) {
+		case 'host':
+			return {
+				syncNote:
+					'Host typed send → socket will broadcast message:new to channel room (host + all joinees)',
+			}
+		case 'guest':
+			return {
+				syncNote:
+					'Guest typed send → server persists and broadcasts message:new to channel room',
+			}
+		default:
+			return {
+				syncNote:
+					'Signed-in participant/joinee typed send → socket will broadcast message:new to channel room',
+			}
+	}
+}
+
+export type ChatInboundSenderKind =
+	| 'self_echo'
+	| 'from_host'
+	| 'from_participant'
+	| 'guest_self_echo'
+	| 'guest_other'
+	| 'unknown'
+
+/**
+ * Classify an inbound `message:new` for logging: who sent vs who is viewing (host/joinee/guest).
+ */
+export function buildInboundChatFlowMeta(
+	normalized: ChatMessageRow,
+	viewerSessionRole: ChatViewerSessionRole,
+	hostUserId: string | null | undefined,
+	viewerDbUserId: string | null,
+	viewerGuestEmail: string | null,
+	isGuestMode: boolean,
+): { senderKind: ChatInboundSenderKind; syncNote: string } {
+	const hid = (hostUserId ?? '').trim()
+	const vid = (viewerDbUserId ?? '').trim()
+	const sid = (normalized.senderId ?? '').trim()
+	const ge = (normalized.guestEmail ?? '').trim().toLowerCase()
+	const vge = (viewerGuestEmail ?? '').trim().toLowerCase()
+
+	if (isGuestMode) {
+		if (vge && ge && ge === vge) {
+			return {
+				senderKind: 'guest_self_echo',
+				syncNote:
+					'Guest viewer: socket echo of own send (other clients in room also get message:new)',
+			}
+		}
+		return {
+			senderKind: 'guest_other',
+			syncNote:
+				'Guest viewer: message from another person in the room (host or other guest)',
+		}
+	}
+
+	if (vid && sid && sid === vid) {
+		return {
+			senderKind: 'self_echo',
+			syncNote:
+				viewerSessionRole === 'host'
+					? 'Host viewer: echo of own message (server broadcast back to you)'
+					: 'Participant viewer: echo of own message (server broadcast back to you)',
+		}
+	}
+	if (hid && sid === hid) {
+		return {
+			senderKind: 'from_host',
+			syncNote:
+				viewerSessionRole === 'host'
+					? 'Host viewer: same as self_echo (you are host)'
+					: 'Joinee viewer: receiving host message in real time',
+		}
+	}
+	if (sid) {
+		return {
+			senderKind: 'from_participant',
+			syncNote:
+				viewerSessionRole === 'host'
+					? 'Host viewer: receiving message from joinee/participant in real time'
+					: 'Joinee viewer: receiving message from another participant (not host)',
+		}
+	}
+	return {
+		senderKind: 'unknown',
+		syncNote: 'Inbound message could not classify sender (missing senderId)',
+	}
 }
