@@ -45,6 +45,18 @@ import { buildStudyRoomOccurrences } from './recurrence.util';
 import { StudyRoomParticipantRoleDto } from './dto/study-room.dto';
 import { createClerkClient } from '@clerk/backend';
 
+/** If FRONTEND_URL is unset, production webinar/register and join links use this (never localhost). */
+const DEFAULT_PRODUCTION_APP_ORIGIN = 'https://webyalaya.com';
+
+function isLocalDevOrigin(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return host === 'localhost' || host === '127.0.0.1';
+  } catch {
+    return false;
+  }
+}
+
 type StudyRoomWithRelations = {
   id: string;
   title: string;
@@ -127,38 +139,48 @@ export class StudyRoomsService {
    * Never returns empty: path-only links in HTML email resolve as http://webinar/join in Gmail.
    */
   private resolveAppPublicBaseUrl(): string {
-    const raw =
-      process.env.FRONTEND_URL?.trim() ||
-      process.env.APP_PUBLIC_URL?.trim() ||
-      process.env.NEXT_PUBLIC_APP_URL?.trim() ||
-      '';
-    if (raw) {
-      const normalized = raw.replace(/\/$/, '');
-      if (/^https?:\/\//i.test(normalized)) {
-        return normalized;
+    const tryCandidate = (raw: string | undefined): string | null => {
+      const t = raw?.trim();
+      if (!t) return null;
+      const normalized = t.replace(/\/$/, '');
+      if (!/^https?:\/\//i.test(normalized)) {
+        this.logger.warn(
+          `FRONTEND_URL / APP_PUBLIC_URL / NEXT_PUBLIC_APP_URL must be an absolute URL. Got "${t}" — ignoring.`,
+        );
+        return null;
       }
-      this.logger.warn(
-        `FRONTEND_URL / APP_PUBLIC_URL / NEXT_PUBLIC_APP_URL must be an absolute URL (e.g. http://localhost:3000). Got "${raw}" — ignoring.`,
-      );
+      if (isLocalDevOrigin(normalized) && process.env.NODE_ENV === 'production') {
+        this.logger.warn(
+          `Public URL "${t}" uses localhost — ignoring in production; set FRONTEND_URL to your real site.`,
+        );
+        return null;
+      }
+      return normalized;
+    };
+
+    for (const v of [
+      process.env.FRONTEND_URL,
+      process.env.APP_PUBLIC_URL,
+      process.env.NEXT_PUBLIC_APP_URL,
+      process.env.NEXT_PUBLIC_SITE_URL,
+      process.env.SITE_URL,
+    ]) {
+      const ok = tryCandidate(v);
+      if (ok) return ok;
     }
-    const siteFallback =
-      process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
-      process.env.SITE_URL?.trim() ||
-      '';
-    if (siteFallback && /^https?:\/\//i.test(siteFallback)) {
-      return siteFallback.replace(/\/$/, '');
-    }
-    const apiUrl = process.env.API_URL?.trim() || '';
-    if (/^https?:\/\/127\.0\.0\.1:\d+/i.test(apiUrl) || /^https?:\/\/localhost:\d+/i.test(apiUrl)) {
-      return 'http://localhost:3000';
-    }
+
     if (process.env.NODE_ENV !== 'production') {
+      const apiUrl = process.env.API_URL?.trim() || '';
+      if (/^https?:\/\/127\.0\.0\.1:\d+/i.test(apiUrl) || /^https?:\/\/localhost:\d+/i.test(apiUrl)) {
+        return 'http://localhost:3000';
+      }
       return 'http://localhost:3000';
     }
+
     this.logger.warn(
-      'FRONTEND_URL not set — webinar links default to http://localhost:3000. Set FRONTEND_URL to your public site (e.g. https://webyalaya.com) in production.',
+      `FRONTEND_URL not set — using ${DEFAULT_PRODUCTION_APP_ORIGIN} for webinar links. Set FRONTEND_URL to override.`,
     );
-    return 'http://localhost:3000';
+    return DEFAULT_PRODUCTION_APP_ORIGIN;
   }
 
   private buildWebinarJoinUrl(studyRoomId: string, joinLinkToken: string): string {
@@ -321,50 +343,50 @@ export class StudyRoomsService {
     );
   }
 
-  private isSlug(key: string) {
-    return key.includes("-");
-  }
+  /**
+   * Resolve a study room by primary key or by slug (recurring series).
+   * IMPORTANT: UUID ids contain hyphens — they must be looked up by `id` first.
+   * The old `key.includes("-")` heuristic misclassified UUIDs as slugs, breaking
+   * webinar approval polling and other room-scoped APIs for standard UUID primary keys.
+   */
   private async resolveStudyRoomByIdOrSlug(
     studyRoomIdOrSlug: string,
     options?: { select?: any; include?: any },
   ): Promise<any> {
-    this.logger.log("ROOM ID OR SLUG : : : ", studyRoomIdOrSlug)
+    const key = studyRoomIdOrSlug?.trim();
+    if (!key) return null;
 
-     const baseOptions = {
-        ...(options?.select ? { select: options.select } : {}),
-        ...(options?.include ? { include: options.include } : {}),
-      };
+    this.logger.log('ROOM ID OR SLUG : : : ', key);
 
-      if (!this.isSlug(studyRoomIdOrSlug)) {
-        return this.prisma.studyRoom.findUnique({
-          where: { id: studyRoomIdOrSlug },
-          ...baseOptions,
-        });
-      }
+    const baseOptions = {
+      ...(options?.select ? { select: options.select } : {}),
+      ...(options?.include ? { include: options.include } : {}),
+    };
 
-      // its slug
-       const rooms = await this.prisma.studyRoom.findMany({
-          where: { slug: studyRoomIdOrSlug },
-          orderBy: { date: "asc" },
-          ...baseOptions,
-        });
+    const byId = await this.prisma.studyRoom.findUnique({
+      where: { id: key },
+      ...baseOptions,
+    });
+    if (byId) return byId;
 
-        // snigle  room  with slug  OR a sigle sessio in a series
-        if (rooms.length === 1) {
-          return rooms[0];
-        }
-        // a series 
-        if (rooms.length > 1) {
-          const now = new Date();
+    const rooms = await this.prisma.studyRoom.findMany({
+      where: { slug: key },
+      orderBy: { date: 'asc' },
+      ...baseOptions,
+    });
 
-          return (
-            rooms.find(r => r.sessionStatus === "ONGOING") ||
-            rooms.find(r => r.sessionStatus === "UPCOMING") ||
-            rooms[0]
-          );
-        }
+    if (rooms.length === 1) {
+      return rooms[0];
+    }
+    if (rooms.length > 1) {
+      return (
+        rooms.find((r) => r.sessionStatus === 'ONGOING') ||
+        rooms.find((r) => r.sessionStatus === 'UPCOMING') ||
+        rooms[0]
+      );
+    }
 
-        return null;
+    return null;
   }
 
   private async getStudyRoomSchemaCapabilities() {

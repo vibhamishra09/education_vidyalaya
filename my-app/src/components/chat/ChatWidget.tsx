@@ -74,6 +74,14 @@ export function ChatWidget({
 	const currentUserDbIdPropRef = useRef(currentUserDbId)
 	currentUserDbIdPropRef.current = currentUserDbId
 	const viewerGuestEmailRef = useRef<string | null>(guestEmail ?? null)
+	/** Bumps when `/api/users/me` resolves inside this widget so dedupe effects re-run (ref alone does not). */
+	const [fetchedDbUserId, setFetchedDbUserId] = useState<string | null>(null)
+	/** Same as `fetchedDbUserId` state — socket `message:new` must read latest without stale closures. */
+	const fetchedDbUserIdRef = useRef<string | null>(null)
+	useEffect(() => {
+		fetchedDbUserIdRef.current = fetchedDbUserId
+	}, [fetchedDbUserId])
+
 	useEffect(() => {
 		viewerDbUserIdRef.current = currentUserDbId
 	}, [currentUserDbId])
@@ -90,7 +98,11 @@ export function ChatWidget({
 					headers: { Authorization: `Bearer ${token}` },
 				})
 				const id = typeof res.data?.id === 'string' ? res.data.id : null
-				if (id && !cancelled) viewerDbUserIdRef.current = id
+				if (id && !cancelled) {
+					viewerDbUserIdRef.current = id
+					fetchedDbUserIdRef.current = id
+					setFetchedDbUserId(id)
+				}
 			} catch {
 				/* ignore */
 			}
@@ -101,8 +113,35 @@ export function ChatWidget({
 	}, [channelId, userId, isGuestMode, getToken, currentUserDbId])
 
 	useEffect(() => {
+		fetchedDbUserIdRef.current = null
+		setFetchedDbUserId(null)
+	}, [channelId])
+
+	useEffect(() => {
 		viewerGuestEmailRef.current = viewerGuestEmail ?? guestEmail ?? null
 	}, [viewerGuestEmail, guestEmail])
+
+	/** When DB user id arrives (prop or `/api/users/me`), re-run dedupe so optimistic + echo collapse. */
+	useEffect(() => {
+		if (!channelId || isGuestMode) return
+		const vid = pickTrimmedUserId(
+			pickTrimmedUserId(viewerDbUserIdRef.current, currentUserDbIdPropRef.current),
+			fetchedDbUserId,
+		)
+		if (!vid) return
+		setMessages((prev) => {
+			const next = collapseNearDuplicateChatRows(
+				prev.map(normalizeChatMessage),
+				vid,
+			)
+			const same =
+				next.length === prev.length &&
+				next.every((m, i) => m.id === prev[i]?.id)
+			if (same) return prev
+			channelMessageCache.set(channelId, next)
+			return next
+		})
+	}, [channelId, currentUserDbId, fetchedDbUserId, isGuestMode])
 
 	const [messages, setMessages] = useState<Message[]>(() => {
 		if (!channelId) return []
@@ -175,8 +214,11 @@ export function ChatWidget({
 				const historyMessages = collapseNearDuplicateChatRows(
 					rawList.map(normalizeChatMessage),
 					pickTrimmedUserId(
-						viewerDbUserIdRef.current,
-						currentUserDbIdPropRef.current,
+						pickTrimmedUserId(
+							viewerDbUserIdRef.current,
+							currentUserDbIdPropRef.current,
+						),
+						fetchedDbUserIdRef.current,
 					),
 				)
 				// Replace server history for this channel only — do not merge with prior room’s list.
@@ -187,7 +229,7 @@ export function ChatWidget({
 				if (!mounted || channelIdRef.current !== activeChannelId) return
 				const errorMessage = e instanceof Error ? e.message : 'Failed to load messages'
 				console.error('Failed to load chat history:', errorMessage)
-				setError(errorMessage)
+				// Do not set the red banner — history is best-effort; socket may still work.
 			}
 		}
 		loadHistory()
@@ -256,6 +298,7 @@ export function ChatWidget({
 				let joinedForCurrentSocket = false
 				/** Only for UI: avoid flashing errors on the first flaky attempts */
 				let connectErrorCount = 0
+				let connectWatchdog: ReturnType<typeof setTimeout> | null = null
 
 				const joinChannel = () => {
 					if (joinedForCurrentSocket) return
@@ -290,6 +333,10 @@ export function ChatWidget({
 
 				s.on('chat:authenticated', () => {
 					console.log('[Chat] Socket authenticated')
+					if (connectWatchdog) {
+						clearTimeout(connectWatchdog)
+						connectWatchdog = null
+					}
 					if (isMounted) {
 						setIsConnecting(false)
 						setError(null)
@@ -299,6 +346,10 @@ export function ChatWidget({
 
 				s.on('chat:joined', () => {
 					console.log('[Chat] Successfully joined channel:', activeChannelId)
+					if (connectWatchdog) {
+						clearTimeout(connectWatchdog)
+						connectWatchdog = null
+					}
 					if (isMounted) {
 						setIsConnecting(false)
 						setError(null)
@@ -314,8 +365,11 @@ export function ChatWidget({
 							return prev
 						}
 						const viewerId = pickTrimmedUserId(
-							viewerDbUserIdRef.current,
-							currentUserDbIdPropRef.current,
+							pickTrimmedUserId(
+								viewerDbUserIdRef.current,
+								currentUserDbIdPropRef.current,
+							),
+							fetchedDbUserIdRef.current,
 						)
 						let removedOneOptimistic = false
 						const withoutMatchingOptimistic = prev.filter((m) => {
@@ -368,6 +422,19 @@ export function ChatWidget({
 							}
 						})()
 					}
+
+					// Avoid a stuck red banner while Socket.IO is still retrying (websocket → polling, etc.).
+					if (isMounted && channelIdRef.current === activeChannelId && connectErrorCount < 4) {
+						setError(null)
+					}
+					if (isMounted && channelIdRef.current === activeChannelId && connectErrorCount >= 4) {
+						setIsConnecting(false)
+						setError(
+							isGuestMode
+								? 'Unable to connect to chat right now. Please refresh or reopen your guest link.'
+								: 'Unable to connect to chat. Please check your connection and retry.',
+						)
+					}
 				})
 
 				s.io.on('reconnect_failed', () => {
@@ -402,7 +469,9 @@ export function ChatWidget({
 						} else if (hasErrorInfo && (errorData.message || errorData.error)) {
 							const msg = (errorData.message || errorData.error || '').toLowerCase()
 							if (
-								/\breconnect|disconnect|transport|ping\s*time|network/i.test(msg)
+								/\breconnect|disconnect|transport|ping\s*time|network|websocket|xhr|poll|closed before|connection/i.test(
+									msg,
+								)
 							) {
 								return
 							}
@@ -451,6 +520,17 @@ export function ChatWidget({
 				})
 
 				s.connect()
+				connectWatchdog = setTimeout(() => {
+					if (!isMounted || channelIdRef.current !== activeChannelId) return
+					if (!s.connected) {
+						setIsConnecting(false)
+						setError(
+							isGuestMode
+								? 'Chat is taking too long to connect. Please refresh this page.'
+								: 'Chat is taking too long to connect. Please refresh and try again.',
+						)
+					}
+				}, 15000)
 			} catch (err: unknown) {
 				console.error('[Chat] Failed to connect socket:', err)
 				if (isMounted) {
@@ -502,7 +582,7 @@ export function ChatWidget({
 		)
 	}
 
-	const onSend = (
+	const onSend = async (
 		text: string,
 		audienceType: MessageAudienceType,
 		targetUserId?: string,
@@ -517,47 +597,72 @@ export function ChatWidget({
 		const trimmed = text.trim()
 		if (!trimmed) return
 
-		// Guests: no optimistic row. Signed-in: optimistic uses DB id from props/ref (no await — avoids send delay).
-		if (!isGuestMode) {
-			const optimisticId = `optimistic-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`}`
-			const now = new Date().toISOString()
-			const sid =
-				(currentUserDbId && String(currentUserDbId)) ||
-				(viewerDbUserIdRef.current && String(viewerDbUserIdRef.current)) ||
-				''
-			if (sid) viewerDbUserIdRef.current = sid
-			const displayName =
-				user?.fullName ||
+		// Show immediate optimistic row for both signed-in and guest users.
+		// For signed-in users, prefer DB user id so server echo can collapse quickly.
+		let sid =
+			(currentUserDbId && String(currentUserDbId)) ||
+			(viewerDbUserIdRef.current && String(viewerDbUserIdRef.current)) ||
+			(fetchedDbUserIdRef.current && String(fetchedDbUserIdRef.current)) ||
+			''
+		if (!isGuestMode && !sid) {
+			try {
+				const token = await getToken()
+				if (token) {
+					const res = await apiClient.get<{ id?: string }>('/api/users/me', {
+						headers: { Authorization: `Bearer ${token}` },
+					})
+					const id = typeof res.data?.id === 'string' ? res.data.id : null
+					if (id) {
+						sid = id
+						viewerDbUserIdRef.current = id
+						fetchedDbUserIdRef.current = id
+						setFetchedDbUserId(id)
+					}
+				}
+			} catch {
+				/* ignore — fall back to placeholder optimistic */
+			}
+		}
+		const optimisticId = `optimistic-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`}`
+		const now = new Date().toISOString()
+		if (sid) viewerDbUserIdRef.current = sid
+		const fallbackGuestEmail =
+			(viewerGuestEmailRef.current && viewerGuestEmailRef.current.trim()) ||
+			(guestEmail && guestEmail.trim()) ||
+			null
+		const displayName = isGuestMode
+			? fallbackGuestEmail?.split('@')[0] || 'You'
+			: user?.fullName ||
 				[user?.firstName, user?.lastName].filter(Boolean).join(' ') ||
 				user?.primaryEmailAddress?.emailAddress?.split('@')[0] ||
 				'You'
-			const optimistic: Message = {
-				id: optimisticId,
-				senderId: sid,
-				audienceType,
-				targetUserId: targetUserId ?? null,
-				content: trimmed,
-				createdAt: now,
-				sender: {
-					id: sid || 'me',
-					name: displayName,
-					avatar: user?.imageUrl ?? null,
-				},
-			}
+		const optimistic: Message = {
+			id: optimisticId,
+			senderId: isGuestMode ? null : sid,
+			guestEmail: isGuestMode ? fallbackGuestEmail : null,
+			audienceType,
+			targetUserId: targetUserId ?? null,
+			content: trimmed,
+			createdAt: now,
+			sender: {
+				id: sid || 'me',
+				name: displayName,
+				avatar: user?.imageUrl ?? null,
+			},
+		}
+		setMessages((prev) => {
+			const next = mergeMessages(prev, [optimistic])
+			if (channelId) channelMessageCache.set(channelId, next)
+			return next
+		})
+		window.setTimeout(() => {
 			setMessages((prev) => {
-				const next = mergeMessages(prev, [optimistic])
+				if (!prev.some((m) => m.id === optimisticId)) return prev
+				const next = prev.filter((m) => m.id !== optimisticId)
 				if (channelId) channelMessageCache.set(channelId, next)
 				return next
 			})
-			window.setTimeout(() => {
-				setMessages((prev) => {
-					if (!prev.some((m) => m.id === optimisticId)) return prev
-					const next = prev.filter((m) => m.id !== optimisticId)
-					if (channelId) channelMessageCache.set(channelId, next)
-					return next
-				})
-			}, 20_000)
-		}
+		}, 20_000)
 
 		s.emit('message:send', {
 			channelId,

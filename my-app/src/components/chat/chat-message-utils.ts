@@ -148,8 +148,14 @@ export function shouldRemoveOptimisticForEcho(
 	const realTarget = real.targetUserId ?? null
 	if (optTarget !== realTarget) return false
 
+	const optSid = (optimistic.senderId ?? '').trim()
+	const realSid = (real.senderId ?? '').trim()
+	// Echo carries the same Prisma user id as the optimistic row — no need for viewerDbUserId
+	if (optSid && realSid && optSid === realSid) {
+		return true
+	}
+
 	if (viewerDbUserId && real.senderId === viewerDbUserId) {
-		const optSid = (optimistic.senderId ?? '').trim()
 		const optObjId = optimistic.sender?.id
 		// Optimistic row may use Clerk display name while echo uses DB name — still same user
 		if (
@@ -235,10 +241,23 @@ function sameSenderForOptimisticEcho(
 	return false
 }
 
+function audienceAndTargetMatch(a: ChatMessageRow, b: ChatMessageRow): boolean {
+	return (
+		(a.audienceType ?? 'EVERYONE') === (b.audienceType ?? 'EVERYONE') &&
+		(a.targetUserId ?? null) === (b.targetUserId ?? null)
+	)
+}
+
 /**
- * Replace optimistic rows with the matching server echo only.
- * Do not drop two real messages with the same text — that broke sync when users
- * sent similar messages within a few seconds (each has a distinct id).
+ * Drop optimistic rows that have a matching server message (same sender, content, audience).
+ *
+ * **Core issue the old adjacent-only pass missed:** after sorting by time, an optimistic
+ * row and its echo are not always *neighbors* — another message can sit between them
+ * (e.g. someone else posts, or a second quick send). Then two lines showed until a
+ * later effect ran.
+ *
+ * This pass pairs each optimistic with the **closest-in-time** real message that matches
+ * (one real consumes at most one optimistic), within a short window.
  */
 export function collapseNearDuplicateChatRows(
 	rows: ChatMessageRow[],
@@ -250,50 +269,42 @@ export function collapseNearDuplicateChatRows(
 		(a, b) =>
 			new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
 	)
-	const out: ChatMessageRow[] = []
 
-	for (const row of sorted) {
-		const prev = out[out.length - 1]
-		if (!prev) {
-			out.push(row)
-			continue
-		}
-		if (prev.id === row.id) continue
+	const optimistics = sorted.filter((m) => isOptimisticMessageId(m.id))
+	if (optimistics.length === 0) return sorted
 
+	const reals = sorted.filter((m) => !isOptimisticMessageId(m.id))
+
+	function pairable(o: ChatMessageRow, r: ChatMessageRow): boolean {
+		if (o.content.trim() !== r.content.trim()) return false
+		if (!audienceAndTargetMatch(o, r)) return false
 		const dt = Math.abs(
-			new Date(row.createdAt).getTime() - new Date(prev.createdAt).getTime(),
+			new Date(o.createdAt).getTime() - new Date(r.createdAt).getTime(),
 		)
-		const audOk =
-			(prev.audienceType ?? 'EVERYONE') === (row.audienceType ?? 'EVERYONE') &&
-			(prev.targetUserId ?? null) === (row.targetUserId ?? null)
-
-		const looksLikeOptimisticEcho =
-			isOptimisticMessageId(prev.id) &&
-			!isOptimisticMessageId(row.id) &&
-			prev.content.trim() === row.content.trim() &&
-			audOk &&
-			sameSenderForOptimisticEcho(prev, row, viewerDbUserId) &&
-			dt <= WINDOW_MS
-
-		if (looksLikeOptimisticEcho) {
-			out[out.length - 1] = row
-			continue
-		}
-
-		// Server echo can sort before the optimistic (clock skew); drop trailing optimistic duplicate
-		const reverseOptimisticEcho =
-			!isOptimisticMessageId(prev.id) &&
-			isOptimisticMessageId(row.id) &&
-			prev.content.trim() === row.content.trim() &&
-			audOk &&
-			sameSenderForOptimisticEcho(prev, row, viewerDbUserId) &&
-			dt <= WINDOW_MS
-
-		if (reverseOptimisticEcho) {
-			continue
-		}
-
-		out.push(row)
+		if (dt > WINDOW_MS) return false
+		return sameSenderForOptimisticEcho(o, r, viewerDbUserId)
 	}
-	return out
+
+	const usedRealIds = new Set<string>()
+	const removeOptimisticIds = new Set<string>()
+
+	for (const o of optimistics) {
+		const candidates = reals
+			.filter((r) => !usedRealIds.has(r.id) && pairable(o, r))
+			.sort(
+				(a, b) =>
+					Math.abs(
+						new Date(o.createdAt).getTime() - new Date(a.createdAt).getTime(),
+					) -
+					Math.abs(
+						new Date(o.createdAt).getTime() - new Date(b.createdAt).getTime(),
+					),
+			)
+		if (candidates.length > 0) {
+			removeOptimisticIds.add(o.id)
+			usedRealIds.add(candidates[0].id)
+		}
+	}
+
+	return sorted.filter((m) => !removeOptimisticIds.has(m.id))
 }

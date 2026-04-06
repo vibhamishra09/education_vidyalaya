@@ -129,6 +129,82 @@ export default function RoomPage() {
 		void refreshChatRecipients()
 	}, [refreshChatRecipients])
 
+	/**
+	 * Keep room details fresh while inside LiveKit so host edits (title/date/duration/status/webinar config)
+	 * are reflected without manual page refresh.
+	 */
+	useEffect(() => {
+		if (!roomName || loading) return
+		const isStudyRoom = roomName.startsWith('studyroom-')
+		const isPeerSession = roomName.startsWith('peersession-')
+		const roomId = isStudyRoom
+			? roomName.slice('studyroom-'.length)
+			: isPeerSession
+				? roomName.slice('peersession-'.length)
+				: roomName.split('-')[1]
+		if (!roomId) return
+
+		let cancelled = false
+		const POLL_MS = 15000
+
+		const pollSessionDetails = async () => {
+			try {
+				const clerkToken = guestAccessToken ? null : await getToken()
+				const endpoint = isStudyRoom
+					? `/api/study-rooms/${roomId}`
+					: `/api/peer-sessions/${roomId}`
+				const response = await apiClient.get(endpoint, {
+					headers: clerkToken ? { Authorization: `Bearer ${clerkToken}` } : {},
+				})
+				if (cancelled || !response.data) return
+
+				const data = response.data as {
+					id: string
+					date: string
+					duration: number
+					sessionStatus?: string
+					chatChannelId?: string | null
+					sessionMode?: string
+					webinarConfig?: unknown
+					[key: string]: unknown
+				}
+
+				setSessionData((prev) => ({
+					...(prev || {}),
+					...data,
+					sessionType: isStudyRoom ? 'studyRoom' : 'peerSession',
+					sessionMode: data.sessionMode,
+					webinarConfig: data.webinarConfig,
+				}))
+
+				if (
+					data.sessionStatus === 'DONE' ||
+					data.sessionStatus === 'CANCELLED' ||
+					data.sessionStatus === 'NOT_COMPLETED'
+				) {
+					setSessionEnded(true)
+				}
+
+				// Guest channel endpoint may not return data; room details still include chatChannelId.
+				if (!channelId && data.chatChannelId) {
+					setChannelId(data.chatChannelId)
+				}
+			} catch {
+				// Best-effort polling; keep room running on last known state.
+			}
+		}
+
+		const intervalId = setInterval(() => {
+			void pollSessionDetails()
+		}, POLL_MS)
+		void pollSessionDetails()
+
+		return () => {
+			cancelled = true
+			clearInterval(intervalId)
+		}
+	}, [roomName, loading, guestAccessToken, getToken, channelId])
+
 	useEffect(() => {
 		if (!roomName) return
 		// Avoid racing Clerk: getToken() can be null before isLoaded, which used to show "Not authenticated".

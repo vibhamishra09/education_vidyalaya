@@ -79,6 +79,15 @@ const nextConfig: NextConfig = {
           source: "/api/:path*",
           destination: `${backendOrigin}/api/:path*`,
         },
+        /**
+         * Socket.IO (chat, etc.) runs on Nest. When the client uses same-origin
+         * (e.g. `getSocketIoBaseUrl()` → `window.location.origin` because env was unset at build),
+         * forward `/socket.io` to the API so the browser does not hit Next (which has no WS gateway).
+         */
+        {
+          source: "/socket.io/:path*",
+          destination: `${backendOrigin}/socket.io/:path*`,
+        },
       ],
     };
   },

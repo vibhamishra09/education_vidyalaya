@@ -11,10 +11,16 @@ export function FloatingActionButtons() {
   const pathname = usePathname();
   const requireAuth = useRequireAuth();
 
-  // Hide on video call routes
+  // Avoid hydration-pathname flicker on initial mount.
+  if (!pathname) {
+    return null;
+  }
+
+  // Hide on video/webinar routes
   const isVideoCallRoute = pathname?.includes('/rooms/') || 
                           pathname?.includes('/sessions/') || 
-                          pathname?.includes('/studyroom/');
+                          pathname?.includes('/studyroom/') ||
+                          pathname?.startsWith('/webinar/');
 
   if (isVideoCallRoute) {
     return null;

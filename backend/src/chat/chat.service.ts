@@ -453,14 +453,45 @@ export class ChatService {
     });
   }
 
+  /**
+   * Channel rows store study rooms by primary key UUID. The LiveKit room segment may be
+   * that id or a slug (browse/share links). Match `resolveStudyRoomByIdOrSlug` behavior.
+   */
+  private async resolveStudyRoomIdForChannelLookup(segment: string): Promise<string | null> {
+    const key = segment?.trim();
+    if (!key) return null;
+
+    const byId = await this.prisma.studyRoom.findUnique({
+      where: { id: key },
+      select: { id: true },
+    });
+    if (byId) return byId.id;
+
+    const rooms = await this.prisma.studyRoom.findMany({
+      where: { slug: key },
+      orderBy: { date: 'asc' },
+      select: { id: true, sessionStatus: true },
+    });
+    if (rooms.length === 1) return rooms[0].id;
+    if (rooms.length > 1) {
+      const preferred =
+        rooms.find((r) => r.sessionStatus === 'ONGOING') ||
+        rooms.find((r) => r.sessionStatus === 'UPCOMING') ||
+        rooms[0];
+      return preferred.id;
+    }
+    return null;
+  }
+
   async getChannelByRoomName(roomName: string) {
     // Extract session/room ID from room name
-    // Room names are like "session-{id}" or "studyroom-{id}"
+    // Study rooms: "studyroom-{uuid|slug}". Peer: "session-{id}" (legacy) or "peersession-{id}" (app).
     const peerMatch = roomName.match(/^session-(.+)$/);
+    const peerSessionPrefixedMatch = roomName.match(/^peersession-(.+)$/);
     const studyRoomMatch = roomName.match(/^studyroom-(.+)$/);
 
-    if (peerMatch) {
-      const peerSessionId = peerMatch[1];
+    if (peerMatch || peerSessionPrefixedMatch) {
+      const peerSessionId = (peerMatch || peerSessionPrefixedMatch)![1];
       const channel = await this.prisma.channel.findFirst({
         where: {
           externalType: 'peerSession',
@@ -472,7 +503,9 @@ export class ChatService {
     }
 
     if (studyRoomMatch) {
-      const studyRoomId = studyRoomMatch[1];
+      const segment = studyRoomMatch[1];
+      const studyRoomId =
+        (await this.resolveStudyRoomIdForChannelLookup(segment)) ?? segment;
       const channel = await this.prisma.channel.findFirst({
         where: { externalType: 'studyRoom', externalId: studyRoomId } as any,
         select: { id: true },

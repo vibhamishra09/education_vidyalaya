@@ -2,6 +2,35 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3002';
 
+/** Forward Clerk/Bearer token so createSkill reaches Nest with auth (same as other /api proxies). */
+function authHeaders(request: NextRequest): HeadersInit {
+  const auth = request.headers.get('authorization');
+  return {
+    'Content-Type': 'application/json',
+    ...(auth ? { Authorization: auth } : {}),
+  };
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.text();
+    const response = await fetch(`${BACKEND_URL}/api/skills`, {
+      method: 'POST',
+      headers: authHeaders(request),
+      body: body || '{}',
+    });
+
+    const data = await response.json().catch(() => ({}));
+    return NextResponse.json(data, { status: response.status });
+  } catch (error) {
+    console.error('Error creating skill:', error);
+    return NextResponse.json(
+      { error: 'Failed to create skill' },
+      { status: 500 },
+    );
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
