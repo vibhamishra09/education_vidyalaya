@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, X, Sparkles, ArrowLeft, Swords, Presentation, Plus } from "lucide-react";
+import { Search, X, Sparkles, ArrowLeft, Swords } from "lucide-react";
 import { useBrowse, useBrowseRecommendations, usePeerMatches } from "@/hooks/use-browse";
 import { useSkills } from "@/hooks/use-skills";
 import { useCurrentUser } from "@/hooks/use-users";
@@ -33,7 +33,7 @@ import { cn } from "@/lib/utils";
 import { studyRoomCardDisplayLive } from "@/lib/utils/study-room-edit";
 import { getStudyRoomPagePathWithJoinIntent } from "@/lib/utils/study-room-share";
 
-const BROWSE_TABS = ["peers", "studyRooms", "webinars"] as const;
+const BROWSE_TABS = ["peers", "studyRooms"] as const;
 type BrowseTab = typeof BROWSE_TABS[number];
 
 /** Default first page: trending / most-active lists (max 10 each). */
@@ -119,23 +119,10 @@ function BrowsePageContent() {
   const [currentPage, setCurrentPage] = useState(1);
   const [peerCount, setPeerCount] = useState<number>(0);
   const [studyRoomCount, setStudyRoomCount] = useState<number>(0);
-  const [webinarCount, setWebinarCount] = useState<number>(0);
   const [peerHasSocialLinks, setPeerHasSocialLinks] = useState<"all" | "withSocial">("all");
   const [studyRoomStatusFilter, setStudyRoomStatusFilter] = useState<
     "all" | SessionStatus.UPCOMING | SessionStatus.ONGOING
   >("all");
-  /** Debate-style webinar filters: ALL = upcoming + ongoing (active) */
-  const [webinarStatusFilter, setWebinarStatusFilter] = useState<
-    | "all"
-    | SessionStatus.UPCOMING
-    | SessionStatus.PENDING
-    | SessionStatus.ONGOING
-    | SessionStatus.DONE
-    | SessionStatus.CANCELLED
-  >("all");
-
-  const effectiveStudyStatus =
-    activeTab === "webinars" ? webinarStatusFilter : studyRoomStatusFilter;
   const [studyFreeOnly, setStudyFreeOnly] = useState<"all" | "free">("all");
 
   // Get current user for recommendations
@@ -150,12 +137,11 @@ function BrowsePageContent() {
     }
 
     const tabParam = searchParams.get("tab");
-    if (
-      tabParam === "peers" ||
-      tabParam === "studyRooms" ||
-      tabParam === "webinars"
-    ) {
+    if (tabParam === "peers" || tabParam === "studyRooms") {
       setActiveTab(tabParam);
+    }
+    if (tabParam === "webinars") {
+      setActiveTab("studyRooms");
     }
   }, [searchParams, setSearchQuery, setActiveTab]);
 
@@ -168,7 +154,6 @@ function BrowsePageContent() {
     selectedSkills,
     peerHasSocialLinks,
     studyRoomStatusFilter,
-    webinarStatusFilter,
     studyFreeOnly,
   ]);
 
@@ -195,17 +180,11 @@ function BrowsePageContent() {
     browseFilters.peerHasSocialLinks = true;
   }
 
-  if (
-    (activeTab === "studyRooms" || activeTab === "webinars") &&
-    effectiveStudyStatus !== "all"
-  ) {
-    browseFilters.studyStatus = effectiveStudyStatus;
+  if (activeTab === "studyRooms" && studyRoomStatusFilter !== "all") {
+    browseFilters.studyStatus = studyRoomStatusFilter;
   }
 
-  if (
-    (activeTab === "studyRooms" || activeTab === "webinars") &&
-    studyFreeOnly === "free"
-  ) {
+  if (activeTab === "studyRooms" && studyFreeOnly === "free") {
     browseFilters.studyFreeOnly = true;
   }
 
@@ -219,25 +198,11 @@ function BrowsePageContent() {
     browseFilters.trendingLimit = BROWSE_TRENDING_LIMIT;
   }
 
-  if (
-    activeTab === "webinars" &&
-    isDefaultBrowseView &&
-    webinarStatusFilter === "all"
-  ) {
-    browseFilters.includeTrendingWebinars = true;
-    browseFilters.trendingLimit = BROWSE_TRENDING_LIMIT;
-  }
-
   const showStudyTrendingDefaultOnly =
     activeTab === "studyRooms" &&
     isDefaultBrowseView &&
     studyRoomStatusFilter === "all" &&
     studyFreeOnly === "all";
-
-  const showWebinarTrendingDefaultOnly =
-    activeTab === "webinars" &&
-    isDefaultBrowseView &&
-    webinarStatusFilter === "all";
 
   /** Page 1, no search/skills, all peers — API sorts by reviews (most active); show at most 10, no pagination. */
   const showPeersMostActiveDefaultOnly =
@@ -254,7 +219,6 @@ function BrowsePageContent() {
       if (browseData.counts) {
         setPeerCount(browseData.counts.peers);
         setStudyRoomCount(browseData.counts.studyRooms);
-        setWebinarCount(browseData.counts.webinars ?? 0);
       }
     }
   }, [browseData]);
@@ -274,7 +238,6 @@ function BrowsePageContent() {
   const peers = browseData?.peers || [];
   const studyRooms = browseData?.studyRooms || [];
   const trendingStudyRooms = browseData?.trendingStudyRooms || [];
-  const trendingWebinars = browseData?.trendingWebinars || [];
   const skills = skillsData?.skills || [];
 
   // Fetch recommendations based on user's "want to learn" skills
@@ -305,13 +268,7 @@ function BrowsePageContent() {
       <Navigation />
 
       <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12 max-w-7xl">
-        {/* Header — on Webinars tab, only back link here; title lives in webinars block below */}
-        <div
-          className={cn(
-            "flex flex-col md:flex-row md:items-start justify-between gap-4",
-            activeTab === "webinars" ? "mb-4" : "mb-8"
-          )}
-        >
+        <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-8">
           <div className="space-y-3 w-full">
             <Link 
               href="/dashboard" 
@@ -320,21 +277,19 @@ function BrowsePageContent() {
               <ArrowLeft className="h-3.5 w-3.5 group-hover:-translate-x-0.5 transition-transform" /> 
               Back to Dashboard
             </Link>
-            {activeTab !== "webinars" && (
             <div className="space-y-1">
               <h1 className="text-3xl font-extrabold tracking-tight lg:text-4xl text-foreground">
                  Browse Community
               </h1>
               <p className="text-muted-foreground text-sm sm:text-base max-w-2xl leading-relaxed">
-                Discover peers, study rooms, and webinars to learn and grow together
+                Discover peers and study rooms to learn and grow together
               </p>
             </div>
-            )}
           </div>
         </div>
 
         {/* Recommendations Section - Based on user's wantSkills */}
-        {showRecommendations && activeTab !== "webinars" && (
+        {showRecommendations && (
           <div className="mb-10 rounded-3xl bg-gradient-to-br from-green-50/50 to-emerald-50/20 border border-green-100/50 p-6 dark:from-green-950/10 dark:to-emerald-950/5 dark:border-green-900/20">
             <div className="flex items-center gap-2 mb-4">
               <Sparkles className="h-5 w-5 text-green-600 fill-green-100 dark:fill-green-900/20" />
@@ -405,34 +360,6 @@ function BrowsePageContent() {
           </div>
         )}
 
-        {/* Webinars — primary title for this tab (replaces Browse Community) */}
-        {activeTab === "webinars" && (
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-            <div>
-              <h1 className="text-3xl font-extrabold tracking-tight lg:text-4xl text-foreground flex items-center gap-3">
-                <Presentation
-                  className="h-8 w-8 lg:h-9 lg:w-9 shrink-0 text-emerald-600 dark:text-emerald-400"
-                  strokeWidth={2}
-                  aria-hidden
-                />
-                Webinars
-              </h1>
-              <p className="text-muted-foreground text-sm sm:text-base mt-1 max-w-2xl leading-relaxed">
-                Host live sessions or join community webinars
-              </p>
-            </div>
-            <Button
-              asChild
-              className="w-full sm:w-auto bg-green-500/10 text-green-700 hover:bg-green-500/20 border border-green-500/20 dark:text-green-400 shadow-sm"
-            >
-              <Link href="/create-study-room?mode=webinar">
-                <Plus className="h-4 w-4 mr-2" />
-                Create webinar
-              </Link>
-            </Button>
-          </div>
-        )}
-
         {/* Filters & Search Container */}
         <div className="flex flex-col md:flex-row md:flex-nowrap md:gap-3 gap-4 mb-8 items-start md:items-center justify-between w-full sticky top-0 z-30 bg-background/80 backdrop-blur-md py-4 -mx-4 px-4 border-b border-border/40">
             {/* Search Bar */}
@@ -457,8 +384,8 @@ function BrowsePageContent() {
                 />
             </div>
             
-            {/* Tabs — height matches Debate Rooms / Create webinar (h-11); flex-1 on search */}
-             <div className="grid grid-cols-3 h-11 items-center justify-center shrink-0 rounded-2xl bg-muted p-1 text-muted-foreground w-full md:w-auto md:max-w-[min(100%,520px)] border border-border/10 gap-0.5">
+            {/* Tabs — height matches Debate Rooms (h-11); flex-1 on search */}
+             <div className="grid grid-cols-2 h-11 items-center justify-center shrink-0 rounded-2xl bg-muted p-1 text-muted-foreground w-full md:w-auto md:max-w-[min(100%,360px)] border border-border/10 gap-0.5">
                 <button
                 type="button"
                 className={cn(
@@ -491,23 +418,6 @@ function BrowsePageContent() {
                 {(searchQuery || selectedSkills.length > 0) && studyRoomCount > 0 && (
                     <Badge variant="secondary" className={cn("text-[10px] h-5 px-1.5 min-w-5", activeTab === "studyRooms" ? "bg-white/20 text-white" : "bg-emerald-100 text-emerald-700")}>
                     {studyRoomCount}
-                    </Badge>
-                )}
-                </button>
-                <button
-                type="button"
-                className={cn(
-                    "inline-flex items-center justify-center whitespace-nowrap rounded-xl px-3 sm:px-5 py-1.5 text-xs sm:text-sm font-bold ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 gap-1.5",
-                    activeTab === "webinars" 
-                    ? "bg-emerald-600 text-white shadow-md shadow-emerald-900/20" 
-                    : "hover:bg-background/60 hover:text-foreground"
-                )}
-                onClick={() => setActiveTab("webinars")}
-                >
-                <span>Webinars</span>
-                {(searchQuery || selectedSkills.length > 0) && webinarCount > 0 && (
-                    <Badge variant="secondary" className={cn("text-[10px] h-5 px-1.5 min-w-5", activeTab === "webinars" ? "bg-white/20 text-white" : "bg-emerald-100 text-emerald-700")}>
-                    {webinarCount}
                     </Badge>
                 )}
                 </button>
@@ -569,50 +479,6 @@ function BrowsePageContent() {
                   onValueChange={(value) => setStudyFreeOnly(value as "all" | "free")}
                 >
                   <SelectTrigger className="w-[170px] h-9 rounded-xl border-muted bg-muted/20">
-                    <SelectValue placeholder="Fee" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All fees</SelectItem>
-                    <SelectItem value="free">Free only</SelectItem>
-                  </SelectContent>
-                </Select>
-              </>
-            )}
-
-            {activeTab === "webinars" && (
-              <>
-                <Select
-                  value={webinarStatusFilter}
-                  onValueChange={(value) =>
-                    setWebinarStatusFilter(
-                      value as
-                        | "all"
-                        | SessionStatus.UPCOMING
-                        | SessionStatus.PENDING
-                        | SessionStatus.ONGOING
-                        | SessionStatus.DONE
-                        | SessionStatus.CANCELLED
-                    )
-                  }
-                >
-                  <SelectTrigger className="w-[180px] h-11 rounded-2xl border-muted bg-muted/20">
-                    <SelectValue placeholder="Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Active webinars</SelectItem>
-                    <SelectItem value={SessionStatus.UPCOMING}>Waiting</SelectItem>
-                    <SelectItem value={SessionStatus.PENDING}>In Prep</SelectItem>
-                    <SelectItem value={SessionStatus.ONGOING}>Live</SelectItem>
-                    <SelectItem value={SessionStatus.DONE}>Ended</SelectItem>
-                    <SelectItem value={SessionStatus.CANCELLED}>Cancelled</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                <Select
-                  value={studyFreeOnly}
-                  onValueChange={(value) => setStudyFreeOnly(value as "all" | "free")}
-                >
-                  <SelectTrigger className="w-[170px] h-11 rounded-2xl border-muted bg-muted/20">
                     <SelectValue placeholder="Fee" />
                   </SelectTrigger>
                   <SelectContent>
@@ -887,153 +753,6 @@ function BrowsePageContent() {
                                 </Button>
                                 <span className="text-sm text-muted-foreground px-2">
                                   Page {browseData.pagination.page} of {browseData.pagination.totalPages}
-                                </span>
-                                <Button
-                                  onClick={() => setCurrentPage((p) => p + 1)}
-                                  disabled={!browseData.pagination.hasMore || browseLoading}
-                                  variant="outline"
-                                >
-                                  Next
-                                </Button>
-                              </div>
-                            </div>
-                          )}
-                      </>
-                    )}
-                  </>
-                )}
-
-                {activeTab === "webinars" && (
-                  <>
-                    {showWebinarTrendingDefaultOnly ? (
-                      <>
-                        <div className="mb-6 flex items-center gap-2">
-                          <Sparkles className="h-5 w-5 text-green-600 shrink-0" />
-                          <h2 className="text-lg font-bold text-foreground">
-                            Trending Webinars
-                          </h2>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-                          {trendingWebinars
-                            .slice(0, BROWSE_TRENDING_LIMIT)
-                            .map((room) => (
-                              <StudyRoomCardComponent
-                                key={`trending-${room.id}`}
-                                roomId={room.id}
-                                slug={room.slug ?? room.id}
-                                status={
-                                  studyRoomCardDisplayLive(
-                                    room.sessionStatus,
-                                    room.date,
-                                  )
-                                    ? "live"
-                                    : "scheduled"
-                                }
-                                title={room.title}
-                                description={room.description}
-                                date={room.date}
-                                duration={room.duration}
-                                imageUrl={room.imageUrl}
-                                participants={{
-                                  current: room.participantCount,
-                                  max: room.maxParticipants,
-                                }}
-                                host={studyRoomCardHost(room)}
-                                category={studyRoomCategoryLabel(room.skills)}
-                                skillNames={studyRoomSkillNames(room.skills)}
-                                sessionStatus={room.sessionStatus}
-                                currentUserId={currentUserData?.user?.id ?? null}
-                                seriesId={room.seriesId ?? null}
-                                joiningFee={room.joiningFee}
-                                timezone={room.timezone ?? null}
-                                actionLabel="Register"
-                                onAction={() => {
-                                  const slug = room.webinarRegistrationSlug;
-                                  if (slug) {
-                                    router.push(
-                                      `/webinar/register/${encodeURIComponent(slug)}`,
-                                    );
-                                  } else {
-                                    router.push(
-                                      getStudyRoomPagePathWithJoinIntent(room.id),
-                                    );
-                                  }
-                                }}
-                              />
-                            ))}
-                          {trendingWebinars.length === 0 && !browseLoading && (
-                            <div className="col-span-full text-center py-12 text-muted-foreground text-sm sm:text-base">
-                              No trending webinars right now. Try a search or filters
-                              below.
-                            </div>
-                          )}
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                          {studyRooms.map((room) => (
-                            <StudyRoomCardComponent
-                              key={room.id}
-                              roomId={room.id}
-                              slug={room.slug ?? room.id}
-                              status={
-                                studyRoomCardDisplayLive(room.sessionStatus, room.date)
-                                  ? "live"
-                                  : "scheduled"
-                              }
-                              title={room.title}
-                              description={room.description}
-                              date={room.date}
-                              duration={room.duration}
-                              imageUrl={room.imageUrl}
-                              participants={{
-                                current: room.participantCount,
-                                max: room.maxParticipants,
-                              }}
-                              host={studyRoomCardHost(room)}
-                              category={studyRoomCategoryLabel(room.skills)}
-                              skillNames={studyRoomSkillNames(room.skills)}
-                              sessionStatus={room.sessionStatus}
-                              currentUserId={currentUserData?.user?.id ?? null}
-                              seriesId={room.seriesId ?? null}
-                              joiningFee={room.joiningFee}
-                              timezone={room.timezone ?? null}
-                              actionLabel="Register"
-                              onAction={() => {
-                                const slug = room.webinarRegistrationSlug;
-                                if (slug) {
-                                  router.push(
-                                    `/webinar/register/${encodeURIComponent(slug)}`,
-                                  );
-                                } else {
-                                  router.push(
-                                    getStudyRoomPagePathWithJoinIntent(room.id),
-                                  );
-                                }
-                              }}
-                            />
-                          ))}
-                          {studyRooms.length === 0 && !browseLoading && (
-                            <div className="col-span-full text-center py-12 text-muted-foreground text-sm sm:text-base">
-                              No webinars found matching your criteria
-                            </div>
-                          )}
-                        </div>
-                        {browseData?.pagination.totalPages &&
-                          browseData.pagination.totalPages > 1 && (
-                            <div className="mt-6 flex justify-center">
-                              <div className="flex items-center gap-2">
-                                <Button
-                                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                                  disabled={currentPage === 1 || browseLoading}
-                                  variant="outline"
-                                >
-                                  Previous
-                                </Button>
-                                <span className="text-sm text-muted-foreground px-2">
-                                  Page {browseData.pagination.page} of{" "}
-                                  {browseData.pagination.totalPages}
                                 </span>
                                 <Button
                                   onClick={() => setCurrentPage((p) => p + 1)}
