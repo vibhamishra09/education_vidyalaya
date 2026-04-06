@@ -8,8 +8,6 @@ import apiClient from '@/lib/api-client'
 import { normalizeLiveKitServerUrl } from '@/lib/livekit-url'
 import { Loader2, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { useUser } from '@clerk/nextjs'
-import axios from 'axios'
 
 type ChatIdentity = {
 	id: string
@@ -82,10 +80,7 @@ export default function RoomPage() {
 	const guestAccessToken = searchParams.get('guestAccessToken')
 	const isMountedRef = useRef(true)
 	const participantKeyRef = useRef<string>('')
-	const {user, isLoaded} = useUser()
-	const [sessionNotStarted, setSessionNotStarted] = useState(false)
-	const [notAParticipant, setNotaParticipant] = useState(false)
-	
+
 	useEffect(() => {
 		isMountedRef.current = true
 		return () => {
@@ -94,10 +89,9 @@ export default function RoomPage() {
 	}, [])
 
 	const refreshChatRecipients = useCallback(async () => {
-		// Guests don't have authenticated chat channels in this flow.
-		if (guestAccessToken) return
-		const clerkToken = await getToken()
-		if (!clerkToken || !roomName) return
+		if (!roomName) return
+		const clerkToken = guestAccessToken ? null : await getToken()
+		if (!guestAccessToken && !clerkToken) return
 
 		const isStudyRoom = roomName.startsWith('studyroom-')
 		const isPeerSession = roomName.startsWith('peersession-')
@@ -113,7 +107,7 @@ export default function RoomPage() {
 				? `/api/study-rooms/${roomId}`
 				: `/api/peer-sessions/${roomId}`
 			const response = await apiClient.get(endpoint, {
-				headers: { Authorization: `Bearer ${clerkToken}` },
+				headers: clerkToken ? { Authorization: `Bearer ${clerkToken}` } : {},
 			})
 			if (!isMountedRef.current || !response.data) return
 			const chatTargets = extractChatTargets(
@@ -138,7 +132,7 @@ export default function RoomPage() {
 	useEffect(() => {
 		if (!roomName) return
 		// Avoid racing Clerk: getToken() can be null before isLoaded, which used to show "Not authenticated".
-		if (!guestAccessToken && !clerkLoaded ) return
+		if (!guestAccessToken && !clerkLoaded) return
 
 		let mounted = true
 		async function initialize() {
@@ -170,14 +164,14 @@ export default function RoomPage() {
 
 				// Fetch LiveKit token, channel ID, and session data
 				const promises: Promise<{ data: { token?: string; channelId?: string; [key: string]: unknown } } | null>[] = [
-					axios.post(
-						`${process.env.NEXT_PUBLIC_API_URL}/api/livekit/${guestAccessToken ? 'guest-token' : 'token'}`,
+					apiClient.post(
+						`/api/livekit/${guestAccessToken ? 'guest-token' : 'token'}`,
 						guestAccessToken ? { roomName, guestAccessToken } : { roomName },
 						{
 							headers: {
 								...(clerkToken ? { Authorization: `Bearer ${clerkToken}` } : {}),
 							},
-						}
+						},
 					),
 					clerkToken
 						? apiClient.get(`/api/chat/channel-by-room/${roomName}`, {
@@ -237,44 +231,8 @@ export default function RoomPage() {
 				}
 				if (results[2]?.data) {
 					// Add session type to sessionData
-					const data = results[2].data as { id: string; date: string; duration: number; sessionStatus?: string; [key: string]: unknown; participants: any[]; createdBy: any};
-					const userId = user?.id
-					const dbId = user?.publicMetadata.dbUserId || currentUserDbId
-					const now = Date.now()
-					const sessionStart = new Date(data.date).getTime()
-					const isLearner = data.role === 'learner'
-					const buffer = 5 * 60 * 1000 // 5 min
-					const isSessionNotStarted = now < (sessionStart - buffer)
-
-					 if (!guestAccessToken && userId) {
-						const participants = data.participants || []
-
-						const isParticipant = participants.some(
-							(p: any) => p.clerkId === userId
-						)
-
-						const isHostUser = data.createdBy?.id === dbId
-
-						if (!isParticipant && !isHostUser) {
-							setNotaParticipant(true)
-							setSessionData({
-								...data,
-								sessionType: isStudyRoom ? 'studyRoom' : 'peerSession',
-							})
-							setLoading(false)
-							return
-						}
-					}
+					const data = results[2].data as { id: string; date: string; duration: number; sessionStatus?: string; [key: string]: unknown };
 					
-					if (isLearner && isSessionNotStarted) {
-						setSessionNotStarted(true)
-						setSessionData({
-							...data,
-							sessionType: isStudyRoom ? 'studyRoom' : 'peerSession',
-						})
-						setLoading(false)
-						return
-					}
 					// Check if session is already completed or not completed (expired)
 					if (data.sessionStatus === 'DONE' || data.sessionStatus === 'CANCELLED' || data.sessionStatus === 'NOT_COMPLETED') {
 						setSessionEnded(true)
@@ -325,7 +283,7 @@ export default function RoomPage() {
 				}
 			} catch (e: unknown) {
 				if (!mounted) return
-				const errorMessage = axios.isAxiosError(e)
+				const errorMessage = isAxiosError(e)
 					? ((typeof e.response?.data === 'object' &&
 							e.response?.data &&
 							'message' in e.response.data
@@ -395,30 +353,6 @@ export default function RoomPage() {
 		)
 	}
 
-	if (!token) {
-		return (
-			<div className="h-screen w-screen flex items-center justify-center bg-black">
-				<div className="text-center text-white">
-					<Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-					<p>Connecting...</p>
-				</div>
-			</div>
-		)
-	}
-
-	if (!serverUrl.trim()) {
-		return (
-			<div className="h-screen w-screen flex items-center justify-center bg-black px-6">
-				<div className="text-center text-red-400 max-w-md">
-					<p className="text-xl font-semibold mb-2 text-white">Video unavailable</p>
-					<p className="text-sm text-gray-400">
-						LiveKit URL is not configured. Set LIVEKIT_URL on the API server (it is returned with the join token), or set NEXT_PUBLIC_LIVEKIT_WS_URL for the web app.
-					</p>
-				</div>
-			</div>
-		)
-	}
-
 	if (sessionEnded) {
 		const isNotCompleted = sessionData?.sessionStatus === 'NOT_COMPLETED';
 		return (
@@ -465,48 +399,29 @@ export default function RoomPage() {
 		)
 	}
 
-
-	if (notAParticipant) {
+	if (!token) {
 		return (
-			<div className="h-screen w-screen flex items-center justify-center bg-[#0a0a0a]">
-				<div className="text-center text-white max-w-md">
-					<p className="text-2xl font-semibold mb-3">You are not Enrolled in this Study Room</p>
-					<p className="text-gray-400 mb-6">
-						Please enroll before joining the room
-					</p>
-
-					<Button onClick={() => router.replace(`/studyroom/${sessionData?.slug}/?join=1`)}>
-						Enroll
-					</Button>
+			<div className="h-screen w-screen flex items-center justify-center bg-black">
+				<div className="text-center text-white">
+					<Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+					<p>Connecting...</p>
 				</div>
 			</div>
 		)
 	}
 
-	if (sessionNotStarted) {
+	if (!serverUrl.trim()) {
 		return (
-			<div className="h-screen w-screen flex items-center justify-center bg-[#0a0a0a]">
-				<div className="text-center text-white max-w-md">
-					<p className="text-2xl font-semibold mb-3">Session Not Started Yet</p>
-					<p className="text-gray-400 mb-6">
-						This session hasn’t started yet. Please join at the scheduled time.
+			<div className="h-screen w-screen flex items-center justify-center bg-black px-6">
+				<div className="text-center text-red-400 max-w-md">
+					<p className="text-xl font-semibold mb-2 text-white">Video unavailable</p>
+					<p className="text-sm text-gray-400">
+						LiveKit URL is not configured. Set LIVEKIT_URL on the API server (it is returned with the join token), or set NEXT_PUBLIC_LIVEKIT_WS_URL for the web app.
 					</p>
-
-					<Button onClick={() => router.replace(`/dashboard`)}>
-						Go to Dashboard
-					</Button>
 				</div>
 			</div>
 		)
 	}
-
-	const sessionMode = sessionData && 'sessionMode' in sessionData
-		? (sessionData as { sessionMode?: string }).sessionMode
-		: undefined
-	const webinarAttendeeMinimalUi =
-		!!guestAccessToken &&
-		sessionMode === 'WEBINAR' &&
-		!isHost
 
 	// Extract stable UUID for consistent scratch pad identification
 	const isStudyRoom = roomName?.startsWith('studyroom-')
@@ -517,6 +432,12 @@ export default function RoomPage() {
 			? roomName.slice('peersession-'.length)
 			: roomName?.includes('-') ? roomName.split('-')[1] : roomName
 
+	const liveSessionKind: 'studyRoom' | 'peerSession' | undefined = isStudyRoom
+		? 'studyRoom'
+		: isPeerSession
+			? 'peerSession'
+			: undefined
+
 	return (
 		<EnhancedVideoRoom
 			token={token}
@@ -524,6 +445,7 @@ export default function RoomPage() {
 			channelId={channelId}
 			sessionData={sessionData}
 			sessionUuid={extractedUuid}
+			liveSessionKind={liveSessionKind}
 			isHost={isHost}
 			chatRecipients={chatRecipients}
 			hostUser={hostUser}
@@ -531,7 +453,6 @@ export default function RoomPage() {
 			externalAccessToken={guestAccessToken}
 			guestLivekitIdentity={guestLivekitIdentity}
 			onParticipantListChange={handleParticipantListChange}
-			webinarAttendeeMinimalUi={webinarAttendeeMinimalUi}
 		/>
 	)
 }
