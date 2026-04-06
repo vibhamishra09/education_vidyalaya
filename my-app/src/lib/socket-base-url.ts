@@ -1,9 +1,8 @@
 /**
  * Base URL for Socket.IO (chat, moderation, transcripts, debate).
  *
- * On production, if `NEXT_PUBLIC_CHAT_WS_URL` / `NEXT_PUBLIC_API_URL` were not set
- * at build time, the old `localhost` fallback broke live. In the browser we use
- * the current origin so same-host deployments still connect.
+ * Priority: explicit chat URL → API origin (no `/api` suffix) → browser same-origin.
+ * Same-origin works when `next.config` rewrites `/socket.io/*` to Nest (see fallback rewrites).
  */
 export function getSocketIoBaseUrl(): string {
 	const chat = process.env.NEXT_PUBLIC_CHAT_WS_URL?.trim().replace(/\/$/, '')

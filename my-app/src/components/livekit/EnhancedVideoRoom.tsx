@@ -171,8 +171,19 @@ export function EnhancedVideoRoom({
 	const router = useRouter()
 	const { showSuccess, showError } = useToast()
 	const { getToken } = useAuth()
-	const { user } = useUser()
+	const { user, isLoaded: clerkLoaded } = useUser()
 	const queryClient = useQueryClient()
+	/**
+	 * Must match what the host sends in `request-audio-on` / `request-video-on` (LiveKit `participant.identity`).
+	 * Guest joins use the guest LiveKit identity on the token — not the viewer's Clerk id, or host-targeted
+	 * events will never match `userIdRef` and permission modals never show.
+	 */
+	const moderationUserId = externalAccessToken
+		? guestLivekitIdentity ?? null
+		: user?.id ?? null
+	const moderationReady =
+		!!sessionData?.id &&
+		(externalAccessToken ? !!guestLivekitIdentity : clerkLoaded && !!user?.id)
 
 	/** Prevents double `router.push` when leave + LiveKit disconnect both fire */
 	const feedbackNavigatedRef = useRef(false)
@@ -262,8 +273,24 @@ export function EnhancedVideoRoom({
 		return perms?.mic === 'disabled'
 	}, [sessionData?.sessionMode, sessionData?.webinarConfig])
 
+	/** Participant camera disabled at create time → no auto video for joinees; host always may publish video. */
+	const webinarJoineeVideoOffByConfig = useMemo(() => {
+		if (sessionData?.sessionMode !== 'WEBINAR') return false
+		const perms = (
+			(sessionData.webinarConfig || {}) as { permissions?: { video?: string } }
+		).permissions
+		return perms?.video === 'disabled'
+	}, [sessionData?.sessionMode, sessionData?.webinarConfig])
+
 	const liveKitInitialAudio =
 		isSecureMediaContext && (!webinarJoineeMicOffByConfig || isHost)
+
+	/** Webinar only: publish camera on connect when create-time participant camera is enabled; standard/peer rooms stay off. */
+	const liveKitInitialVideo = useMemo(() => {
+		if (!isSecureMediaContext) return false
+		if (sessionData?.sessionMode !== 'WEBINAR') return false
+		return !webinarJoineeVideoOffByConfig || isHost
+	}, [isSecureMediaContext, sessionData?.sessionMode, webinarJoineeVideoOffByConfig, isHost])
 
 	// Store showSuccess in ref to avoid recreating handleWarning callback
 	const showSuccessRef = useRef(showSuccess)
@@ -365,8 +392,8 @@ export function EnhancedVideoRoom({
 		sessionType: sessionData?.sessionType || null,
 		isHost,
 		token: authToken,
-		userId: user?.id,
-		enabled: !!sessionData?.id && (!isGuest || !!guestLivekitIdentity),
+		userId: moderationUserId,
+		enabled: moderationReady,
 	})
 
 	const webinarChat = useMemo(() => {
@@ -722,6 +749,7 @@ export function EnhancedVideoRoom({
 				sessionData.sessionMode === 'WEBINAR' &&
 				sessionData.id && (
 					<WebinarHostPanel
+						isHost={isHost}
 						studyRoomId={sessionData.id}
 						guestParticipants={[]}
 						chatEnabled={webinarChat.chatLive}
@@ -729,7 +757,7 @@ export function EnhancedVideoRoom({
 					/>
 				)}
 			<LiveKitRoom
-				video={false}
+				video={liveKitInitialVideo}
 				audio={liveKitInitialAudio}
 				token={token}
 				serverUrl={serverUrl}
@@ -1501,14 +1529,27 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		if (!localParticipant || isHost) return
 
 		const prevPermissions = prevPermissionsRef.current
+		const webinarPermissions = (
+			(sessionInfo?.webinarConfig || {}) as { permissions?: { mic?: string; video?: string } }
+		).permissions
+		const forceMicOffByWebinarConfig =
+			sessionInfo?.sessionMode === 'WEBINAR' && webinarPermissions?.mic === 'disabled'
+		const forceVideoOffByWebinarConfig =
+			sessionInfo?.sessionMode === 'WEBINAR' && webinarPermissions?.video === 'disabled'
 
 		// If audio is locked and mic is on, force disable it
-		if (permissions && !permissions.allowAudio && localParticipant.isMicrophoneEnabled) {
+		if (
+			localParticipant.isMicrophoneEnabled &&
+			(!!permissions && !permissions.allowAudio || forceMicOffByWebinarConfig)
+		) {
 			localParticipant.setMicrophoneEnabled(false).catch(() => { })
 		}
 
 		// If video is locked and camera is on, force disable it
-		if (permissions && !permissions.allowVideo && localParticipant.isCameraEnabled) {
+		if (
+			localParticipant.isCameraEnabled &&
+			(!!permissions && !permissions.allowVideo || forceVideoOffByWebinarConfig)
+		) {
 			localParticipant.setCameraEnabled(false).catch(() => { })
 		}
 
@@ -1556,7 +1597,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 
 		// Update ref for next comparison
 		prevPermissionsRef.current = permissions
-	}, [permissions, localParticipant, isHost, showWarning, showSuccess, shouldShowToast])
+	}, [permissions, localParticipant, isHost, showWarning, showSuccess, shouldShowToast, sessionInfo?.sessionMode, sessionInfo?.webinarConfig])
 
 	// Use memoized virtual backgrounds (moved outside with stable ref below)
 	// Access via `VIRTUAL_BACKGROUNDS` constant defined below to avoid re-creating this array each render
@@ -2671,6 +2712,15 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	useEffect(() => {
 		const handleMobileVisibilityChange = async () => {
 			if (!localParticipant) return
+			const webinarPermissions = (
+				(sessionInfo?.webinarConfig || {}) as { permissions?: { mic?: string; video?: string } }
+			).permissions
+			const canRestoreMic =
+				permissions?.allowAudio !== false &&
+				!(sessionInfo?.sessionMode === 'WEBINAR' && webinarPermissions?.mic === 'disabled')
+			const canRestoreCamera =
+				permissions?.allowVideo !== false &&
+				!(sessionInfo?.sessionMode === 'WEBINAR' && webinarPermissions?.video === 'disabled')
 
 			if (document.hidden) {
 				// Tab going hidden — remember current track states
@@ -2681,7 +2731,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				// Small delay to let the browser fully resume
 				await new Promise(r => setTimeout(r, 500))
 
-				if (micBeforeHideRef.current && !localParticipant.isMicrophoneEnabled) {
+				if (canRestoreMic && micBeforeHideRef.current && !localParticipant.isMicrophoneEnabled) {
 					try {
 						await localParticipant.setMicrophoneEnabled(true)
 						console.log('[MobileVisibility] Mic restored after tab switch')
@@ -2690,7 +2740,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 					}
 				}
 
-				if (cameraBeforeHideRef.current && !localParticipant.isCameraEnabled) {
+				if (canRestoreCamera && cameraBeforeHideRef.current && !localParticipant.isCameraEnabled) {
 					try {
 						await localParticipant.setCameraEnabled(true)
 						console.log('[MobileVisibility] Camera restored after tab switch')
@@ -2705,7 +2755,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		return () => {
 			document.removeEventListener('visibilitychange', handleMobileVisibilityChange)
 		}
-	}, [localParticipant])
+	}, [localParticipant, permissions?.allowAudio, permissions?.allowVideo, sessionInfo?.sessionMode, sessionInfo?.webinarConfig])
 
 	return (
 		<>
@@ -4898,7 +4948,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			)}
 
 			{/* Permission Request Modal - Shows when host asks participant to enable audio/video */}
-			{!isHost && studyRoomStyleJoinerChrome && pendingPermissionRequest && (
+			{!isHost && pendingPermissionRequest && (
 				<PermissionRequestModal
 					type={pendingPermissionRequest.type}
 					onAccept={() => {
@@ -5037,14 +5087,14 @@ function ParticipantList({
 	onEnableVideoParticipant: _onEnableVideoParticipant, // Unused
 	onLockUserAudio: _onLockUserAudio, // Unused
 	onLockUserVideo: _onLockUserVideo, // Unused
-	onLockUserChatAudience,
+	onLockUserChatAudience: _onLockUserChatAudience, // Unused
 	onRequestAudioOn,
 	onRequestVideoOn,
-	participantChatLocks,
+	participantChatLocks: _participantChatLocks, // Unused
 	pendingParticipantRequests,
 	onApproveAudioRequest,
 	onApproveVideoRequest,
-	onPromoteToCohost,
+	onPromoteToCohost: _onPromoteToCohost, // Unused
 }: {
 	isHost: boolean
 	onMuteParticipant?: (targetUserId: string) => void
@@ -5124,11 +5174,6 @@ function ParticipantList({
 				const hasAReq = hasAudioRequest(participant.identity)
 				const hasVReq = hasVideoRequest(participant.identity)
 				const canControl = isHost && !isLocal
-				const chatLocks = participantChatLocks?.[participant.identity] || {
-					everyone: false,
-					host: false,
-					user: false,
-				}
 				const gradient = getAvatarColor(participant.identity)
 
 				// Helper to get avatar
@@ -5275,67 +5320,6 @@ function ParticipantList({
 									>
 										{isMicOn ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
 									</button>
-									{canControl && (
-										<div className="ml-1 flex items-center gap-1">
-											<button
-												onClick={() =>
-													onPromoteToCohost?.(participant.identity, 'COHOST')
-												}
-												className="px-1.5 py-1 rounded text-[9px] font-semibold bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30"
-												title="Make cohost"
-											>
-												Co
-											</button>
-											<button
-												onClick={() =>
-													onLockUserChatAudience?.(
-														participant.identity,
-														'everyone',
-														!chatLocks.everyone,
-													)
-												}
-												className={`px-1.5 py-1 rounded text-[9px] font-semibold ${chatLocks.everyone
-													? 'bg-red-500/20 text-red-300'
-													: 'bg-white/10 text-white/60 hover:text-white'
-													}`}
-												title="Restrict messages to Everyone"
-											>
-												E
-											</button>
-											<button
-												onClick={() =>
-													onLockUserChatAudience?.(
-														participant.identity,
-														'host',
-														!chatLocks.host,
-													)
-												}
-												className={`px-1.5 py-1 rounded text-[9px] font-semibold ${chatLocks.host
-													? 'bg-red-500/20 text-red-300'
-													: 'bg-white/10 text-white/60 hover:text-white'
-													}`}
-												title="Restrict messages to Host"
-											>
-												H
-											</button>
-											<button
-												onClick={() =>
-													onLockUserChatAudience?.(
-														participant.identity,
-														'user',
-														!chatLocks.user,
-													)
-												}
-												className={`px-1.5 py-1 rounded text-[9px] font-semibold ${chatLocks.user
-													? 'bg-red-500/20 text-red-300'
-													: 'bg-white/10 text-white/60 hover:text-white'
-													}`}
-												title="Restrict messages to specific users"
-											>
-												U
-											</button>
-										</div>
-									)}
 								</div>
 							)}
 						</div>
