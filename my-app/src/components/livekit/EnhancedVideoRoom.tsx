@@ -4614,6 +4614,10 @@ const VideoRoomContent = memo(function VideoRoomContent({
 								{channelId ? (
 									<ChatWidget
 										channelId={channelId}
+										chatPanelActive={showChat}
+										viewerSessionRole={
+											isGuest ? 'guest' : isHost ? 'host' : 'joinee'
+										}
 										chatDisabled={chatDisabled}
 										recipients={chatRecipients}
 										hostUserId={hostUser?.id}
