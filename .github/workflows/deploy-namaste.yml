@@ -140,14 +140,45 @@ jobs:
             --force-new-deployment \
             --region ${{ env.AWS_REGION }}
 
+      - name: Wait for ECS deployment to stabilize (fail on real deploy issues)
+        run: |
+          set -euo pipefail
+          echo "Waiting for ECS service to become stable..."
+          aws ecs wait services-stable \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services ${{ env.ECS_SERVICE }} \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Verify ECS rollout state
+        run: |
+          set -euo pipefail
+          ROLLOUT_STATE=$(aws ecs describe-services \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services ${{ env.ECS_SERVICE }} \
+            --region ${{ env.AWS_REGION }} \
+            --query "services[0].deployments[?status=='PRIMARY'].rolloutState | [0]" \
+            --output text)
+          echo "Primary rollout state: ${ROLLOUT_STATE}"
+          if [ "${ROLLOUT_STATE}" != "COMPLETED" ]; then
+            echo "Backend rollout did not complete successfully."
+            echo "Recent ECS events:"
+            aws ecs describe-services \
+              --cluster ${{ env.ECS_CLUSTER }} \
+              --services ${{ env.ECS_SERVICE }} \
+              --region ${{ env.AWS_REGION }} \
+              --query "services[0].events[0:10].[createdAt,message]" \
+              --output table || true
+            exit 1
+          fi
+
       - name: Deployment summary
         run: |
-          echo "✅ Backend deployment triggered successfully!"
+          echo "✅ Backend deployment completed and service is stable."
           echo "Image: ${{ steps.build-image.outputs.image }}"
           echo "ECS Service: ${{ env.ECS_SERVICE }}"
           echo "Cluster: ${{ env.ECS_CLUSTER }}"
           echo "AWS Credentials: Namaste profile (via static credentials)"
-          echo "Deployment is in progress. ECS will pull the updated image."
+          echo "Rollout state: COMPLETED"
 
   deploy-frontend:
     name: Deploy Frontend to Vercel (Prod - Namaste)
