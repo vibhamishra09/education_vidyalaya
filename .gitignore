@@ -22,6 +22,10 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+logs/*.log.txt
+logs/*.detail.txt
+logs/chat-flow.txt
+my-app/logs/
 
 # OS files
 .DS_Store
