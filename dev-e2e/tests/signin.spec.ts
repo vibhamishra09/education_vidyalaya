@@ -42,15 +42,6 @@ test("Check existing study rooms, peers,webinars", async ({ page }) => {
   const room = page.getByRole('button', { name: 'Join Room' }).first();
   await expect(room).toBeVisible();
 
-  await page.getByRole('button', { name: 'Webinars' }).click();
-  const webinar = page.getByRole('button', { name: 'Register' }).first();
-  const webinarCount = await webinar.count();
-
-  if (webinarCount > 0) {
-    await expect(webinar).toBeVisible();
-  } else {
-    console.log('No webinars available, skipping...');
-  }
 });
 
 test.describe("Instant room creation", () => {

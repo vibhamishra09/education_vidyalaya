@@ -20,7 +20,8 @@ import {
 	Clock, MonitorUp, MonitorOff, Grid2X2, Presentation, Pin,
 	PinOff, User, PictureInPicture2, Camera, CameraOff, Sparkles, Lock, Settings2,
 	PhoneOff, ChevronUp, ChevronLeft, ChevronRight, ShieldCheck, Ban, Aperture,
-	ImageIcon, LayoutGrid, Check, Timer, Power, LogOut, ZoomIn, ZoomOut, MousePointer2, Pencil
+	ImageIcon, LayoutGrid, Check, Timer, Power, LogOut, ZoomIn, ZoomOut, MousePointer2, Pencil,
+	Share2
 } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
@@ -4381,6 +4382,24 @@ const VideoRoomContent = memo(function VideoRoomContent({
 							</button>
 						</div>
 
+						
+						<div className="hidden md:flex relative flex-col items-center justify-center group">
+							<button
+								onClick={async () => {
+										try {
+											await navigator.clipboard.writeText(window.location.href)
+											showSuccess("URL Copied to Clipboard")
+										} catch (err) {
+											console.error('Failed to copy:', err)
+										}
+									}}
+									className="h-9 w-9 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl hover:bg-sky-500/20 active:scale-95 transition-all relative text-white/80 hover:text-sky-400"
+									title="Share"
+								>
+								<Share2 className="h-4 w-4 md:h-5 md:w-5" />
+							</button>
+						</div>
+
 						{/* Extend Session - Only show if timer is enabled AND user is host */}
 						{timerEnabled && isHost && (
 							<div className="hidden md:flex relative flex-col items-center justify-center group">
@@ -4437,6 +4456,9 @@ const VideoRoomContent = memo(function VideoRoomContent({
 							</div>
 						)}
 					</div>
+						
+
+
 					{/* RIGHT: End call */}
 					<div className="flex min-w-0 shrink-0 items-center justify-end gap-1.5 sm:gap-2">
 						<div className="relative shrink-0">
