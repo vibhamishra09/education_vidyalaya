@@ -85,6 +85,7 @@ import { useToast } from '@/contexts/toast-context';
 import { useParticipantEvaluations, useUpsertModeratorEvaluation } from '@/hooks/use-debate-rooms';
 import { useRemoteControl } from '@/hooks/use-remote-control';
 import { RemoteControlOverlay } from '@/components/livekit/RemoteControlOverlay';
+import { useBluetoothMicRecovery } from '@/hooks/use-bluetooth-mic-recovery';
 
 interface ChatMessage {
   id: string;
@@ -570,6 +571,10 @@ function DebateLiveContent({
   // LiveKit hooks
   const room = useRoomContext();
   const { localParticipant } = useLocalParticipant();
+  useBluetoothMicRecovery({
+    room,
+    localParticipant,
+  });
   const participants = useParticipants();
   const speakingParticipants = useSpeakingParticipants();
 

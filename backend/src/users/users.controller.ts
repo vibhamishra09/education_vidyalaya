@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Logger,
   UnauthorizedException,
@@ -12,8 +13,9 @@ import {
 } from '@nestjs/common';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { ClerkAuthGuard } from '../common/guards/clerk-auth.guard';
+import { OptionalClerkAuthGuard } from '../common/guards/optional-clerk-auth.guard';
 import { UsersService } from './users.service';
-import { CompleteOnboardingDto, UpdateUserDto } from './dto/user.dto';
+import { UpdateUserDto } from './dto/user.dto';
 
 @Controller('api')
 export class UsersController {
@@ -69,8 +71,16 @@ export class UsersController {
   }
 
   @Get('users/:userId')
-  async getPublicUserProfile(@Param('userId') userId: string) {
-    return this.usersService.getPublicUserProfile(userId);
+  @UseGuards(OptionalClerkAuthGuard)
+  async getPublicUserProfile(
+    @Param('userId') userId: string,
+    @CurrentUser('dbUserId') dbUserId?: string,
+    @CurrentUser('clerkId') clerkUserId?: string,
+  ) {
+    return this.usersService.getPublicUserProfile(
+      userId,
+      clerkUserId || dbUserId || undefined,
+    );
   }
 
   @Get('users/:userId/skills')
@@ -81,30 +91,26 @@ export class UsersController {
     return this.usersService.getUserSkills(userId, type);
   }
 
-  @Post('users/onboarding')
+  @Post('users/:userId/follow')
   @UseGuards(ClerkAuthGuard)
-  async completeOnboarding(
-    @CurrentUser() clerkUserId: string,
-    @Body() body: CompleteOnboardingDto,
+  async followUser(
+    @Param('userId') userId: string,
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
   ) {
-    if (!clerkUserId) {
-      throw new UnauthorizedException(
-        'Authenticated Clerk user could not be resolved for onboarding.',
-      );
-    }
+    return this.usersService.followUser(clerkUserId || dbUserId || '', userId);
+  }
 
-    this.logger.debug('Completing onboarding for Clerk user:', clerkUserId);
-
-    return this.usersService.completeOnboarding(clerkUserId, {
-      name: body.name,
-      email: body.email,
-      avatar: body.avatar,
-      bio: body.bio,
-      location: body.location,
-      school: body.school,
-      hourlyRate: body.hourlyRate,
-      skillsIHave: body.skillsIHave || [],
-      skillsIWant: body.skillsIWant || [],
-    });
+  @Delete('users/:userId/follow')
+  @UseGuards(ClerkAuthGuard)
+  async unfollowUser(
+    @Param('userId') userId: string,
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
+  ) {
+    return this.usersService.unfollowUser(
+      clerkUserId || dbUserId || '',
+      userId,
+    );
   }
 }

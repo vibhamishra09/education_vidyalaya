@@ -38,6 +38,7 @@ export function WebinarRegisterClient({
     approvalPending?: boolean;
     /** False when AWS SES did not send confirmation (still registered). */
     emailSent?: boolean;
+    joinUrlManual?: string;
     message?: string;
   } | null>(null);
 
@@ -72,6 +73,7 @@ export function WebinarRegisterClient({
         roomId: res.roomId,
         approvalPending: res.approvalPending !== false,
         emailSent: res.emailSent !== false,
+        joinUrlManual: res.joinUrlManual,
         message: res.message,
       });
     } catch (err: unknown) {
@@ -119,6 +121,17 @@ export function WebinarRegisterClient({
                 <strong className="text-foreground font-medium">Join webinar</strong> link and your{" "}
                 <strong className="text-foreground font-medium">passcode</strong>.
               </p>
+            )}
+            {done.joinUrlManual && (
+              <div className="pt-1">
+                <Button asChild className="w-full">
+                  <a href={done.joinUrlManual}>
+                    {done.approvalPending !== false
+                      ? "Open waiting room now"
+                      : "Continue to join now"}
+                  </a>
+                </Button>
+              </div>
             )}
           </div>
         </main>

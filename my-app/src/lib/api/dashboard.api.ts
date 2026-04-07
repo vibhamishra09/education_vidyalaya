@@ -1,5 +1,10 @@
 import apiClient from '../api-client';
-import { DashboardData, DashboardQuery } from '@/types/api.types';
+import {
+  ActivityFeedQuery,
+  ActivityFeedResponse,
+  DashboardData,
+  DashboardQuery,
+} from '@/types/api.types';
 import { cleanQueryParams } from '../utils/api-utils';
 
 export interface SessionActivityDataPoint {
@@ -39,6 +44,18 @@ export const dashboardApi = {
     const response = await apiClient.get<WalletActivityDataPoint[]>(
       '/api/dashboard/wallet-activity',
       { params: { months } }
+    );
+    return response.data;
+  },
+
+  getActivityFeed: async (
+    query?: ActivityFeedQuery,
+  ): Promise<ActivityFeedResponse> => {
+    const response = await apiClient.get<ActivityFeedResponse>(
+      '/api/dashboard/feed',
+      {
+        params: query ? cleanQueryParams(query) : {},
+      },
     );
     return response.data;
   },

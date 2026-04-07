@@ -262,25 +262,65 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       targetUserId?: string;
     },
   ) {
-    // Guest path: save message to database and emit to host
+    // Guest path: same visibility rules as signed-in users; EVERYONE → channel broadcast (all participants)
     if (client.data.isGuest) {
       try {
+        const sessionInfo = await this.chatService.getSessionInfoFromChannelId(
+          payload.channelId,
+        );
+        const audienceType = this.normalizeAudienceType(payload.audienceType);
+        const guestPermKey = client.data.guestIdentity as string;
+
+        if (sessionInfo && guestPermKey) {
+          const canChat = await this.permissionsService.hasPermission(
+            sessionInfo.externalId,
+            guestPermKey,
+            'chat',
+            false,
+          );
+          if (!canChat) {
+            client.emit('chat:error', {
+              code: 'CHAT_DISABLED',
+              message: 'Chat is disabled by the host',
+            });
+            return;
+          }
+
+          const canSendToAudience =
+            await this.permissionsService.hasAudiencePermission(
+              sessionInfo.externalId,
+              guestPermKey,
+              audienceType,
+              false,
+            );
+          if (!canSendToAudience) {
+            client.emit('chat:error', {
+              code: 'CHAT_SCOPE_RESTRICTED',
+              message: 'The host has restricted this chat target for you',
+            });
+            return;
+          }
+        }
+
         const hostDbUserId = await this.chatService.getChannelHostUserId(
           payload.channelId,
         );
-        if (!hostDbUserId) {
+        if (
+          audienceType === MessageAudienceType.HOST &&
+          !hostDbUserId
+        ) {
           client.emit('chat:error', { message: 'Host not found for this channel' });
           return;
         }
 
-        // Save guest message to database
         const message = await this.chatService.sendGuestMessage(
           payload.channelId,
           client.data.guestParticipantId,
           client.data.guestEmail,
           client.data.guestName,
           payload.content,
-          hostDbUserId,
+          audienceType,
+          audienceType === MessageAudienceType.HOST ? hostDbUserId : payload.targetUserId,
         );
 
         const base = this.serializeMessageForSocket({
@@ -297,11 +337,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
         const messageToEmit = { ...base, isGuest: true };
 
-        // Emit to host and sender
-        this.server
-          .to(`user:${hostDbUserId}`)
-          .emit('message:new', messageToEmit);
-        client.emit('message:new', messageToEmit);
+        await this.emitScopedMessage(payload.channelId, messageToEmit);
+
+        // Guests are not in user:{dbId} rooms; echo non-EVERYONE sends here (EVERYONE already hits channel room)
+        if (audienceType !== MessageAudienceType.EVERYONE) {
+          client.emit('message:new', messageToEmit);
+        }
       } catch (error: any) {
         this.logger.debug('Error sending guest message:', error);
         client.emit('chat:error', { message: error.message || 'Failed to send message' });

@@ -12,7 +12,7 @@ import { MetricCardComponent } from "@/components/cards/metric-card";
 import { StudyRoomCard } from "@/components/cards/study-room-card";
 import { ReviewCardComponent } from "@/components/cards/review-card";
 import { ProfileStatsChart } from "@/components/stats/profile-stats-chart";
-import { ArrowLeft, Star, MessageCircle, Users } from "lucide-react";
+import { ArrowLeft, Star, MessageCircle, UserCheck, UserPlus, Users } from "lucide-react";
 import { SocialLinksDisplay } from "@/components/ui/social-links-display";
 import { usersApi, reviewsApi, studyRoomsApi } from "@/lib/api";
 import { setAuthToken } from "@/lib/api-client";
@@ -36,6 +36,7 @@ export default function PublicProfilePage({
   const [reviewCount, setReviewCount] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [isFollowLoading, setIsFollowLoading] = useState<boolean>(false);
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -164,6 +165,38 @@ export default function PublicProfilePage({
     },
   ];
 
+  const isOwnProfile = currentUser?.id === user.id;
+
+  const handleFollowToggle = async () => {
+    if (!currentUser || isOwnProfile) return;
+
+    try {
+      setIsFollowLoading(true);
+      const token = await getToken();
+      if (token) {
+        setAuthToken(token);
+      }
+
+      const response = user.isFollowing
+        ? await usersApi.unfollowUser(user.id)
+        : await usersApi.followUser(user.id);
+
+      setUser((previous) =>
+        previous
+          ? {
+              ...previous,
+              isFollowing: response.isFollowing,
+              followerCount: response.followerCount,
+            }
+          : previous,
+      );
+    } catch (err) {
+      console.error("Error updating follow state:", err);
+    } finally {
+      setIsFollowLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex flex-col">
       <Navigation />
@@ -215,17 +248,47 @@ export default function PublicProfilePage({
                         </span>
                         <span className="text-xs sm:text-sm">sessions</span>
                       </div>
+                      <div className="flex items-center gap-1 text-muted-foreground">
+                        <Users className="h-4 w-4 sm:h-5 sm:w-5" />
+                        <span className="text-sm sm:text-base font-medium">
+                          {user.followerCount ?? 0}
+                        </span>
+                        <span className="text-xs sm:text-sm">followers</span>
+                      </div>
+                    </div>
+
+                    <div className="mt-2 text-xs sm:text-sm text-muted-foreground">
+                      Following {user.followingCount ?? 0} peers
                     </div>
                   </div>
 
                   {/* Only show Request Session button if not viewing own profile */}
-                  {currentUser && currentUser.id !== user.id && (
-                    <Link href={`/request-session/${userId}`}>
-                      <Button className="w-full sm:w-auto">
-                        <MessageCircle className="h-4 w-4 mr-2" />
-                        Request Session
+                  {currentUser && !isOwnProfile && (
+                    <div className="flex w-full flex-col gap-2 sm:w-auto">
+                      <Button
+                        variant={user.isFollowing ? "outline" : "default"}
+                        className="w-full sm:w-auto"
+                        onClick={handleFollowToggle}
+                        disabled={isFollowLoading}
+                      >
+                        {user.isFollowing ? (
+                          <UserCheck className="mr-2 h-4 w-4" />
+                        ) : (
+                          <UserPlus className="mr-2 h-4 w-4" />
+                        )}
+                        {isFollowLoading
+                          ? "Updating..."
+                          : user.isFollowing
+                            ? "Following"
+                            : "Follow"}
                       </Button>
-                    </Link>
+                      <Link href={`/request-session/${userId}`}>
+                        <Button className="w-full sm:w-auto">
+                          <MessageCircle className="h-4 w-4 mr-2" />
+                          Request Session
+                        </Button>
+                      </Link>
+                    </div>
                   )}
                 </div>
 

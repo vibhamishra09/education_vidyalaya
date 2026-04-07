@@ -12,12 +12,35 @@ function getHostname(value?: string): string | undefined {
 }
 
 /**
+ * Same idea as `api-client` `looksLikeWebyalayaMarketingOrigin`: the public homepage is not the Nest API.
+ * In dev, using it as NEXT_PUBLIC_API_URL would make /api/* rewrites hit webyalaya.com → 404 on /api/livekit/token.
+ */
+function looksLikeWebyalayaMarketingOrigin(url: string): boolean {
+  try {
+    const u = new URL(url);
+    const host = u.hostname.replace(/^www\./i, "");
+    return host === "webyalaya.com" && (u.pathname === "" || u.pathname === "/");
+  } catch {
+    return false;
+  }
+}
+
+const resolvedPublicApi =
+  process.env.NEXT_PUBLIC_API_URL?.trim().replace(/\/$/, "") ?? "";
+const publicApiForRewrites =
+  process.env.NODE_ENV === "development" &&
+  resolvedPublicApi &&
+  looksLikeWebyalayaMarketingOrigin(resolvedPublicApi)
+    ? ""
+    : resolvedPublicApi;
+
+/**
  * Nest API target for same-origin /api/* rewrites (when the browser hits localhost:3000/api/...).
- * Use BACKEND_URL so this is never confused with the Next site URL; do not omit on Vercel if you rely on rewrites.
+ * Prefer BACKEND_URL; do not rely on NEXT_PUBLIC_API_URL alone in dev (often set to the marketing site).
  */
 const backendOrigin =
   process.env.BACKEND_URL?.trim().replace(/\/$/, "") ||
-  process.env.NEXT_PUBLIC_API_URL?.trim().replace(/\/$/, "") ||
+  publicApiForRewrites ||
   "http://127.0.0.1:3002";
 
 const allowedDevOrigins = Array.from(
@@ -55,6 +78,15 @@ const nextConfig: NextConfig = {
         {
           source: "/api/:path*",
           destination: `${backendOrigin}/api/:path*`,
+        },
+        /**
+         * Socket.IO (chat, etc.) runs on Nest. When the client uses same-origin
+         * (e.g. `getSocketIoBaseUrl()` → `window.location.origin` because env was unset at build),
+         * forward `/socket.io` to the API so the browser does not hit Next (which has no WS gateway).
+         */
+        {
+          source: "/socket.io/:path*",
+          destination: `${backendOrigin}/socket.io/:path*`,
         },
       ],
     };

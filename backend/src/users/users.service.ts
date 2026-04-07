@@ -6,7 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { createClerkClient } from '@clerk/backend';
-import { Prisma, SessionStatus } from '../generated/prisma/client';
+import { Prisma, SessionStatus, NotifType } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 /** Generated Prisma `User` / `UserFindUniqueArgs` are unreliable here; infer delegate args instead. */
@@ -48,6 +48,7 @@ type UserOnboardingResult = {
 };
 import { UpdateUserDto } from './dto/user.dto';
 import { CacheService } from '../redis/cache.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import {
   isConnectionError,
   withQueryTimeout,
@@ -64,6 +65,7 @@ export class UsersService {
   constructor(
     private prisma: PrismaService,
     private readonly cacheService: CacheService,
+    private readonly notificationsService: NotificationsService,
   ) { }
 
   private buildClerkDisplayName(clerkUser: any): string {
@@ -133,6 +135,10 @@ export class UsersService {
           clerkId,
           name: existingByEmail.name || displayName,
           avatar: existingByEmail.avatar || avatar,
+          // Automatically onboard even if they existed as a placeholder
+          onboarded: true,
+          // Give coins if they never had any (newly onboarded)
+          ...(existingByEmail.onboarded ? {} : { coins: { increment: 1000 } }),
         },
         select: {
           id: true,
@@ -149,7 +155,8 @@ export class UsersService {
           email: normalizedEmail,
           name: displayName,
           avatar,
-          onboarded: false,
+          onboarded: true,
+          coins: 1000, // Award welcome coins automatically
         },
         select: {
           id: true,
@@ -199,6 +206,51 @@ export class UsersService {
         `Failed to sync Clerk metadata for ${clerkId}: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
+  }
+
+  private async resolveDbUser(userIdOrClerkId: string) {
+    const existingUser = await this.findUserByIdOrClerkId(userIdOrClerkId, {
+      select: {
+        id: true,
+        clerkId: true,
+        name: true,
+      },
+    });
+
+    if (existingUser) {
+      return existingUser as {
+        id: string;
+        clerkId: string;
+        name: string | null;
+      };
+    }
+
+    if (userIdOrClerkId.startsWith('user_')) {
+      const ensuredUser = await this.ensureUserFromClerk(userIdOrClerkId);
+      return {
+        id: ensuredUser.id,
+        clerkId: ensuredUser.clerkId,
+        name: ensuredUser.name ?? null,
+      };
+    }
+
+    throw new NotFoundException('User not found');
+  }
+
+  private async invalidateSocialCaches(
+    cacheRefs: Array<string | null | undefined>,
+  ) {
+    const uniqueRefs = Array.from(
+      new Set(cacheRefs.filter((value): value is string => Boolean(value))),
+    );
+
+    await Promise.all(
+      uniqueRefs.flatMap((ref) => [
+        this.cacheService.deletePattern(`user:current:*${ref}*`),
+        this.cacheService.deletePattern(`user:public:*${ref}*`),
+        this.cacheService.deletePattern(`dashboard:feed:*${ref}*`),
+      ]),
+    );
   }
 
   async getCurrentUser(userIdOrClerkId: string) {
@@ -285,6 +337,8 @@ export class UsersService {
             reviewStats,
             peerSessionsAsLearner,
             studyRoomsAsLearner,
+            followerCount,
+            followingCount,
           ] = await withQueryTimeout(
             Promise.all([
               // Count peer sessions where user is the teacher (received)
@@ -334,6 +388,12 @@ export class UsersService {
                   },
                 },
               }),
+              this.prisma.userFollow.count({
+                where: { followingId: fullUser.id },
+              }),
+              this.prisma.userFollow.count({
+                where: { followerId: fullUser.id },
+              }),
             ]),
             25000, // 25 second timeout
             `getCurrentUser - Promise.all stats for user ${userIdOrClerkId}`,
@@ -364,6 +424,9 @@ export class UsersService {
               hasSkills,
               wantSkills,
               socialLinks: (fullUser.socialLinks as any[]) || [],
+              followerCount,
+              followingCount,
+              isFollowing: false,
               publicStats: {
                 sessionsTaught,
                 sessionsAttendedAsLearner,
@@ -517,20 +580,30 @@ export class UsersService {
       this.cacheService.createKey('user:current', { userIdOrClerkId: userId }),
     );
     await this.cacheService.deletePattern(`user:public:${userId}*`);
+    await this.cacheService.deletePattern(`dashboard:feed:*${currentUser.id}*`);
 
     // Return updated user with skills
     return this.getCurrentUser(currentUser.id);
   }
 
-  async getPublicUserProfile(userId: string) {
+  async getPublicUserProfile(userId: string, viewerIdOrClerkId?: string) {
     // Cache for 2 minutes - public profiles change less frequently
-    const cacheKey = this.cacheService.createKey('user:public', { userId });
+    const cacheKey = this.cacheService.createKey('user:public', {
+      userId,
+      viewerId: viewerIdOrClerkId || 'anonymous',
+    });
     const cacheTTL = 120;
 
     return this.cacheService.getOrSet(
       cacheKey,
       async () => {
         try {
+          const viewer = viewerIdOrClerkId
+            ? await this.findUserByIdOrClerkId(viewerIdOrClerkId, {
+                select: { id: true },
+              })
+            : null;
+
           const user = await withQueryTimeout(
             this.prisma.user.findUnique({
               where: { id: userId },
@@ -573,6 +646,9 @@ export class UsersService {
             reviewStats,
             peerSessionsAsLearner,
             studyRoomsAsLearner,
+            followerCount,
+            followingCount,
+            followState,
           ] = await withQueryTimeout(
             Promise.all([
               this.prisma.peerSession.count({
@@ -614,6 +690,23 @@ export class UsersService {
                   },
                 },
               }),
+              this.prisma.userFollow.count({
+                where: { followingId: profile.id },
+              }),
+              this.prisma.userFollow.count({
+                where: { followerId: profile.id },
+              }),
+              viewer?.id
+                ? this.prisma.userFollow.findUnique({
+                    where: {
+                      followerId_followingId: {
+                        followerId: viewer.id,
+                        followingId: profile.id,
+                      },
+                    },
+                    select: { id: true },
+                  })
+                : Promise.resolve(null),
             ]),
             25000, // 25 second timeout
             `getPublicUserProfile - Promise.all stats for user ${userId}`,
@@ -641,6 +734,9 @@ export class UsersService {
             hasSkills,
             wantSkills,
             socialLinks: (profile.socialLinks as any[]) || [],
+            followerCount,
+            followingCount,
+            isFollowing: Boolean(followState),
             publicStats: {
               sessionsTaught,
               sessionsAttendedAsLearner,
@@ -759,134 +855,108 @@ export class UsersService {
     }));
   }
 
-  async completeOnboarding(
-    clerkId: string,
-    data: {
-      name: string;
-      email: string;
-      avatar?: string;
-      bio?: string;
-      location?: string;
-      school?: string;
-      hourlyRate?: number;
-      skillsIHave: string[];
-      skillsIWant: string[];
-    },
-  ) {
-    // Create user with onboarding data (on-demand user creation)
-    this.logger.debug('🔍 Completing onboarding for user:', clerkId);
-    const normalizedHourlyRate = data.hourlyRate ?? 0;
-    const normalizedEmail = data.email.trim().toLowerCase();
-    const userPayload = {
-      name: data.name,
-      email: normalizedEmail,
-      avatar: data.avatar,
-      bio: data.bio,
-      location: data.location,
-      school: data.school,
-      hourlyRate: normalizedHourlyRate,
-      coins: 1000, // Award 1000 coins for completing onboarding
-      onboarded: true,
-    };
+  async followUser(followerIdOrClerkId: string, targetUserId: string) {
+    const [follower, target] = await Promise.all([
+      this.resolveDbUser(followerIdOrClerkId),
+      this.resolveDbUser(targetUserId),
+    ]);
 
-    const existingByClerkId = await this.prisma.user.findUnique({
-      where: { clerkId },
-      select: { id: true },
+    if (follower.id === target.id) {
+      throw new ConflictException('You cannot follow yourself');
+    }
+
+    await this.prisma.userFollow.upsert({
+      where: {
+        followerId_followingId: {
+          followerId: follower.id,
+          followingId: target.id,
+        },
+      },
+      update: {},
+      create: {
+        followerId: follower.id,
+        followingId: target.id,
+      },
     });
 
-    const existingByEmail = existingByClerkId
-      ? null
-      : await this.prisma.user.findUnique({
-        where: { email: normalizedEmail },
-        select: { id: true },
-      });
+    const [followerCount, followingCount] = await Promise.all([
+      this.prisma.userFollow.count({
+        where: { followingId: target.id },
+      }),
+      this.prisma.userFollow.count({
+        where: { followerId: follower.id },
+      }),
+    ]);
 
-    const user = (existingByClerkId
-      ? await this.prisma.user.update({
-        where: { clerkId },
-        data: userPayload,
-      })
-      : existingByEmail
-        ? await this.prisma.user.update({
-          where: { id: existingByEmail.id },
-          data: {
-            ...userPayload,
-            clerkId,
-          },
-        })
-        : await this.prisma.user.create({
-          data: {
-            clerkId,
-            ...userPayload,
-          },
-        }));
+    await this.invalidateSocialCaches([
+      follower.id,
+      follower.clerkId,
+      target.id,
+      target.clerkId,
+    ]);
 
-    this.logger.debug('🔍 User created:', user);
-
-    await this.syncClerkMetadata(clerkId, user.id);
-
-    // Process skills - first ensure they exist in the Skill table
-    const allSkills = [...data.skillsIHave, ...data.skillsIWant];
-    for (const skillName of allSkills) {
-      await this.prisma.skill.upsert({
-        where: { name: skillName },
-        update: {},
-        create: { name: skillName },
-      });
-    }
-
-    // Clear existing user skills
-    await this.prisma.userSkill.deleteMany({
-      where: { userId: user.id },
-    });
-
-    // Add "HAS" skills
-    for (const skillName of data.skillsIHave) {
-      const skill = await this.prisma.skill.findUnique({
-        where: { name: skillName },
-      });
-
-      if (skill) {
-        await this.prisma.userSkill.create({
-          data: {
-            userId: user.id,
-            skillId: skill.id,
-            type: 'HAS',
-          },
-        });
-      }
-    }
-
-    // Add "WANTS" skills
-    for (const skillName of data.skillsIWant) {
-      const skill = await this.prisma.skill.findUnique({
-        where: { name: skillName },
-      });
-
-      if (skill) {
-        await this.prisma.userSkill.create({
-          data: {
-            userId: user.id,
-            skillId: skill.id,
-            type: 'WANTS',
-          },
-        });
-      }
-    }
+    await this.notificationsService.createAndPushNotification(
+      target.id,
+      `${follower.name || 'A learner'} followed you.`,
+      'New follower',
+      NotifType.NORMAL,
+      {
+        actionType: 'USER_FOLLOWED',
+        actionData: {
+          followerUserId: follower.id,
+          profileUserId: target.id,
+        },
+      },
+    );
 
     return {
       success: true,
-      user: {
-        id: user.id,
-        clerkId: user.clerkId,
-        name: user.name,
-        email: user.email,
-        avatar: user.avatar,
-        bio: user.bio,
-        hourlyRate: user.hourlyRate,
-        coins: user.coins,
-        onboarded: user.onboarded,
+      targetUserId: target.id,
+      isFollowing: true,
+      followerCount,
+      followingCount,
+    };
+  }
+
+  async unfollowUser(followerIdOrClerkId: string, targetUserId: string) {
+    const [follower, target] = await Promise.all([
+      this.resolveDbUser(followerIdOrClerkId),
+      this.resolveDbUser(targetUserId),
+    ]);
+
+    if (follower.id === target.id) {
+      throw new ConflictException('You cannot unfollow yourself');
+    }
+
+    await this.prisma.userFollow.deleteMany({
+      where: {
+        followerId: follower.id,
+        followingId: target.id,
       },
+    });
+
+    const [followerCount, followingCount] = await Promise.all([
+      this.prisma.userFollow.count({
+        where: { followingId: target.id },
+      }),
+      this.prisma.userFollow.count({
+        where: { followerId: follower.id },
+      }),
+    ]);
+
+    await this.invalidateSocialCaches([
+      follower.id,
+      follower.clerkId,
+      target.id,
+      target.clerkId,
+    ]);
+
+    return {
+      success: true,
+      targetUserId: target.id,
+      isFollowing: false,
+      followerCount,
+      followingCount,
     };
   }
 }

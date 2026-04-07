@@ -259,11 +259,7 @@ export default function RequestSessionPage({
       return;
     }
 
-    // Check if peer has set their hourly rate
-    if (!peer.hourlyRate) {
-      setError('This user has not set their hourly rate yet. Please contact them directly or ask them to set their rate in their profile.');
-      return;
-    }
+
 
     // Note: We allow booking even when there's an availability warning
     // The warning is just informational to let the user know there's a higher chance of cancellation
@@ -589,21 +585,7 @@ export default function RequestSessionPage({
                     />
                   </div>
 
-                  {/* Google Meet Link */}
-                  <div className="space-y-2">
-                    <Label htmlFor="gmeetLink">Google Meet Link (Optional)</Label>
-                    <Input
-                      id="gmeetLink"
-                      type="url"
-                      placeholder="https://meet.google.com/abc-defg-hij"
-                      value={formData.gmeetLink}
-                      onChange={(e) => updateField("gmeetLink", e.target.value)}
-                      disabled={isSelfRequest}
-                    />
-                    <p className="text-sm text-muted-foreground">
-                      Create a Google Meet and paste the link here. Both participants will use this to join the session.
-                    </p>
-                  </div>
+
 
                   {/* Error Display */}
                   {error && (
@@ -631,7 +613,6 @@ export default function RequestSessionPage({
                         submitting ||
                         !formData.date ||
                         !formData.time ||
-                        !peer?.hourlyRate ||
                           (typeof currentUser.coins === 'string' ? parseFloat(currentUser.coins) : currentUser.coins) < calculatedCost
                       }
                     >

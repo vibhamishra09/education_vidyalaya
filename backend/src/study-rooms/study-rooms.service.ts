@@ -45,6 +45,18 @@ import { buildStudyRoomOccurrences } from './recurrence.util';
 import { StudyRoomParticipantRoleDto } from './dto/study-room.dto';
 import { createClerkClient } from '@clerk/backend';
 
+/** If FRONTEND_URL is unset, production webinar/register and join links use this (never localhost). */
+const DEFAULT_PRODUCTION_APP_ORIGIN = 'https://webyalaya.com';
+
+function isLocalDevOrigin(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return host === 'localhost' || host === '127.0.0.1';
+  } catch {
+    return false;
+  }
+}
+
 type StudyRoomWithRelations = {
   id: string;
   title: string;
@@ -127,38 +139,48 @@ export class StudyRoomsService {
    * Never returns empty: path-only links in HTML email resolve as http://webinar/join in Gmail.
    */
   private resolveAppPublicBaseUrl(): string {
-    const raw =
-      process.env.FRONTEND_URL?.trim() ||
-      process.env.APP_PUBLIC_URL?.trim() ||
-      process.env.NEXT_PUBLIC_APP_URL?.trim() ||
-      '';
-    if (raw) {
-      const normalized = raw.replace(/\/$/, '');
-      if (/^https?:\/\//i.test(normalized)) {
-        return normalized;
+    const tryCandidate = (raw: string | undefined): string | null => {
+      const t = raw?.trim();
+      if (!t) return null;
+      const normalized = t.replace(/\/$/, '');
+      if (!/^https?:\/\//i.test(normalized)) {
+        this.logger.warn(
+          `FRONTEND_URL / APP_PUBLIC_URL / NEXT_PUBLIC_APP_URL must be an absolute URL. Got "${t}" — ignoring.`,
+        );
+        return null;
       }
-      this.logger.warn(
-        `FRONTEND_URL / APP_PUBLIC_URL / NEXT_PUBLIC_APP_URL must be an absolute URL (e.g. http://localhost:3000). Got "${raw}" — ignoring.`,
-      );
+      if (isLocalDevOrigin(normalized) && process.env.NODE_ENV === 'production') {
+        this.logger.warn(
+          `Public URL "${t}" uses localhost — ignoring in production; set FRONTEND_URL to your real site.`,
+        );
+        return null;
+      }
+      return normalized;
+    };
+
+    for (const v of [
+      process.env.FRONTEND_URL,
+      process.env.APP_PUBLIC_URL,
+      process.env.NEXT_PUBLIC_APP_URL,
+      process.env.NEXT_PUBLIC_SITE_URL,
+      process.env.SITE_URL,
+    ]) {
+      const ok = tryCandidate(v);
+      if (ok) return ok;
     }
-    const siteFallback =
-      process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
-      process.env.SITE_URL?.trim() ||
-      '';
-    if (siteFallback && /^https?:\/\//i.test(siteFallback)) {
-      return siteFallback.replace(/\/$/, '');
-    }
-    const apiUrl = process.env.API_URL?.trim() || '';
-    if (/^https?:\/\/127\.0\.0\.1:\d+/i.test(apiUrl) || /^https?:\/\/localhost:\d+/i.test(apiUrl)) {
-      return 'http://localhost:3000';
-    }
+
     if (process.env.NODE_ENV !== 'production') {
+      const apiUrl = process.env.API_URL?.trim() || '';
+      if (/^https?:\/\/127\.0\.0\.1:\d+/i.test(apiUrl) || /^https?:\/\/localhost:\d+/i.test(apiUrl)) {
+        return 'http://localhost:3000';
+      }
       return 'http://localhost:3000';
     }
+
     this.logger.warn(
-      'FRONTEND_URL not set — webinar links default to http://localhost:3000. Set FRONTEND_URL to your public site (e.g. https://webyalaya.com) in production.',
+      `FRONTEND_URL not set — using ${DEFAULT_PRODUCTION_APP_ORIGIN} for webinar links. Set FRONTEND_URL to override.`,
     );
-    return 'http://localhost:3000';
+    return DEFAULT_PRODUCTION_APP_ORIGIN;
   }
 
   private buildWebinarJoinUrl(studyRoomId: string, joinLinkToken: string): string {
@@ -243,7 +265,7 @@ export class StudyRoomsService {
   private async resolveUserIdentity(userIdOrClerkId: string) {
     const byId = await this.prisma.user.findUnique({
       where: { id: userIdOrClerkId },
-      select: { id: true, clerkId: true },
+      select: { id: true, clerkId: true, name: true },
     });
 
     if (byId) {
@@ -252,7 +274,7 @@ export class StudyRoomsService {
 
     const byClerkId = await this.prisma.user.findUnique({
       where: { clerkId: userIdOrClerkId },
-      select: { id: true, clerkId: true },
+      select: { id: true, clerkId: true, name: true },
     });
 
     if (byClerkId) {
@@ -277,50 +299,94 @@ export class StudyRoomsService {
     throw new NotFoundException('User not found');
   }
 
-  private isSlug(key: string) {
-    return key.includes("-");
+  private async notifyFollowersAboutStudyRoom(opts: {
+    hostId: string;
+    hostName: string | null;
+    roomId: string;
+    roomTitle: string;
+    startsAt: Date;
+    isLive: boolean;
+  }) {
+    const followers = await this.prisma.userFollow.findMany({
+      where: { followingId: opts.hostId },
+      select: { followerId: true },
+    });
+
+    if (followers.length === 0) {
+      return;
+    }
+
+    const hostName = opts.hostName || 'Someone you follow';
+    const message = opts.isLive
+      ? `${hostName} started ${opts.roomTitle}. Join now.`
+      : `${hostName} scheduled ${opts.roomTitle}.`;
+
+    await Promise.all(
+      followers.map((follow) =>
+        this.notificationsService.createAndPushNotification(
+          follow.followerId,
+          message,
+          'New study room from someone you follow',
+          NotifType.NORMAL,
+          {
+            actionType: 'FOLLOWING_STUDYROOM_CREATED',
+            studyRoomId: opts.roomId,
+            actionData: {
+              studyRoomId: opts.roomId,
+              hostUserId: opts.hostId,
+              startsAt: opts.startsAt.toISOString(),
+              isLive: opts.isLive,
+            },
+          },
+        ),
+      ),
+    );
   }
+
+  /**
+   * Resolve a study room by primary key or by slug (recurring series).
+   * IMPORTANT: UUID ids contain hyphens — they must be looked up by `id` first.
+   * The old `key.includes("-")` heuristic misclassified UUIDs as slugs, breaking
+   * webinar approval polling and other room-scoped APIs for standard UUID primary keys.
+   */
   private async resolveStudyRoomByIdOrSlug(
     studyRoomIdOrSlug: string,
     options?: { select?: any; include?: any },
   ): Promise<any> {
-    this.logger.log("ROOM ID OR SLUG : : : ", studyRoomIdOrSlug)
+    const key = studyRoomIdOrSlug?.trim();
+    if (!key) return null;
 
-     const baseOptions = {
-        ...(options?.select ? { select: options.select } : {}),
-        ...(options?.include ? { include: options.include } : {}),
-      };
+    this.logger.log('ROOM ID OR SLUG : : : ', key);
 
-      if (!this.isSlug(studyRoomIdOrSlug)) {
-        return this.prisma.studyRoom.findUnique({
-          where: { id: studyRoomIdOrSlug },
-          ...baseOptions,
-        });
-      }
+    const baseOptions = {
+      ...(options?.select ? { select: options.select } : {}),
+      ...(options?.include ? { include: options.include } : {}),
+    };
 
-      // its slug
-       const rooms = await this.prisma.studyRoom.findMany({
-          where: { slug: studyRoomIdOrSlug },
-          orderBy: { date: "asc" },
-          ...baseOptions,
-        });
+    const byId = await this.prisma.studyRoom.findUnique({
+      where: { id: key },
+      ...baseOptions,
+    });
+    if (byId) return byId;
 
-        // snigle  room  with slug  OR a sigle sessio in a series
-        if (rooms.length === 1) {
-          return rooms[0];
-        }
-        // a series 
-        if (rooms.length > 1) {
-          const now = new Date();
+    const rooms = await this.prisma.studyRoom.findMany({
+      where: { slug: key },
+      orderBy: { date: 'asc' },
+      ...baseOptions,
+    });
 
-          return (
-            rooms.find(r => r.sessionStatus === "ONGOING") ||
-            rooms.find(r => r.sessionStatus === "UPCOMING") ||
-            rooms[0]
-          );
-        }
+    if (rooms.length === 1) {
+      return rooms[0];
+    }
+    if (rooms.length > 1) {
+      return (
+        rooms.find((r) => r.sessionStatus === 'ONGOING') ||
+        rooms.find((r) => r.sessionStatus === 'UPCOMING') ||
+        rooms[0]
+      );
+    }
 
-        return null;
+    return null;
   }
 
   private async getStudyRoomSchemaCapabilities() {
@@ -1445,6 +1511,15 @@ export class StudyRoomsService {
     }
 
     const firstRoom = createdRooms[0];
+    await this.notifyFollowersAboutStudyRoom({
+      hostId: creator.id,
+      hostName: creator.name ?? null,
+      roomId: firstRoom.id,
+      roomTitle: createDto.title,
+      startsAt: firstRoom.date,
+      isLive: firstRoom.date.getTime() <= now.getTime(),
+    });
+
     const appPublicUrl = this.resolveAppPublicBaseUrl();
     return {
       id: firstRoom.id,
@@ -3308,119 +3383,101 @@ export class StudyRoomsService {
     });
     this.logger.log('✅ [completeStudyRoom] Study room status updated to DONE');
 
-    // Get all participants for streak tracking
-    const participants = await this.prisma.studyRoomParticipant.findMany({
-      where: { studyRoomId: studyRoom.id },
-      select: { userId: true },
-    });
+    // Background the rest of the post-session processing
+    (async () => {
+      try {
+        this.logger.debug(`🚀 [completeStudyRoom] Starting background post-session processing for ${studyRoomId}`);
+        
+        // Get all participants for streak tracking
+        const participants = await this.prisma.studyRoomParticipant.findMany({
+          where: { studyRoomId: studyRoom.id },
+          select: { userId: true },
+        });
 
-    this.logger.debug(
-      `👥 [completeStudyRoom] Found ${participants.length} participants`,
-    );
+        this.logger.debug(
+          `👥 [completeStudyRoom] Found ${participants.length} participants to process`,
+        );
 
-    // Update streak for the creator (host/teacher)
-    this.logger.debug(
-      '🔥 [completeStudyRoom] Updating streak for creator (teacher)',
-      studyRoom.createdById,
-    );
-    await this.streaksService.updateUserActivity(
-      studyRoom.createdById,
-      studyRoom.date,
-      studyRoom.duration,
-      'teacher',
-      0,
-    );
+        // 1. Process creator updates (host/teacher)
+        this.logger.debug('🔥 [completeStudyRoom] Background: Updating creator data');
+        await Promise.all([
+          this.streaksService.updateUserActivity(
+            studyRoom.createdById,
+            studyRoom.date,
+            studyRoom.duration,
+            'teacher',
+            0,
+          ),
+          this.achievementsService.checkSessionAchievements(
+            studyRoom.createdById,
+            'teacher',
+          ),
+          this.engagementService.awardFirstMeaningfulActionBonus(
+            studyRoom.createdById,
+            studyRoom.date,
+            'session_completion',
+          ),
+          this.engagementService.awardFirstTeachingSessionOfWeekBonus(
+            studyRoom.createdById,
+            studyRoom.date,
+          ),
+        ]).catch(err => this.logger.error('Error in background creator updates:', err));
 
-    // Check achievements for creator
-    await this.achievementsService.checkSessionAchievements(
-      studyRoom.createdById,
-      'teacher',
-    );
+        const creatorStreak = await this.streaksService.getUserStreak(studyRoom.createdById);
+        await this.achievementsService.checkStreakAchievements(
+          studyRoom.createdById,
+          creatorStreak.currentStreak,
+        ).catch(err => this.logger.error('Error in background creator streak achievements:', err));
 
-    // Check streak achievements for creator
-    const creatorStreak = await this.streaksService.getUserStreak(
-      studyRoom.createdById,
-    );
-    await this.achievementsService.checkStreakAchievements(
-      studyRoom.createdById,
-      creatorStreak.currentStreak,
-    );
+        // 2. Process participant updates (learners) in chunks to avoid overwhelming the DB
+        this.logger.debug('🚀 [completeStudyRoom] Background: Updating participant data in chunks');
+        const CHUNK_SIZE = 5;
+        for (let i = 0; i < participants.length; i += CHUNK_SIZE) {
+          const chunk = participants.slice(i, i + CHUNK_SIZE);
+          this.logger.debug(`📦 [completeStudyRoom] Background: Processing participant chunk ${Math.floor(i/CHUNK_SIZE) + 1}/${Math.ceil(participants.length/CHUNK_SIZE)}`);
+          
+          await Promise.all(chunk.map(async (participant) => {
+            try {
+              await this.streaksService.updateUserActivity(
+                participant.userId,
+                studyRoom.date,
+                studyRoom.duration,
+                'learner',
+                0,
+              );
+              await Promise.all([
+                this.achievementsService.checkSessionAchievements(participant.userId, 'learner'),
+                this.engagementService.awardFirstMeaningfulActionBonus(participant.userId, studyRoom.date, 'session_completion'),
+              ]);
+              const pStreak = await this.streaksService.getUserStreak(participant.userId);
+              await this.achievementsService.checkStreakAchievements(participant.userId, pStreak.currentStreak);
+            } catch (err) {
+              this.logger.error(`[completeStudyRoom] Background: Participant update failed for ${participant.userId}:`, err);
+            }
+          }));
+        }
 
-    await this.engagementService.awardFirstMeaningfulActionBonus(
-      studyRoom.createdById,
-      studyRoom.date,
-      'session_completion',
-    );
-    await this.engagementService.awardFirstTeachingSessionOfWeekBonus(
-      studyRoom.createdById,
-      studyRoom.date,
-    );
-
-    // Update streak for all participants (learners)
-    for (let i = 0; i < participants.length; i++) {
-      const participant = participants[i];
-
-      await this.streaksService.updateUserActivity(
-        participant.userId,
-        studyRoom.date,
-        studyRoom.duration,
-        'learner',
-        0,
-      );
-
-      // Check achievements for participant
-      await this.achievementsService.checkSessionAchievements(
-        participant.userId,
-        'learner',
-      );
-
-      // Check streak achievements for participant
-      const participantStreak = await this.streaksService.getUserStreak(
-        participant.userId,
-      );
-      await this.achievementsService.checkStreakAchievements(
-        participant.userId,
-        participantStreak.currentStreak,
-      );
-
-      await this.engagementService.awardFirstMeaningfulActionBonus(
-        participant.userId,
-        studyRoom.date,
-        'session_completion',
-      );
-    }
-
-    // Generate AI summary from transcripts
-    let summary: string | null = null;
-    try {
-      this.logger.debug(
-        '🤖 [completeStudyRoom] Generating AI summary for study room',
-        studyRoomId,
-      );
-      summary = await this.transcriptsService.compileAndSummarize(studyRoom.id);
-
-      // Store summary in database
-      await this.prisma.studyRoom.update({
-        where: { id: studyRoom.id },
-        data: { summary },
-      });
-      this.logger.log(
-        '✅ [completeStudyRoom] AI summary generated and stored successfully',
-      );
-    } catch (error) {
-      this.logger.error(
-        '⚠️ [completeStudyRoom] Failed to generate summary',
-        error instanceof Error ? error.stack : undefined,
-        `studyRoomId: ${studyRoomId}, error: ${error instanceof Error ? error.message : String(error)}`,
-      );
-      // Continue execution even if summary generation fails
-    }
+        // 3. Generate AI summary
+        this.logger.debug('🤖 [completeStudyRoom] Background: Starting AI summary generation');
+        const summary = await this.transcriptsService.compileAndSummarize(studyRoom.id);
+        if (summary) {
+          await this.prisma.studyRoom.update({
+            where: { id: studyRoom.id },
+            data: { summary },
+          });
+          this.logger.log('✅ [completeStudyRoom] Background: AI summary stored successfully');
+        }
+        
+        this.logger.debug(`✅ [completeStudyRoom] Background processing completed for ${studyRoomId}`);
+      } catch (error) {
+        this.logger.error(`❌ [completeStudyRoom] Fatal error in background processing for ${studyRoomId}:`, error);
+      }
+    })();
 
     return {
       success: true,
-      message: 'Study room marked as completed',
+      message: 'Study room marked as completed. Processing data in background.',
       studyRoom: updatedRoom,
-      summary,
     };
   }
 

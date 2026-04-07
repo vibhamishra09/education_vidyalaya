@@ -1,5 +1,7 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import {
+  ActivityFeedMode,
+  ActivityFeedResponse,
   DashboardService,
   SessionActivityDataPoint,
   WalletActivityDataPoint,
@@ -77,5 +79,25 @@ export class DashboardController {
 
     const monthsNum = months ? parseInt(months, 10) : 6;
     return this.dashboardService.getWalletActivity(userId, monthsNum);
+  }
+
+  @Get('feed')
+  async getActivityFeed(
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
+    @Query('mode') mode?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ): Promise<ActivityFeedResponse> {
+    const userId = await this.resolveDbUserId(dbUserId, clerkUserId);
+    const normalizedMode: ActivityFeedMode =
+      mode === 'following' ? 'following' : 'for_you';
+
+    return this.dashboardService.getActivityFeed(
+      userId,
+      normalizedMode,
+      page ? parseInt(page, 10) : 1,
+      limit ? parseInt(limit, 10) : 8,
+    );
   }
 }

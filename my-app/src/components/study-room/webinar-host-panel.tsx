@@ -13,6 +13,7 @@ type GuestRow = { id: string; name: string; email: string; role: string };
 const POLL_MS = 5000;
 
 export function WebinarHostPanel({
+  isHost = false,
   studyRoomId,
   guestParticipants,
   chatEnabled,
@@ -20,12 +21,15 @@ export function WebinarHostPanel({
   /** Exclude from “live guests” (e.g. host’s own registration row). */
   hostEmail,
 }: {
+  isHost?: boolean;
   studyRoomId: string;
   guestParticipants: GuestRow[];
   chatEnabled: boolean;
   onChatEnabledChange?: (v: boolean) => void;
   hostEmail?: string | null;
 }) {
+  if (!isHost) return null;
+
   const [open, setOpen] = useState(false);
   const [regs, setRegs] = useState<
     Array<{
@@ -45,11 +49,27 @@ export function WebinarHostPanel({
 
   const liveGuestCount = useMemo(() => {
     const h = hostEmail?.trim().toLowerCase();
-    if (!h) return guestParticipants.length;
-    return guestParticipants.filter(
+    const liveFromRoom = !h
+      ? guestParticipants.length
+      : guestParticipants.filter(
       (g) => g.email.trim().toLowerCase() !== h,
     ).length;
-  }, [guestParticipants, hostEmail]);
+    if (liveFromRoom > 0) return liveFromRoom;
+    // Fallback when live participant list is unavailable: show approved registrations
+    // so host immediately sees admitted attendees reflected in this panel.
+    const approved = regs.filter(
+      (r) => r.approvalStatus === "approved" && (!h || r.email.trim().toLowerCase() !== h),
+    ).length;
+    return approved;
+  }, [guestParticipants, hostEmail, regs]);
+
+  const pendingAdmitCount = useMemo(
+    () =>
+      waitingRoomEnabled
+        ? regs.filter((r) => r.approvalStatus === "pending").length
+        : 0,
+    [regs, waitingRoomEnabled],
+  );
 
   useEffect(() => {
     setToggleChat(chatEnabled);
@@ -81,13 +101,13 @@ export function WebinarHostPanel({
     void load();
   }, [load]);
 
+  // Keep registration list fresh while the host is in the room (panel open or closed).
   useEffect(() => {
-    if (!open) return;
     const id = window.setInterval(() => {
       void load();
     }, POLL_MS);
     return () => window.clearInterval(id);
-  }, [open, load]);
+  }, [load]);
 
   const onRemoveGuest = async (guestId: string) => {
     setRemoving(guestId);
@@ -132,15 +152,27 @@ export function WebinarHostPanel({
           onClick={() => setOpen(true)}
           className={cn(
             "fixed left-0 top-0 z-[46]",
-            "flex items-center justify-center p-2.5",
+            "relative flex items-center justify-center p-2.5",
             "rounded-br-lg border-r border-b border-white/15 bg-[#141414]/95",
             "text-emerald-400 shadow-lg backdrop-blur-sm",
             "transition-colors hover:bg-[#1a1a1a] hover:text-emerald-300",
             "pointer-events-auto",
           )}
-          title="Webinar controls"
+          title={
+            pendingAdmitCount > 0
+              ? `Webinar controls — ${pendingAdmitCount} waiting to be admitted`
+              : "Webinar controls"
+          }
         >
           <Menu className="h-5 w-5" strokeWidth={2} />
+          {pendingAdmitCount > 0 && (
+            <span
+              className="absolute -right-0.5 -top-0.5 flex h-[1.125rem] min-w-[1.125rem] items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold text-black"
+              aria-hidden
+            >
+              {pendingAdmitCount > 9 ? "9+" : pendingAdmitCount}
+            </span>
+          )}
         </button>
       )}
 
@@ -188,38 +220,6 @@ export function WebinarHostPanel({
                   <X className="h-4 w-4" />
                 </button>
               </div>
-            </div>
-
-            <div className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-2">
-              <span className="text-xs text-white/80">Chat for attendees</span>
-              <Switch
-                checked={toggleChat}
-                onCheckedChange={(v) => void onToggleChat(v)}
-              />
-            </div>
-
-            {/* “Allow specific users”: admit/remove only when waiting room was enabled for this webinar */}
-            <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 space-y-1.5">
-              <p className="text-xs font-semibold text-white/90">
-                Who can join
-              </p>
-              {waitingRoomEnabled ? (
-                <p className="text-[11px] leading-snug text-white/55">
-                  Waiting room is <span className="text-amber-200/90">on</span>{" "}
-                  for this webinar. New registrations stay{" "}
-                  <strong className="text-white/75">pending</strong> until you{" "}
-                  <strong className="text-white/75">Admit</strong>. Use{" "}
-                  <strong className="text-white/75">Remove</strong> to kick
-                  someone who has already joined.
-                </p>
-              ) : (
-                <p className="text-[11px] leading-snug text-white/55">
-                  Waiting room is <span className="text-emerald-300/90">off</span>
-                  — attendees are <strong className="text-white/75">approved automatically</strong>{" "}
-                  (no admit step). You can still <strong className="text-white/75">Remove</strong>{" "}
-                  someone who has joined.
-                </p>
-              )}
             </div>
 
             <div>
@@ -311,6 +311,43 @@ export function WebinarHostPanel({
               creating the webinar; in webinar mode they don&apos;t see other
               participants&apos; video tiles.
             </p>
+
+            <div className="border-t border-white/10 pt-2 space-y-2">
+              <p className="text-[11px] uppercase tracking-wide text-white/45">
+                Controls
+              </p>
+              <div className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-2">
+                <span className="text-xs text-white/80">Chat for attendees</span>
+                <Switch
+                  checked={toggleChat}
+                  onCheckedChange={(v) => void onToggleChat(v)}
+                />
+              </div>
+
+              {/* “Allow specific users”: admit/remove only when waiting room was enabled for this webinar */}
+              <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 space-y-1.5">
+                <p className="text-xs font-semibold text-white/90">
+                  Who can join
+                </p>
+                {waitingRoomEnabled ? (
+                  <p className="text-[11px] leading-snug text-white/55">
+                    Waiting room is <span className="text-amber-200/90">on</span>{" "}
+                    for this webinar. New registrations stay{" "}
+                    <strong className="text-white/75">pending</strong> until you{" "}
+                    <strong className="text-white/75">Admit</strong>. Use{" "}
+                    <strong className="text-white/75">Remove</strong> to kick
+                    someone who has already joined.
+                  </p>
+                ) : (
+                  <p className="text-[11px] leading-snug text-white/55">
+                    Waiting room is <span className="text-emerald-300/90">off</span>
+                    — attendees are <strong className="text-white/75">approved automatically</strong>{" "}
+                    (no admit step). You can still <strong className="text-white/75">Remove</strong>{" "}
+                    someone who has joined.
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </div>

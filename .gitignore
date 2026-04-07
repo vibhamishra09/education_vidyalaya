@@ -27,6 +27,14 @@ logs/*.detail.txt
 logs/chat-flow.txt
 my-app/logs/
 
+# Local dev process output (`pnpm dev:log`) — keep logs/README.md in repo
+logs/*.log.txt
+logs/*.detail.txt
+logs/chat-flow.txt
+
+# Next.js app dev logs (e.g. chat-flow via /api/dev/chat-flow-log; cwd = my-app/)
+my-app/logs/
+
 # OS files
 .DS_Store
 Thumbs.db
@@ -56,3 +64,12 @@ coverage/
 # pnpm-lock.yaml
 
 .clerk/
+my-app/storageState.moderator.json
+my-app/storageState.participant.json
+my-app/test-results.json
+
+dev-e2e/node_modules/
+dev-e2e/playwright-report/
+dev-e2e/test-results.json
+dev-e2e/storageState.*.json
+dev-e2e/test-results
