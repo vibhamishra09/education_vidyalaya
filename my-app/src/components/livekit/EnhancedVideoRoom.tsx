@@ -592,6 +592,8 @@ export function EnhancedVideoRoom({
 		onWarning: handleWarning,
 		extendedEndTime,
 	})
+	console.log(minutesLeft, formattedTime, currentEndTime);
+	
 
 	// Handle approving extension request from the dialog
 	const handleApproveExtension = useCallback(() => {
@@ -896,7 +898,7 @@ export function EnhancedVideoRoom({
 			{timerEnabled && isHost && (
 				<SessionEndWarningDialog
 					open={showWarning}
-					minutesRemaining={minutesLeft}
+					currentEndTime={currentEndTime}
 					onClose={() => setShowWarning(false)}
 				/>
 			)}
