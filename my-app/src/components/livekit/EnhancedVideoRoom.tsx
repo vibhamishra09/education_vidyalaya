@@ -107,6 +107,7 @@ interface SessionData {
 	duration: number;
 	sessionType: 'studyRoom' | 'peerSession';
 	sessionMode?: string;
+	slug: string
 	[key: string]: unknown;
 }
 
@@ -4389,7 +4390,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 							<button
 								onClick={async () => {
 										try {
-											await navigator.clipboard.writeText(window.location.href)
+											await navigator.clipboard.writeText(window.location.origin + '/studyroom/' + _sessionData?.slug)
 											showSuccess("URL Copied to Clipboard")
 										} catch (err) {
 											console.error('Failed to copy:', err)
