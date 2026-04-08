@@ -151,7 +151,7 @@ export class SkillsService {
                 'x-api-key': process.env.OLLAMA_API_KEY!,
               },
               body: JSON.stringify({
-                model: "gemma3:270m", //we also have gemma3:1b, if it does'nt perform well, we can fallback to it
+                model: "gemma3:1b", 
                 prompt,
                 stream: false,
                 keep_alive: "10m",
