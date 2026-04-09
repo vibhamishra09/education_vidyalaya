@@ -7,9 +7,13 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
       "env": {
         "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_dGVhY2hpbmctbGxhbWEtOC5jbGVyay5hY2NvdW50cy5kZXYk",
-        "EXPO_PUBLIC_API_URL": "https://be.dev.webyalaya.com"
+        "EXPO_PUBLIC_API_URL": "https://be.dev.webyalaya.com",
+        "NPM_CONFIG_CI": "false"
       }
     },
     "preview": {

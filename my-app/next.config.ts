@@ -39,6 +39,7 @@ const publicApiForRewrites =
  * Prefer BACKEND_URL; do not rely on NEXT_PUBLIC_API_URL alone in dev (often set to the marketing site).
  */
 const backendOrigin =
+  process.env.API_URL?.trim().replace(/\/$/, "") ||
   process.env.BACKEND_URL?.trim().replace(/\/$/, "") ||
   publicApiForRewrites ||
   "http://127.0.0.1:3002";

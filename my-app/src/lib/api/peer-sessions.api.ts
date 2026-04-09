@@ -10,24 +10,8 @@ import {
 import { cleanQueryParams } from '../utils/api-utils';
 import type { AvailableSlotsResponse } from './availability.api';
 
-/**
- * Peer session URLs:
- * - If the API lives on another origin (NEXT_PUBLIC_API_URL), call it directly.
- * - Otherwise use same-origin `/api/...` so Next can run `app/api/peer-sessions/[sessionId]`
- *   (proxy) or `fallback` rewrites — never a dead PATCH on the root Next app.
- */
-function peerSessionsUrl(path: string): string {
-  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-  const base = process.env.NEXT_PUBLIC_API_URL?.trim().replace(/\/$/, '') ?? '';
-  if (
-    base &&
-    typeof window !== 'undefined' &&
-    base !== window.location.origin
-  ) {
-    return `${base}${normalizedPath}`;
-  }
-  return normalizedPath;
-}
+// Peer sessions API using the centralized apiClient
+
 
 export const peerSessionsApi = {
   // Get peer sessions
@@ -45,7 +29,7 @@ export const peerSessionsApi = {
       page,
       limit,
     });
-    const response = await apiClient.get<PeerSessionsResponse>(peerSessionsUrl('/api/peer-sessions'), {
+    const response = await apiClient.get<PeerSessionsResponse>('/api/peer-sessions', {
       params,
     });
     return response.data;
@@ -54,14 +38,14 @@ export const peerSessionsApi = {
   // Get peer session details
   getPeerSessionDetails: async (peerSessionId: string): Promise<PeerSession> => {
     const response = await apiClient.get<PeerSession>(
-      peerSessionsUrl(`/api/peer-sessions/${peerSessionId}`),
+      `/api/peer-sessions/${peerSessionId}`,
     );
     return response.data;
   },
 
   // Request peer session
   requestPeerSession: async (data: RequestSessionDto): Promise<PeerSession> => {
-    const response = await apiClient.post<PeerSession>(peerSessionsUrl('/api/peer-sessions'), data);
+    const response = await apiClient.post<PeerSession>('/api/peer-sessions', data);
     return response.data;
   },
 
@@ -71,7 +55,7 @@ export const peerSessionsApi = {
     data: UpdateSessionStatusDto
   ): Promise<PeerSession> => {
     const response = await apiClient.patch<PeerSession>(
-      peerSessionsUrl(`/api/peer-sessions/${peerSessionId}/status`),
+      `/api/peer-sessions/${peerSessionId}/status`,
       data,
     );
     return response.data;
@@ -82,7 +66,7 @@ export const peerSessionsApi = {
     data: UpdatePeerSessionDto
   ): Promise<PeerSession> => {
     const response = await apiClient.patch<PeerSession>(
-      peerSessionsUrl(`/api/peer-sessions/${peerSessionId}`),
+      `/api/peer-sessions/${peerSessionId}`,
       data,
     );
     return response.data;
@@ -91,7 +75,7 @@ export const peerSessionsApi = {
   // Accept peer session request
   acceptPeerSession: async (peerSessionId: string): Promise<PeerSession> => {
     const response = await apiClient.patch<PeerSession>(
-      peerSessionsUrl(`/api/peer-sessions/${peerSessionId}/accept`),
+      `/api/peer-sessions/${peerSessionId}/accept`,
     );
     return response.data;
   },
@@ -99,7 +83,7 @@ export const peerSessionsApi = {
   // Reject peer session request
   rejectPeerSession: async (peerSessionId: string): Promise<PeerSession> => {
     const response = await apiClient.patch<PeerSession>(
-      peerSessionsUrl(`/api/peer-sessions/${peerSessionId}/reject`),
+      `/api/peer-sessions/${peerSessionId}/reject`,
     );
     return response.data;
   },
@@ -107,7 +91,7 @@ export const peerSessionsApi = {
   // Complete peer session
   completePeerSession: async (peerSessionId: string): Promise<PeerSession> => {
     const response = await apiClient.patch<PeerSession>(
-      peerSessionsUrl(`/api/peer-sessions/${peerSessionId}/complete`),
+      `/api/peer-sessions/${peerSessionId}/complete`,
     );
     return response.data;
   },
@@ -159,7 +143,7 @@ export const peerSessionsApi = {
     feedback: SessionFeedbackSubmission
   ): Promise<{ success: boolean; message: string; peerSessionId: string }> => {
     const response = await apiClient.post(
-      peerSessionsUrl(`/api/peer-sessions/${peerSessionId}/feedback`),
+      `/api/peer-sessions/${peerSessionId}/feedback`,
       feedback,
     );
     return response.data;
@@ -168,7 +152,7 @@ export const peerSessionsApi = {
   // Check if user is host
   checkIsHost: async (peerSessionId: string): Promise<{ isHost: boolean }> => {
     const response = await apiClient.get<{ isHost: boolean }>(
-      peerSessionsUrl(`/api/peer-sessions/${peerSessionId}/is-host`),
+      `/api/peer-sessions/${peerSessionId}/is-host`,
     );
     return response.data;
   },

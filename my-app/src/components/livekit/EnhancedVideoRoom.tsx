@@ -4349,29 +4349,6 @@ const VideoRoomContent = memo(function VideoRoomContent({
 							</div>
 						)}
 
-						{/* PiP Setup Widget - Only show if not primed and screen shared or camera on */}
-						{!isPipPrimed && !isMobileViewport && (isScreenShareEnabled || isCameraEnabled) && (
-							<div className="hidden lg:flex items-center mr-2 animate-in fade-in slide-in-from-bottom-2 duration-500">
-								<button
-									onClick={async () => {
-										// Priming: Just calling togglePiP once with a gesture 
-										// "Unlocks" the browser's trust for subsequent auto-triggers.
-										await togglePiP();
-										setIsPipPrimed(true);
-									}}
-									className="group flex items-center gap-2 px-3 py-1.5 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 rounded-full transition-all active:scale-95"
-								>
-									<span className="relative flex h-2 w-2">
-										<span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
-										<span className="relative inline-flex rounded-full h-2 w-2 bg-sky-500"></span>
-									</span>
-									<span className="text-[11px] font-medium text-sky-400 whitespace-nowrap">Enable Auto-PiP</span>
-									<div className="hidden group-hover:block absolute bottom-full mb-3 left-1/2 -translate-x-1/2 w-48 p-2 bg-[#1a1a1a] border border-white/10 rounded-lg shadow-2xl text-[10px] text-white/70 leading-relaxed z-[60]">
-										Chrome requires a manual click to authorize automatic transitions. Click here once to enable.
-									</div>
-								</button>
-							</div>
-						)}
 
 						{/* PiP */}
 						<div className="hidden md:flex flex-col items-center justify-center group">
@@ -4466,6 +4443,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						<div className="relative shrink-0">
 							<Button
 								onClick={isHost ? () => setShowEndMenu(!showEndMenu) : onLeave}
+								title={isHost ? "End meeting for everyone" : "Leave the meeting"}
 								className={`
 							h-11 md:h-11 px-4 md:px-6 rounded-lg md:rounded-xl font-semibold text-xs md:text-sm transition-all duration-200
 							flex items-center gap-1.5 md:gap-2 shadow-lg active:scale-95

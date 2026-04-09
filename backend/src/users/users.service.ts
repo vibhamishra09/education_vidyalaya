@@ -46,7 +46,7 @@ type UserOnboardingResult = {
   coins: Prisma.Decimal;
   onboarded: boolean;
 };
-import { UpdateUserDto } from './dto/user.dto';
+import { UpdateUserDto, OnboardingDto } from './dto/user.dto';
 import { CacheService } from '../redis/cache.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import {
@@ -251,6 +251,26 @@ export class UsersService {
         this.cacheService.deletePattern(`dashboard:feed:*${ref}*`),
       ]),
     );
+  }
+
+  async onboardUser(clerkId: string, onboardingDto: OnboardingDto) {
+    // Ensure the user exists in our database and is marked as onboarded
+    const user = await this.ensureUserFromClerk(clerkId);
+
+    // Map onboarding fields to UpdateUserDto
+    const updateDto: UpdateUserDto = {
+      name: onboardingDto.name,
+      bio: onboardingDto.bio,
+      avatar: onboardingDto.avatar,
+      location: onboardingDto.location,
+      school: onboardingDto.school,
+      hourlyRate: onboardingDto.hourlyRate,
+      hasSkills: onboardingDto.skillsIHave,
+      wantSkills: onboardingDto.skillsIWant,
+    };
+
+    // Update the user profile with the provided data
+    return this.updateUserProfile(user.id, updateDto);
   }
 
   async getCurrentUser(userIdOrClerkId: string) {
