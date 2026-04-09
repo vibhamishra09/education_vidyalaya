@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@clerk/nextjs'
 import { isAxiosError } from 'axios'
-import { EnhancedVideoRoom } from '@/components/livekit/EnhancedVideoRoom'
+import { EnhancedVideoRoom, SessionData } from '@/components/livekit/EnhancedVideoRoom'
 import apiClient from '@/lib/api-client'
 import { normalizeLiveKitServerUrl } from '@/lib/livekit-url'
 import { Loader2, XCircle } from 'lucide-react'
@@ -72,6 +72,7 @@ export default function RoomPage() {
 		duration: number;
 		sessionType: 'studyRoom' | 'peerSession';
 		sessionStatus?: string;
+		slug: string;
 		[key: string]: unknown;
 	} | null>(null)
 	const [isHost, setIsHost] = useState<boolean>(false)
@@ -171,6 +172,7 @@ export default function RoomPage() {
 					sessionType: 'studyRoom',
 					sessionMode: data.sessionMode,
 					webinarConfig: data.webinarConfig,
+					slug: (data.slug as string) || roomName,
 				}))
 
 				if (
@@ -356,6 +358,7 @@ export default function RoomPage() {
 						sessionType: 'studyRoom',
 						sessionMode: (data as { sessionMode?: string }).sessionMode,
 						webinarConfig: (data as { webinarConfig?: unknown }).webinarConfig,
+						slug: (data.slug as string) || roomName,
 					})
 
 					const chatTargets = extractChatTargets(

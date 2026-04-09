@@ -746,7 +746,7 @@ export default function StudyRoomClient({ roomId, slug }: StudyRoomClientProps) 
         <StudyRoomHostEditDialog
           open={hostEditOpen}
           onOpenChange={setHostEditOpen}
-          roomId={roomId}
+          roomId={slug}
           initialTitle={room.title}
           initialDescription={room.description}
           initialDate={room.date}

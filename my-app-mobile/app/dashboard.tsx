@@ -69,12 +69,20 @@ function MetricCard({
 function SessionRow({
   session,
   label,
+  onPress,
 }: {
   session: DashboardSession;
   label: string;
+  onPress?: () => void;
 }) {
+  const isOngoing = session.sessionStatus === 'ONGOING';
+
   return (
-    <View className="flex-row items-center justify-between border-b border-slate-50 py-3 last:border-0">
+    <TouchableOpacity 
+      onPress={onPress}
+      activeOpacity={0.7}
+      className="flex-row items-center justify-between border-b border-slate-50 py-4 last:border-0"
+    >
       <View className="flex-1 pr-3">
         <Text className="text-base font-bold text-slate-900">{session.title}</Text>
         <Text className="mt-1 text-xs text-slate-500">
@@ -82,12 +90,20 @@ function SessionRow({
         </Text>
         <Text className="mt-1 text-xs text-slate-400">{label}</Text>
       </View>
-      <View className="rounded bg-slate-100 px-2 py-1">
-        <Text className="text-xs font-medium text-slate-600">
-          {session.sessionStatus === 'ONGOING' ? 'Live' : session.sessionStatus}
-        </Text>
+      
+      <View className="flex-row items-center gap-2">
+        {isOngoing && (
+          <View className="rounded-lg bg-emerald-600 px-3 py-1.5 shadow-sm">
+            <Text className="text-xs font-bold text-white">Join</Text>
+          </View>
+        )}
+        <View className={clsx("rounded px-2 py-1", isOngoing ? "bg-rose-50" : "bg-slate-100")}>
+          <Text className={clsx("text-[10px] font-bold uppercase", isOngoing ? "text-rose-600" : "text-slate-600")}>
+            {isOngoing ? 'Live' : session.sessionStatus}
+          </Text>
+        </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -253,10 +269,29 @@ export default function DashboardScreen() {
     };
   }, [backendReady, request]);
 
-  const sessions =
-    activeTab === 'Upcoming'
-      ? [...(dashboard?.upcomingSessions || []), ...(dashboard?.upcomingStudyRooms || [])]
-      : [...(dashboard?.pastSessions || []), ...(dashboard?.pastStudyRooms || [])];
+    const sessions = 
+      activeTab === 'Upcoming'
+        ? [
+            ...(dashboard?.upcomingSessions || []).map(s => ({ ...s, type: 'peerSession' as const })),
+            ...(dashboard?.upcomingStudyRooms || []).map(s => ({ ...s, type: 'studyRoom' as const }))
+          ]
+        : [
+            ...(dashboard?.pastSessions || []).map(s => ({ ...s, type: 'peerSession' as const })),
+            ...(dashboard?.pastStudyRooms || []).map(s => ({ ...s, type: 'studyRoom' as const }))
+          ];
+
+    const handleSessionPress = (session: DashboardSession & { type: 'peerSession' | 'studyRoom' }) => {
+      if (session.type === 'studyRoom') {
+        router.push(`/study-room/${session.id}`);
+      } else {
+        // Peer sessions go direct to live-session, or a feedback page if DONE
+        if (session.sessionStatus === 'DONE') {
+          router.push(`/session-feedback/${session.id}`);
+        } else {
+          router.push(`/live-session/${session.id}`);
+        }
+      }
+    };
 
   const pendingRequests = [...(dashboard?.pendingRequests || []), ...(dashboard?.sentRequests || [])];
 
@@ -426,6 +461,7 @@ export default function DashboardScreen() {
                       key={`${activeTab}-${session.id}`}
                       session={session}
                       label={session.peer?.name || session.createdBy?.name || 'Webyalaya'}
+                      onPress={() => handleSessionPress(session as any)}
                     />
                   ))
                 )}

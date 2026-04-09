@@ -1,6 +1,7 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { ApiError } from '@/types/api.types';
 import { USER_FACING_TRY_AGAIN } from '@/lib/utils/error-handling';
+import { API_CONFIG } from '@/lib/api-config';
 
 declare module 'axios' {
   interface AxiosRequestConfig {
