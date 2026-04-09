@@ -11,6 +11,7 @@ import { OfflineNotice } from '../components/OfflineNotice';
 import { SidebarProvider, useSidebar } from '../lib/SidebarContext';
 import { Sidebar } from '../components/Sidebar';
 import { BackendUserProvider } from '../lib/backend-user-context';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!;
 
@@ -109,9 +110,11 @@ export default function Layout() {
     <ClerkProvider tokenCache={tokenCache} publishableKey={publishableKey}>
       <ClerkLoaded>
         <BackendUserProvider>
-          <SidebarProvider>
-            <LayoutContent />
-          </SidebarProvider>
+          <SafeAreaProvider>
+            <SidebarProvider>
+              <LayoutContent />
+            </SidebarProvider>
+          </SafeAreaProvider>
         </BackendUserProvider>
       </ClerkLoaded>
     </ClerkProvider>

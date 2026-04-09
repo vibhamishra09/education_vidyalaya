@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useAuth, useUser } from '@clerk/nextjs';
 import { io, Socket } from 'socket.io-client';
 import { useQueryClient } from '@tanstack/react-query';
+import { API_CONFIG } from '@/lib/api-config';
 import {
   DebateState,
   DebateStatus,

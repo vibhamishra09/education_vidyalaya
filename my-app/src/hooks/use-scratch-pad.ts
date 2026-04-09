@@ -48,7 +48,7 @@ export function useScratchPad({ roomId, room, isHost, canEdit = true, roomTitle,
 				await new Promise(resolve => setTimeout(resolve, 300))
 				
 				console.log(`${LOG_TAG} Loading state for ${roomId}...`)
-				const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/scratch-pad/${roomId}`, {
+				const response = await fetch(`/api/scratch-pad/${roomId}`, {
 					headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
 				})
 
@@ -144,7 +144,7 @@ export function useScratchPad({ roomId, room, isHost, canEdit = true, roomTitle,
 				schema: schema.serialize(),
 			}
 
-			const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/scratch-pad/${roomId}`, {
+			const response = await fetch(`/api/scratch-pad/${roomId}`, {
 				method: 'POST',
 				headers: { 
 					'Content-Type': 'application/json',
