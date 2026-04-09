@@ -81,7 +81,7 @@ export function normalizeChatMessage(msg: unknown): ChatMessageRow {
 	if (o.sender && typeof o.sender === 'object') {
 		const s = o.sender as Record<string, unknown>
 		if (typeof s.id === 'string' && typeof s.name === 'string') {
-			sender = {
+		sender = {
 				id: s.id,
 				name: s.name,
 				avatar:

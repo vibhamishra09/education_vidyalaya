@@ -10,7 +10,7 @@ import { Loader2, Menu, UserCheck, UserMinus, Users, X } from "lucide-react";
 
 type GuestRow = { id: string; name: string; email: string; role: string };
 
-const POLL_MS = 5000;
+const POLL_MS = 15000;
 
 export function WebinarHostPanel({
   isHost = false,
@@ -84,16 +84,16 @@ export function WebinarHostPanel({
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoading(true);
     try {
       const res = await studyRoomsApi.listWebinarRegistrations(studyRoomId);
       setRegs(res.registrations);
       setWaitingRoomEnabled(res.waitingRoomEnabled !== false);
     } catch {
-      setRegs([]);
+      if (!opts?.silent) setRegs([]);
     } finally {
-      setLoading(false);
+      if (!opts?.silent) setLoading(false);
     }
   }, [studyRoomId]);
 
@@ -101,13 +101,15 @@ export function WebinarHostPanel({
     void load();
   }, [load]);
 
-  // Keep registration list fresh while the host is in the room (panel open or closed).
+  // Poll only while panel is open to avoid constant list churn while teaching.
   useEffect(() => {
+    if (!open) return;
+    void load({ silent: true });
     const id = window.setInterval(() => {
-      void load();
+      void load({ silent: true });
     }, POLL_MS);
     return () => window.clearInterval(id);
-  }, [load]);
+  }, [load, open]);
 
   const onRemoveGuest = async (guestId: string) => {
     setRemoving(guestId);
@@ -274,23 +276,24 @@ export function WebinarHostPanel({
                                 Admit
                               </Button>
                             )}
-                          {r.guestParticipantId && (
+                          {r.approvalStatus === "approved" && r.guestParticipantId && (
                             <Button
                               type="button"
                               variant="ghost"
                               size="sm"
-                              className="h-7 px-2 text-red-400 hover:text-red-300"
+                              className="h-7 gap-1 px-2 text-red-400 hover:bg-red-500/10 hover:text-red-300"
                               disabled={removing === r.guestParticipantId}
                               onClick={() =>
                                 void onRemoveGuest(r.guestParticipantId!)
                               }
-                              title="Remove registration or kick from session"
+                              title="Kick attendee from webinar"
                             >
                               {removing === r.guestParticipantId ? (
                                 <Loader2 className="h-3 w-3 animate-spin" />
                               ) : (
                                 <UserMinus className="h-3.5 w-3.5" />
                               )}
+                              Kick
                             </Button>
                           )}
                         </div>
@@ -335,14 +338,14 @@ export function WebinarHostPanel({
                     for this webinar. New registrations stay{" "}
                     <strong className="text-white/75">pending</strong> until you{" "}
                     <strong className="text-white/75">Admit</strong>. Use{" "}
-                    <strong className="text-white/75">Remove</strong> to kick
-                    someone who has already joined.
+                    <strong className="text-white/75">Kick</strong> to remove
+                    an approved attendee immediately.
                   </p>
                 ) : (
                   <p className="text-[11px] leading-snug text-white/55">
                     Waiting room is <span className="text-emerald-300/90">off</span>
                     — attendees are <strong className="text-white/75">approved automatically</strong>{" "}
-                    (no admit step). You can still <strong className="text-white/75">Remove</strong>{" "}
+                    (no admit step). You can still <strong className="text-white/75">Kick</strong>{" "}
                     someone who has joined.
                   </p>
                 )}

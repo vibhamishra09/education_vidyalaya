@@ -15,6 +15,8 @@ import { corsOriginDelegate } from '../common/cors';
 interface ExtensionState {
   hasExtended: boolean;
   newEndTime?: number;
+  extensionCount?: number;
+  totalExtendedMinutes?: number;
 }
 
 // Track extension state per session
@@ -213,15 +215,6 @@ export class SessionExtensionGateway
       return;
     }
 
-    // Check if already extended
-    const state = sessionExtensionState.get(sessionId);
-    if (state?.hasExtended) {
-      client.emit('extension-error', {
-        message: 'Session has already been extended',
-      });
-      return;
-    }
-
     // Get the user's name for the notification
     const userName = await this.getUserName(client.data.userId);
 
@@ -273,15 +266,6 @@ export class SessionExtensionGateway
 
     if (!sessionId || !sessionType || !currentEndTime) {
       client.emit('extension-error', { message: 'Invalid payload' });
-      return;
-    }
-
-    // Check if already extended
-    const existingState = sessionExtensionState.get(sessionId);
-    if (existingState?.hasExtended) {
-      client.emit('extension-error', {
-        message: 'Session has already been extended',
-      });
       return;
     }
 
@@ -353,11 +337,17 @@ export class SessionExtensionGateway
 
       // Calculate new end time
       const newEndTime = currentEndTime + extensionMinutes * 60 * 1000;
+      const existingState = sessionExtensionState.get(sessionId);
+      const nextCount = (existingState?.extensionCount ?? 0) + 1;
+      const nextTotalMinutes =
+        (existingState?.totalExtendedMinutes ?? 0) + extensionMinutes;
 
       // Update extension state
       sessionExtensionState.set(sessionId, {
         hasExtended: true,
         newEndTime,
+        extensionCount: nextCount,
+        totalExtendedMinutes: nextTotalMinutes,
       });
 
       this.logger.log(
@@ -370,6 +360,8 @@ export class SessionExtensionGateway
         newEndTime,
         extensionMinutes,
         hasExtended: true,
+        extensionCount: nextCount,
+        totalExtendedMinutes: nextTotalMinutes,
         extendedBy: {
           userId: client.data.userId,
           name: await this.getUserName(client.data.userId),

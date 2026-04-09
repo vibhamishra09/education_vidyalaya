@@ -14,6 +14,7 @@ import { LoggerService } from '../common/logger';
 import { corsOriginDelegate } from '../common/cors';
 
 @WebSocketGateway({
+  namespace: '/transcripts',
   cors: {
     origin: corsOriginDelegate,
     credentials: true,

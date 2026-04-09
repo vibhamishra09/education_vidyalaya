@@ -31,6 +31,26 @@ export function getPublicAppOrigin(): string {
 }
 
 /**
+ * Origin for links shown in the UI (copy/share) while developing locally.
+ * When the app is opened on localhost / 127.0.0.1, always use that origin (including port),
+ * even if NEXT_PUBLIC_APP_URL points at production — so webinar registration matches dev.
+ * In production on webyalaya.com, uses the real site origin.
+ */
+export function getDisplayAppOrigin(): string {
+  if (typeof window !== "undefined") {
+    try {
+      const host = window.location.hostname.toLowerCase();
+      if (host === "localhost" || host === "127.0.0.1") {
+        return window.location.origin.replace(/\/$/, "");
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  return getPublicAppOrigin();
+}
+
+/**
  * Backend join/registration responses may omit FRONTEND_URL and return path-only URLs.
  * Same-origin links work in the current tab; this makes hrefs copy/paste and new-tab safe.
  */

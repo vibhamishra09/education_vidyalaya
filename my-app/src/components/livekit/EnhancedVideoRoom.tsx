@@ -14,6 +14,8 @@ import {
 import '@livekit/components-styles'
 import { BackgroundProcessor, BackgroundBlur, VirtualBackground, BackgroundOptions } from '@livekit/track-processors'
 import { ChatWidget } from '@/components/chat/ChatWidget'
+import { parseLivekitAccessTokenIdentity } from '@/lib/livekit-jwt-identity'
+import { isJoineeFlowFileEnabled } from '@/lib/joinee-flow-log'
 import { Button } from '@/components/ui/button'
 import {
 	MessageSquare, X, Users, Maximize2, Minimize2, Video, VideoOff, Mic, MicOff,
@@ -174,17 +176,46 @@ export function EnhancedVideoRoom({
 	const { getToken } = useAuth()
 	const { user, isLoaded: clerkLoaded } = useUser()
 	const queryClient = useQueryClient()
+	// Auth token for chat/moderation sockets
+	const [authToken, setAuthToken] = useState<string | null>(null)
+	const derivedLivekitIdentity = useMemo(
+		() =>
+			externalAccessToken && token
+				? parseLivekitAccessTokenIdentity(token)
+				: null,
+		[externalAccessToken, token],
+	)
+	const resolvedGuestLivekitIdentity =
+		guestLivekitIdentity ?? derivedLivekitIdentity ?? null
 	/**
 	 * Must match what the host sends in `request-audio-on` / `request-video-on` (LiveKit `participant.identity`).
 	 * Guest joins use the guest LiveKit identity on the token — not the viewer's Clerk id, or host-targeted
 	 * events will never match `userIdRef` and permission modals never show.
 	 */
 	const moderationUserId = externalAccessToken
-		? guestLivekitIdentity ?? null
+		? resolvedGuestLivekitIdentity ?? user?.id ?? null
 		: user?.id ?? null
+	/** Host moderation events use LiveKit `participant.identity`; may differ from Clerk id (guest links). */
+	const moderationIdentityMatchIds = useMemo(
+		() =>
+			[
+				...new Set(
+					[
+						user?.id,
+						resolvedGuestLivekitIdentity,
+						currentUserDbId,
+						moderationUserId,
+					].filter((x): x is string => typeof x === 'string' && x.length > 0),
+				),
+			],
+		[user?.id, resolvedGuestLivekitIdentity, currentUserDbId, moderationUserId],
+	)
 	const moderationReady =
 		!!sessionData?.id &&
-		(externalAccessToken ? !!guestLivekitIdentity : clerkLoaded && !!user?.id)
+		(externalAccessToken
+			? !!authToken &&
+				(!!resolvedGuestLivekitIdentity || !!(clerkLoaded && user?.id))
+			: clerkLoaded && !!user?.id)
 
 	/** Prevents double `router.push` when leave + LiveKit disconnect both fire */
 	const feedbackNavigatedRef = useRef(false)
@@ -195,9 +226,6 @@ export function EnhancedVideoRoom({
 	// Socket.io for transcripts
 	const [transcriptSocket, setTranscriptSocket] = useState<Socket | null>(null)
 	const socketConnectingRef = useRef(false)
-
-	// Auth token for socket connection
-	const [authToken, setAuthToken] = useState<string | null>(null)
 
 	// Loading state when ending meeting
 	const [endingMeeting, setEndingMeeting] = useState(false)
@@ -394,7 +422,9 @@ export function EnhancedVideoRoom({
 		isHost,
 		token: authToken,
 		userId: moderationUserId,
+		identityMatchIds: moderationIdentityMatchIds,
 		enabled: moderationReady,
+		meetFlowTrace: isJoineeFlowFileEnabled() && !isHost,
 	})
 
 	const webinarChat = useMemo(() => {
@@ -438,9 +468,15 @@ export function EnhancedVideoRoom({
 		pushSessionFeedback(true)
 	}, [meetingEnded, pushSessionFeedback])
 
-	const onLiveKitRoomClosedByServer = useCallback(() => {
+	const onLiveKitRoomClosedByServer = useCallback((reason?: DisconnectReason) => {
+		if (!isHost && reason === DisconnectReason.PARTICIPANT_REMOVED) {
+			showWarning(
+				'Removed by host',
+				'You were removed from this meet by the host due to inappropriate behaviour.',
+			)
+		}
 		pushSessionFeedback(true)
-	}, [pushSessionFeedback])
+	}, [isHost, pushSessionFeedback, showWarning])
 
 	// Wrapper functions for request actions with toast notifications
 	const handleRequestAudioOn = useCallback((targetUserId: string) => {
@@ -637,7 +673,7 @@ export function EnhancedVideoRoom({
 
 				const url = getSocketIoBaseUrl()
 
-				socket = io(url, {
+				socket = io(`${url}/transcripts`, {
 					transports: ['websocket'],
 					auth: { token: authToken },
 					reconnection: true,
@@ -1112,7 +1148,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	webinarChatMode?: string
 	webinarChatLive?: boolean
 	liveKitServerUrl?: string
-	onLiveKitRoomClosedByServer?: () => void
+	onLiveKitRoomClosedByServer?: (reason?: DisconnectReason) => void
 }) {
 	// Room context removed to avoid race conditions, using localParticipant hook instead
 	const room = useRoomContext()
@@ -1184,7 +1220,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				reason === DisconnectReason.PARTICIPANT_REMOVED ||
 				reason === DisconnectReason.SERVER_SHUTDOWN
 			if (!serverEnded) return
-			onLiveKitRoomClosedByServer()
+			onLiveKitRoomClosedByServer(reason)
 		}
 		lkRoom.on(RoomEvent.Disconnected, handler)
 		return () => {
@@ -1471,8 +1507,10 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				const enable = data.action === 'unmute'
 				localParticipant.setMicrophoneEnabled(enable).catch(() => { })
 
-				// Show toast notification when host mutes this participant
-				if (data.action === 'mute' && data.targetUserId === currentUserId) {
+				// Show toast notification when host mutes this participant (targeted or room-wide).
+				const muteAppliesToMe =
+					!data.targetUserId || data.targetUserId === currentUserId
+				if (data.action === 'mute' && muteAppliesToMe) {
 					if (shouldShowToast('moderation-muted', 6000)) {
 						showWarning(
 							'Microphone muted',
@@ -1498,8 +1536,10 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				const enable = data.action === 'enable'
 				localParticipant.setCameraEnabled(enable).catch(() => { })
 
-				// Show toast notification when host disables video for this participant
-				if (data.action === 'disable' && data.targetUserId === currentUserId) {
+				// Show toast notification when host disables video (targeted or room-wide).
+				const disableAppliesToMe =
+					!data.targetUserId || data.targetUserId === currentUserId
+				if (data.action === 'disable' && disableAppliesToMe) {
 					if (shouldShowToast('moderation-video-disabled', 6000)) {
 						showWarning(
 							'Camera disabled',
@@ -1599,6 +1639,42 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		// Update ref for next comparison
 		prevPermissionsRef.current = permissions
 	}, [permissions, localParticipant, isHost, showWarning, showSuccess, shouldShowToast, sessionInfo?.sessionMode, sessionInfo?.webinarConfig])
+
+	// Show joiners explicit notifications for room setting toggles that are not covered by `permissions`.
+	const prevRoomSettingsRef = useRef(roomSettings)
+	useEffect(() => {
+		if (isHost || !roomSettings || !prevRoomSettingsRef.current) {
+			prevRoomSettingsRef.current = roomSettings
+			return
+		}
+		const prev = prevRoomSettingsRef.current
+		if (!prev) {
+			prevRoomSettingsRef.current = roomSettings
+			return
+		}
+
+		if (prev.chatRestrictToHostOnly !== roomSettings.chatRestrictToHostOnly) {
+			if (roomSettings.chatRestrictToHostOnly) {
+				if (shouldShowToast('chat-host-only', 5000)) {
+					showWarning('💬 Chat Restricted', 'You can send messages to host only.')
+				}
+			} else if (shouldShowToast('chat-host-only-cleared', 5000)) {
+				showSuccess('💬 Chat Open', 'You can send messages to everyone again.')
+			}
+		}
+
+		if (prev.hideParticipantList !== roomSettings.hideParticipantList) {
+			if (roomSettings.hideParticipantList) {
+				if (shouldShowToast('participant-list-hidden', 5000)) {
+					showWarning('👥 Participant List Hidden', 'Host has hidden the participant list.')
+				}
+			} else if (shouldShowToast('participant-list-visible', 5000)) {
+				showSuccess('👥 Participant List Visible', 'You can open the participant list now.')
+			}
+		}
+
+		prevRoomSettingsRef.current = roomSettings
+	}, [roomSettings, isHost, showWarning, showSuccess, shouldShowToast])
 
 	// Use memoized virtual backgrounds (moved outside with stable ref below)
 	// Access via `VIRTUAL_BACKGROUNDS` constant defined below to avoid re-creating this array each render
@@ -1942,6 +2018,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		if (typeof window === 'undefined') return
 		const unlock = () => {
 			joinSoundUnlockedRef.current = true
+			void lkRoom?.startAudio().catch(() => { })
 		}
 		window.addEventListener('pointerdown', unlock, { passive: true })
 		window.addEventListener('keydown', unlock)
@@ -1949,7 +2026,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			window.removeEventListener('pointerdown', unlock)
 			window.removeEventListener('keydown', unlock)
 		}
-	}, [])
+	}, [lkRoom])
 
 	const playParticipantJoinedSound = useCallback(() => {
 		if (typeof window === 'undefined' || !joinSoundUnlockedRef.current) return
@@ -4347,30 +4424,6 @@ const VideoRoomContent = memo(function VideoRoomContent({
 							</div>
 						)}
 
-						{/* PiP Setup Widget - Only show if not primed and screen shared or camera on */}
-						{!isPipPrimed && !isMobileViewport && (isScreenShareEnabled || isCameraEnabled) && (
-							<div className="hidden lg:flex items-center mr-2 animate-in fade-in slide-in-from-bottom-2 duration-500">
-								<button
-									onClick={async () => {
-										// Priming: Just calling togglePiP once with a gesture 
-										// "Unlocks" the browser's trust for subsequent auto-triggers.
-										await togglePiP();
-										setIsPipPrimed(true);
-									}}
-									className="group flex items-center gap-2 px-3 py-1.5 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 rounded-full transition-all active:scale-95"
-								>
-									<span className="relative flex h-2 w-2">
-										<span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
-										<span className="relative inline-flex rounded-full h-2 w-2 bg-sky-500"></span>
-									</span>
-									<span className="text-[11px] font-medium text-sky-400 whitespace-nowrap">Enable Auto-PiP</span>
-									<div className="hidden group-hover:block absolute bottom-full mb-3 left-1/2 -translate-x-1/2 w-48 p-2 bg-[#1a1a1a] border border-white/10 rounded-lg shadow-2xl text-[10px] text-white/70 leading-relaxed z-[60]">
-										Chrome requires a manual click to authorize automatic transitions. Click here once to enable.
-									</div>
-								</button>
-							</div>
-						)}
-
 						{/* PiP */}
 						<div className="hidden md:flex flex-col items-center justify-center group">
 							<button
@@ -5371,15 +5424,19 @@ function PermissionRequestModal({
 	const { localParticipant } = useLocalParticipant()
 
 	const handleAccept = async () => {
+		// First acknowledge host request so backend unlocks permission.
+		// Do not convert accept -> deny on transient device errors.
+		onAccept()
 		try {
+			// Small delay allows permissions update to propagate before publishing media.
+			await new Promise((r) => setTimeout(r, 180))
 			if (type === 'audio') {
 				await localParticipant?.setMicrophoneEnabled(true)
 			} else {
 				await localParticipant?.setCameraEnabled(true)
 			}
-			onAccept()
-		} catch (err) {
-			onDeny()
+		} catch {
+			// Keep accepted state. User can manually toggle once device/browser allows.
 		}
 	}
 

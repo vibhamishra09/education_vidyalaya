@@ -16,6 +16,13 @@ type ChatIdentity = {
 	avatar?: string | null
 }
 
+function resolveStudyRoomRouteId(roomName: string): string {
+	// Accept both legacy "studyroom-<id>" and clean "<slug>" route segments.
+	return roomName.startsWith('studyroom-')
+		? roomName.slice('studyroom-'.length)
+		: roomName
+}
+
 function extractChatTargets(
 	data: Record<string, unknown>,
 	isStudyRoom: boolean,
@@ -98,27 +105,19 @@ export default function RoomPage() {
 		const clerkToken = guestAccessToken ? null : await getToken()
 		if (!guestAccessToken && !clerkToken) return
 
-		const isStudyRoom = roomName.startsWith('studyroom-')
-		const isPeerSession = roomName.startsWith('peersession-')
-		const roomId = isStudyRoom
-			? roomName.slice('studyroom-'.length)
-			: isPeerSession
-				? roomName.slice('peersession-'.length)
-				: roomName.split('-')[1]
+		const roomId = resolveStudyRoomRouteId(roomName)
 		if (!roomId) return
 
 		try {
-			const endpoint = isStudyRoom
-				? `/api/study-rooms/${roomId}`
-				: `/api/peer-sessions/${roomId}`
+			const endpoint = `/api/study-rooms/${roomId}`
 			const response = await apiClient.get(endpoint, {
 				headers: clerkToken ? { Authorization: `Bearer ${clerkToken}` } : {},
 			})
 			if (!isMountedRef.current || !response.data) return
 			const chatTargets = extractChatTargets(
 				response.data as Record<string, unknown>,
-				isStudyRoom,
-				isPeerSession,
+				true,
+				false,
 			)
 			setChatRecipients(chatTargets.recipients)
 			setHostUser(chatTargets.host)
@@ -140,13 +139,7 @@ export default function RoomPage() {
 	 */
 	useEffect(() => {
 		if (!roomName || loading) return
-		const isStudyRoom = roomName.startsWith('studyroom-')
-		const isPeerSession = roomName.startsWith('peersession-')
-		const roomId = isStudyRoom
-			? roomName.slice('studyroom-'.length)
-			: isPeerSession
-				? roomName.slice('peersession-'.length)
-				: roomName.split('-')[1]
+		const roomId = resolveStudyRoomRouteId(roomName)
 		if (!roomId) return
 
 		let cancelled = false
@@ -155,9 +148,7 @@ export default function RoomPage() {
 		const pollSessionDetails = async () => {
 			try {
 				const clerkToken = guestAccessToken ? null : await getToken()
-				const endpoint = isStudyRoom
-					? `/api/study-rooms/${roomId}`
-					: `/api/peer-sessions/${roomId}`
+				const endpoint = `/api/study-rooms/${roomId}`
 				const response = await apiClient.get(endpoint, {
 					headers: clerkToken ? { Authorization: `Bearer ${clerkToken}` } : {},
 				})
@@ -177,7 +168,7 @@ export default function RoomPage() {
 				setSessionData((prev) => ({
 					...(prev || {}),
 					...data,
-					sessionType: isStudyRoom ? 'studyRoom' : 'peerSession',
+					sessionType: 'studyRoom',
 					sessionMode: data.sessionMode,
 					webinarConfig: data.webinarConfig,
 				}))
@@ -223,16 +214,7 @@ export default function RoomPage() {
 					throw new Error('Not authenticated')
 				}
 
-				// Extract room type and ID from room name
-				// Format: studyroom-{id} or peersession-{id}
-				const isStudyRoom = roomName.startsWith('studyroom-')
-				const isPeerSession = roomName.startsWith('peersession-')
-				// ID comes after the prefix, handle UUIDs with hyphens
-				const roomId = isStudyRoom 
-					? roomName.slice('studyroom-'.length)
-					: isPeerSession 
-						? roomName.slice('peersession-'.length)
-						: roomName.split('-')[1]
+				const roomId = resolveStudyRoomRouteId(roomName)
 
 				// Resolve DB user id before room/chat mount so ChatWidget can collapse optimistic+echo (avoids duplicate “hi”).
 				if (clerkToken) {
@@ -268,8 +250,8 @@ export default function RoomPage() {
 						: Promise.resolve(null), // Channel might not exist, that's OK
 				]
 
-				// Add session data fetch if it's a study room or peer session
-				if (isStudyRoom && roomId) {
+				// Study room page always resolves study-room details.
+				if (roomId) {
 					promises.push(
 						clerkToken
 							? apiClient.get(`/api/study-rooms/${roomId}`, {
@@ -278,14 +260,6 @@ export default function RoomPage() {
 									},
 							  })
 							: apiClient.get(`/api/study-rooms/${roomId}`)
-					)
-				} else if (isPeerSession && roomId) {
-					promises.push(
-						apiClient.get(`/api/peer-sessions/${roomId}`, {
-							headers: {
-								Authorization: `Bearer ${clerkToken}`,
-							},
-						})
 					)
 				}
 
@@ -321,6 +295,14 @@ export default function RoomPage() {
 	
 					// Add session type to sessionData
 					const data = results[2].data as { id: string; date: string; duration: number; sessionStatus?: string; [key: string]: unknown; participants: any[]; createdBy: any};
+					const canonicalRoomName = `studyroom-${data.id}`
+					// Ensure host + joinee always join the exact same LiveKit room name.
+					if (mounted && roomName !== canonicalRoomName) {
+						const query = typeof window !== 'undefined' ? window.location.search : ''
+						router.replace(`/rooms/studyroom/${canonicalRoomName}${query}`)
+						setLoading(false)
+						return
+					}
 					const userId = user?.id
 					const dbId = user?.publicMetadata.dbUserId || currentUserDbId
 					const now = Date.now()
@@ -342,7 +324,7 @@ export default function RoomPage() {
 							setNotaParticipant(true)
 							setSessionData({
 								...data,
-								sessionType: isStudyRoom ? 'studyRoom' : 'peerSession',
+								sessionType: 'studyRoom',
 							})
 							setLoading(false)
 							return
@@ -353,7 +335,7 @@ export default function RoomPage() {
 						setSessionNotStarted(true)
 						setSessionData({
 							...data,
-							sessionType: isStudyRoom ? 'studyRoom' : 'peerSession',
+							sessionType: 'studyRoom',
 						})
 						setLoading(false)
 						return
@@ -363,7 +345,7 @@ export default function RoomPage() {
 						setSessionEnded(true)
 						setSessionData({
 							...data,
-							sessionType: isStudyRoom ? 'studyRoom' : 'peerSession',
+							sessionType: 'studyRoom',
 						})
 						setLoading(false)
 						return
@@ -371,24 +353,22 @@ export default function RoomPage() {
 					
 					setSessionData({
 						...data,
-						sessionType: isStudyRoom ? 'studyRoom' : 'peerSession',
+						sessionType: 'studyRoom',
 						sessionMode: (data as { sessionMode?: string }).sessionMode,
 						webinarConfig: (data as { webinarConfig?: unknown }).webinarConfig,
 					})
 
 					const chatTargets = extractChatTargets(
 						data as Record<string, unknown>,
-						isStudyRoom,
-						isPeerSession,
+						true,
+						false,
 					)
 					setChatRecipients(chatTargets.recipients)
 					setHostUser(chatTargets.host)
 
 					// Check if current user is the host
 					try {
-						const endpoint = isStudyRoom 
-							? `/api/study-rooms/${roomId}/is-host`
-							: `/api/peer-sessions/${roomId}/is-host`
+						const endpoint = `/api/study-rooms/${roomId}/is-host`
 						if (clerkToken) {
 							const hostResponse = await apiClient.get(endpoint, {
 								headers: {
@@ -585,20 +565,9 @@ export default function RoomPage() {
 		)
 	}
 
-	// Extract stable UUID for consistent scratch pad identification
-	const isStudyRoom = roomName?.startsWith('studyroom-')
-	const isPeerSession = roomName?.startsWith('peersession-')
-	const extractedUuid = isStudyRoom 
-		? roomName.slice('studyroom-'.length)
-		: isPeerSession 
-			? roomName.slice('peersession-'.length)
-			: roomName?.includes('-') ? roomName.split('-')[1] : roomName
-
-	const liveSessionKind: 'studyRoom' | 'peerSession' | undefined = isStudyRoom
-		? 'studyRoom'
-		: isPeerSession
-			? 'peerSession'
-			: undefined
+	// Stable study-room id/slug used across room subsystems.
+	const extractedUuid = roomName ? resolveStudyRoomRouteId(roomName) : roomName
+	const liveSessionKind: 'studyRoom' = 'studyRoom'
 
 	return (
 		<EnhancedVideoRoom
