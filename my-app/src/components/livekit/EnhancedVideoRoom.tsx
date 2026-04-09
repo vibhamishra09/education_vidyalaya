@@ -101,12 +101,13 @@ const VIRTUAL_BACKGROUNDS = [
 		thumbnail: 'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=200&h=150&fit=crop&q=80'
 	}
 ]
-interface SessionData {
+export interface SessionData {
 	id: string;
 	date: string;
 	duration: number;
 	sessionType: 'studyRoom' | 'peerSession';
 	sessionMode?: string;
+	slug: string
 	[key: string]: unknown;
 }
 
@@ -4366,7 +4367,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 							<button
 								onClick={async () => {
 										try {
-											await navigator.clipboard.writeText(window.location.href)
+											await navigator.clipboard.writeText(window.location.origin + '/studyroom/' + _sessionData?.slug)
 											showSuccess("URL Copied to Clipboard")
 										} catch (err) {
 											console.error('Failed to copy:', err)

@@ -805,7 +805,7 @@ export function CreateStudyRoomClient() {
                 </Card>
                 )}
 
-                <Card className="border-muted bg-card/50 backdrop-blur-sm shadow-sm hover:shadow-md transition-shadow">
+                <Card className="border-muted bg-card/50 backdrop-blur-sm shadow-sm hover:shadow-md transition-shadow" style={{position: "relative", zIndex: 10}}>
                   <CardHeader className="pb-3">
                     <CardTitle className="flex items-center gap-3 text-lg font-medium text-foreground/80">
                       <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900/20 flex items-center justify-center text-blue-600 dark:text-blue-400">
