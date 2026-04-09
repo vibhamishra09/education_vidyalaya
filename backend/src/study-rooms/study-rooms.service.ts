@@ -4,6 +4,8 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 import {
+  Inject,
+  forwardRef,
   Injectable,
   NotFoundException,
   BadRequestException,
@@ -23,6 +25,7 @@ import { EngagementService } from '../engagement/engagement.service';
 import { UsersService } from '../users/users.service';
 import { LoggerService } from '../common/logger/logger.service';
 import { CacheService } from '../redis/cache.service';
+import { LivekitService } from '../livekit/livekit.service';
 import { isConnectionError } from '../common/db-error-handler';
 import {
   CreateStudyRoomDto,
@@ -117,6 +120,8 @@ export class StudyRoomsService {
     private readonly logger: LoggerService,
     private readonly cacheService: CacheService,
     private readonly usersService: UsersService,
+    @Inject(forwardRef(() => LivekitService))
+    private readonly livekitService: LivekitService,
   ) {
     this.logger.setContext(StudyRoomsService.name);
   }
@@ -183,14 +188,36 @@ export class StudyRoomsService {
     return DEFAULT_PRODUCTION_APP_ORIGIN;
   }
 
+  /**
+   * Base URL for webinar join / waiting links in emails and guest join redirects.
+   * In development, avoids using a production FRONTEND_URL (common .env mistake) so
+   * links open local Next.js. Override with WEBINAR_EMAIL_PUBLIC_URL or EMAIL_APP_PUBLIC_URL.
+   */
+  private resolveWebinarEmailClientBaseUrl(): string {
+    const explicit =
+      process.env.WEBINAR_EMAIL_PUBLIC_URL?.trim() ||
+      process.env.EMAIL_APP_PUBLIC_URL?.trim();
+    if (explicit && /^https?:\/\//i.test(explicit)) {
+      return explicit.replace(/\/$/, '');
+    }
+    if (process.env.NODE_ENV === 'production') {
+      return this.resolveAppPublicBaseUrl().replace(/\/$/, '');
+    }
+    const fe = process.env.FRONTEND_URL?.trim();
+    if (fe && /^https?:\/\//i.test(fe) && isLocalDevOrigin(fe)) {
+      return fe.replace(/\/$/, '');
+    }
+    return 'http://localhost:3000';
+  }
+
   private buildWebinarJoinUrl(studyRoomId: string, joinLinkToken: string): string {
-    const base = this.resolveAppPublicBaseUrl().replace(/\/$/, '');
+    const base = this.resolveWebinarEmailClientBaseUrl().replace(/\/$/, '');
     const path = `/webinar/join?room=studyroom-${studyRoomId}&token=${encodeURIComponent(joinLinkToken)}`;
     return `${base}${path}`;
   }
 
   private buildWebinarWaitingUrl(studyRoomId: string, joinLinkToken: string): string {
-    const base = this.resolveAppPublicBaseUrl().replace(/\/$/, '');
+    const base = this.resolveWebinarEmailClientBaseUrl().replace(/\/$/, '');
     const path = `/webinar/waiting?room=studyroom-${studyRoomId}&token=${encodeURIComponent(joinLinkToken)}`;
     return `${base}${path}`;
   }
@@ -1927,7 +1954,7 @@ export class StudyRoomsService {
     };
   }
 
-  /** Webinar audience: subscribe-only; host publishes A/V (unless permissions allow mic/video). */
+  /** Webinar gate for signed-in path: host only; attendees must use registration guest link. */
   async getLivekitPublishPolicyForStudyRoom(
     studyRoomId: string,
     clerkUserId: string,
@@ -1937,7 +1964,6 @@ export class StudyRoomsService {
       select: {
         sessionMode: true,
         createdById: true,
-        webinarConfig: true,
       },
     });
     if (!room || room.sessionMode !== StudyRoomSessionMode.WEBINAR) {
@@ -1950,16 +1976,13 @@ export class StudyRoomsService {
     if (user?.id === room.createdById) {
       return { publish: true, publishData: true };
     }
-    const cfg = this.mergeWebinarConfig(
-      (room.webinarConfig as Record<string, unknown>) || undefined,
-    );
-    // LiveKit canPublish must be true for guests to start camera/mic tracks when the host
-    // unlocks or requests media; webinar defaults are enforced in UI and moderation, not here.
-    const publish = true;
-    const { publishData } = this.webinarChatPublishData(
-      cfg as Record<string, unknown>,
-    );
-    return { publish, publishData };
+    // Webinar hard gate: only host may join directly with signed-in token.
+    // All other attendees must use the registration/join link guest token flow.
+    throw new ForbiddenException({
+      code: 'WEBINAR_REGISTRATION_REQUIRED',
+      message:
+        'Only host/cohost can join directly. Please register first and join from your webinar email link.',
+    });
   }
 
   private webinarChatPublishData(cfg: Record<string, unknown>): {
@@ -2092,7 +2115,10 @@ export class StudyRoomsService {
       room.id,
       guest.id,
     );
-    const appPublicUrl = this.resolveAppPublicBaseUrl().replace(/\/$/, '');
+    const appPublicUrl = this.resolveWebinarEmailClientBaseUrl().replace(
+      /\/$/,
+      '',
+    );
     const joinPath = `/rooms/studyroom/studyroom-${room.id}?guestAccessToken=${guestAccessToken}`;
     const joinUrl = `${appPublicUrl}${joinPath}`;
     return {
@@ -2280,6 +2306,73 @@ export class StudyRoomsService {
     await this.prisma.studyRoomGuestParticipant.delete({
       where: { id: guest.id },
     });
+    // Force immediate removal from active LiveKit room (if currently connected).
+    try {
+      await this.livekitService.removeParticipant(
+        `studyroom-${room.id}`,
+        guest.livekitIdentity,
+      );
+    } catch (err) {
+      // Guest may already be offline; do not fail host action for that.
+      this.logger.warn(
+        `Failed to remove webinar guest ${guest.livekitIdentity} from LiveKit room studyroom-${room.id}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+    return { success: true };
+  }
+
+  async kickWebinarGuest(
+    studyRoomId: string,
+    guestParticipantId: string,
+    hostUserId: string,
+  ) {
+    const room = await this.resolveStudyRoomByIdOrSlug(studyRoomId, {
+      select: { id: true, slug: true, createdById: true, sessionMode: true },
+    });
+    if (!room || room.sessionMode !== StudyRoomSessionMode.WEBINAR) {
+      throw new NotFoundException('Webinar not found');
+    }
+    const actor = await this.resolveUserIdentity(hostUserId);
+    if (room.createdById !== actor.id) {
+      throw new ForbiddenException('Only the host can kick attendees');
+    }
+    const guest = await this.prisma.studyRoomGuestParticipant.findFirst({
+      where: { id: guestParticipantId, studyRoomId: room.id },
+    });
+    if (!guest) {
+      throw new NotFoundException('Guest not found');
+    }
+
+    // Kick from active room only; keep registration/approval data intact.
+    // Try canonical room name first, then slug for older non-canonical sessions.
+    const candidateRoomNames = Array.from(
+      new Set(
+        [`studyroom-${room.id}`, room.slug?.trim() || ''].filter(
+          (name): name is string => !!name,
+        ),
+      ),
+    );
+    let kicked = false;
+    let lastErr: string | null = null;
+    for (const roomName of candidateRoomNames) {
+      try {
+        await this.livekitService.removeParticipant(
+          roomName,
+          guest.livekitIdentity,
+        );
+        kicked = true;
+        break;
+      } catch (err) {
+        lastErr = err instanceof Error ? err.message : String(err);
+      }
+    }
+    if (!kicked) {
+      throw new BadRequestException(
+        lastErr ||
+          'Could not remove attendee from live meeting. Ask attendee to rejoin and try again.',
+      );
+    }
+
     return { success: true };
   }
 

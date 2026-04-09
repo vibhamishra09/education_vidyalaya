@@ -1,1 +1,1166 @@
+Time (UTC): 2026-04-02T13:15:41.795Z
+Transport: ses
+From: notifications@webyalaya.com
+To: vibhamishra.outr@gmail.com
+Subject: New Session Request
+Status: FAILED
+Error: Could not load credentials from any providers
+--- HTML ---
+
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Webyalaya Notification</title>
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h1 style="color: #2c3e50; margin-top: 0;">Webyalaya Notification</h1>
+          </div>
+          <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0;">
+            <p style="margin-top: 0;">Hello Vibha Mishra,</p>
+            <div style="margin: 12px 0;">Vibha Mishra has requested a peer session with you</div>
+            <p style="margin-bottom: 0;">Best regards,<br>The Webyalaya Team</p>
+          </div>
+          <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; text-align: center; font-size: 12px; color: #666;">
+            <p style="margin: 0;">This is an automated notification from Webyalaya.</p>
+            <p style="margin: 5px 0 0 0;">© 2026 Webyalaya. All rights reserved.</p>
+          </div>
+        </body>
+      </html>
+    
+
+Time (UTC): 2026-04-03T08:31:45.808Z
+Transport: ses
+From: notifications@webyalaya.com
+To: vibhamishra.outr@gmail.com
+Subject: New Session Request
+Status: FAILED
+Error: Could not load credentials from any providers
+--- HTML ---
+
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Webyalaya Notification</title>
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h1 style="color: #2c3e50; margin-top: 0;">Webyalaya Notification</h1>
+          </div>
+          <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0;">
+            <p style="margin-top: 0;">Hello Vibha Mishra,</p>
+            <div style="margin: 12px 0;">Vibha Mishra has requested a peer session with you</div>
+            <p style="margin-bottom: 0;">Best regards,<br>The Webyalaya Team</p>
+          </div>
+          <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; text-align: center; font-size: 12px; color: #666;">
+            <p style="margin: 0;">This is an automated notification from Webyalaya.</p>
+            <p style="margin: 5px 0 0 0;">© 2026 Webyalaya. All rights reserved.</p>
+          </div>
+        </body>
+      </html>
+    
+
+Time (UTC): 2026-04-03T10:57:47.437Z
+Transport: ses
+From: notifications@webyalaya.com
+To: vibhamishra.outr@gmail.com
+Subject: New Session Request
+Status: FAILED
+Error: Could not load credentials from any providers
+--- HTML ---
+
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Webyalaya Notification</title>
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h1 style="color: #2c3e50; margin-top: 0;">Webyalaya Notification</h1>
+          </div>
+          <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0;">
+            <p style="margin-top: 0;">Hello Vibha Mishra,</p>
+            <div style="margin: 12px 0;">Vibha Mishra has requested a peer session with you</div>
+            <p style="margin-bottom: 0;">Best regards,<br>The Webyalaya Team</p>
+          </div>
+          <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; text-align: center; font-size: 12px; color: #666;">
+            <p style="margin: 0;">This is an automated notification from Webyalaya.</p>
+            <p style="margin: 5px 0 0 0;">© 2026 Webyalaya. All rights reserved.</p>
+          </div>
+        </body>
+      </html>
+    
+
+Time (UTC): 2026-04-03T21:10:13.966Z
+Transport: ses
+From: notifications@webyalaya.com
+To: vibhamishra0907@gmail.com
+Subject: Session Ended - Leave Review
+Status: FAILED
+Error: Could not load credentials from any providers
+--- HTML ---
+
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Webyalaya Notification</title>
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h1 style="color: #2c3e50; margin-top: 0;">Webyalaya Notification</h1>
+          </div>
+          <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0;">
+            <p style="margin-top: 0;">Hello Vibha Mishra,</p>
+            <div style="margin: 12px 0;">Your session with Vibha Mishra has ended. Please leave a review!</div>
+            <p style="margin-bottom: 0;">Best regards,<br>The Webyalaya Team</p>
+          </div>
+          <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; text-align: center; font-size: 12px; color: #666;">
+            <p style="margin: 0;">This is an automated notification from Webyalaya.</p>
+            <p style="margin: 5px 0 0 0;">© 2026 Webyalaya. All rights reserved.</p>
+          </div>
+        </body>
+      </html>
+    
+
+Time (UTC): 2026-04-03T21:10:15.459Z
+Transport: ses
+From: notifications@webyalaya.com
+To: vibhamishra.outr@gmail.com
+Subject: Session Ended - Leave Review
+Status: FAILED
+Error: Could not load credentials from any providers
+--- HTML ---
+
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Webyalaya Notification</title>
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h1 style="color: #2c3e50; margin-top: 0;">Webyalaya Notification</h1>
+          </div>
+          <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0;">
+            <p style="margin-top: 0;">Hello Vibha Mishra,</p>
+            <div style="margin: 12px 0;">Your session with Vibha Mishra has ended. Please leave a review!</div>
+            <p style="margin-bottom: 0;">Best regards,<br>The Webyalaya Team</p>
+          </div>
+          <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; text-align: center; font-size: 12px; color: #666;">
+            <p style="margin: 0;">This is an automated notification from Webyalaya.</p>
+            <p style="margin: 5px 0 0 0;">© 2026 Webyalaya. All rights reserved.</p>
+          </div>
+        </body>
+      </html>
+    
+
+Time (UTC): 2026-04-04T13:50:10.047Z
+Transport: ses
+From: notifications@webyalaya.com
+To: pandyakingofkings@gmail.com
+Subject: Study Room Ended - Leave Review
+Status: FAILED
+Error: Could not load credentials from any providers
+--- HTML ---
+
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Webyalaya Notification</title>
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h1 style="color: #2c3e50; margin-top: 0;">Webyalaya Notification</h1>
+          </div>
+          <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0;">
+            <p style="margin-top: 0;">Hello Standalone Gaming,</p>
+            <div style="margin: 12px 0;">Study room "rp1" has ended. Please leave a review!</div>
+            <p style="margin-bottom: 0;">Best regards,<br>The Webyalaya Team</p>
+          </div>
+          <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; text-align: center; font-size: 12px; color: #666;">
+            <p style="margin: 0;">This is an automated notification from Webyalaya.</p>
+            <p style="margin: 5px 0 0 0;">© 2026 Webyalaya. All rights reserved.</p>
+          </div>
+        </body>
+      </html>
+    
+
+Time (UTC): 2026-04-04T18:30:04.884Z
+Transport: ses
+From: notifications@webyalaya.com
+To: tmanas2004@gmail.com
+Subject: Review Reminder
+Status: SUCCESS
+MessageId: 0109019d59c26349-c1a6e10e-eb5d-4e75-92c3-5c7365919023-000000
+--- HTML ---
+
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Webyalaya Notification</title>
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h1 style="color: #2c3e50; margin-top: 0;">Webyalaya Notification</h1>
+          </div>
+          <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0;">
+            <p style="margin-top: 0;">Hello manas,</p>
+            <div style="margin: 12px 0;">Please review the study room "creative session" with test</div>
+            <p style="margin-bottom: 0;">Best regards,<br>The Webyalaya Team</p>
+          </div>
+          <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; text-align: center; font-size: 12px; color: #666;">
+            <p style="margin: 0;">This is an automated notification from Webyalaya.</p>
+            <p style="margin: 5px 0 0 0;">© 2026 Webyalaya. All rights reserved.</p>
+          </div>
+        </body>
+      </html>
+    
+
+Time (UTC): 2026-04-06T03:51:47.267Z
+Transport: ses
+From: notifications@webyalaya.com
+To: saxenay117@gmail.com
+Subject: Review Reminder
+Status: SUCCESS
+MessageId: 0109019d60eaffbe-dc1585f4-9eab-48a0-b6d6-d2d9055b29ba-000000
+--- HTML ---
+
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Webyalaya Notification</title>
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h1 style="color: #2c3e50; margin-top: 0;">Webyalaya Notification</h1>
+          </div>
+          <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0;">
+            <p style="margin-top: 0;">Hello Yash Saxena,</p>
+            <div style="margin: 12px 0;">Please review the study room "Team-Daily" with Sachin anand</div>
+            <p style="margin-bottom: 0;">Best regards,<br>The Webyalaya Team</p>
+          </div>
+          <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; text-align: center; font-size: 12px; color: #666;">
+            <p style="margin: 0;">This is an automated notification from Webyalaya.</p>
+            <p style="margin: 5px 0 0 0;">© 2026 Webyalaya. All rights reserved.</p>
+          </div>
+        </body>
+      </html>
+    
+
+Time (UTC): 2026-04-06T03:51:48.258Z
+Transport: ses
+From: notifications@webyalaya.com
+To: yashjec77@gmail.com
+Subject: Review Reminder
+Status: SUCCESS
+MessageId: 0109019d60eb03c5-da7846d3-033f-48df-a7c1-5d81432e1559-000000
+--- HTML ---
+
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Webyalaya Notification</title>
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h1 style="color: #2c3e50; margin-top: 0;">Webyalaya Notification</h1>
+          </div>
+          <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0;">
+            <p style="margin-top: 0;">Hello Yash Saxena,</p>
+            <div style="margin: 12px 0;">Please review the study room "GENERATIVE-AI" with Yash Saxena</div>
+            <p style="margin-bottom: 0;">Best regards,<br>The Webyalaya Team</p>
+          </div>
+          <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; text-align: center; font-size: 12px; color: #666;">
+            <p style="margin: 0;">This is an automated notification from Webyalaya.</p>
+            <p style="margin: 5px 0 0 0;">© 2026 Webyalaya. All rights reserved.</p>
+          </div>
+        </body>
+      </html>
+    
+
+Time (UTC): 2026-04-06T03:51:48.666Z
+Transport: ses
+From: notifications@webyalaya.com
+To: 2210030003cse@gmail.com
+Subject: Review Reminder
+Status: SUCCESS
+MessageId: 0109019d60eb054c-7d178cab-2ea2-43b4-b7f9-a3995b54e529-000000
+--- HTML ---
+
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Webyalaya Notification</title>
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h1 style="color: #2c3e50; margin-top: 0;">Webyalaya Notification</h1>
+          </div>
+          <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0;">
+            <p style="margin-top: 0;">Hello manas,</p>
+            <div style="margin: 12px 0;">Please review the study room "Team-Daily" with Sachin anand</div>
+            <p style="margin-bottom: 0;">Best regards,<br>The Webyalaya Team</p>
+          </div>
+          <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; text-align: center; font-size: 12px; color: #666;">
+            <p style="margin: 0;">This is an automated notification from Webyalaya.</p>
+            <p style="margin: 5px 0 0 0;">© 2026 Webyalaya. All rights reserved.</p>
+          </div>
+        </body>
+      </html>
+    
+
+Time (UTC): 2026-04-06T03:51:49.695Z
+Transport: ses
+From: notifications@webyalaya.com
+To: ssachin919@gmail.com
+Subject: Review Reminder
+Status: SUCCESS
+MessageId: 0109019d60eb093e-a75a2abd-4435-45fe-9939-8f580c056f31-000000
+--- HTML ---
+
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Webyalaya Notification</title>
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h1 style="color: #2c3e50; margin-top: 0;">Webyalaya Notification</h1>
+          </div>
+          <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0;">
+            <p style="margin-top: 0;">Hello Sachin anand,</p>
+            <div style="margin: 12px 0;">Please review the study room "GENERATIVE-AI" with Yash Saxena</div>
+            <p style="margin-bottom: 0;">Best regards,<br>The Webyalaya Team</p>
+          </div>
+          <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; text-align: center; font-size: 12px; color: #666;">
+            <p style="margin: 0;">This is an automated notification from Webyalaya.</p>
+            <p style="margin: 5px 0 0 0;">© 2026 Webyalaya. All rights reserved.</p>
+          </div>
+        </body>
+      </html>
+    
+
+Time (UTC): 2026-04-06T03:51:51.915Z
+Transport: ses
+From: notifications@webyalaya.com
+To: ssachin919@gmail.com
+Subject: Review Reminder
+Status: SUCCESS
+MessageId: 0109019d60eb120f-aafda00d-c899-4a8b-ba1e-3152fc5ddc71-000000
+--- HTML ---
+
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Webyalaya Notification</title>
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h1 style="color: #2c3e50; margin-top: 0;">Webyalaya Notification</h1>
+          </div>
+          <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0;">
+            <p style="margin-top: 0;">Hello Sachin anand,</p>
+            <div style="margin: 12px 0;">Please review the study room "maths-class" with Yash Saxena</div>
+            <p style="margin-bottom: 0;">Best regards,<br>The Webyalaya Team</p>
+          </div>
+          <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; text-align: center; font-size: 12px; color: #666;">
+            <p style="margin: 0;">This is an automated notification from Webyalaya.</p>
+            <p style="margin: 5px 0 0 0;">© 2026 Webyalaya. All rights reserved.</p>
+          </div>
+        </body>
+      </html>
+    
+
+Time (UTC): 2026-04-06T03:51:53.307Z
+Transport: ses
+From: notifications@webyalaya.com
+To: yashjec77@gmail.com
+Subject: Review Reminder
+Status: SUCCESS
+MessageId: 0109019d60eb1769-95539ee5-c1d5-456f-aa95-8f5928f5f92d-000000
+--- HTML ---
+
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Webyalaya Notification</title>
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h1 style="color: #2c3e50; margin-top: 0;">Webyalaya Notification</h1>
+          </div>
+          <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0;">
+            <p style="margin-top: 0;">Hello Yash Saxena,</p>
+            <div style="margin: 12px 0;">Please review the study room "maths-class" with Yash Saxena</div>
+            <p style="margin-bottom: 0;">Best regards,<br>The Webyalaya Team</p>
+          </div>
+          <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; text-align: center; font-size: 12px; color: #666;">
+            <p style="margin: 0;">This is an automated notification from Webyalaya.</p>
+            <p style="margin: 5px 0 0 0;">© 2026 Webyalaya. All rights reserved.</p>
+          </div>
+        </body>
+      </html>
+    
+
+Time (UTC): 2026-04-06T18:30:06.962Z
+Transport: ses
+From: notifications@webyalaya.com
+To: havilah.b21@iiits.in
+Subject: Review Reminder
+Status: SUCCESS
+MessageId: 0109019d640f1d64-d6a24a4a-1f75-4422-bbf2-624c4f510186-000000
+--- HTML ---
+
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Webyalaya Notification</title>
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h1 style="color: #2c3e50; margin-top: 0;">Webyalaya Notification</h1>
+          </div>
+          <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0;">
+            <p style="margin-top: 0;">Hello havilah,</p>
+            <div style="margin: 12px 0;">Please review the study room "hey-app" with havilah bodde</div>
+            <p style="margin-bottom: 0;">Best regards,<br>The Webyalaya Team</p>
+          </div>
+          <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; text-align: center; font-size: 12px; color: #666;">
+            <p style="margin: 0;">This is an automated notification from Webyalaya.</p>
+            <p style="margin: 5px 0 0 0;">© 2026 Webyalaya. All rights reserved.</p>
+          </div>
+        </body>
+      </html>
+    
+
+Time (UTC): 2026-04-07T19:01:08.585Z
+Transport: ses
+From: notifications@webyalaya.com
+To: havilah.b21@iiits.in
+Subject: You're registered: jo's-room
+Status: SUCCESS
+MessageId: 0109019d6951e563-9a60f954-f2fa-4860-a9d5-10c723509924-000000
+--- HTML ---
+
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Webyalaya Notification</title>
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h1 style="color: #2c3e50; margin-top: 0;">Webyalaya Notification</h1>
+          </div>
+          <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0;">
+            <p style="margin-top: 0;">Hello Havilah Bodde,</p>
+            <div style="margin: 12px 0;">
+<p style="margin:0 0 16px;color:#333;">Thank you for registering.</p>
+<table role="presentation" style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px;">
+  <tr><td style="padding:6px 12px 6px 0;color:#64748b;vertical-align:top;width:120px;"><strong>Webinar</strong></td><td style="padding:6px 0;color:#0f172a;">jo's-room</td></tr>
+  <tr><td style="padding:6px 12px 6px 0;color:#64748b;vertical-align:top;"><strong>Host</strong></td><td style="padding:6px 0;color:#0f172a;">havilah bodde</td></tr>
+  <tr><td style="padding:6px 12px 6px 0;color:#64748b;vertical-align:top;"><strong>Scheduled</strong></td><td style="padding:6px 0;color:#0f172a;">Wednesday, April 8, 2026 at 12:27 AM</td></tr>
+  <tr><td style="padding:6px 12px 6px 0;color:#64748b;vertical-align:top;"><strong>Duration</strong></td><td style="padding:6px 0;color:#0f172a;">60 minutes</td></tr>
+</table>
+
+<div style="margin:20px 0;padding:16px 18px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;">
+  <p style="margin:0 0 8px;font-size:13px;color:#047857;font-weight:600;">Your passcode</p>
+  <p style="margin:0;font-size:22px;letter-spacing:0.2em;font-family:ui-monospace,Menlo,monospace;color:#064e3b;">903707</p>
+</div>
+<p style="margin:16px 0 0;color:#334155;line-height:1.55;font-size:14px;">Open <strong>Join webinar</strong> below, enter this passcode, then—if the host turned on a waiting room—you&apos;ll wait there until admitted and tap <strong>Join webinar</strong> again. If there is no waiting room, you&apos;ll join right after your passcode.</p>
+<p style="margin:20px 0 0;"><a href="https://webyalaya.com/webinar/join?room=studyroom-cmnozecus000nuhx0h8g6370f&amp;token=xPIY5QjQB593AQ7I3PrjOmg5W1IS_jPGgZVt01VF5kk" style="display:inline-block;padding:12px 22px;background:#16a34a;color:#ffffff !important;text-decoration:none;border-radius:8px;font-weight:600;">Join webinar</a></p>
+<p style="margin:16px 0 0;font-size:13px;color:#64748b;">Returned after entering your passcode? <a href="https://webyalaya.com/webinar/waiting?room=studyroom-cmnozecus000nuhx0h8g6370f&amp;token=xPIY5QjQB593AQ7I3PrjOmg5W1IS_jPGgZVt01VF5kk" style="color:#2563eb;">Open waiting room</a></p>
+</div>
+            <p style="margin-bottom: 0;">Best regards,<br>The Webyalaya Team</p>
+          </div>
+          <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; text-align: center; font-size: 12px; color: #666;">
+            <p style="margin: 0;">This is an automated notification from Webyalaya.</p>
+            <p style="margin: 5px 0 0 0;">© 2026 Webyalaya. All rights reserved.</p>
+          </div>
+        </body>
+      </html>
+    
+
+Time (UTC): 2026-04-07T19:24:47.118Z
+Transport: ses
+From: notifications@webyalaya.com
+To: havilah.b21@iiits.in
+Subject: You're registered: catch-pick
+Status: SUCCESS
+MessageId: 0109019d69678ad1-bb4f7fea-6830-49aa-a931-acd9e5c62dfe-000000
+--- HTML ---
+
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Webyalaya Notification</title>
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h1 style="color: #2c3e50; margin-top: 0;">Webyalaya Notification</h1>
+          </div>
+          <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0;">
+            <p style="margin-top: 0;">Hello Havilah,</p>
+            <div style="margin: 12px 0;">
+<p style="margin:0 0 16px;color:#333;">Thank you for registering.</p>
+<table role="presentation" style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px;">
+  <tr><td style="padding:6px 12px 6px 0;color:#64748b;vertical-align:top;width:120px;"><strong>Webinar</strong></td><td style="padding:6px 0;color:#0f172a;">catch-pick</td></tr>
+  <tr><td style="padding:6px 12px 6px 0;color:#64748b;vertical-align:top;"><strong>Host</strong></td><td style="padding:6px 0;color:#0f172a;">havilah bodde</td></tr>
+  <tr><td style="padding:6px 12px 6px 0;color:#64748b;vertical-align:top;"><strong>Scheduled</strong></td><td style="padding:6px 0;color:#0f172a;">Wednesday, April 8, 2026 at 12:53 AM</td></tr>
+  <tr><td style="padding:6px 12px 6px 0;color:#64748b;vertical-align:top;"><strong>Duration</strong></td><td style="padding:6px 0;color:#0f172a;">60 minutes</td></tr>
+</table>
+
+<div style="margin:20px 0;padding:16px 18px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;">
+  <p style="margin:0 0 8px;font-size:13px;color:#047857;font-weight:600;">Your passcode</p>
+  <p style="margin:0;font-size:22px;letter-spacing:0.2em;font-family:ui-monospace,Menlo,monospace;color:#064e3b;">935722</p>
+</div>
+<p style="margin:16px 0 0;color:#334155;line-height:1.55;font-size:14px;">Open <strong>Join webinar</strong> below, enter this passcode, then—if the host turned on a waiting room—you&apos;ll wait there until admitted and tap <strong>Join webinar</strong> again. If there is no waiting room, you&apos;ll join right after your passcode.</p>
+<p style="margin:20px 0 0;"><a href="https://webyalaya.com/webinar/join?room=studyroom-cmnp0broy0019uhx0mxex0rud&amp;token=gQYm2IXJ_K4u6zDpeHab2hnCEJ0TPp8X7uRkPEv9fig" style="display:inline-block;padding:12px 22px;background:#16a34a;color:#ffffff !important;text-decoration:none;border-radius:8px;font-weight:600;">Join webinar</a></p>
+<p style="margin:16px 0 0;font-size:13px;color:#64748b;">Returned after entering your passcode? <a href="https://webyalaya.com/webinar/waiting?room=studyroom-cmnp0broy0019uhx0mxex0rud&amp;token=gQYm2IXJ_K4u6zDpeHab2hnCEJ0TPp8X7uRkPEv9fig" style="color:#2563eb;">Open waiting room</a></p>
+</div>
+            <p style="margin-bottom: 0;">Best regards,<br>The Webyalaya Team</p>
+          </div>
+          <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; text-align: center; font-size: 12px; color: #666;">
+            <p style="margin: 0;">This is an automated notification from Webyalaya.</p>
+            <p style="margin: 5px 0 0 0;">© 2026 Webyalaya. All rights reserved.</p>
+          </div>
+        </body>
+      </html>
+    
+
+Time (UTC): 2026-04-07T19:52:25.549Z
+Transport: ses
+From: notifications@webyalaya.com
+To: havilah.b21@iiits.in
+Subject: You're registered: sasi-rio
+Status: SUCCESS
+MessageId: 0109019d6980d9cc-64736ba4-e9a3-4815-8e90-547bb2292fad-000000
+--- HTML ---
+
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Webyalaya Notification</title>
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h1 style="color: #2c3e50; margin-top: 0;">Webyalaya Notification</h1>
+          </div>
+          <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0;">
+            <p style="margin-top: 0;">Hello Havilah,</p>
+            <div style="margin: 12px 0;">
+<p style="margin:0 0 16px;color:#333;">Thank you for registering.</p>
+<table role="presentation" style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px;">
+  <tr><td style="padding:6px 12px 6px 0;color:#64748b;vertical-align:top;width:120px;"><strong>Webinar</strong></td><td style="padding:6px 0;color:#0f172a;">sasi-rio</td></tr>
+  <tr><td style="padding:6px 12px 6px 0;color:#64748b;vertical-align:top;"><strong>Host</strong></td><td style="padding:6px 0;color:#0f172a;">havilah bodde</td></tr>
+  <tr><td style="padding:6px 12px 6px 0;color:#64748b;vertical-align:top;"><strong>Scheduled</strong></td><td style="padding:6px 0;color:#0f172a;">Wednesday, April 8, 2026 at 1:21 AM</td></tr>
+  <tr><td style="padding:6px 12px 6px 0;color:#64748b;vertical-align:top;"><strong>Duration</strong></td><td style="padding:6px 0;color:#0f172a;">60 minutes</td></tr>
+</table>
+
+<div style="margin:20px 0;padding:16px 18px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;">
+  <p style="margin:0 0 8px;font-size:13px;color:#047857;font-weight:600;">Your passcode</p>
+  <p style="margin:0;font-size:22px;letter-spacing:0.2em;font-family:ui-monospace,Menlo,monospace;color:#064e3b;">371893</p>
+</div>
+<p style="margin:16px 0 0;color:#334155;line-height:1.55;font-size:14px;">Open <strong>Join webinar</strong> below, enter this passcode, then—if the host turned on a waiting room—you&apos;ll wait there until admitted and tap <strong>Join webinar</strong> again. If there is no waiting room, you&apos;ll join right after your passcode.</p>
+<p style="margin:20px 0 0;"><a href="http://localhost:3000/webinar/join?room=studyroom-cmnp1bz110001uhd8w934xwgw&amp;token=uwKP0052vXSQlMopTKxnKyCjvWD2WzjdP1CgihXL5C8" style="display:inline-block;padding:12px 22px;background:#16a34a;color:#ffffff !important;text-decoration:none;border-radius:8px;font-weight:600;">Join webinar</a></p>
+<p style="margin:16px 0 0;font-size:13px;color:#64748b;">Returned after entering your passcode? <a href="http://localhost:3000/webinar/waiting?room=studyroom-cmnp1bz110001uhd8w934xwgw&amp;token=uwKP0052vXSQlMopTKxnKyCjvWD2WzjdP1CgihXL5C8" style="color:#2563eb;">Open waiting room</a></p>
+</div>
+            <p style="margin-bottom: 0;">Best regards,<br>The Webyalaya Team</p>
+          </div>
+          <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; text-align: center; font-size: 12px; color: #666;">
+            <p style="margin: 0;">This is an automated notification from Webyalaya.</p>
+            <p style="margin: 5px 0 0 0;">© 2026 Webyalaya. All rights reserved.</p>
+          </div>
+        </body>
+      </html>
+    
+
+Time (UTC): 2026-04-07T20:23:20.140Z
+Transport: ses
+From: notifications@webyalaya.com
+To: havilah.b21@iiits.in
+Subject: You're registered: jo-room
+Status: SUCCESS
+MessageId: 0109019d699d2652-6e33bb17-88c9-4276-b7a0-dd8de7cc41d6-000000
+--- HTML ---
+
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Webyalaya Notification</title>
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h1 style="color: #2c3e50; margin-top: 0;">Webyalaya Notification</h1>
+          </div>
+          <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0;">
+            <p style="margin-top: 0;">Hello Havilah Bodde,</p>
+            <div style="margin: 12px 0;">
+<p style="margin:0 0 16px;color:#333;">Thank you for registering.</p>
+<table role="presentation" style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px;">
+  <tr><td style="padding:6px 12px 6px 0;color:#64748b;vertical-align:top;width:120px;"><strong>Webinar</strong></td><td style="padding:6px 0;color:#0f172a;">jo-room</td></tr>
+  <tr><td style="padding:6px 12px 6px 0;color:#64748b;vertical-align:top;"><strong>Host</strong></td><td style="padding:6px 0;color:#0f172a;">havilah bodde</td></tr>
+  <tr><td style="padding:6px 12px 6px 0;color:#64748b;vertical-align:top;"><strong>Scheduled</strong></td><td style="padding:6px 0;color:#0f172a;">Wednesday, April 8, 2026 at 1:52 AM</td></tr>
+  <tr><td style="padding:6px 12px 6px 0;color:#64748b;vertical-align:top;"><strong>Duration</strong></td><td style="padding:6px 0;color:#0f172a;">60 minutes</td></tr>
+</table>
+
+<div style="margin:20px 0;padding:16px 18px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;">
+  <p style="margin:0 0 8px;font-size:13px;color:#047857;font-weight:600;">Your passcode</p>
+  <p style="margin:0;font-size:22px;letter-spacing:0.2em;font-family:ui-monospace,Menlo,monospace;color:#064e3b;">933705</p>
+</div>
+<p style="margin:16px 0 0;color:#334155;line-height:1.55;font-size:14px;">Open <strong>Join webinar</strong> below, enter this passcode, then—if the host turned on a waiting room—you&apos;ll wait there until admitted and tap <strong>Join webinar</strong> again. If there is no waiting room, you&apos;ll join right after your passcode.</p>
+<p style="margin:20px 0 0;"><a href="http://localhost:3000/webinar/join?room=studyroom-cmnp2g1ai000huhd8xoy5yfj7&amp;token=mBV5TUkCVSlOV4ww5TCmXwSI_q_-Md95GyROwwLgptQ" style="display:inline-block;padding:12px 22px;background:#16a34a;color:#ffffff !important;text-decoration:none;border-radius:8px;font-weight:600;">Join webinar</a></p>
+<p style="margin:16px 0 0;font-size:13px;color:#64748b;">Returned after entering your passcode? <a href="http://localhost:3000/webinar/waiting?room=studyroom-cmnp2g1ai000huhd8xoy5yfj7&amp;token=mBV5TUkCVSlOV4ww5TCmXwSI_q_-Md95GyROwwLgptQ" style="color:#2563eb;">Open waiting room</a></p>
+</div>
+            <p style="margin-bottom: 0;">Best regards,<br>The Webyalaya Team</p>
+          </div>
+          <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; text-align: center; font-size: 12px; color: #666;">
+            <p style="margin: 0;">This is an automated notification from Webyalaya.</p>
+            <p style="margin: 5px 0 0 0;">© 2026 Webyalaya. All rights reserved.</p>
+          </div>
+        </body>
+      </html>
+    
+
+Time (UTC): 2026-04-08T04:15:30.625Z
+Transport: ses
+From: notifications@webyalaya.com
+To: saxenay117@gmail.com
+Subject: Review Reminder
+Status: SUCCESS
+MessageId: 0109019d6b4d6f91-32138a6e-fc60-4ba7-a3e1-b6c9c344d535-000000
+--- HTML ---
+
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Webyalaya Notification</title>
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h1 style="color: #2c3e50; margin-top: 0;">Webyalaya Notification</h1>
+          </div>
+          <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0;">
+            <p style="margin-top: 0;">Hello Yash Saxena,</p>
+            <div style="margin: 12px 0;">Please review the study room "Team-Daily" with Sachin anand</div>
+            <p style="margin-bottom: 0;">Best regards,<br>The Webyalaya Team</p>
+          </div>
+          <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; text-align: center; font-size: 12px; color: #666;">
+            <p style="margin: 0;">This is an automated notification from Webyalaya.</p>
+            <p style="margin: 5px 0 0 0;">© 2026 Webyalaya. All rights reserved.</p>
+          </div>
+        </body>
+      </html>
+    
+
+Time (UTC): 2026-04-08T04:15:33.306Z
+Transport: ses
+From: notifications@webyalaya.com
+To: 2210030003cse@gmail.com
+Subject: Review Reminder
+Status: SUCCESS
+MessageId: 0109019d6b4d79ec-5a4450ec-c182-46fa-bb60-7f2c60ac34b2-000000
+--- HTML ---
+
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Webyalaya Notification</title>
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h1 style="color: #2c3e50; margin-top: 0;">Webyalaya Notification</h1>
+          </div>
+          <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0;">
+            <p style="margin-top: 0;">Hello manas,</p>
+            <div style="margin: 12px 0;">Please review the study room "Team-Daily" with Sachin anand</div>
+            <p style="margin-bottom: 0;">Best regards,<br>The Webyalaya Team</p>
+          </div>
+          <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; text-align: center; font-size: 12px; color: #666;">
+            <p style="margin: 0;">This is an automated notification from Webyalaya.</p>
+            <p style="margin: 5px 0 0 0;">© 2026 Webyalaya. All rights reserved.</p>
+          </div>
+        </body>
+      </html>
+    
+
+Time (UTC): 2026-04-08T04:15:35.124Z
+Transport: ses
+From: notifications@webyalaya.com
+To: chilakahemanthcsea@gmail.com
+Subject: Review Reminder
+Status: SUCCESS
+MessageId: 0109019d6b4d8115-d0304c62-5f86-47f4-82a6-aa328510e9b3-000000
+--- HTML ---
+
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Webyalaya Notification</title>
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h1 style="color: #2c3e50; margin-top: 0;">Webyalaya Notification</h1>
+          </div>
+          <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0;">
+            <p style="margin-top: 0;">Hello Hemanth,</p>
+            <div style="margin: 12px 0;">Please review the study room "Team-Daily" with Sachin anand</div>
+            <p style="margin-bottom: 0;">Best regards,<br>The Webyalaya Team</p>
+          </div>
+          <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; text-align: center; font-size: 12px; color: #666;">
+            <p style="margin: 0;">This is an automated notification from Webyalaya.</p>
+            <p style="margin: 5px 0 0 0;">© 2026 Webyalaya. All rights reserved.</p>
+          </div>
+        </body>
+      </html>
+    
+
+Time (UTC): 2026-04-08T04:15:37.592Z
+Transport: ses
+From: notifications@webyalaya.com
+To: vibhamishra.outr@gmail.com
+Subject: Review Reminder
+Status: SUCCESS
+MessageId: 0109019d6b4d8a1e-1eefcb42-0f24-4edb-acd7-e0525521d92e-000000
+--- HTML ---
+
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Webyalaya Notification</title>
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h1 style="color: #2c3e50; margin-top: 0;">Webyalaya Notification</h1>
+          </div>
+          <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0;">
+            <p style="margin-top: 0;">Hello Vibha Mishra,</p>
+            <div style="margin: 12px 0;">Please review the study room "Team-Daily" with Sachin anand</div>
+            <p style="margin-bottom: 0;">Best regards,<br>The Webyalaya Team</p>
+          </div>
+          <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; text-align: center; font-size: 12px; color: #666;">
+            <p style="margin: 0;">This is an automated notification from Webyalaya.</p>
+            <p style="margin: 5px 0 0 0;">© 2026 Webyalaya. All rights reserved.</p>
+          </div>
+        </body>
+      </html>
+    
+
+Time (UTC): 2026-04-08T05:30:13.609Z
+Transport: ses
+From: notifications@webyalaya.com
+To: havilah.b21@iiits.in
+Subject: You're registered: test
+Status: SUCCESS
+MessageId: 0109019d6b91d701-43db756a-b9fd-4e17-a963-7fc3a8270b5b-000000
+--- HTML ---
+
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Webyalaya Notification</title>
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h1 style="color: #2c3e50; margin-top: 0;">Webyalaya Notification</h1>
+          </div>
+          <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0;">
+            <p style="margin-top: 0;">Hello Havilahe Bodde,</p>
+            <div style="margin: 12px 0;">
+<p style="margin:0 0 16px;color:#333;">Thank you for registering.</p>
+<table role="presentation" style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px;">
+  <tr><td style="padding:6px 12px 6px 0;color:#64748b;vertical-align:top;width:120px;"><strong>Webinar</strong></td><td style="padding:6px 0;color:#0f172a;">test</td></tr>
+  <tr><td style="padding:6px 12px 6px 0;color:#64748b;vertical-align:top;"><strong>Host</strong></td><td style="padding:6px 0;color:#0f172a;">havilah bodde</td></tr>
+  <tr><td style="padding:6px 12px 6px 0;color:#64748b;vertical-align:top;"><strong>Scheduled</strong></td><td style="padding:6px 0;color:#0f172a;">Wednesday, April 8, 2026 at 10:58 AM</td></tr>
+  <tr><td style="padding:6px 12px 6px 0;color:#64748b;vertical-align:top;"><strong>Duration</strong></td><td style="padding:6px 0;color:#0f172a;">60 minutes</td></tr>
+</table>
+
+<div style="margin:20px 0;padding:16px 18px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;">
+  <p style="margin:0 0 8px;font-size:13px;color:#047857;font-weight:600;">Your passcode</p>
+  <p style="margin:0;font-size:22px;letter-spacing:0.2em;font-family:ui-monospace,Menlo,monospace;color:#064e3b;">698782</p>
+</div>
+<p style="margin:16px 0 0;color:#334155;line-height:1.55;font-size:14px;">Open <strong>Join webinar</strong> below, enter this passcode, then—if the host turned on a waiting room—you&apos;ll wait there until admitted and tap <strong>Join webinar</strong> again. If there is no waiting room, you&apos;ll join right after your passcode.</p>
+<p style="margin:20px 0 0;"><a href="http://localhost:3000/webinar/join?room=studyroom-cmnplyc6m000buhfc2ef11lva&amp;token=9ulB7CMbEr1B5BhL12GmexW4pxQPSa2qjq3qeTXDHfE" style="display:inline-block;padding:12px 22px;background:#16a34a;color:#ffffff !important;text-decoration:none;border-radius:8px;font-weight:600;">Join webinar</a></p>
+<p style="margin:16px 0 0;font-size:13px;color:#64748b;">Returned after entering your passcode? <a href="http://localhost:3000/webinar/waiting?room=studyroom-cmnplyc6m000buhfc2ef11lva&amp;token=9ulB7CMbEr1B5BhL12GmexW4pxQPSa2qjq3qeTXDHfE" style="color:#2563eb;">Open waiting room</a></p>
+</div>
+            <p style="margin-bottom: 0;">Best regards,<br>The Webyalaya Team</p>
+          </div>
+          <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; text-align: center; font-size: 12px; color: #666;">
+            <p style="margin: 0;">This is an automated notification from Webyalaya.</p>
+            <p style="margin: 5px 0 0 0;">© 2026 Webyalaya. All rights reserved.</p>
+          </div>
+        </body>
+      </html>
+    
+
+Time (UTC): 2026-04-08T06:03:04.414Z
+Transport: ses
+From: notifications@webyalaya.com
+To: havilah.b21@iiits.in
+Subject: You're registered: test
+Status: SUCCESS
+MessageId: 0109019d6bafe9a0-f5985e31-d48b-4394-8554-0f587a5e80ee-000000
+--- HTML ---
+
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Webyalaya Notification</title>
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h1 style="color: #2c3e50; margin-top: 0;">Webyalaya Notification</h1>
+          </div>
+          <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0;">
+            <p style="margin-top: 0;">Hello Havilah,</p>
+            <div style="margin: 12px 0;">
+<p style="margin:0 0 16px;color:#333;">Thank you for registering.</p>
+<table role="presentation" style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px;">
+  <tr><td style="padding:6px 12px 6px 0;color:#64748b;vertical-align:top;width:120px;"><strong>Webinar</strong></td><td style="padding:6px 0;color:#0f172a;">test</td></tr>
+  <tr><td style="padding:6px 12px 6px 0;color:#64748b;vertical-align:top;"><strong>Host</strong></td><td style="padding:6px 0;color:#0f172a;">havilah bodde</td></tr>
+  <tr><td style="padding:6px 12px 6px 0;color:#64748b;vertical-align:top;"><strong>Scheduled</strong></td><td style="padding:6px 0;color:#0f172a;">Wednesday, April 8, 2026 at 11:32 AM</td></tr>
+  <tr><td style="padding:6px 12px 6px 0;color:#64748b;vertical-align:top;"><strong>Duration</strong></td><td style="padding:6px 0;color:#0f172a;">60 minutes</td></tr>
+</table>
+
+<div style="margin:20px 0;padding:16px 18px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;">
+  <p style="margin:0 0 8px;font-size:13px;color:#047857;font-weight:600;">Your passcode</p>
+  <p style="margin:0;font-size:22px;letter-spacing:0.2em;font-family:ui-monospace,Menlo,monospace;color:#064e3b;">129789</p>
+</div>
+<p style="margin:16px 0 0;color:#334155;line-height:1.55;font-size:14px;">Open <strong>Join webinar</strong> below, enter this passcode, then—if the host turned on a waiting room—you&apos;ll wait there until admitted and tap <strong>Join webinar</strong> again. If there is no waiting room, you&apos;ll join right after your passcode.</p>
+<p style="margin:20px 0 0;"><a href="http://localhost:3000/webinar/join?room=studyroom-cmnpn5gfq0001uho4e1rdb2wg&amp;token=s2-cj0OtZRUpCCuhLZPaJLw0EQd_7AGVw9lJPdUD3p8" style="display:inline-block;padding:12px 22px;background:#16a34a;color:#ffffff !important;text-decoration:none;border-radius:8px;font-weight:600;">Join webinar</a></p>
+<p style="margin:16px 0 0;font-size:13px;color:#64748b;">Returned after entering your passcode? <a href="http://localhost:3000/webinar/waiting?room=studyroom-cmnpn5gfq0001uho4e1rdb2wg&amp;token=s2-cj0OtZRUpCCuhLZPaJLw0EQd_7AGVw9lJPdUD3p8" style="color:#2563eb;">Open waiting room</a></p>
+</div>
+            <p style="margin-bottom: 0;">Best regards,<br>The Webyalaya Team</p>
+          </div>
+          <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; text-align: center; font-size: 12px; color: #666;">
+            <p style="margin: 0;">This is an automated notification from Webyalaya.</p>
+            <p style="margin: 5px 0 0 0;">© 2026 Webyalaya. All rights reserved.</p>
+          </div>
+        </body>
+      </html>
+    
+
+Time (UTC): 2026-04-08T06:50:08.726Z
+Transport: ses
+From: notifications@webyalaya.com
+To: test@gmail.com
+Subject: Study Room Ended - Leave Review
+Status: SUCCESS
+MessageId: 0109019d6bdb01e5-8bfb041d-bb47-492c-a6d2-c63165396a2f-000000
+--- HTML ---
+
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Webyalaya Notification</title>
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h1 style="color: #2c3e50; margin-top: 0;">Webyalaya Notification</h1>
+          </div>
+          <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0;">
+            <p style="margin-top: 0;">Hello PlayWright,</p>
+            <div style="margin: 12px 0;">Study room "maths-classes" has ended. Please leave a review!</div>
+            <p style="margin-bottom: 0;">Best regards,<br>The Webyalaya Team</p>
+          </div>
+          <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; text-align: center; font-size: 12px; color: #666;">
+            <p style="margin: 0;">This is an automated notification from Webyalaya.</p>
+            <p style="margin: 5px 0 0 0;">© 2026 Webyalaya. All rights reserved.</p>
+          </div>
+        </body>
+      </html>
+    
+
+Time (UTC): 2026-04-08T07:18:32.200Z
+Transport: ses
+From: notifications@webyalaya.com
+To: havilah.b21@iiits.in
+Subject: You're registered: s-srook
+Status: SUCCESS
+MessageId: 0109019d6bf5001f-5b7aee95-ef5c-4ddd-bf0b-dd7a0585c48f-000000
+--- HTML ---
+
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Webyalaya Notification</title>
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h1 style="color: #2c3e50; margin-top: 0;">Webyalaya Notification</h1>
+          </div>
+          <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0;">
+            <p style="margin-top: 0;">Hello Havilah Bodde,</p>
+            <div style="margin: 12px 0;">
+<p style="margin:0 0 16px;color:#333;">Thank you for registering.</p>
+<table role="presentation" style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px;">
+  <tr><td style="padding:6px 12px 6px 0;color:#64748b;vertical-align:top;width:120px;"><strong>Webinar</strong></td><td style="padding:6px 0;color:#0f172a;">s-srook</td></tr>
+  <tr><td style="padding:6px 12px 6px 0;color:#64748b;vertical-align:top;"><strong>Host</strong></td><td style="padding:6px 0;color:#0f172a;">havilah bodde</td></tr>
+  <tr><td style="padding:6px 12px 6px 0;color:#64748b;vertical-align:top;"><strong>Scheduled</strong></td><td style="padding:6px 0;color:#0f172a;">Wednesday, April 8, 2026 at 12:47 PM</td></tr>
+  <tr><td style="padding:6px 12px 6px 0;color:#64748b;vertical-align:top;"><strong>Duration</strong></td><td style="padding:6px 0;color:#0f172a;">60 minutes</td></tr>
+</table>
+
+<div style="margin:20px 0;padding:16px 18px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;">
+  <p style="margin:0 0 8px;font-size:13px;color:#047857;font-weight:600;">Your passcode</p>
+  <p style="margin:0;font-size:22px;letter-spacing:0.2em;font-family:ui-monospace,Menlo,monospace;color:#064e3b;">697679</p>
+</div>
+<p style="margin:16px 0 0;color:#334155;line-height:1.55;font-size:14px;">Open <strong>Join webinar</strong> below, enter this passcode, then—if the host turned on a waiting room—you&apos;ll wait there until admitted and tap <strong>Join webinar</strong> again. If there is no waiting room, you&apos;ll join right after your passcode.</p>
+<p style="margin:20px 0 0;"><a href="http://localhost:3000/webinar/join?room=studyroom-cmnppujhy000juhk856s4wj36&amp;token=-6a4EfKmK7EMznvYkfHAba_hHdhi0203G6lnt5yKAeM" style="display:inline-block;padding:12px 22px;background:#16a34a;color:#ffffff !important;text-decoration:none;border-radius:8px;font-weight:600;">Join webinar</a></p>
+<p style="margin:16px 0 0;font-size:13px;color:#64748b;">Returned after entering your passcode? <a href="http://localhost:3000/webinar/waiting?room=studyroom-cmnppujhy000juhk856s4wj36&amp;token=-6a4EfKmK7EMznvYkfHAba_hHdhi0203G6lnt5yKAeM" style="color:#2563eb;">Open waiting room</a></p>
+</div>
+            <p style="margin-bottom: 0;">Best regards,<br>The Webyalaya Team</p>
+          </div>
+          <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; text-align: center; font-size: 12px; color: #666;">
+            <p style="margin: 0;">This is an automated notification from Webyalaya.</p>
+            <p style="margin: 5px 0 0 0;">© 2026 Webyalaya. All rights reserved.</p>
+          </div>
+        </body>
+      </html>
+    
+
+Time (UTC): 2026-04-08T15:57:23.850Z
+Transport: ses
+From: notifications@webyalaya.com
+To: havilah.b21@iiits.in
+Subject: You're registered: jo-Room
+Status: SUCCESS
+MessageId: 0109019d6dd0087f-1cd9f7f4-0c32-4e0a-a725-06ce6fabd34c-000000
+--- HTML ---
+
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Webyalaya Notification</title>
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h1 style="color: #2c3e50; margin-top: 0;">Webyalaya Notification</h1>
+          </div>
+          <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0;">
+            <p style="margin-top: 0;">Hello Havilah,</p>
+            <div style="margin: 12px 0;">
+<p style="margin:0 0 16px;color:#333;">Thank you for registering.</p>
+<table role="presentation" style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px;">
+  <tr><td style="padding:6px 12px 6px 0;color:#64748b;vertical-align:top;width:120px;"><strong>Webinar</strong></td><td style="padding:6px 0;color:#0f172a;">jo-Room</td></tr>
+  <tr><td style="padding:6px 12px 6px 0;color:#64748b;vertical-align:top;"><strong>Host</strong></td><td style="padding:6px 0;color:#0f172a;">havilah bodde</td></tr>
+  <tr><td style="padding:6px 12px 6px 0;color:#64748b;vertical-align:top;"><strong>Scheduled</strong></td><td style="padding:6px 0;color:#0f172a;">Wednesday, April 8, 2026 at 9:26 PM</td></tr>
+  <tr><td style="padding:6px 12px 6px 0;color:#64748b;vertical-align:top;"><strong>Duration</strong></td><td style="padding:6px 0;color:#0f172a;">60 minutes</td></tr>
+</table>
+
+<div style="margin:20px 0;padding:16px 18px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;">
+  <p style="margin:0 0 8px;font-size:13px;color:#047857;font-weight:600;">Your passcode</p>
+  <p style="margin:0;font-size:22px;letter-spacing:0.2em;font-family:ui-monospace,Menlo,monospace;color:#064e3b;">280665</p>
+</div>
+<p style="margin:16px 0 0;color:#334155;line-height:1.55;font-size:14px;">Open <strong>Join webinar</strong> below, enter this passcode, then—if the host turned on a waiting room—you&apos;ll wait there until admitted and tap <strong>Join webinar</strong> again. If there is no waiting room, you&apos;ll join right after your passcode.</p>
+<p style="margin:20px 0 0;"><a href="http://localhost:3000/webinar/join?room=studyroom-cmnq8d58m0009uhdc1pgqa7yd&amp;token=fgslfMxiewH6goLf5REI4h0sockODnwbTEOUg_iFtSU" style="display:inline-block;padding:12px 22px;background:#16a34a;color:#ffffff !important;text-decoration:none;border-radius:8px;font-weight:600;">Join webinar</a></p>
+<p style="margin:16px 0 0;font-size:13px;color:#64748b;">Returned after entering your passcode? <a href="http://localhost:3000/webinar/waiting?room=studyroom-cmnq8d58m0009uhdc1pgqa7yd&amp;token=fgslfMxiewH6goLf5REI4h0sockODnwbTEOUg_iFtSU" style="color:#2563eb;">Open waiting room</a></p>
+</div>
+            <p style="margin-bottom: 0;">Best regards,<br>The Webyalaya Team</p>
+          </div>
+          <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; text-align: center; font-size: 12px; color: #666;">
+            <p style="margin: 0;">This is an automated notification from Webyalaya.</p>
+            <p style="margin: 5px 0 0 0;">© 2026 Webyalaya. All rights reserved.</p>
+          </div>
+        </body>
+      </html>
+    
+
+Time (UTC): 2026-04-08T17:23:43.544Z
+Transport: ses
+From: notifications@webyalaya.com
+To: havilah.b21@iiits.in
+Subject: You're registered: cat-dog
+Status: SUCCESS
+MessageId: 0109019d6e1f11fd-a5180865-3f52-42f8-8139-0ac36edc39a1-000000
+--- HTML ---
+
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Webyalaya Notification</title>
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h1 style="color: #2c3e50; margin-top: 0;">Webyalaya Notification</h1>
+          </div>
+          <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0;">
+            <p style="margin-top: 0;">Hello Havilah,</p>
+            <div style="margin: 12px 0;">
+<p style="margin:0 0 16px;color:#333;">Thank you for registering.</p>
+<table role="presentation" style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px;">
+  <tr><td style="padding:6px 12px 6px 0;color:#64748b;vertical-align:top;width:120px;"><strong>Webinar</strong></td><td style="padding:6px 0;color:#0f172a;">cat-dog</td></tr>
+  <tr><td style="padding:6px 12px 6px 0;color:#64748b;vertical-align:top;"><strong>Host</strong></td><td style="padding:6px 0;color:#0f172a;">havilah bodde</td></tr>
+  <tr><td style="padding:6px 12px 6px 0;color:#64748b;vertical-align:top;"><strong>Scheduled</strong></td><td style="padding:6px 0;color:#0f172a;">Wednesday, April 8, 2026 at 10:52 PM</td></tr>
+  <tr><td style="padding:6px 12px 6px 0;color:#64748b;vertical-align:top;"><strong>Duration</strong></td><td style="padding:6px 0;color:#0f172a;">60 minutes</td></tr>
+</table>
+
+<div style="margin:20px 0;padding:16px 18px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;">
+  <p style="margin:0 0 8px;font-size:13px;color:#047857;font-weight:600;">Your passcode</p>
+  <p style="margin:0;font-size:22px;letter-spacing:0.2em;font-family:ui-monospace,Menlo,monospace;color:#064e3b;">484705</p>
+</div>
+<p style="margin:16px 0 0;color:#334155;line-height:1.55;font-size:14px;">Open <strong>Join webinar</strong> below, enter this passcode, then—if the host turned on a waiting room—you&apos;ll wait there until admitted and tap <strong>Join webinar</strong> again. If there is no waiting room, you&apos;ll join right after your passcode.</p>
+<p style="margin:20px 0 0;"><a href="http://localhost:3000/webinar/join?room=studyroom-cmnqbfw030001uhv4a60qezau&amp;token=9xndkJTwdAFyLIigSj_m_l2X2-j_bX_T2xRXYLY1xGg" style="display:inline-block;padding:12px 22px;background:#16a34a;color:#ffffff !important;text-decoration:none;border-radius:8px;font-weight:600;">Join webinar</a></p>
+<p style="margin:16px 0 0;font-size:13px;color:#64748b;">Returned after entering your passcode? <a href="http://localhost:3000/webinar/waiting?room=studyroom-cmnqbfw030001uhv4a60qezau&amp;token=9xndkJTwdAFyLIigSj_m_l2X2-j_bX_T2xRXYLY1xGg" style="color:#2563eb;">Open waiting room</a></p>
+</div>
+            <p style="margin-bottom: 0;">Best regards,<br>The Webyalaya Team</p>
+          </div>
+          <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; text-align: center; font-size: 12px; color: #666;">
+            <p style="margin: 0;">This is an automated notification from Webyalaya.</p>
+            <p style="margin: 5px 0 0 0;">© 2026 Webyalaya. All rights reserved.</p>
+          </div>
+        </body>
+      </html>
+    
+
+Time (UTC): 2026-04-09T10:24:38.190Z
+Transport: ses
+From: notifications@webyalaya.com
+To: havilah.b21@iiits.in
+Subject: You're registered: test
+Status: SUCCESS
+MessageId: 0109019d71c5bce6-e229bef6-517e-47b2-b680-b6b5581cb103-000000
+--- HTML ---
+
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Webyalaya Notification</title>
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h1 style="color: #2c3e50; margin-top: 0;">Webyalaya Notification</h1>
+          </div>
+          <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0;">
+            <p style="margin-top: 0;">Hello Havilah,</p>
+            <div style="margin: 12px 0;">
+<p style="margin:0 0 16px;color:#333;">Thank you for registering.</p>
+<table role="presentation" style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px;">
+  <tr><td style="padding:6px 12px 6px 0;color:#64748b;vertical-align:top;width:120px;"><strong>Webinar</strong></td><td style="padding:6px 0;color:#0f172a;">test</td></tr>
+  <tr><td style="padding:6px 12px 6px 0;color:#64748b;vertical-align:top;"><strong>Host</strong></td><td style="padding:6px 0;color:#0f172a;">havilah bodde</td></tr>
+  <tr><td style="padding:6px 12px 6px 0;color:#64748b;vertical-align:top;"><strong>Scheduled</strong></td><td style="padding:6px 0;color:#0f172a;">Thursday, April 9, 2026 at 3:54 PM</td></tr>
+  <tr><td style="padding:6px 12px 6px 0;color:#64748b;vertical-align:top;"><strong>Duration</strong></td><td style="padding:6px 0;color:#0f172a;">60 minutes</td></tr>
+</table>
+
+<div style="margin:20px 0;padding:16px 18px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;">
+  <p style="margin:0 0 8px;font-size:13px;color:#047857;font-weight:600;">Your passcode</p>
+  <p style="margin:0;font-size:22px;letter-spacing:0.2em;font-family:ui-monospace,Menlo,monospace;color:#064e3b;">856895</p>
+</div>
+<p style="margin:16px 0 0;color:#334155;line-height:1.55;font-size:14px;">Open <strong>Join webinar</strong> below, enter this passcode, then—if the host turned on a waiting room—you&apos;ll wait there until admitted and tap <strong>Join webinar</strong> again. If there is no waiting room, you&apos;ll join right after your passcode.</p>
+<p style="margin:20px 0 0;"><a href="http://localhost:3000/webinar/join?room=studyroom-cmnrby5wm000buhu0p6arxx5g&amp;token=c6O_RGKR40OtK0YUKoqQAI_V5avd0ee88nlE2KZQkjA" style="display:inline-block;padding:12px 22px;background:#16a34a;color:#ffffff !important;text-decoration:none;border-radius:8px;font-weight:600;">Join webinar</a></p>
+<p style="margin:16px 0 0;font-size:13px;color:#64748b;">Returned after entering your passcode? <a href="http://localhost:3000/webinar/waiting?room=studyroom-cmnrby5wm000buhu0p6arxx5g&amp;token=c6O_RGKR40OtK0YUKoqQAI_V5avd0ee88nlE2KZQkjA" style="color:#2563eb;">Open waiting room</a></p>
+</div>
+            <p style="margin-bottom: 0;">Best regards,<br>The Webyalaya Team</p>
+          </div>
+          <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; text-align: center; font-size: 12px; color: #666;">
+            <p style="margin: 0;">This is an automated notification from Webyalaya.</p>
+            <p style="margin: 5px 0 0 0;">© 2026 Webyalaya. All rights reserved.</p>
+          </div>
+        </body>
+      </html>
+    
+
+Time (UTC): 2026-04-09T10:43:23.007Z
+Transport: ses
+From: notifications@webyalaya.com
+To: havilah.b21@iiits.in
+Subject: You're registered: test
+Status: SUCCESS
+MessageId: 0109019d71d6e694-594df465-86b0-44e5-9ec6-0c27369c505b-000000
+--- HTML ---
+
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Webyalaya Notification</title>
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h1 style="color: #2c3e50; margin-top: 0;">Webyalaya Notification</h1>
+          </div>
+          <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0;">
+            <p style="margin-top: 0;">Hello Havilah Bodde,</p>
+            <div style="margin: 12px 0;">
+<p style="margin:0 0 16px;color:#333;">Thank you for registering.</p>
+<table role="presentation" style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px;">
+  <tr><td style="padding:6px 12px 6px 0;color:#64748b;vertical-align:top;width:120px;"><strong>Webinar</strong></td><td style="padding:6px 0;color:#0f172a;">test</td></tr>
+  <tr><td style="padding:6px 12px 6px 0;color:#64748b;vertical-align:top;"><strong>Host</strong></td><td style="padding:6px 0;color:#0f172a;">havilah bodde</td></tr>
+  <tr><td style="padding:6px 12px 6px 0;color:#64748b;vertical-align:top;"><strong>Scheduled</strong></td><td style="padding:6px 0;color:#0f172a;">Thursday, April 9, 2026 at 4:12 PM</td></tr>
+  <tr><td style="padding:6px 12px 6px 0;color:#64748b;vertical-align:top;"><strong>Duration</strong></td><td style="padding:6px 0;color:#0f172a;">60 minutes</td></tr>
+</table>
+
+<div style="margin:20px 0;padding:16px 18px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;">
+  <p style="margin:0 0 8px;font-size:13px;color:#047857;font-weight:600;">Your passcode</p>
+  <p style="margin:0;font-size:22px;letter-spacing:0.2em;font-family:ui-monospace,Menlo,monospace;color:#064e3b;">734905</p>
+</div>
+<p style="margin:16px 0 0;color:#334155;line-height:1.55;font-size:14px;">Open <strong>Join webinar</strong> below, enter this passcode, then—if the host turned on a waiting room—you&apos;ll wait there until admitted and tap <strong>Join webinar</strong> again. If there is no waiting room, you&apos;ll join right after your passcode.</p>
+<p style="margin:20px 0 0;"><a href="http://localhost:3000/webinar/join?room=studyroom-cmnrcm4q50013uhu05cpah09h&amp;token=elAJrd8__joI_Bc0lw22FCro3Klb69BbeZMF6qtk6pA" style="display:inline-block;padding:12px 22px;background:#16a34a;color:#ffffff !important;text-decoration:none;border-radius:8px;font-weight:600;">Join webinar</a></p>
+<p style="margin:16px 0 0;font-size:13px;color:#64748b;">Returned after entering your passcode? <a href="http://localhost:3000/webinar/waiting?room=studyroom-cmnrcm4q50013uhu05cpah09h&amp;token=elAJrd8__joI_Bc0lw22FCro3Klb69BbeZMF6qtk6pA" style="color:#2563eb;">Open waiting room</a></p>
+</div>
+            <p style="margin-bottom: 0;">Best regards,<br>The Webyalaya Team</p>
+          </div>
+          <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; text-align: center; font-size: 12px; color: #666;">
+            <p style="margin: 0;">This is an automated notification from Webyalaya.</p>
+            <p style="margin: 5px 0 0 0;">© 2026 Webyalaya. All rights reserved.</p>
+          </div>
+        </body>
+      </html>
+    
 Mail Log Cleared during merge conflict resolution.

@@ -5,15 +5,17 @@ import {
   NotFoundException,
   Logger,
 } from '@nestjs/common';
-import {
-  MessageAudienceType,
-  StudyRoomSessionMode,
-} from '../generated/prisma/client';
+import { MessageAudienceType } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { isConnectionError } from '../common/db-error-handler';
 
 @Injectable()
 export class ChatService {
+  /**
+   * Guest join links may expire while the attendee is still in an active room.
+   * Keep chat socket auth tolerant to short-lived expiry drift.
+   */
+  private static readonly GUEST_SOCKET_TOKEN_GRACE_MS = 24 * 60 * 60 * 1000;
   private readonly logger = new Logger(ChatService.name);
 
   constructor(private prisma: PrismaService) {}
@@ -454,6 +456,15 @@ export class ChatService {
   }
 
   /**
+   * Normalize study room id or slug to canonical `StudyRoom.id` (for guest join vs channel.externalId).
+   */
+  async canonicalStudyRoomId(
+    segment: string | undefined | null,
+  ): Promise<string | null> {
+    return this.resolveStudyRoomIdForChannelLookup(segment ?? '');
+  }
+
+  /**
    * Channel rows store study rooms by primary key UUID. The LiveKit room segment may be
    * that id or a slug (browse/share links). Match `resolveStudyRoomByIdOrSlug` behavior.
    */
@@ -557,13 +568,11 @@ export class ChatService {
         studyRoom: { select: { sessionMode: true } },
       },
     });
-    if (!record || record.expiresAt < new Date()) return null;
-    if (
-      record.studyRoom.sessionMode === StudyRoomSessionMode.WEBINAR &&
-      !record.guestParticipant.approvedBy
-    ) {
-      return null;
-    }
+    if (!record) return null;
+    const expiredByMs = Date.now() - record.expiresAt.getTime();
+    if (expiredByMs > ChatService.GUEST_SOCKET_TOKEN_GRACE_MS) return null;
+    // Webinar waiting-room guests must still authenticate Socket.IO so chat can load (host uses Clerk).
+    // Joining video remains gated in `StudyRoomsService.validateGuestAccessToken` (approvedBy / waiting room).
     return {
       studyRoomId: record.studyRoomId,
       guestParticipant: {

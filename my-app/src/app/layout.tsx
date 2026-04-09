@@ -144,11 +144,11 @@ export const metadata: Metadata = {
     description: "Connect with peers to learn and teach. Join study rooms, host sessions, and grow together in a collaborative learning community.",
     images: [
       {
-        url: "/og-image.png",
+        url: "/og-image.svg",
         width: 1200,
         height: 630,
         alt: "Webyalaya - Peer to Peer Learning Platform",
-        type: "image/png",
+        type: "image/svg+xml",
       },
     ],
   },
@@ -158,7 +158,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Webyalaya - Peer to Peer Learning Platform",
     description: "Connect with peers to learn and teach. Join study rooms, host sessions, and grow together.",
-    images: ["/og-image.png"],
+    images: ["/og-image.svg"],
     creator: "@webyalaya",
     site: "@webyalaya",
   },
@@ -167,13 +167,12 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       { url: "/webyalaya-main-logo.svg", sizes: "any", type: "image/svg+xml" },
-      { url: "/favicon.png", sizes: "32x32", type: "image/png" },
-      { url: "/icons/icon-192x192.png", sizes: "192x192", type: "image/png" },
-      { url: "/icons/icon-512x512.png", sizes: "512x512", type: "image/png" },
+      { url: "/icons/icon-192x192.svg", sizes: "192x192", type: "image/svg+xml" },
+      { url: "/icons/icon-512x512.svg", sizes: "512x512", type: "image/svg+xml" },
     ],
     shortcut: "/webyalaya-main-logo.svg",
     apple: [
-      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+      { url: "/apple-touch-icon.svg", sizes: "180x180", type: "image/svg+xml" },
     ],
     other: [
       {

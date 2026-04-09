@@ -206,6 +206,25 @@ export class StudyRoomsController {
     );
   }
 
+  @Post('webinar/:studyRoomId/guests/:guestId/kick')
+  @UseGuards(ClerkAuthGuard)
+  async kickWebinarGuest(
+    @Param('studyRoomId') studyRoomId: string,
+    @Param('guestId') guestId: string,
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
+  ) {
+    const actorKey = clerkUserId || dbUserId;
+    if (!actorKey) {
+      throw new UnauthorizedException('User identity missing');
+    }
+    return this.studyRoomsService.kickWebinarGuest(
+      studyRoomId,
+      guestId,
+      actorKey,
+    );
+  }
+
   @Patch('webinar/:studyRoomId/chat-enabled')
   @UseGuards(ClerkAuthGuard)
   async setWebinarChatEnabled(
