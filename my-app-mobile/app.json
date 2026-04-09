@@ -23,7 +23,11 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.rushabh28.myappmobile"
+      "package": "com.rushabh28.myappmobile",
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -32,13 +36,15 @@
       "expo-router",
       "@react-native-community/datetimepicker",
       "expo-web-browser",
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-av"
     ],
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "2481c4ee-4376-4237-9339-9061b9dcaaaf"
+        "projectId": "74dd9290-0778-415a-b2eb-f557a9fb3e5d"
       }
-    }
+    },
+    "owner": "tmanas"
   }
 }

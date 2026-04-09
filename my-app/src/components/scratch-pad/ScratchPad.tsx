@@ -66,16 +66,42 @@ export const ScratchPad = memo(function ScratchPad({ roomId, room, isHost, canEd
             {/* Header with Title and Save Action */}
             <div className="h-12 bg-white/5 border-b border-white/5 flex items-center justify-between px-4 z-[9999]">
                 <div className="flex items-center gap-4">
+                    {/* Mode Toggle */}
+                    <div className="flex bg-white/5 rounded-lg p-0.5 mr-2">
+								<button 
+									onClick={() => setMode('personal')}
+									title="Individual workspace for your personal notes"
+									className={`flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold rounded-md transition-all duration-300 ${
+										mode === 'personal' 
+										? 'bg-purple-600 text-white shadow-[0_0_10px_rgba(168,85,247,0.3)]' 
+										: 'text-white/40 hover:text-white/70 hover:bg-white/5'
+									}`}
+								>
+									<User className="h-3 w-3" />
+									PERSONAL
+								</button>
+								<button 
+									onClick={() => setMode('shared')}
+									title="Collaborative whiteboard for all meeting participants"
+									className={`flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold rounded-md transition-all duration-300 ${
+										mode === 'shared' 
+										? 'bg-sky-600 text-white shadow-[0_0_10px_rgba(14,165,233,0.3)]' 
+										: 'text-white/40 hover:text-white/70 hover:bg-white/5'
+									}`}
+								>
+									<Users className="h-3 w-3" />
+									MEETING
+								</button>
+                    </div>
+
+                    <div className="h-4 w-px bg-white/10 mx-1" />
+
                     <div className="flex items-center gap-2">
-                        <div className="h-7 w-7 rounded-lg bg-white/5 flex items-center justify-center border border-white/5">
-                            {mode === 'personal' ? (
-                                <User className="h-4 w-4 text-purple-400" />
-                            ) : (
-                                <Users className="h-4 w-4 text-sky-400" />
-                            )}
-                        </div>
-                        <span className="text-sm font-bold text-white/90 tracking-tight">
-                            {mode === 'personal' ? 'Personal Workspace' : 'Meeting Whiteboard'}
+                        <span className="text-xs font-bold text-white/50 tracking-tight">
+                            Viewing:
+                        </span>
+                        <span className={`text-xs font-bold tracking-tight ${mode === 'personal' ? 'text-purple-400' : 'text-sky-400'}`}>
+                            {mode === 'personal' ? 'Personal Notes' : 'Shared Whiteboard'}
                         </span>
                     </div>
 
@@ -126,6 +152,7 @@ export const ScratchPad = memo(function ScratchPad({ roomId, room, isHost, canEd
             
             <div className="flex-1 relative">
                 <Tldraw 
+                    key={mode}
                     store={store}
                     autoFocus 
                     onMount={onEditorMount}

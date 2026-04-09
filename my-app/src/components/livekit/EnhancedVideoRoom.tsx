@@ -103,12 +103,13 @@ const VIRTUAL_BACKGROUNDS = [
 		thumbnail: 'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=200&h=150&fit=crop&q=80'
 	}
 ]
-interface SessionData {
+export interface SessionData {
 	id: string;
 	date: string;
 	duration: number;
 	sessionType: 'studyRoom' | 'peerSession';
 	sessionMode?: string;
+	slug: string
 	[key: string]: unknown;
 }
 
@@ -628,6 +629,8 @@ export function EnhancedVideoRoom({
 		onWarning: handleWarning,
 		extendedEndTime,
 	})
+	console.log(minutesLeft, formattedTime, currentEndTime);
+	
 
 	// Handle approving extension request from the dialog
 	const handleApproveExtension = useCallback(() => {
@@ -932,7 +935,7 @@ export function EnhancedVideoRoom({
 			{timerEnabled && isHost && (
 				<SessionEndWarningDialog
 					open={showWarning}
-					minutesRemaining={minutesLeft}
+					currentEndTime={currentEndTime}
 					onClose={() => setShowWarning(false)}
 				/>
 			)}
@@ -4440,7 +4443,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 							<button
 								onClick={async () => {
 										try {
-											await navigator.clipboard.writeText(window.location.href)
+											await navigator.clipboard.writeText(window.location.origin + '/studyroom/' + _sessionData?.slug)
 											showSuccess("URL Copied to Clipboard")
 										} catch (err) {
 											console.error('Failed to copy:', err)
@@ -4517,6 +4520,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						<div className="relative shrink-0">
 							<Button
 								onClick={isHost ? () => setShowEndMenu(!showEndMenu) : onLeave}
+								title={isHost ? "End meeting for everyone" : "Leave the meeting"}
 								className={`
 							h-11 md:h-11 px-4 md:px-6 rounded-lg md:rounded-xl font-semibold text-xs md:text-sm transition-all duration-200
 							flex items-center gap-1.5 md:gap-2 shadow-lg active:scale-95
