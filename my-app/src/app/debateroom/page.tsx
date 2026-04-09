@@ -196,7 +196,7 @@ export default function DebateRoomsPage() {
               Debate Rooms
             </h1>
             <p className="text-muted-foreground text-sm sm:text-base max-w-2xl leading-relaxed">
-              Discover peers, study rooms, and debate rooms to learn and grow together
+              Discover peers, study rooms and debate rooms to learn and grow together
             </p>
           </div>
 
