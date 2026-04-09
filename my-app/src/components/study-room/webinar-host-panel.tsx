@@ -101,10 +101,10 @@ export function WebinarHostPanel({
     return () => window.clearInterval(id);
   }, [load, open]);
 
-  const onRemoveGuest = async (guestId: string) => {
+  const onKickGuest = async (guestId: string) => {
     setRemoving(guestId);
     try {
-      await studyRoomsApi.removeWebinarGuest(studyRoomId, guestId);
+      await studyRoomsApi.kickWebinarGuest(studyRoomId, guestId);
       await load();
     } finally {
       setRemoving(null);
@@ -264,9 +264,9 @@ export function WebinarHostPanel({
                               className="h-7 gap-1 px-2 text-red-400 hover:bg-red-500/10 hover:text-red-300"
                               disabled={removing === r.guestParticipantId}
                               onClick={() =>
-                                void onRemoveGuest(r.guestParticipantId!)
+                                void onKickGuest(r.guestParticipantId!)
                               }
-                              title="Kick attendee from webinar"
+                              title="Kick attendee from live webinar (keeps registration)"
                             >
                               {removing === r.guestParticipantId ? (
                                 <Loader2 className="h-3 w-3 animate-spin" />
@@ -311,7 +311,7 @@ export function WebinarHostPanel({
                     <strong className="text-white/75">pending</strong> until you{" "}
                     <strong className="text-white/75">Admit</strong>. Use{" "}
                     <strong className="text-white/75">Kick</strong> to remove
-                    an approved attendee immediately.
+                    an approved attendee from the live meet immediately (registration remains).
                   </p>
                 ) : (
                   <p className="text-[11px] leading-snug text-white/55">

@@ -472,8 +472,8 @@ export function EnhancedVideoRoom({
 	const onLiveKitRoomClosedByServer = useCallback((reason?: DisconnectReason) => {
 		if (!isHost && reason === DisconnectReason.PARTICIPANT_REMOVED) {
 			showError(
-				'Removed by host',
-				'You were removed from this meet by the host due to inappropriate behaviour.',
+				'Removed',
+				'You were removed from the webinar.',
 			)
 		}
 		pushSessionFeedback(true)

@@ -2321,6 +2321,61 @@ export class StudyRoomsService {
     return { success: true };
   }
 
+  async kickWebinarGuest(
+    studyRoomId: string,
+    guestParticipantId: string,
+    hostUserId: string,
+  ) {
+    const room = await this.resolveStudyRoomByIdOrSlug(studyRoomId, {
+      select: { id: true, slug: true, createdById: true, sessionMode: true },
+    });
+    if (!room || room.sessionMode !== StudyRoomSessionMode.WEBINAR) {
+      throw new NotFoundException('Webinar not found');
+    }
+    const actor = await this.resolveUserIdentity(hostUserId);
+    if (room.createdById !== actor.id) {
+      throw new ForbiddenException('Only the host can kick attendees');
+    }
+    const guest = await this.prisma.studyRoomGuestParticipant.findFirst({
+      where: { id: guestParticipantId, studyRoomId: room.id },
+    });
+    if (!guest) {
+      throw new NotFoundException('Guest not found');
+    }
+
+    // Kick from active room only; keep registration/approval data intact.
+    // Try canonical room name first, then slug for older non-canonical sessions.
+    const candidateRoomNames = Array.from(
+      new Set(
+        [`studyroom-${room.id}`, room.slug?.trim() || ''].filter(
+          (name): name is string => !!name,
+        ),
+      ),
+    );
+    let kicked = false;
+    let lastErr: string | null = null;
+    for (const roomName of candidateRoomNames) {
+      try {
+        await this.livekitService.removeParticipant(
+          roomName,
+          guest.livekitIdentity,
+        );
+        kicked = true;
+        break;
+      } catch (err) {
+        lastErr = err instanceof Error ? err.message : String(err);
+      }
+    }
+    if (!kicked) {
+      throw new BadRequestException(
+        lastErr ||
+          'Could not remove attendee from live meeting. Ask attendee to rejoin and try again.',
+      );
+    }
+
+    return { success: true };
+  }
+
   async setWebinarChatEnabled(
     studyRoomId: string,
     clerkUserId: string,
