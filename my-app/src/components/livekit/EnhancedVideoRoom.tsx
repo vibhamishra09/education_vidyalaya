@@ -470,13 +470,13 @@ export function EnhancedVideoRoom({
 
 	const onLiveKitRoomClosedByServer = useCallback((reason?: DisconnectReason) => {
 		if (!isHost && reason === DisconnectReason.PARTICIPANT_REMOVED) {
-			showWarning(
+			showError(
 				'Removed by host',
 				'You were removed from this meet by the host due to inappropriate behaviour.',
 			)
 		}
 		pushSessionFeedback(true)
-	}, [isHost, pushSessionFeedback, showWarning])
+	}, [isHost, pushSessionFeedback, showError])
 
 	// Wrapper functions for request actions with toast notifications
 	const handleRequestAudioOn = useCallback((targetUserId: string) => {
@@ -789,7 +789,6 @@ export function EnhancedVideoRoom({
 						isHost={isHost}
 						studyRoomId={sessionData.id}
 						guestParticipants={[]}
-						chatEnabled={webinarChat.chatLive}
 						hostEmail={user?.primaryEmailAddress?.emailAddress ?? null}
 					/>
 				)}
@@ -1178,7 +1177,9 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	const restrictGuestChatAudiences = isGuest && !isWebinarJoinee
 	const canViewParticipantList =
 		studyRoomStyleJoinerChrome &&
-		(isHost || permissions?.allowParticipantList !== false)
+		(isHost ||
+			(permissions?.allowParticipantList !== false &&
+				roomSettings?.hideParticipantList !== true))
 	const participantIdentitiesKey = useMemo(
 		() => allParticipants.map((participant) => participant.identity).sort().join('|'),
 		[allParticipants],
@@ -1498,8 +1499,12 @@ const VideoRoomContent = memo(function VideoRoomContent({
 
 		const handleMute = (data: { action: 'mute' | 'unmute'; targetUserId?: string; hostClerkId?: string; isLocked?: boolean }) => {
 			try {
+				const selfIds = new Set<string>([
+					currentUserId || '',
+					localParticipant?.identity || '',
+				])
 				// If targetUserId is specified and it's not this user, skip
-				if (data.targetUserId && data.targetUserId !== currentUserId) return
+				if (data.targetUserId && !selfIds.has(data.targetUserId)) return
 				// If this is a global action (no targetUserId) but current user is the host, skip
 				// The host should NEVER be affected by global mute actions
 				if (!data.targetUserId && data.hostClerkId && data.hostClerkId === currentUserId) return
@@ -1509,7 +1514,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 
 				// Show toast notification when host mutes this participant (targeted or room-wide).
 				const muteAppliesToMe =
-					!data.targetUserId || data.targetUserId === currentUserId
+					!data.targetUserId || selfIds.has(data.targetUserId)
 				if (data.action === 'mute' && muteAppliesToMe) {
 					if (shouldShowToast('moderation-muted', 6000)) {
 						showWarning(
@@ -1527,8 +1532,12 @@ const VideoRoomContent = memo(function VideoRoomContent({
 
 		const handleVideo = (data: { action: 'disable' | 'enable'; targetUserId?: string; hostClerkId?: string; isLocked?: boolean }) => {
 			try {
+				const selfIds = new Set<string>([
+					currentUserId || '',
+					localParticipant?.identity || '',
+				])
 				// If targetUserId is specified and it's not this user, skip
-				if (data.targetUserId && data.targetUserId !== currentUserId) return
+				if (data.targetUserId && !selfIds.has(data.targetUserId)) return
 				// If this is a global action (no targetUserId) but current user is the host, skip
 				// The host should NEVER be affected by global video disable actions
 				if (!data.targetUserId && data.hostClerkId && data.hostClerkId === currentUserId) return
@@ -1538,7 +1547,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 
 				// Show toast notification when host disables video (targeted or room-wide).
 				const disableAppliesToMe =
-					!data.targetUserId || data.targetUserId === currentUserId
+					!data.targetUserId || selfIds.has(data.targetUserId)
 				if (data.action === 'disable' && disableAppliesToMe) {
 					if (shouldShowToast('moderation-video-disabled', 6000)) {
 						showWarning(
@@ -4403,14 +4412,19 @@ const VideoRoomContent = memo(function VideoRoomContent({
 								{/* Participants */}
 								<button
 									onClick={() => {
-										if (!canViewParticipantList) return
+										if (!canViewParticipantList) {
+											showWarning(
+												'Participant List Hidden',
+												'Host has hidden the participant list. You cannot open it right now.',
+											)
+											return
+										}
 										if (!showParticipants) {
 											setShowChat(false)
 											setShowTimerPanel(false)
 										}
 										setShowParticipants(!showParticipants)
 									}}
-									disabled={!canViewParticipantList}
 									className={`h-11 w-11 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl hover:bg-sky-500/20 active:scale-95 transition-all relative ${showParticipants ? 'bg-sky-500/20 text-sky-400' : 'text-white/80 hover:text-sky-400'}`}
 									title={canViewParticipantList ? 'Participants' : 'Participant list is hidden by host'}
 								>
@@ -5248,8 +5262,37 @@ function ParticipantList({
 
 			{sortedParticipants.map((participant) => {
 				const isLocal = participant.identity === localParticipant?.identity
-				const isMicOn = participant.isMicrophoneEnabled
-				const isCamOn = participant.isCameraEnabled
+				const micPublication = Array.from(
+					participant.audioTrackPublications.values(),
+				).find((pub) => pub.source === Track.Source.Microphone)
+				const camPublication = Array.from(
+					participant.videoTrackPublications.values(),
+				).find((pub) => pub.source === Track.Source.Camera)
+				// Prefer live publication state for snappier icon updates after host/joinee actions.
+				const isMicOn =
+					participant.isMicrophoneEnabled ||
+					Boolean(
+						micPublication?.track &&
+							!(
+								(
+									micPublication as unknown as {
+										isMuted?: boolean
+									}
+								).isMuted ?? false
+							),
+					)
+				const isCamOn =
+					participant.isCameraEnabled ||
+					Boolean(
+						camPublication?.track &&
+							!(
+								(
+									camPublication as unknown as {
+										isMuted?: boolean
+									}
+								).isMuted ?? false
+							),
+					)
 				const hasAReq = hasAudioRequest(participant.identity)
 				const hasVReq = hasVideoRequest(participant.identity)
 				const canControl = isHost && !isLocal

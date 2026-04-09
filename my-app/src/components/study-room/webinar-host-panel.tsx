@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { studyRoomsApi } from "@/lib/api/study-rooms.api";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { Loader2, Menu, UserCheck, UserMinus, Users, X } from "lucide-react";
@@ -16,16 +15,12 @@ export function WebinarHostPanel({
   isHost = false,
   studyRoomId,
   guestParticipants,
-  chatEnabled,
-  onChatEnabledChange,
   /** Exclude from “live guests” (e.g. host’s own registration row). */
   hostEmail,
 }: {
   isHost?: boolean;
   studyRoomId: string;
   guestParticipants: GuestRow[];
-  chatEnabled: boolean;
-  onChatEnabledChange?: (v: boolean) => void;
   hostEmail?: string | null;
 }) {
   if (!isHost) return null;
@@ -45,7 +40,6 @@ export function WebinarHostPanel({
   const [loading, setLoading] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
   const [approving, setApproving] = useState<string | null>(null);
-  const [toggleChat, setToggleChat] = useState(chatEnabled);
 
   const liveGuestCount = useMemo(() => {
     const h = hostEmail?.trim().toLowerCase();
@@ -70,10 +64,6 @@ export function WebinarHostPanel({
         : 0,
     [regs, waitingRoomEnabled],
   );
-
-  useEffect(() => {
-    setToggleChat(chatEnabled);
-  }, [chatEnabled]);
 
   useEffect(() => {
     if (!open) return;
@@ -131,16 +121,6 @@ export function WebinarHostPanel({
       await load();
     } finally {
       setApproving(null);
-    }
-  };
-
-  const onToggleChat = async (enabled: boolean) => {
-    setToggleChat(enabled);
-    try {
-      await studyRoomsApi.setWebinarChatEnabled(studyRoomId, enabled);
-      onChatEnabledChange?.(enabled);
-    } catch {
-      setToggleChat(!enabled);
     }
   };
 
@@ -319,14 +299,6 @@ export function WebinarHostPanel({
               <p className="text-[11px] uppercase tracking-wide text-white/45">
                 Controls
               </p>
-              <div className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-2">
-                <span className="text-xs text-white/80">Chat for attendees</span>
-                <Switch
-                  checked={toggleChat}
-                  onCheckedChange={(v) => void onToggleChat(v)}
-                />
-              </div>
-
               {/* “Allow specific users”: admit/remove only when waiting room was enabled for this webinar */}
               <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 space-y-1.5">
                 <p className="text-xs font-semibold text-white/90">
