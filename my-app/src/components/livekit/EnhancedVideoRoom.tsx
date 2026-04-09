@@ -5266,12 +5266,26 @@ function ParticipantList({
 
 			{sortedParticipants.map((participant) => {
 				const isLocal = participant.identity === localParticipant?.identity
-				const micPublication = Array.from(
-					participant.audioTrackPublications.values(),
-				).find((pub) => pub.source === Track.Source.Microphone)
-				const camPublication = Array.from(
-					participant.videoTrackPublications.values(),
-				).find((pub) => pub.source === Track.Source.Camera)
+				let micPublication:
+					| ReturnType<typeof participant.audioTrackPublications.values> extends IterableIterator<infer T>
+						? T | undefined
+						: undefined
+				for (const pub of participant.audioTrackPublications.values()) {
+					if (pub.source === Track.Source.Microphone) {
+						micPublication = pub
+						break
+					}
+				}
+				let camPublication:
+					| ReturnType<typeof participant.videoTrackPublications.values> extends IterableIterator<infer T>
+						? T | undefined
+						: undefined
+				for (const pub of participant.videoTrackPublications.values()) {
+					if (pub.source === Track.Source.Camera) {
+						camPublication = pub
+						break
+					}
+				}
 				// Prefer live publication state for snappier icon updates after host/joinee actions.
 				const isMicOn =
 					participant.isMicrophoneEnabled ||

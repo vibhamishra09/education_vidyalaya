@@ -327,6 +327,7 @@ export default function RoomPage() {
 							setSessionData({
 								...data,
 								sessionType: 'studyRoom',
+								slug: (data.slug as string) || roomName,
 							})
 							setLoading(false)
 							return
@@ -338,6 +339,7 @@ export default function RoomPage() {
 						setSessionData({
 							...data,
 							sessionType: 'studyRoom',
+							slug: (data.slug as string) || roomName,
 						})
 						setLoading(false)
 						return
@@ -348,6 +350,7 @@ export default function RoomPage() {
 						setSessionData({
 							...data,
 							sessionType: 'studyRoom',
+							slug: (data.slug as string) || roomName,
 						})
 						setLoading(false)
 						return
