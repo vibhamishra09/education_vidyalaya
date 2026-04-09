@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { Navigation } from '@/components/layout/navigation';
 import { Footer } from '@/components/layout/footer';
 import { Button } from '@/components/ui/button';
@@ -29,6 +30,7 @@ import {
   Search,
   Loader2,
   Swords,
+  ArrowLeft,
   X,
 } from 'lucide-react';
 import { DebateRoomCard } from '@/components/cards/debate-room-card';
@@ -49,13 +51,14 @@ export default function DebateRoomsPage() {
 
   // Filters
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<DebateStatus | 'ALL'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'SCHEDULED' | 'LIVE'>('ALL');
   const [trendingOnly, setTrendingOnly] = useState(false);
   const [page, setPage] = useState(1);
 
   const filters: DebateRoomFilters = {
     search: search || undefined,
-    status: statusFilter !== 'ALL' ? statusFilter : undefined,
+    // Backend accepts one status; keep LIVE server-side and apply SCHEDULED client-side.
+    status: statusFilter === 'LIVE' ? DebateStatus.LIVE : undefined,
     page,
     limit: 12,
     trending: trendingOnly || undefined,
@@ -64,6 +67,30 @@ export default function DebateRoomsPage() {
 
   const { data, isLoading, error } = useDebateRooms(filters);
   const { data: currentUserData } = useCurrentUser();
+  const filteredDebateRooms = useMemo(() => {
+    const rooms = data?.debateRooms ?? [];
+    // Hide ended/cancelled rooms from listing; users inside a room can still
+    // see outcomes in-room without surfacing stale cards here.
+    const visibleRooms = rooms.filter(
+      (room) =>
+        room.status === DebateStatus.WAITING ||
+        room.status === DebateStatus.PREP ||
+        room.status === DebateStatus.LIVE,
+    );
+
+    if (statusFilter === 'SCHEDULED') {
+      return visibleRooms.filter(
+        (room) =>
+          room.status === DebateStatus.WAITING || room.status === DebateStatus.PREP,
+      );
+    }
+
+    if (statusFilter === 'LIVE') {
+      return visibleRooms.filter((room) => room.status === DebateStatus.LIVE);
+    }
+
+    return visibleRooms;
+  }, [data?.debateRooms, statusFilter]);
 
   useEffect(() => {
     setPage(1);
@@ -153,16 +180,23 @@ export default function DebateRoomsPage() {
     <div className="min-h-screen flex flex-col">
       <Navigation />
 
-      <main className="flex-1 container mx-auto px-4 py-8">
+      <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12 max-w-7xl">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-          <div>
-            <h1 className="text-3xl sm:text-4xl font-bold flex items-center gap-2">
-              <Swords className="h-8 w-8 text-primary" />
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+          <div className="space-y-3 w-full">
+            <Link
+              href="/dashboard"
+              className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium text-muted-foreground bg-muted/40 hover:bg-green-500/10 hover:text-green-700 transition-all group w-fit border border-transparent hover:border-green-500/20"
+            >
+              <ArrowLeft className="h-3.5 w-3.5 group-hover:-translate-x-0.5 transition-transform" />
+              Back to Dashboard
+            </Link>
+            <h1 className="text-3xl font-extrabold tracking-tight lg:text-4xl text-foreground flex items-center gap-2">
+              <Swords className="h-7 w-7 text-green-500" />
               Debate Rooms
             </h1>
-            <p className="text-sm sm:text-base text-muted-foreground mt-1">
-              Join structured debates and improve your argumentation skills
+            <p className="text-muted-foreground text-sm sm:text-base max-w-2xl leading-relaxed">
+              Discover peers, study rooms and debate rooms to learn and grow together
             </p>
           </div>
 
@@ -422,18 +456,15 @@ export default function DebateRoomsPage() {
           {/* Status Filter */}
           <Select
             value={statusFilter}
-            onValueChange={(v) => setStatusFilter(v as DebateStatus | 'ALL')}
+            onValueChange={(v) => setStatusFilter(v as 'ALL' | 'SCHEDULED' | 'LIVE')}
           >
             <SelectTrigger className="w-[180px] h-11 rounded-2xl border-muted bg-muted/20">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="ALL">Active debates</SelectItem>
-              <SelectItem value={DebateStatus.WAITING}>Waiting</SelectItem>
-              <SelectItem value={DebateStatus.PREP}>In Prep</SelectItem>
+              <SelectItem value="ALL">All debates</SelectItem>
+              <SelectItem value="SCHEDULED">Scheduled</SelectItem>
               <SelectItem value={DebateStatus.LIVE}>Live</SelectItem>
-              <SelectItem value={DebateStatus.ENDED}>Ended</SelectItem>
-              <SelectItem value={DebateStatus.CANCELLED}>Cancelled</SelectItem>
             </SelectContent>
           </Select>
 
@@ -498,7 +529,7 @@ export default function DebateRoomsPage() {
         {/* Debate Rooms Grid */}
         {data && !isLoading && (
           <>
-            {!data.debateRooms || data.debateRooms.length === 0 ? (
+            {filteredDebateRooms.length === 0 ? (
               <div className="py-10">
                 <div className="max-w-md mx-auto border rounded-xl bg-card p-6 shadow-sm text-center">
                   <Swords className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
@@ -519,7 +550,7 @@ export default function DebateRoomsPage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                {data.debateRooms.map((room) => (
+                {filteredDebateRooms.map((room) => (
                   <DebateRoomCard
                     key={room.id}
                     room={room}

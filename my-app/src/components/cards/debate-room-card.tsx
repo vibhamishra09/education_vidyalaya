@@ -154,6 +154,9 @@ export function DebateRoomCard({
     }
   };
 
+  // Keep card CTA theme-driven (avoid default blue button style unless explicitly requested).
+  const resolvedActionVariant: ButtonVariant = actionVariant ?? "ghost";
+
   return (
     <motion.div
       whileHover={{ y: -4, scale: 1.01 }}
@@ -235,7 +238,7 @@ export function DebateRoomCard({
 
           {/* Team Participant Counts */}
           <div className="flex items-center gap-3 pt-2">
-            <div className="flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400">
+            <div className="flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400">
               <Users className="h-3.5 w-3.5" />
               <span className="font-semibold">FOR: {forCount}</span>
             </div>
@@ -305,7 +308,7 @@ export function DebateRoomCard({
                 "h-9 pl-3 pr-4 text-xs font-bold rounded-full shadow-md transition-all",
                 actionVariant ? "" : theme.button
               )}
-              variant={actionVariant || "default"}
+              variant={resolvedActionVariant}
               onClick={handleDefaultAction}
               disabled={actionDisabled || actionLoading}
             >

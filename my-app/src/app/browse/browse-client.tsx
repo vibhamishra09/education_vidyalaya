@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useMemo, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Navigation } from "@/components/layout/navigation";
@@ -12,28 +12,43 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, X, Sparkles, ArrowLeft, Swords } from "lucide-react";
+import { Search, X, Sparkles, ArrowLeft, Swords, Users, GraduationCap, Plus, Loader2 } from "lucide-react";
 import { useBrowse, useBrowseRecommendations, usePeerMatches } from "@/hooks/use-browse";
+import { useDebateRooms, useCreateDebateRoom } from "@/hooks/use-debate-rooms";
 import { useSkills } from "@/hooks/use-skills";
 import { useCurrentUser } from "@/hooks/use-users";
+import { useToast } from "@/contexts/toast-context";
+import { DebateRoomCard } from "@/components/cards/debate-room-card";
 import {
   Skill,
   BrowseFilters,
   SessionStatus,
   type StudyRoomCard,
 } from "@/types/api.types";
+import { DebateStatus, type DebateRoomFilters } from "@/types/debate.types";
 import { useTabPersistence, useLocalStorage } from "@/hooks/use-local-storage";
 import { cn } from "@/lib/utils";
 import { studyRoomCardDisplayLive } from "@/lib/utils/study-room-edit";
 import { getStudyRoomPagePathWithJoinIntent } from "@/lib/utils/study-room-share";
 
-const BROWSE_TABS = ["peers", "studyRooms"] as const;
+const BROWSE_TABS = ["peers", "studyRooms", "debateRooms"] as const;
 type BrowseTab = typeof BROWSE_TABS[number];
 
 /** Default first page: trending / most-active lists (max 10 each). */
@@ -95,6 +110,7 @@ function studyRoomCardHost(room: {
 function BrowsePageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { showError, showSuccess } = useToast();
   // Persist active tab to localStorage
   const [activeTab, setActiveTab] = useTabPersistence<BrowseTab>(
     "browse_tab",
@@ -124,6 +140,12 @@ function BrowsePageContent() {
     "all" | SessionStatus.UPCOMING | SessionStatus.ONGOING
   >("all");
   const [studyFreeOnly, setStudyFreeOnly] = useState<"all" | "free">("all");
+  const [debateStatusFilter, setDebateStatusFilter] = useState<"ALL" | "SCHEDULED" | "LIVE">("ALL");
+  const [debateTrendingOnly, setDebateTrendingOnly] = useState(false);
+  const [debatePage, setDebatePage] = useState(1);
+  const [isCreateDebateOpen, setIsCreateDebateOpen] = useState(false);
+  const [newDebateTopic, setNewDebateTopic] = useState("");
+  const [newDebateDescription, setNewDebateDescription] = useState("");
 
   // Get current user for recommendations
   const { data: currentUserData } = useCurrentUser();
@@ -137,7 +159,7 @@ function BrowsePageContent() {
     }
 
     const tabParam = searchParams.get("tab");
-    if (tabParam === "peers" || tabParam === "studyRooms") {
+    if (tabParam === "peers" || tabParam === "studyRooms" || tabParam === "debateRooms") {
       setActiveTab(tabParam);
     }
     if (tabParam === "webinars") {
@@ -156,6 +178,9 @@ function BrowsePageContent() {
     studyRoomStatusFilter,
     studyFreeOnly,
   ]);
+  useEffect(() => {
+    setDebatePage(1);
+  }, [searchQuery, debateStatusFilter, debateTrendingOnly]);
 
   const isDefaultBrowseView =
     currentPage === 1 &&
@@ -163,7 +188,7 @@ function BrowsePageContent() {
     selectedSkills.length === 0;
 
   const browseFilters: BrowseFilters = {
-    tab: activeTab,
+    tab: activeTab === "debateRooms" ? "peers" : activeTab,
     page: currentPage,
     limit: isDefaultBrowseView ? BROWSE_DEFAULT_LIMIT : BROWSE_FILTERED_LIMIT,
   };
@@ -239,6 +264,59 @@ function BrowsePageContent() {
   const studyRooms = browseData?.studyRooms || [];
   const trendingStudyRooms = browseData?.trendingStudyRooms || [];
   const skills = skillsData?.skills || [];
+  const debateFilters: DebateRoomFilters = {
+    search: searchQuery.trim() || undefined,
+    status: debateStatusFilter === "LIVE" ? DebateStatus.LIVE : undefined,
+    page: debatePage,
+    limit: 12,
+    trending: debateTrendingOnly || undefined,
+    sort: debateTrendingOnly ? "hybrid" : "newest",
+  };
+  const { data: debateData, isLoading: debateLoading, error: debateError } = useDebateRooms(
+    activeTab === "debateRooms" ? debateFilters : undefined,
+  );
+  const createDebateRoom = useCreateDebateRoom();
+  const filteredDebateRooms = useMemo(() => {
+    const rooms = debateData?.debateRooms ?? [];
+    const visible = rooms.filter(
+      (room) =>
+        room.status === DebateStatus.WAITING ||
+        room.status === DebateStatus.PREP ||
+        room.status === DebateStatus.LIVE,
+    );
+    if (debateStatusFilter === "SCHEDULED") {
+      return visible.filter(
+        (room) =>
+          room.status === DebateStatus.WAITING || room.status === DebateStatus.PREP,
+      );
+    }
+    if (debateStatusFilter === "LIVE") {
+      return visible.filter((room) => room.status === DebateStatus.LIVE);
+    }
+    return visible;
+  }, [debateData?.debateRooms, debateStatusFilter]);
+
+  const handleCreateDebate = async () => {
+    const topic = newDebateTopic.trim();
+    if (!topic) {
+      showError("Validation Error", "Debate topic is required.");
+      return;
+    }
+    try {
+      const created = await createDebateRoom.mutateAsync({
+        topic,
+        description: newDebateDescription.trim() || undefined,
+        debateDurationMinutes: 60,
+      });
+      showSuccess("Debate Created", "Your debate room has been created.");
+      setIsCreateDebateOpen(false);
+      setNewDebateTopic("");
+      setNewDebateDescription("");
+      router.push(`/debateroom/${created.id}`);
+    } catch {
+      showError("Error", "Failed to create debate room. Please try again.");
+    }
+  };
 
   // Fetch recommendations based on user's "want to learn" skills
   const { data: recommendationsData, isLoading: recommendationsLoading } = useBrowseRecommendations(
@@ -254,10 +332,22 @@ function BrowsePageContent() {
   
   const recommendedPeers = peerMatchesData?.matches || recommendationsData?.peers || [];
   const recommendedRooms = recommendationsData?.studyRooms || [];
-  
-  const isRecLoading = activeTab === "peers" ? peerMatchesLoading : recommendationsLoading;
-  const hasRecommendations = (activeTab === "peers" ? recommendedPeers.length > 0 : recommendedRooms.length > 0);
-  const showRecommendations = hasRecommendations && !searchQuery && selectedSkills.length === 0;
+
+  const isRecommendationsTab =
+    activeTab === "peers" || activeTab === "studyRooms";
+  const isRecLoading =
+    activeTab === "peers" ? peerMatchesLoading : recommendationsLoading;
+  const hasRecommendations =
+    activeTab === "peers"
+      ? recommendedPeers.length > 0
+      : activeTab === "studyRooms"
+        ? recommendedRooms.length > 0
+        : false;
+  const showRecommendations =
+    isRecommendationsTab &&
+    hasRecommendations &&
+    !searchQuery &&
+    selectedSkills.length === 0;
 
   const handleRoomAction = (room: { slug?: string; id: string }) => {
     router.push(getStudyRoomPagePathWithJoinIntent(room.slug || room.id));
@@ -282,7 +372,7 @@ function BrowsePageContent() {
                  Browse Community
               </h1>
               <p className="text-muted-foreground text-sm sm:text-base max-w-2xl leading-relaxed">
-                Discover peers and study rooms to learn and grow together
+                Discover peers, study rooms, and debate rooms to learn and grow together
               </p>
             </div>
           </div>
@@ -384,18 +474,19 @@ function BrowsePageContent() {
                 />
             </div>
             
-            {/* Tabs — height matches Debate Rooms (h-11); flex-1 on search */}
-             <div className="grid grid-cols-2 h-11 items-center justify-center shrink-0 rounded-2xl bg-muted p-1 text-muted-foreground w-full md:w-auto md:max-w-[min(100%,360px)] border border-border/10 gap-0.5">
+            {/* Tabs + Debate CTA in one segmented control */}
+             <div className="grid grid-cols-3 h-11 items-center justify-center shrink-0 rounded-2xl bg-muted p-1 text-muted-foreground w-full md:max-w-[560px] border border-border/10 gap-0.5">
                 <button
                 type="button"
                 className={cn(
-                    "inline-flex items-center justify-center whitespace-nowrap rounded-xl px-3 sm:px-5 py-1.5 text-xs sm:text-sm font-bold ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 gap-1.5",
+                    "inline-flex min-w-0 items-center justify-center whitespace-nowrap rounded-xl px-2.5 sm:px-4 py-1.5 text-xs sm:text-sm font-bold ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 gap-1.5",
                     activeTab === "peers" 
                     ? "bg-emerald-600 text-white shadow-md shadow-emerald-900/20" 
                     : "hover:bg-background/60 hover:text-foreground"
                 )}
                 onClick={() => setActiveTab("peers")}
                 >
+                <Users className="h-4 w-4 shrink-0" />
                 <span>Peers</span>
                 {(searchQuery || selectedSkills.length > 0) && peerCount > 0 && (
                     <Badge variant="secondary" className={cn("text-[10px] h-5 px-1.5 min-w-5", activeTab === "peers" ? "bg-white/20 text-white" : "bg-emerald-100 text-emerald-700")}>
@@ -406,13 +497,14 @@ function BrowsePageContent() {
                 <button
                 type="button"
                 className={cn(
-                    "inline-flex items-center justify-center whitespace-nowrap rounded-xl px-3 sm:px-5 py-1.5 text-xs sm:text-sm font-bold ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 gap-1.5",
+                    "inline-flex min-w-0 items-center justify-center whitespace-nowrap rounded-xl px-2.5 sm:px-4 py-1.5 text-xs sm:text-sm font-bold ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 gap-1.5",
                     activeTab === "studyRooms" 
                     ? "bg-emerald-600 text-white shadow-md shadow-emerald-900/20" 
                     : "hover:bg-background/60 hover:text-foreground"
                 )}
                 onClick={() => setActiveTab("studyRooms")}
                 >
+                <GraduationCap className="h-4 w-4 shrink-0" />
                 <span className="hidden sm:inline">Study Rooms</span>
                 <span className="sm:hidden">Study</span>
                 {(searchQuery || selectedSkills.length > 0) && studyRoomCount > 0 && (
@@ -421,18 +513,20 @@ function BrowsePageContent() {
                     </Badge>
                 )}
                 </button>
-            </div>
-            
-            <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto shrink-0">
-            <Link href="/debateroom" className="w-full sm:w-auto">
-              <Button 
-                variant="outline" 
-                className="h-11 w-full rounded-2xl border-muted bg-muted/20 hover:bg-muted/40 text-sm font-semibold"
-              >
-                <Swords className="h-4 w-4 mr-2" />
-                Debate Rooms
-              </Button>
-            </Link>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("debateRooms")}
+                  className={cn(
+                    "inline-flex min-w-0 items-center justify-center whitespace-nowrap rounded-xl px-2.5 sm:px-4 py-1.5 text-xs sm:text-sm font-bold ring-offset-background transition-all gap-1.5",
+                    activeTab === "debateRooms"
+                      ? "bg-emerald-600 text-white shadow-md shadow-emerald-900/20"
+                      : "hover:bg-background/60 hover:text-foreground",
+                  )}
+                >
+                  <Swords className="h-4 w-4 shrink-0" />
+                  <span className="hidden sm:inline">Debate Rooms</span>
+                  <span className="sm:hidden">Debate</span>
+                </button>
             </div>
         </div>
 
@@ -488,8 +582,95 @@ function BrowsePageContent() {
                 </Select>
               </>
             )}
+            {activeTab === "debateRooms" && (
+              <>
+                <Select
+                  value={debateStatusFilter}
+                  onValueChange={(value) =>
+                    setDebateStatusFilter(value as "ALL" | "SCHEDULED" | "LIVE")
+                  }
+                >
+                  <SelectTrigger className="w-[200px] h-9 rounded-xl border-muted bg-muted/20">
+                    <SelectValue placeholder="Debate status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">All debates</SelectItem>
+                    <SelectItem value="SCHEDULED">Scheduled</SelectItem>
+                    <SelectItem value="LIVE">Live</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-9 rounded-xl border-muted bg-muted/20 hover:bg-muted/40 text-sm font-semibold"
+                  onClick={() => setDebateTrendingOnly((prev) => !prev)}
+                >
+                  Trending: {debateTrendingOnly ? "On" : "Off"}
+                </Button>
+                <Dialog open={isCreateDebateOpen} onOpenChange={setIsCreateDebateOpen}>
+                  <DialogTrigger asChild>
+                    <Button className="h-9 rounded-xl bg-green-500/10 text-green-700 hover:bg-green-500/20 border border-green-500/20 shadow-sm">
+                      <Plus className="h-4 w-4 mr-1.5" />
+                      Create Debate
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-[460px]">
+                    <DialogHeader>
+                      <DialogTitle>Create Debate Room</DialogTitle>
+                      <DialogDescription>
+                        Add a topic and start a new debate.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-3 py-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="browse-debate-topic">Topic *</Label>
+                        <Input
+                          id="browse-debate-topic"
+                          value={newDebateTopic}
+                          onChange={(e) => setNewDebateTopic(e.target.value)}
+                          placeholder="e.g., Is AI good for education?"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="browse-debate-desc">Description</Label>
+                        <Textarea
+                          id="browse-debate-desc"
+                          value={newDebateDescription}
+                          onChange={(e) => setNewDebateDescription(e.target.value)}
+                          placeholder="Optional context..."
+                          rows={3}
+                        />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button
+                        variant="outline"
+                        onClick={() => setIsCreateDebateOpen(false)}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={handleCreateDebate}
+                        disabled={createDebateRoom.isPending}
+                        className="bg-green-600 hover:bg-green-700 text-white"
+                      >
+                        {createDebateRoom.isPending ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Creating...
+                          </>
+                        ) : (
+                          "Create Debate"
+                        )}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </>
+            )}
           </div>
 
+          {activeTab !== "debateRooms" && (
           <div className="flex flex-wrap gap-2 mb-4">
             {skillsLoading ? (
               Array.from({ length: 6 }).map((_, index) => (
@@ -513,8 +694,9 @@ function BrowsePageContent() {
               ))
             )}
           </div>
+          )}
 
-          {selectedSkills.length > 0 && (
+          {activeTab !== "debateRooms" && selectedSkills.length > 0 && (
             <div className="flex flex-wrap gap-2 items-center">
               <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mr-2">
                 Active:
@@ -765,6 +947,52 @@ function BrowsePageContent() {
                             </div>
                           )}
                       </>
+                    )}
+                  </>
+                )}
+                {activeTab === "debateRooms" && (
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                      {filteredDebateRooms.map((room) => (
+                        <DebateRoomCard
+                          key={room.id}
+                          room={room}
+                          currentUserId={currentUserData?.user?.id ?? null}
+                        />
+                      ))}
+                      {filteredDebateRooms.length === 0 && !debateLoading && !debateError && (
+                        <div className="col-span-full text-center py-12 text-muted-foreground text-sm sm:text-base">
+                          No active debates found for selected filters
+                        </div>
+                      )}
+                    </div>
+                    {debateError && (
+                      <div className="text-center py-8 text-muted-foreground text-sm sm:text-base">
+                        Failed to load debates. Please try again.
+                      </div>
+                    )}
+                    {debateData?.totalPages && debateData.totalPages > 1 && (
+                      <div className="mt-6 flex justify-center">
+                        <div className="flex items-center gap-2">
+                          <Button
+                            onClick={() => setDebatePage((p) => Math.max(1, p - 1))}
+                            disabled={debatePage === 1 || debateLoading}
+                            variant="outline"
+                          >
+                            Previous
+                          </Button>
+                          <span className="text-sm text-muted-foreground px-2">
+                            Page {debateData.page} of {debateData.totalPages}
+                          </span>
+                          <Button
+                            onClick={() => setDebatePage((p) => p + 1)}
+                            disabled={debatePage >= debateData.totalPages || debateLoading}
+                            variant="outline"
+                          >
+                            Next
+                          </Button>
+                        </div>
+                      </div>
                     )}
                   </>
                 )}
