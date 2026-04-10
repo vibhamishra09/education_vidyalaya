@@ -35,8 +35,6 @@ logs/joinee-flow.txt
 
 # Next.js app dev logs (e.g. chat-flow via /api/dev/chat-flow-log; cwd = my-app/)
 my-app/logs/
-my-app/src/app/api/dev/joinee-flow-log/
-my-app/src/lib/joinee-flow-log.ts
 
 
 # OS files
