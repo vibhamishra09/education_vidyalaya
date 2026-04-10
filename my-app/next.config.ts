@@ -70,21 +70,21 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: nextAppRoot,
   },
-  async redirects() {
-    return [
-      // Backward-compatible room URLs.
-      {
-        source: "/studyroom/:room*",
-        destination: "/rooms/studyroom/:room*",
-        permanent: false,
-      },
-      {
-        source: "/peersession/:room*",
-        destination: "/rooms/peersession/:room*",
-        permanent: false,
-      },
-    ];
-  },
+  // async redirects() {
+  //   return [
+  //     // Backward-compatible room URLs.
+  //     {
+  //       source: "/studyroom/:room*",
+  //       destination: "/rooms/studyroom/:room*",
+  //       permanent: false,
+  //     },
+  //     {
+  //       source: "/peersession/:room*",
+  //       destination: "/rooms/peersession/:room*",
+  //       permanent: false,
+  //     },
+  //   ];
+  // },
   /**
    * Forward /api/* to Nest so browser calls like PATCH /api/peer-sessions/:id work when
    * NEXT_PUBLIC_API_URL is empty or matches the site origin (same-origin + Bearer token).
