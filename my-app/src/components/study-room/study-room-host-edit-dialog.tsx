@@ -94,6 +94,8 @@ export function StudyRoomHostEditDialog({
   const formSyncedForRoomIdRef = useRef<string | null>(null);
   /** Last server `initialDescription` we applied to the textarea (for merge-only updates). */
   const prevInitialDescriptionRef = useRef<string | undefined>(undefined);
+  const [dateChanged, setDateChanged] = useState(false);
+  const [timeChanged, setTimeChanged] = useState(false);
 
   useEffect(() => {
     if (!open) {
@@ -131,6 +133,8 @@ export function StudyRoomHostEditDialog({
     setPendingFile(null);
     setRemovedImage(false);
     setTitleError("");
+    setDateChanged(false);
+    setTimeChanged(false);
   }, [
     open,
     roomId,
@@ -211,14 +215,18 @@ export function StudyRoomHostEditDialog({
         title: trimmed,
         // Always send so PATCH clears DB when user empties optional description (omit was skipping update)
         description: description.trim(),
-        date,
-        time,
-        timezone,
         duration: parseInt(duration, 10) || initialDuration,
         maxParticipants: parseInt(maxParticipants, 10) || initialMaxParticipants,
         joiningFee: joiningFeeParsed,
         skills,
       };
+      if (dateChanged) payload.date = date;
+      if (timeChanged) payload.time = time;
+
+      // ONLY send timezone if either changed
+      if (dateChanged || timeChanged) {
+        payload.timezone = timezone;
+      }
       if (pendingFile) {
         payload.imageUrl = uploadedUrl;
       } else if (removedImage) {
@@ -231,8 +239,23 @@ export function StudyRoomHostEditDialog({
       await updateStudyRoom.mutateAsync(payload);
       showSuccess("Updated", "Study room details saved.");
       onOpenChange(false);
-    } catch {
-      showError("Update failed", "Could not save study room details.");
+    } catch (error: unknown) {
+      let message = "Could not save study room details.";
+      console.log(error);
+      onOpenChange(false)
+      if (
+        error &&
+        typeof error === "object" &&
+        "statusCode" in error
+        ) {
+          const e = error as {statusCode: number, message: string}
+          if(e.statusCode != 500){
+            showError("Failed", e.message)
+          }
+          return
+      }
+
+      showError("Update failed", message);
     } finally {
       setUploadingImage(false);
     }
@@ -377,7 +400,10 @@ export function StudyRoomHostEditDialog({
                 id="host-edit-date"
                 type="date"
                 value={date}
-                onChange={(e) => setDate(e.target.value)}
+                onChange={(e) => {
+                  setDate(e.target.value) 
+                  setDateChanged(true);
+                }}
               />
             </div>
             <div className="space-y-2">
@@ -386,7 +412,10 @@ export function StudyRoomHostEditDialog({
                 id="host-edit-time"
                 type="time"
                 value={time}
-                onChange={(e) => setTime(e.target.value)}
+                onChange={(e) => {
+                  setTime(e.target.value) 
+                  setTimeChanged(true);
+                }}
               />
             </div>
           </div>

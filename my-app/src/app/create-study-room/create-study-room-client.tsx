@@ -240,7 +240,6 @@ export function CreateStudyRoomClient() {
         ...prev,
         date: now.toISOString().split("T")[0],
         time: now.toTimeString().slice(0, 5),
-        recurrenceEnabled: false,
       }));
     }
   }, [isInstantRoom, setFormData]);
@@ -485,8 +484,6 @@ export function CreateStudyRoomClient() {
 
     const isRecurring = !isInstantRoom && formData.recurrenceEnabled;
 
-    console.log("MUTATION :: ", isRecurring);
-    
     const mutation = isRecurring ? createRecurringRoomMutation : createStudyRoomMutation;    
 
     mutation.mutate(createData, {
