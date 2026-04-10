@@ -15,7 +15,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { ClerkAuthGuard } from '../common/guards/clerk-auth.guard';
 import { OptionalClerkAuthGuard } from '../common/guards/optional-clerk-auth.guard';
 import { UsersService } from './users.service';
-import { UpdateUserDto } from './dto/user.dto';
+import { UpdateUserDto, OnboardingDto } from './dto/user.dto';
 
 @Controller('api')
 export class UsersController {
@@ -112,5 +112,15 @@ export class UsersController {
       clerkUserId || dbUserId || '',
       userId,
     );
+  }
+
+  @Post('users/onboarding')
+  @UseGuards(ClerkAuthGuard)
+  async onboardUser(
+    @CurrentUser('clerkId') clerkUserId: string,
+    @Body() onboardingDto: OnboardingDto,
+  ) {
+    this.logger.log(`Onboarding user ${clerkUserId}`);
+    return this.usersService.onboardUser(clerkUserId, onboardingDto);
   }
 }

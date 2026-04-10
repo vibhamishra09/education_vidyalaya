@@ -26,8 +26,16 @@ import {
 	chatFlowShortId,
 	isChatFlowFileEnabled,
 } from '@/lib/chat-flow-log'
+import {
+	isJoineeFlowFileEnabled,
+	joineeFlowLog,
+	shouldTraceJoinee,
+} from '@/lib/joinee-flow-log'
 
 type Message = ChatMessageRow
+
+/** Slow networks / tab backgrounding: allow longer before showing fatal chat banner */
+const CHAT_CONNECT_WATCHDOG_MS = 40_000
 
 const channelMessageCache = new Map<string, Message[]>()
 
@@ -73,11 +81,22 @@ export function ChatWidget({
 	const { getToken } = useAuth()
 	const userId = user?.id
 	/**
-	 * If the URL includes a guest join token, always use guest chat (socket + history).
-	 * Otherwise a signed-in joinee would connect as their Clerk user while the API still
-	 * resolved guest email from the token — mismatched rooms/history vs host EVERYONE broadcasts.
+	 * When the room URL includes `guestAccessToken`, chat must use the **guest** Socket.IO path
+	 * (same identity as LiveKit + Redis moderation). Using Clerk here while the join link is
+	 * guest-based breaks permissions, join:channel, and sends — socket stays disconnected.
+	 * Signed-in users with a guest link still authenticate chat with the guest token.
 	 */
 	const isGuestMode = Boolean(guestToken?.trim())
+	const logJoinee = (step: string, detail?: Record<string, unknown>) => {
+		if (!isJoineeFlowFileEnabled() || !shouldTraceJoinee(isGuestMode, viewerSessionRole)) {
+			return
+		}
+		joineeFlowLog(step, {
+			...detail,
+			authPath: isGuestMode ? 'guest_token' : 'signed_in_joinee',
+			viewerSessionRole,
+		})
+	}
 	/** Keep socket effect from re-running on every parent render (was reconnecting constantly → missed message:new). */
 	const getTokenRef = useRef(getToken)
 	getTokenRef.current = getToken
@@ -169,6 +188,10 @@ export function ChatWidget({
 		const cached = channelMessageCache.get(channelId) || []
 		return cached.map(normalizeChatMessage)
 	})
+	const messageCountRef = useRef(0)
+	useEffect(() => {
+		messageCountRef.current = messages.length
+	}, [messages.length])
 	const socketRef = useRef<Socket | null>(null)
 	const [error, setError] = useState<string | null>(null)
 	const [isConnecting, setIsConnecting] = useState(false)
@@ -288,6 +311,11 @@ export function ChatWidget({
 					guestMode: isGuestMode,
 					viewerSessionRole: isGuestMode ? 'guest' : viewerSessionRole,
 				})
+				logJoinee('joinee:history_request', {
+					channelId: chatFlowShortId(activeChannelId),
+					hasGuestEmail: Boolean(guestEmail?.trim()),
+					hasGuestToken: Boolean(guestToken?.trim()),
+				})
 				const params: Record<string, string | number> = { limit: 200 }
 				if (isGuestMode) {
 					params.includeMeta = '1'
@@ -341,6 +369,10 @@ export function ChatWidget({
 					count: historyMessages.length,
 					viewerSessionRole: isGuestMode ? 'guest' : viewerSessionRole,
 				})
+				logJoinee('joinee:history_loaded', {
+					channelId: chatFlowShortId(activeChannelId),
+					count: historyMessages.length,
+				})
 			} catch (e: unknown) {
 				if (!mounted || channelIdRef.current !== activeChannelId) return
 				const errorMessage = e instanceof Error ? e.message : 'Failed to load messages'
@@ -348,6 +380,7 @@ export function ChatWidget({
 					error: errorMessage,
 					viewerSessionRole: isGuestMode ? 'guest' : viewerSessionRole,
 				})
+				logJoinee('joinee:history_error', { error: errorMessage })
 				console.error('Failed to load chat history:', errorMessage)
 				// Do not set the red banner — history is best-effort; socket may still work.
 			}
@@ -358,8 +391,11 @@ export function ChatWidget({
 		}
 	}, [channelId, isGuestMode, guestEmail, guestToken, viewerSessionRole])
 
+	// Guest links: do not require Clerk `isLoaded` — joinee may be signed out or Clerk slow.
 	useEffect(() => {
-		if (!channelId || !isLoaded || (!userId && !isGuestMode)) {
+		const guestReady = isGuestMode && Boolean(guestToken?.trim())
+		const signedInReady = !isGuestMode && isLoaded && Boolean(userId)
+		if (!channelId || (!guestReady && !signedInReady)) {
 			if (socketRef.current) {
 				socketRef.current.disconnect()
 				socketRef.current = null
@@ -382,6 +418,10 @@ export function ChatWidget({
 					token = (await getTokenRef.current()) ?? null
 				}
 				if (!token) {
+					logJoinee('joinee:socket_no_token', {
+						isGuestMode,
+						clerkLoaded: isLoaded,
+					})
 					if (isMounted) {
 						setError('Authentication required')
 						setIsConnecting(false)
@@ -399,8 +439,13 @@ export function ChatWidget({
 					role: isGuestMode ? 'guest' : 'signed-in',
 					viewerSessionRole: viewerSessionRoleRef.current,
 				})
+				logJoinee('joinee:socket_prepare', {
+					socketIoBaseUrl: url,
+					channelId: chatFlowShortId(activeChannelId),
+					tokenLen: typeof token === 'string' ? token.length : 0,
+				})
 
-				const s = io(url, {
+				const s = io(`${url}/chat`, {
 					transports: ['websocket', 'polling'],
 					auth: { token },
 					reconnection: true,
@@ -424,6 +469,9 @@ export function ChatWidget({
 					if (joinedForCurrentSocket) return
 					joinedForCurrentSocket = true
 					chatFlowLog('socket:emit_join_channel', {
+						channelId: chatFlowShortId(activeChannelId),
+					})
+					logJoinee('joinee:socket_emit_join_channel', {
 						channelId: chatFlowShortId(activeChannelId),
 					})
 					s.emit('join:channel', { channelId: activeChannelId })
@@ -450,6 +498,10 @@ export function ChatWidget({
 					chatFlowLog('socket:transport_connected', {
 						channelId: chatFlowShortId(activeChannelId),
 					})
+					if (connectWatchdog) {
+						clearTimeout(connectWatchdog)
+						connectWatchdog = null
+					}
 					connectErrorCount = 0
 					joinedForCurrentSocket = false
 					if (isMounted && channelIdRef.current === activeChannelId) {
@@ -558,6 +610,11 @@ export function ChatWidget({
 						attempt: connectErrorCount,
 						message: err.message,
 					})
+					logJoinee('joinee:socket_connect_error', {
+						attempt: connectErrorCount,
+						message: err.message,
+						name: err.name,
+					})
 
 					const looksLikeAuthFailure =
 						/401|403|unauthorized|forbidden/i.test(err.message) ||
@@ -582,6 +639,11 @@ export function ChatWidget({
 						setError(null)
 					}
 					if (isMounted && channelIdRef.current === activeChannelId && connectErrorCount >= 4) {
+						logJoinee('joinee:socket_connect_error_fatal', {
+							attempt: connectErrorCount,
+							message: err.message,
+							ui: 'banner_guest_or_signed_in',
+						})
 						setIsConnecting(false)
 						setError(
 							isGuestMode
@@ -593,6 +655,9 @@ export function ChatWidget({
 
 				s.io.on('reconnect_failed', () => {
 					if (!isMounted || channelIdRef.current !== activeChannelId) return
+					logJoinee('joinee:socket_reconnect_failed', {
+						channelId: chatFlowShortId(activeChannelId),
+					})
 					setIsConnecting(false)
 					setError(
 						isGuestMode
@@ -611,6 +676,10 @@ export function ChatWidget({
 
 					if (hasErrorInfo) {
 						chatFlowLog('socket:chat_error', {
+							code: errorData.code,
+							message: errorData.message || errorData.error,
+						})
+						logJoinee('joinee:socket_chat_error', {
 							code: errorData.code,
 							message: errorData.message || errorData.error,
 						})
@@ -672,6 +741,9 @@ export function ChatWidget({
 						syncNote:
 							'Transport reconnected — re-emit join:channel if server did not re-authenticate yet',
 					})
+					logJoinee('joinee:socket_reconnected', {
+						channelId: chatFlowShortId(activeChannelId),
+					})
 					connectErrorCount = 0
 					joinedForCurrentSocket = false
 					window.setTimeout(() => {
@@ -686,19 +758,30 @@ export function ChatWidget({
 				s.connect()
 				connectWatchdog = setTimeout(() => {
 					if (!isMounted || channelIdRef.current !== activeChannelId) return
-					if (!s.connected) {
+					if (s.connected) return
+					// REST history can work while Socket.IO is still handshaking — do not show red error if messages already loaded.
+					if (messageCountRef.current > 0) {
 						setIsConnecting(false)
-						setError(
-							isGuestMode
-								? 'Chat is taking too long to connect. Please refresh this page.'
-								: 'Chat is taking too long to connect. Please refresh and try again.',
-						)
+						setError(null)
+						return
 					}
-				}, 15000)
+					logJoinee('joinee:socket_watchdog_timeout', {
+						ms: CHAT_CONNECT_WATCHDOG_MS,
+						connected: s.connected,
+						channelId: chatFlowShortId(activeChannelId),
+					})
+					setIsConnecting(false)
+					setError(
+						isGuestMode
+							? 'Chat is taking too long to connect. Please refresh this page.'
+							: 'Chat is taking too long to connect. Please refresh and try again.',
+					)
+				}, CHAT_CONNECT_WATCHDOG_MS)
 			} catch (err: unknown) {
 				console.error('[Chat] Failed to connect socket:', err)
+				const errorMessage = err instanceof Error ? err.message : 'Failed to connect'
+				logJoinee('joinee:socket_connect_exception', { message: errorMessage })
 				if (isMounted) {
-					const errorMessage = err instanceof Error ? err.message : 'Failed to connect'
 					setError(errorMessage)
 					setIsConnecting(false)
 				}
@@ -732,7 +815,7 @@ export function ChatWidget({
 		)
 	}
 
-	if (!isLoaded) {
+	if (!isLoaded && !isGuestMode) {
 		return (
 			<div className={`p-4 border rounded ${className}`}>
 				<p className="text-muted-foreground text-sm">Loading chat...</p>
@@ -777,6 +860,11 @@ export function ChatWidget({
 			preview: trimmed.slice(0, 80),
 			...(isChatFlowFileEnabled() ? { content: trimmed } : {}),
 		})
+		logJoinee('joinee:message_outbound_prepare', {
+			channelId: chatFlowShortId(channelId),
+			audienceType,
+			socketConnected: s.connected,
+		})
 
 		// Resolve DB user id from props/refs only — do not await before socket emit (was delaying host↔joinee sync by seconds).
 		let sid =
@@ -797,6 +885,10 @@ export function ChatWidget({
 			viewerSessionRole: isGuestMode ? 'guest' : viewerSessionRole,
 			syncNote:
 				'Socket emitted message:send immediately — other clients should get message:new without waiting for /api/users/me',
+		})
+		logJoinee('joinee:message_emit_message_send', {
+			channelId: chatFlowShortId(channelId),
+			audienceType,
 		})
 
 		if (!isGuestMode && !sid) {
@@ -821,10 +913,8 @@ export function ChatWidget({
 		if (sid) viewerDbUserIdRef.current = sid
 
 		// Signed-in without a DB user id: skip optimistic row so we never show two lines (placeholder + echo).
-		// Signed-in joinee: no optimistic row — only server echo (avoids Clerk name vs DB name duplicate).
-		const canUseOptimistic =
-			(isGuestMode || (!!sid && sid.trim() !== '')) &&
-			!(viewerSessionRole === 'joinee' && !isGuestMode)
+		// Joinee (signed-in or guest): same optimistic path as host when we have a stable sender key.
+		const canUseOptimistic = isGuestMode || (!!sid && sid.trim() !== '')
 
 		if (canUseOptimistic) {
 			const optimisticId = `optimistic-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`}`

@@ -144,4 +144,11 @@ export class LivekitService {
 
     return await this.egressClient.stopEgress(egressId);
   }
+
+  async removeParticipant(roomName: string, identity: string): Promise<void> {
+    if (!this.roomService) {
+      throw new InternalServerErrorException('RoomServiceClient is not initialized');
+    }
+    await this.roomService.removeParticipant(roomName, identity);
+  }
 }

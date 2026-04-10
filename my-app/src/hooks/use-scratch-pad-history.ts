@@ -2,7 +2,8 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@clerk/nextjs';
 import axios from 'axios';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+// Using relative path to leverage Next.js rewrites for stability
+const API_URL = ''; 
 
 export interface ScratchPadMetadata {
   roomId: string;

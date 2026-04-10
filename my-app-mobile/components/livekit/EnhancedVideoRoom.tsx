@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Platform, Dimensions, SafeAreaView, StatusBar as RNStatusBar, Modal, Alert, Image, Animated, TouchableWithoutFeedback } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Platform, Dimensions, StatusBar as RNStatusBar, Modal, Alert, Image, Animated, TouchableWithoutFeedback } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { 
   Mic, MicOff, Video as VideoIcon, VideoOff, PhoneOff, 
   MessageSquare, Users, MoreVertical, X, Settings2, 
@@ -7,18 +8,40 @@ import {
   LayoutGrid, Presentation, Pin, PinOff, Timer, Power, LogOut, ChevronUp, User, Lock, Check, ChevronLeft, ChevronRight, Grid2X2
 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
-// import { LinearGradient } from 'expo-linear-gradient'; 
+import { 
+  LiveKitRoom, 
+  useParticipants,
+  useLocalParticipant,
+  useTracks,
+  useSpeakingParticipants,
+  VideoTrack,
+  AudioSession,
+} from '@livekit/react-native';
+import { 
+  Track, 
+  RoomOptions, 
+  VideoPresets, 
+  Participant,
+  TrackPublication,
+  LocalParticipant,
+  RemoteParticipant,
+  RoomEvent,
+} from 'livekit-client';
 import { useSessionTimer } from '../../hooks/use-session-timer';
 import { MobileChatSheet } from './MobileChatSheet';
 import { MobileParticipantSheet } from './MobileParticipantSheet';
 import { ShareSheet } from '../ui/share-sheet';
 import clsx from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import * as ExpoKeepAwake from 'expo-keep-awake';
 
 // Helper for tailwind classes
 function cn(...inputs: (string | undefined | null | false)[]) {
   return twMerge(clsx(inputs));
 }
+
+// WebRTC availability check
+const isWebRTCAvailable = !!(Platform.OS === 'web' || (typeof global !== 'undefined' && (global as any).RTCPeerConnection));
 
 // Mock types
 interface ChatIdentity {
@@ -62,26 +85,22 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 // ----------------------------------------------------------------------
 
 const ParticipantTile = ({ 
-    name, 
-    isSpeaking, 
-    isLocal, 
-    isMicOn, 
-    isCamOn, 
-    avatarUrl,
+    participant,
     onPin,
     isPinned,
     variant = 'grid' // 'grid' | 'focus-main' | 'focus-thumb'
 }: { 
-    name: string; 
-    isSpeaking: boolean; 
-    isLocal: boolean;
-    isMicOn: boolean;
-    isCamOn: boolean;
-    avatarUrl?: string | null;
+    participant: Participant;
     onPin?: () => void;
     isPinned?: boolean;
     variant?: 'grid' | 'focus-main' | 'focus-thumb';
 }) => {
+    const isSpeaking = participant.isSpeaking;
+    const isLocal = participant instanceof LocalParticipant;
+    const isMicOn = participant.isMicrophoneEnabled;
+    const isCamOn = participant.isCameraEnabled;
+    const name = participant.identity || participant.name || 'Unknown';
+    const avatarUrl = null; // Can be extracted from metadata if available
     // Dynamic border color based on speaking/pinned
     const borderColor = isSpeaking ? 'border-[#00DC6E]' : isPinned ? 'border-blue-500' : 'border-transparent';
     const borderWidth = isSpeaking || isPinned ? 'border-2' : 'border-0';
@@ -101,9 +120,18 @@ const ParticipantTile = ({
             "flex-1 w-full h-full"
         )}
       >
-        {/* Background / Avatar */}
+        {/* Background / Avatar or Real Video */}
         <View className="absolute inset-0 bg-[#252525] items-center justify-center">
-            {avatarUrl ? (
+            {isCamOn && participant.getTrackPublication(Track.Source.Camera) ? (
+                <VideoTrack 
+                    trackRef={{
+                        participant,
+                        source: Track.Source.Camera,
+                        publication: participant.getTrackPublication(Track.Source.Camera)!
+                    }} 
+                    style={{ width: '100%', height: '100%' }}
+                />
+            ) : avatarUrl ? (
                  <Image source={{ uri: avatarUrl }} className={`${avatarSize} rounded-full`} />
             ) : (
                  <View className={`${avatarSize} rounded-full bg-[#3a3a3a] items-center justify-center shadow-lg`}>
@@ -168,11 +196,19 @@ const ParticipantTile = ({
 };
 
 // Layout Components
-const GridLayout = ({ participants, pinnedId, onPin }: { participants: any[], pinnedId: string | null, onPin: (id: string) => void }) => {
+const GridLayout = ({ 
+    participants, 
+    pinnedId, 
+    onPin 
+}: { 
+    participants: Participant[], 
+    pinnedId: string | null, 
+    onPin: (id: string) => void 
+}) => {
     const count = participants.length;
     
     // Calculate dimensions
-    const getStyles = (index: number) => {
+    const getStyles = (index: number): any => {
         if (count === 1) return { width: '100%', height: '100%' };
         if (count === 2) return { width: '100%', height: '48%', marginBottom: index === 0 ? '4%' : 0 };
         if (count <= 4) return { width: '48%', height: '48%', marginBottom: index < 2 ? '4%' : 0, marginRight: index % 2 === 0 ? '4%' : 0 };
@@ -182,15 +218,11 @@ const GridLayout = ({ participants, pinnedId, onPin }: { participants: any[], pi
     return (
         <View className="flex-1 w-full p-2 flex-row flex-wrap justify-center content-center">
             {participants.map((p, index) => (
-                <View key={p.id} style={getStyles(index)}>
+                <View key={p.sid} style={getStyles(index)}>
                     <ParticipantTile 
-                        name={p.name}
-                        isSpeaking={p.isSpeaking}
-                        isLocal={p.isLocal}
-                        isMicOn={p.isMicOn}
-                        isCamOn={p.isCamOn}
-                        isPinned={pinnedId === p.id}
-                        onPin={() => onPin(p.id)}
+                        participant={p}
+                        isPinned={pinnedId === p.sid}
+                        onPin={() => onPin(p.sid)}
                         variant="grid"
                     />
                 </View>
@@ -200,14 +232,22 @@ const GridLayout = ({ participants, pinnedId, onPin }: { participants: any[], pi
 };
 
 // Focus Layout
-const FocusLayout = ({ participants, pinnedId, onPin }: { participants: any[], pinnedId: string | null, onPin: (id: string) => void }) => {
+const FocusLayout = ({ 
+    participants, 
+    pinnedId, 
+    onPin 
+}: { 
+    participants: Participant[], 
+    pinnedId: string | null, 
+    onPin: (id: string) => void 
+}) => {
     // Determine focused participant (pinned > speaking > last active)
-    const focusedParticipant = participants.find(p => p.id === pinnedId) 
-        || participants.find(p => p.isSpeaking && !p.isLocal) 
-        || participants.find(p => !p.isLocal) 
+    const focusedParticipant = participants.find(p => p.sid === pinnedId) 
+        || participants.find(p => p.isSpeaking && !(p instanceof LocalParticipant)) 
+        || participants.find(p => !(p instanceof LocalParticipant)) 
         || participants[0];
 
-    const thumbnails = participants.filter(p => p.id !== focusedParticipant?.id);
+    const thumbnails = participants.filter(p => p.sid !== focusedParticipant?.sid);
 
     return (
         <View className="flex-1 w-full bg-[#0a0a0a]">
@@ -217,16 +257,12 @@ const FocusLayout = ({ participants, pinnedId, onPin }: { participants: any[], p
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 12, gap: 8 }}>
                         {thumbnails.map((p) => (
                              <TouchableOpacity 
-                                key={p.id} 
+                                key={p.sid} 
                                 style={{ width: 120, height: '100%' }}
-                                onPress={() => onPin(p.id)} // Click to pin/focus
+                                onPress={() => onPin(p.sid)} // Click to pin/focus
                              >
                                 <ParticipantTile 
-                                    name={p.name}
-                                    isSpeaking={p.isSpeaking}
-                                    isLocal={p.isLocal}
-                                    isMicOn={p.isMicOn}
-                                    isCamOn={p.isCamOn}
+                                    participant={p}
                                     variant="focus-thumb"
                                 />
                              </TouchableOpacity>
@@ -239,13 +275,9 @@ const FocusLayout = ({ participants, pinnedId, onPin }: { participants: any[], p
             <View className="flex-1 p-0 justify-center items-center">
                 {focusedParticipant ? (
                     <ParticipantTile 
-                        name={focusedParticipant.name}
-                        isSpeaking={focusedParticipant.isSpeaking}
-                        isLocal={focusedParticipant.isLocal}
-                        isMicOn={focusedParticipant.isMicOn}
-                        isCamOn={focusedParticipant.isCamOn}
-                        isPinned={pinnedId === focusedParticipant.id}
-                        onPin={() => onPin(focusedParticipant.id)}
+                        participant={focusedParticipant}
+                        isPinned={pinnedId === focusedParticipant.sid}
+                        onPin={() => onPin(focusedParticipant.sid)}
                         variant="focus-main"
                     />
                 ) : (
@@ -262,7 +294,25 @@ const FocusLayout = ({ participants, pinnedId, onPin }: { participants: any[], p
 // Main Component
 // ----------------------------------------------------------------------
 
-export function EnhancedVideoRoom({
+export function EnhancedVideoRoom(props: EnhancedVideoRoomProps) {
+  if (!isWebRTCAvailable) {
+    return <WebRTCUnavailableScreen />;
+  }
+  
+  return (
+    <LiveKitRoom
+      token={props.token}
+      serverUrl={props.serverUrl}
+      connect={true}
+      audio={true}
+      video={true}
+    >
+      <VideoRoomInner {...props} />
+    </LiveKitRoom>
+  );
+}
+
+function VideoRoomInner({
   token,
   serverUrl,
   channelId,
@@ -274,10 +324,13 @@ export function EnhancedVideoRoom({
   onEndSession
 }: EnhancedVideoRoomProps) {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  
+  // Real LiveKit Data
+  const participants = useParticipants();
+  const { localParticipant } = useLocalParticipant();
   
   // Local State
-  const [isMicOn, setIsMicOn] = useState(true);
-  const [isCamOn, setIsCamOn] = useState(true);
   const [showChat, setShowChat] = useState(false);
   const [showParticipants, setShowParticipants] = useState(false);
   const [shareSheetVisible, setShareSheetVisible] = useState(false);
@@ -285,6 +338,16 @@ export function EnhancedVideoRoom({
   const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
   const [showEndMenu, setShowEndMenu] = useState(false);
   const [pinnedParticipantId, setPinnedParticipantId] = useState<string | null>(null);
+
+  // Keep screen awake and initialize audio session
+  useEffect(() => {
+    ExpoKeepAwake.activateKeepAwakeAsync();
+    AudioSession.startAudioSession();
+    return () => { 
+        ExpoKeepAwake.deactivateKeepAwake(); 
+        AudioSession.stopAudioSession();
+    };
+  }, []);
 
   // User Activity for auto-hiding controls
   const [isUserActive, setIsUserActive] = useState(true);
@@ -310,28 +373,32 @@ export function EnhancedVideoRoom({
     }, 4000); // 4 seconds timeout
   }, [controlsOpacity]);
 
-  // Handle Initial Timer (Mock)
+  // Handle Initial Timer
   useEffect(() => {
      resetActivity(); 
      return () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); }
-  }, []);
+  }, [resetActivity]);
 
   // Flash & Extension States
   const [extensionRequest, setExtensionRequest] = useState<{ requester: string } | null>(null);
   const [activeFlashMessage, setActiveFlashMessage] = useState<any>(null); // Simplified typing
   const [showQuestionManager, setShowQuestionManager] = useState(false);
 
-  // Mock Participants
-  const [participants, setParticipants] = useState([
-    { id: '1', name: 'You', isLocal: true, isSpeaking: false, isMicOn: true, isCamOn: true },
-    { id: '2', name: 'Alice', isLocal: false, isSpeaking: true, isMicOn: true, isCamOn: true },
-    { id: '3', name: 'Bob', isLocal: false, isSpeaking: false, isMicOn: false, isCamOn: true },
-  ]);
+  // Controls sync with real local participant
+  const isMicOn = localParticipant?.isMicrophoneEnabled ?? false;
+  const isCamOn = localParticipant?.isCameraEnabled ?? false;
 
-  // Sync state
-  useEffect(() => {
-    setParticipants(prev => prev.map(p => p.isLocal ? { ...p, isMicOn, isCamOn } : p));
-  }, [isMicOn, isCamOn]);
+  const toggleMic = async () => {
+    if (localParticipant) {
+        await localParticipant.setMicrophoneEnabled(!isMicOn);
+    }
+  };
+
+  const toggleCam = async () => {
+    if (localParticipant) {
+        await localParticipant.setCameraEnabled(!isCamOn);
+    }
+  };
 
   // Session Timer
   const sessionStartTime = useMemo(() => sessionData?.date ? new Date(sessionData.date).getTime() : Date.now(), [sessionData]);
@@ -351,7 +418,7 @@ export function EnhancedVideoRoom({
 
   return (
     <TouchableWithoutFeedback onPress={resetActivity}>
-    <SafeAreaView className="flex-1 bg-[#09090b]">
+    <View className="flex-1 bg-[#09090b]">
       <RNStatusBar barStyle="light-content" backgroundColor="#09090b" />
       
       {/* ---------------------------------------------------------------------- */}
@@ -364,9 +431,12 @@ export function EnhancedVideoRoom({
       {/* TOP BAR - PILL STYLE */}
       {/* ---------------------------------------------------------------------- */}
       <Animated.View 
-        style={{ opacity: controlsOpacity }} 
+        style={{ 
+          opacity: controlsOpacity,
+          top: Math.max(insets.top, 16) 
+        }} 
         pointerEvents={isUserActive ? 'auto' : 'none'} 
-        className="absolute top-14 left-0 right-0 z-50 items-center px-4"
+        className="absolute left-0 right-0 z-50 items-center px-4"
       >
             <View className="bg-[#1a1a1a]/95 backdrop-blur-md px-4 py-2 rounded-full flex-row items-center gap-4 border border-white/10 shadow-2xl">
                 {/* Meeting Info */}
@@ -425,7 +495,13 @@ export function EnhancedVideoRoom({
       {/* ---------------------------------------------------------------------- */}
       {/* VIDEO AREA - DYNAMIC LAYOUT */}
       {/* ---------------------------------------------------------------------- */}
-      <View className="flex-1 bg-[#09090b] pt-2 pb-2 mt-12 mb-20">
+      <View 
+        style={{ 
+          paddingTop: insets.top + (isUserActive ? 64 : 0), 
+          paddingBottom: insets.bottom + (isUserActive ? 80 : 0) 
+        }}
+        className="flex-1 bg-[#09090b]"
+      >
             {layoutMode === 'grid' ? (
                 <GridLayout 
                     participants={participants} 
@@ -445,16 +521,19 @@ export function EnhancedVideoRoom({
       {/* BOTTOM CONTROL BAR - FLOATING ISLAND */}
       {/* ---------------------------------------------------------------------- */}
       <Animated.View 
-         style={{ opacity: controlsOpacity }} 
+         style={{ 
+           opacity: controlsOpacity,
+           bottom: Math.max(insets.bottom, 16) 
+         }} 
          pointerEvents={isUserActive ? 'auto' : 'none'}
-         className="absolute bottom-8 left-4 right-4 z-50 items-center"
+         className="absolute left-4 right-4 z-50 items-center"
       >
         <View className="flex-row items-center justify-between bg-[#141414]/95 backdrop-blur-xl border border-white/10 rounded-2xl px-3 py-2.5 shadow-2xl w-full max-w-[500px]">
             
             {/* Left Controls - Audio/Video */}
             <View className="flex-row items-center gap-2">
                 <TouchableOpacity 
-                    onPress={() => setIsMicOn(!isMicOn)}
+                    onPress={toggleMic}
                     className={`w-10 h-10 rounded-full items-center justify-center border shadow-sm ${
                         isMicOn ? 'bg-white/5 border-white/5 active:bg-white/10' : 'bg-red-500 border-red-400'
                     }`}
@@ -463,7 +542,7 @@ export function EnhancedVideoRoom({
                 </TouchableOpacity>
 
                 <TouchableOpacity 
-                    onPress={() => setIsCamOn(!isCamOn)}
+                    onPress={toggleCam}
                     className={`w-10 h-10 rounded-full items-center justify-center border shadow-sm ${
                         isCamOn ? 'bg-white/5 border-white/5 active:bg-white/10' : 'bg-red-500 border-red-400'
                     }`}
@@ -582,19 +661,54 @@ export function EnhancedVideoRoom({
       <MobileParticipantSheet
         visible={showParticipants}
         onClose={() => setShowParticipants(false)}
-        participants={participants}
+        participants={participants.map(p => ({
+            id: p.sid,
+            name: p.identity || p.name || 'Unknown',
+            isLocal: p instanceof LocalParticipant,
+            isSpeaking: p.isSpeaking,
+            isMicOn: p.isMicrophoneEnabled,
+            isCamOn: p.isCameraEnabled
+        }))}
         isLocalHost={isHost}
       />
-
-      <ShareSheet
-        visible={shareSheetVisible}
-        onClose={() => setShareSheetVisible(false)}
-        title={sessionData?.title || "Join my Session"}
-        message={`Join my session: ${sessionData?.title}`}
-        url={`https://myapp.com/session/${sessionData?.id}`}
-      />
-
-    </SafeAreaView>
+      
+    </View>
     </TouchableWithoutFeedback>
   );
+}
+
+function WebRTCUnavailableScreen() {
+    const insets = useSafeAreaInsets();
+    
+    return (
+        <View className="flex-1 bg-[#09090b] items-center justify-center px-8" style={{ paddingTop: insets.top }}>
+            <View className="w-20 h-20 bg-amber-500/10 rounded-full items-center justify-center mb-6">
+                <AlertCircle size={40} color="#f59e0b" />
+            </View>
+            
+            <Text className="text-white text-2xl font-bold text-center mb-4">
+                Development Client Required
+            </Text>
+            
+            <View className="bg-[#1a1a1a] p-6 rounded-2xl border border-white/10 w-full mb-8">
+                <Text className="text-white/80 text-sm leading-6 mb-4">
+                    This feature uses <Text className="text-[#00DC6E] font-bold">WebRTC</Text> for real-time video, which is not available in the standard Expo Go app. 
+                </Text>
+                
+                <Text className="text-white/60 text-xs font-medium uppercase tracking-wider mb-2">How to Fix:</Text>
+                <View className="gap-2">
+                    <Text className="text-white/80 text-sm">• Build a <Text className="font-bold">Development Client</Text></Text>
+                    <Text className="text-white/80 text-sm">• Run <Text className="font-mono text-amber-500">npx expo run:android</Text> or <Text className="font-mono text-amber-500">run:ios</Text></Text>
+                    <Text className="text-white/80 text-sm">• Or use <Text className="font-bold">EAS Build</Text> for a standalone app</Text>
+                </View>
+            </View>
+            
+            <TouchableOpacity 
+                onPress={() => Alert.alert("Build Instructions", "Run 'npx expo run:android' or 'npx expo run:ios' in your terminal to build the app with native video support.")}
+                className="bg-[#00DC6E] px-8 py-4 rounded-full active:opacity-80"
+            >
+                <Text className="text-[#002c16] font-bold text-base">View Setup Guide</Text>
+            </TouchableOpacity>
+        </View>
+    );
 }

@@ -1,4 +1,9 @@
 import type { NextConfig } from "next";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+/** Directory containing this config (`my-app/`). Used so Turbopack does not pick the monorepo root from a parent lockfile (which can cause App Router 404s). */
+const nextAppRoot = path.dirname(fileURLToPath(import.meta.url));
 
 function getHostname(value?: string): string | undefined {
   const trimmed = value?.trim();
@@ -39,9 +44,10 @@ const publicApiForRewrites =
  * Prefer BACKEND_URL; do not rely on NEXT_PUBLIC_API_URL alone in dev (often set to the marketing site).
  */
 const backendOrigin =
+  process.env.API_URL?.trim().replace(/\/$/, "") ||
   process.env.BACKEND_URL?.trim().replace(/\/$/, "") ||
   publicApiForRewrites ||
-  "http://127.0.0.1:3002";
+  "http://127.0.0.1:3001";
 
 const allowedDevOrigins = Array.from(
   new Set(
@@ -61,6 +67,24 @@ const allowedDevOrigins = Array.from(
 
 const nextConfig: NextConfig = {
   allowedDevOrigins,
+  turbopack: {
+    root: nextAppRoot,
+  },
+  async redirects() {
+    return [
+      // Backward-compatible room URLs.
+      {
+        source: "/studyroom/:room*",
+        destination: "/rooms/studyroom/:room*",
+        permanent: false,
+      },
+      {
+        source: "/peersession/:room*",
+        destination: "/rooms/peersession/:room*",
+        permanent: false,
+      },
+    ];
+  },
   /**
    * Forward /api/* to Nest so browser calls like PATCH /api/peer-sessions/:id work when
    * NEXT_PUBLIC_API_URL is empty or matches the site origin (same-origin + Bearer token).

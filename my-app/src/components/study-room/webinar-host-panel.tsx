@@ -3,29 +3,24 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { studyRoomsApi } from "@/lib/api/study-rooms.api";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { Loader2, Menu, UserCheck, UserMinus, Users, X } from "lucide-react";
 
 type GuestRow = { id: string; name: string; email: string; role: string };
 
-const POLL_MS = 5000;
+const POLL_MS = 15000;
 
 export function WebinarHostPanel({
   isHost = false,
   studyRoomId,
   guestParticipants,
-  chatEnabled,
-  onChatEnabledChange,
   /** Exclude from “live guests” (e.g. host’s own registration row). */
   hostEmail,
 }: {
   isHost?: boolean;
   studyRoomId: string;
   guestParticipants: GuestRow[];
-  chatEnabled: boolean;
-  onChatEnabledChange?: (v: boolean) => void;
   hostEmail?: string | null;
 }) {
   if (!isHost) return null;
@@ -45,7 +40,6 @@ export function WebinarHostPanel({
   const [loading, setLoading] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
   const [approving, setApproving] = useState<string | null>(null);
-  const [toggleChat, setToggleChat] = useState(chatEnabled);
 
   const liveGuestCount = useMemo(() => {
     const h = hostEmail?.trim().toLowerCase();
@@ -72,10 +66,6 @@ export function WebinarHostPanel({
   );
 
   useEffect(() => {
-    setToggleChat(chatEnabled);
-  }, [chatEnabled]);
-
-  useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
@@ -84,16 +74,16 @@ export function WebinarHostPanel({
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoading(true);
     try {
       const res = await studyRoomsApi.listWebinarRegistrations(studyRoomId);
       setRegs(res.registrations);
       setWaitingRoomEnabled(res.waitingRoomEnabled !== false);
     } catch {
-      setRegs([]);
+      if (!opts?.silent) setRegs([]);
     } finally {
-      setLoading(false);
+      if (!opts?.silent) setLoading(false);
     }
   }, [studyRoomId]);
 
@@ -101,18 +91,20 @@ export function WebinarHostPanel({
     void load();
   }, [load]);
 
-  // Keep registration list fresh while the host is in the room (panel open or closed).
+  // Poll only while panel is open to avoid constant list churn while teaching.
   useEffect(() => {
+    if (!open) return;
+    void load({ silent: true });
     const id = window.setInterval(() => {
-      void load();
+      void load({ silent: true });
     }, POLL_MS);
     return () => window.clearInterval(id);
-  }, [load]);
+  }, [load, open]);
 
-  const onRemoveGuest = async (guestId: string) => {
+  const onKickGuest = async (guestId: string) => {
     setRemoving(guestId);
     try {
-      await studyRoomsApi.removeWebinarGuest(studyRoomId, guestId);
+      await studyRoomsApi.kickWebinarGuest(studyRoomId, guestId);
       await load();
     } finally {
       setRemoving(null);
@@ -129,16 +121,6 @@ export function WebinarHostPanel({
       await load();
     } finally {
       setApproving(null);
-    }
-  };
-
-  const onToggleChat = async (enabled: boolean) => {
-    setToggleChat(enabled);
-    try {
-      await studyRoomsApi.setWebinarChatEnabled(studyRoomId, enabled);
-      onChatEnabledChange?.(enabled);
-    } catch {
-      setToggleChat(!enabled);
     }
   };
 
@@ -274,23 +256,24 @@ export function WebinarHostPanel({
                                 Admit
                               </Button>
                             )}
-                          {r.guestParticipantId && (
+                          {r.approvalStatus === "approved" && r.guestParticipantId && (
                             <Button
                               type="button"
                               variant="ghost"
                               size="sm"
-                              className="h-7 px-2 text-red-400 hover:text-red-300"
+                              className="h-7 gap-1 px-2 text-red-400 hover:bg-red-500/10 hover:text-red-300"
                               disabled={removing === r.guestParticipantId}
                               onClick={() =>
-                                void onRemoveGuest(r.guestParticipantId!)
+                                void onKickGuest(r.guestParticipantId!)
                               }
-                              title="Remove registration or kick from session"
+                              title="Kick attendee from live webinar (keeps registration)"
                             >
                               {removing === r.guestParticipantId ? (
                                 <Loader2 className="h-3 w-3 animate-spin" />
                               ) : (
                                 <UserMinus className="h-3.5 w-3.5" />
                               )}
+                              Kick
                             </Button>
                           )}
                         </div>
@@ -316,14 +299,6 @@ export function WebinarHostPanel({
               <p className="text-[11px] uppercase tracking-wide text-white/45">
                 Controls
               </p>
-              <div className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-2">
-                <span className="text-xs text-white/80">Chat for attendees</span>
-                <Switch
-                  checked={toggleChat}
-                  onCheckedChange={(v) => void onToggleChat(v)}
-                />
-              </div>
-
               {/* “Allow specific users”: admit/remove only when waiting room was enabled for this webinar */}
               <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 space-y-1.5">
                 <p className="text-xs font-semibold text-white/90">
@@ -335,14 +310,14 @@ export function WebinarHostPanel({
                     for this webinar. New registrations stay{" "}
                     <strong className="text-white/75">pending</strong> until you{" "}
                     <strong className="text-white/75">Admit</strong>. Use{" "}
-                    <strong className="text-white/75">Remove</strong> to kick
-                    someone who has already joined.
+                    <strong className="text-white/75">Kick</strong> to remove
+                    an approved attendee from the live meet immediately (registration remains).
                   </p>
                 ) : (
                   <p className="text-[11px] leading-snug text-white/55">
                     Waiting room is <span className="text-emerald-300/90">off</span>
                     — attendees are <strong className="text-white/75">approved automatically</strong>{" "}
-                    (no admit step). You can still <strong className="text-white/75">Remove</strong>{" "}
+                    (no admit step). You can still <strong className="text-white/75">Kick</strong>{" "}
                     someone who has joined.
                   </p>
                 )}

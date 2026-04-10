@@ -30,14 +30,11 @@ export function useRecording({ roomId }: UseRecordingProps) {
   const fetchRoomRecordings = useCallback(async () => {
     try {
       const token = await getToken();
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/recording/${roomId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const response = await fetch(`/api/recording/${roomId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
       if (response.ok) {
         const data = await response.json();
@@ -53,17 +50,14 @@ export function useRecording({ roomId }: UseRecordingProps) {
     setError(null);
     try {
       const token = await getToken();
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/recording/start`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ roomId }),
-        }
-      );
+      const response = await fetch('/api/recording/start', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ roomId }),
+      });
 
       if (!response.ok) {
         const data = await response.json();
@@ -85,17 +79,14 @@ export function useRecording({ roomId }: UseRecordingProps) {
     setError(null);
     try {
       const token = await getToken();
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/recording/stop`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ roomId }),
-        }
-      );
+      const response = await fetch('/api/recording/stop', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ roomId }),
+      });
 
       if (!response.ok) {
         const data = await response.json();

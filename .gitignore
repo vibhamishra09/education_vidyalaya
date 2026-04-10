@@ -31,9 +31,11 @@ my-app/logs/
 logs/*.log.txt
 logs/*.detail.txt
 logs/chat-flow.txt
+logs/joinee-flow.txt
 
 # Next.js app dev logs (e.g. chat-flow via /api/dev/chat-flow-log; cwd = my-app/)
 my-app/logs/
+
 
 # OS files
 .DS_Store

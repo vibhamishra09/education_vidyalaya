@@ -137,3 +137,43 @@ export class ClerkWebhookDto {
   type: 'user.created' | 'user.updated' | 'user.deleted';
   data: ClerkUserDto;
 }
+
+export class OnboardingDto {
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsEmail()
+  email?: string;
+
+  @IsOptional()
+  @IsString()
+  avatar?: string;
+
+  @IsOptional()
+  @IsString()
+  bio?: string;
+
+  @IsOptional()
+  @IsString()
+  location?: string;
+
+  @IsOptional()
+  @IsString()
+  school?: string;
+
+  @IsOptional()
+  @IsNumber()
+  hourlyRate?: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  skillsIHave?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  skillsIWant?: string[];
+}
