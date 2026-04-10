@@ -72,7 +72,7 @@ export default function RoomPage() {
 		duration: number;
 		sessionType: 'studyRoom' | 'peerSession';
 		sessionStatus?: string;
-		slug: string;
+		slug? :string | undefined
 		[key: string]: unknown;
 	} | null>(null)
 	const [isHost, setIsHost] = useState<boolean>(false)

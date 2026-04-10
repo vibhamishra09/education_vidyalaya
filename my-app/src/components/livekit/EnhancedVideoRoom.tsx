@@ -109,7 +109,7 @@ export interface SessionData {
 	duration: number;
 	sessionType: 'studyRoom' | 'peerSession';
 	sessionMode?: string;
-	slug: string
+	slug?: string | undefined;
 	[key: string]: unknown;
 }
 
@@ -134,6 +134,7 @@ interface EnhancedVideoRoomProps {
 	sessionUuid?: string | null
 	/** From URL (`studyroom-` / `peersession-`); used if `sessionData` is missing ids during navigation */
 	liveSessionKind?: 'studyRoom' | 'peerSession'
+	slug?: string | undefined
 }
 
 export function EnhancedVideoRoom({
