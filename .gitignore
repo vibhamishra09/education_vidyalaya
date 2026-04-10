@@ -37,7 +37,7 @@ logs/joinee-flow.txt
 my-app/logs/
 my-app/src/app/api/dev/joinee-flow-log/
 my-app/src/lib/joinee-flow-log.ts
-my-app/src/lib/livekit-jwt-identity.ts
+
 
 # OS files
 .DS_Store
