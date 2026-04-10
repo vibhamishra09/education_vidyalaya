@@ -215,8 +215,7 @@ export function EnhancedVideoRoom({
 	const moderationReady =
 		!!sessionData?.id &&
 		(externalAccessToken
-			? !!authToken &&
-				(!!resolvedGuestLivekitIdentity || !!(clerkLoaded && user?.id))
+			? !!authToken
 			: clerkLoaded && !!user?.id)
 
 	/** Prevents double `router.push` when leave + LiveKit disconnect both fire */
@@ -1683,6 +1682,18 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				}
 			} else if (shouldShowToast('participant-list-visible', 5000)) {
 				showSuccess('👥 Participant List Visible', 'You can open the participant list now.')
+			}
+		}
+
+		// Some host actions emit `room-settings-updated` without changing computed `permissions`,
+		// so notify from room settings as a reliable fallback.
+		if (prev.chatDisabled !== roomSettings.chatDisabled) {
+			if (roomSettings.chatDisabled) {
+				if (shouldShowToast('chat-locked-room-settings', 5000)) {
+					showWarning('💬 Chat Locked', 'The host has disabled chat.')
+				}
+			} else if (shouldShowToast('chat-unlocked-room-settings', 5000)) {
+				showSuccess('💬 Chat Unlocked', 'You can now send messages.')
 			}
 		}
 
@@ -5045,7 +5056,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				</div>
 			)}
 
-			{/* Permission Request Modal - Shows when host asks participant to enable audio/video */}
+			{/* Permission Request Modal - host asks participant to enable audio/video */}
 			{!isHost && pendingPermissionRequest && (
 				<PermissionRequestModal
 					type={pendingPermissionRequest.type}
