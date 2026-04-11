@@ -9,6 +9,7 @@ import { normalizeLiveKitServerUrl } from '@/lib/livekit-url'
 import { Loader2, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useUser } from '@clerk/nextjs'
+import { SignInButton, SignUpButton } from '@clerk/nextjs'
 
 type ChatIdentity = {
 	id: string
@@ -63,7 +64,7 @@ export default function RoomPage() {
 	const searchParams = useSearchParams()
 	const router = useRouter()
 	const roomName = params.room
-	const { getToken, isLoaded: clerkLoaded } = useAuth()
+	const { getToken, isLoaded: clerkLoaded, isSignedIn } = useAuth()
 	const [token, setToken] = useState<string | null>(null)
 	const [channelId, setChannelId] = useState<string | null>(null)
 	const [sessionData, setSessionData] = useState<{
@@ -266,7 +267,6 @@ export default function RoomPage() {
 				}
 
 				const results = await Promise.all(promises)
-				console.log(results);
 				
 
 				if (!mounted) return
@@ -452,7 +452,55 @@ export default function RoomPage() {
 			</div>
 		)
 	}
+	
 
+	if (!isSignedIn && !guestAccessToken) {
+	return (
+		<div className="relative h-screen w-screen flex items-center justify-center bg-[#0a0a0a] overflow-hidden">
+			
+			<div className="absolute inset-0">
+				<div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[500px] h-[500px] bg-[#E01E5A]/10 blur-[120px] rounded-full" />
+			</div>
+
+			<div className="relative z-10 w-full max-w-sm mx-auto px-4">
+				<div className="bg-[#141414]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-xl text-center">
+
+					<div className="flex justify-center mb-4">
+						<div className="h-12 w-12 rounded-full bg-white/5 flex items-center justify-center border border-white/10 text-lg">
+							🔐
+						</div>
+					</div>
+
+					<h2 className="text-xl font-semibold text-white mb-2">
+						Join the Session
+					</h2>
+
+					<p className="text-gray-400 text-sm mb-5">
+						Sign in to access your study room and start learning
+					</p>
+
+					<div className="flex flex-col gap-2.5">
+						<SignInButton mode="modal" forceRedirectUrl={window.location.href}>
+							<Button className="w-full h-10 rounded-lg bg-[#E01E5A] hover:bg-[#C01B4B] text-white font-medium transition-colors">
+								Sign In
+							</Button>
+						</SignInButton>
+
+						<SignUpButton mode="modal" forceRedirectUrl={window.location.href}>
+							<Button
+								variant="outline"
+								className="w-full h-10 rounded-lg border-white/10 bg-white/5 text-white hover:bg-white/10 hover:text-white transition-colors"
+							>
+								Create Account
+							</Button>
+						</SignUpButton>
+					</div>
+
+				</div>
+			</div>
+		</div>
+	)
+}
 	if (error) {
 		return (
 			<div className="h-screen w-screen flex items-center justify-center bg-black">
@@ -533,7 +581,6 @@ export default function RoomPage() {
 			</div>
 		)
 	}
-
 
 	if (notAParticipant) {
 		return (
