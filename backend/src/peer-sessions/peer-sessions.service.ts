@@ -619,120 +619,88 @@ export class PeerSessionsService {
         data: { coins: { increment: payment.amountReceived || 0 } },
       });
 
-      // Track activity and update streaks for both learner and teacher
-      const coinsEarned = Number(payment.amountReceived || 0);
+      // Background the rest of the post-session processing
+      (async () => {
+        try {
+          this.logger.debug(`🚀 [completePeerSession] Starting background post-session processing for ${peerSessionId}`);
+          const coinsEarned = Number(payment.amountReceived || 0);
 
-      // Update learner's activity (requestedBy is the learner)
-      await this.streaksService.updateUserActivity(
-        peerSession.requestedById,
-        peerSession.date,
-        peerSession.duration,
-        'learner',
-        Number(payment.amountMade),
-      );
+          // Parallelize learner and teacher activity updates and achievement/bonus checks
+          const learnerUpdates = (async () => {
+            await this.streaksService.updateUserActivity(
+              peerSession.requestedById,
+              peerSession.date,
+              peerSession.duration,
+              'learner',
+              Number(payment.amountMade),
+            );
+            await Promise.all([
+              this.achievementsService.checkSessionAchievements(peerSession.requestedById, 'learner'),
+              this.engagementService.awardFirstMeaningfulActionBonus(peerSession.requestedById, peerSession.date, 'session_completion'),
+            ]);
+            const lStreak = await this.streaksService.getUserStreak(peerSession.requestedById);
+            await this.achievementsService.checkStreakAchievements(peerSession.requestedById, lStreak.currentStreak);
+          })();
 
-      // Update teacher's activity (requestedTo is the teacher)
-      await this.streaksService.updateUserActivity(
-        peerSession.requestedToId,
-        peerSession.date,
-        peerSession.duration,
-        'teacher',
-        coinsEarned,
-      );
+          const teacherUpdates = (async () => {
+            await this.streaksService.updateUserActivity(
+              peerSession.requestedToId,
+              peerSession.date,
+              peerSession.duration,
+              'teacher',
+              coinsEarned,
+            );
+            await Promise.all([
+              this.achievementsService.checkSessionAchievements(peerSession.requestedToId, 'teacher'),
+              this.engagementService.awardFirstMeaningfulActionBonus(peerSession.requestedToId, peerSession.date, 'session_completion'),
+              this.engagementService.awardFirstTeachingSessionOfWeekBonus(peerSession.requestedToId, peerSession.date),
+            ]);
+            const tStreak = await this.streaksService.getUserStreak(peerSession.requestedToId);
+            await this.achievementsService.checkStreakAchievements(peerSession.requestedToId, tStreak.currentStreak);
+          })();
 
-      // Check and update achievements for both users
-      await this.achievementsService.checkSessionAchievements(
-        peerSession.requestedById,
-        'learner',
-      );
+          await Promise.all([learnerUpdates, teacherUpdates]);
+          
+          // Generate AI summary
+          const summary = await this.transcriptsService.compileAndSummarize(peerSessionId);
+          if (summary) {
+            await this.prisma.peerSession.update({
+              where: { id: peerSessionId },
+              data: { summary },
+            });
+          }
 
-      await this.achievementsService.checkSessionAchievements(
-        peerSession.requestedToId,
-        'teacher',
-      );
-
-      // Check streak achievements
-      const learnerStreak = await this.streaksService.getUserStreak(
-        peerSession.requestedById,
-      );
-      const teacherStreak = await this.streaksService.getUserStreak(
-        peerSession.requestedToId,
-      );
-
-      await this.achievementsService.checkStreakAchievements(
-        peerSession.requestedById,
-        learnerStreak.currentStreak,
-      );
-
-      await this.achievementsService.checkStreakAchievements(
-        peerSession.requestedToId,
-        teacherStreak.currentStreak,
-      );
-
-      await this.engagementService.awardFirstMeaningfulActionBonus(
-        peerSession.requestedById,
-        peerSession.date,
-        'session_completion',
-      );
-      await this.engagementService.awardFirstMeaningfulActionBonus(
-        peerSession.requestedToId,
-        peerSession.date,
-        'session_completion',
-      );
-      await this.engagementService.awardFirstTeachingSessionOfWeekBonus(
-        peerSession.requestedToId,
-        peerSession.date,
-      );
-
-      // Generate AI summary from transcripts
-      try {
-        this.logger.debug(
-          '🤖 [completePeerSession] Generating AI summary for peer session:',
-          peerSessionId,
-        );
-        const summary =
-          await this.transcriptsService.compileAndSummarize(peerSessionId);
-
-        // Store summary in database
-        await this.prisma.peerSession.update({
-          where: { id: peerSessionId },
-          data: { summary },
-        });
-        this.logger.debug(
-          '✅ [completePeerSession] AI summary generated and stored successfully',
-        );
-      } catch (error) {
-        this.logger.debug(
-          '⚠️ [completePeerSession] Failed to generate summary:',
-          error,
-        );
-        // Continue execution even if summary generation fails
-      }
-
-      // Notify both parties to leave reviews
-      await this.notificationsService.createAndPushNotification(
-        peerSession.requestedById,
-        `Your session with ${peerSession.requestedTo.name} is complete. Please leave a review!`,
-        'Session Complete - Leave Review',
-        NotifType.URGENT,
-        {
-          actionType: 'SESSION_COMPLETE_REVIEW',
-          peerSessionId: peerSession.id,
-          actionData: { sessionId: peerSession.id, sessionType: 'peerSession' },
-        },
-      );
-
-      await this.notificationsService.createAndPushNotification(
-        peerSession.requestedToId,
-        `Your session with ${peerSession.requestedBy.name} is complete. Please leave a review!`,
-        'Session Complete - Leave Review',
-        NotifType.URGENT,
-        {
-          actionType: 'SESSION_COMPLETE_REVIEW',
-          peerSessionId: peerSession.id,
-          actionData: { sessionId: peerSession.id, sessionType: 'peerSession' },
-        },
-      );
+          // Notify both parties
+          await Promise.all([
+            this.notificationsService.createAndPushNotification(
+              peerSession.requestedById,
+              `Your session with ${peerSession.requestedTo.name} is complete. Please leave a review!`,
+              'Session Complete - Leave Review',
+              NotifType.URGENT,
+              {
+                actionType: 'SESSION_COMPLETE_REVIEW',
+                peerSessionId: peerSession.id,
+                actionData: { sessionId: peerSession.id, sessionType: 'peerSession' },
+              },
+            ),
+            this.notificationsService.createAndPushNotification(
+              peerSession.requestedToId,
+              `Your session with ${peerSession.requestedBy.name} is complete. Please leave a review!`,
+              'Session Complete - Leave Review',
+              NotifType.URGENT,
+              {
+                actionType: 'SESSION_COMPLETE_REVIEW',
+                peerSessionId: peerSession.id,
+                actionData: { sessionId: peerSession.id, sessionType: 'peerSession' },
+              },
+            )
+          ]);
+          
+          this.logger.debug(`✅ [completePeerSession] Background processing completed for ${peerSessionId}`);
+        } catch (error) {
+          this.logger.error(`❌ [completePeerSession] Fatal error in background processing for ${peerSessionId}:`, error);
+        }
+      })();
     } else if (
       updateDto.status === SessionStatus.CANCELLED &&
       peerSession.payments.length > 0

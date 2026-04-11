@@ -124,14 +124,28 @@ export class UpdateUserDto {
   socialLinks?: SocialLinkDto[];
 }
 
-export class CompleteOnboardingDto {
-  @IsString()
-  @MinLength(1, { message: 'Name cannot be empty' })
-  @MaxLength(100, { message: 'Name must be at most 100 characters long' })
-  name: string;
 
-  @IsEmail({}, { message: 'Please enter a valid email address' })
-  email: string;
+export class ClerkUserDto {
+  id: string;
+  email_addresses: { email_address: string }[];
+  first_name?: string;
+  last_name?: string;
+  image_url?: string;
+}
+
+export class ClerkWebhookDto {
+  type: 'user.created' | 'user.updated' | 'user.deleted';
+  data: ClerkUserDto;
+}
+
+export class OnboardingDto {
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsEmail()
+  email?: string;
 
   @IsOptional()
   @IsString()
@@ -162,17 +176,4 @@ export class CompleteOnboardingDto {
   @IsArray()
   @IsString({ each: true })
   skillsIWant?: string[];
-}
-
-export class ClerkUserDto {
-  id: string;
-  email_addresses: { email_address: string }[];
-  first_name?: string;
-  last_name?: string;
-  image_url?: string;
-}
-
-export class ClerkWebhookDto {
-  type: 'user.created' | 'user.updated' | 'user.deleted';
-  data: ClerkUserDto;
 }

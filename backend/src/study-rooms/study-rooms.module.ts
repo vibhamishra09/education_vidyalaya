@@ -9,6 +9,7 @@ import { TranscriptsModule } from '../transcripts/transcripts.module';
 import { EmailModule } from '../email/email.module';
 import { UsersModule } from '../users/users.module';
 import { EngagementModule } from '../engagement/engagement.module';
+import { LivekitModule } from '../livekit/livekit.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { EngagementModule } from '../engagement/engagement.module';
     EmailModule,
     UsersModule,
     EngagementModule,
+    forwardRef(() => LivekitModule),
   ],
   controllers: [StudyRoomsController],
   providers: [StudyRoomsService],

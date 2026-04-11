@@ -19,7 +19,8 @@ function parseRoomId(roomParam: string | null): string | null {
 const joinTokenStorageKey = (studyRoomId: string) =>
   `webinarJoinToken:${studyRoomId}`;
 
-const POLL_MS = 5000;
+/** How often we ask the API if the host admitted the guest (after fix, id lookup is correct). */
+const POLL_MS = 2000;
 
 function resolveJoinUrl(res: { joinUrl: string }): string {
   const u = res.joinUrl;

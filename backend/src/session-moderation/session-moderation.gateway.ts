@@ -2,6 +2,7 @@ import {} from '@nestjs/common';
 import {
   OnGatewayConnection,
   OnGatewayDisconnect,
+  OnGatewayInit,
   SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
@@ -16,14 +17,20 @@ import { PrismaService } from '../prisma/prisma.service';
 import { corsOriginDelegate } from '../common/cors';
 
 @WebSocketGateway({
+  namespace: '/session-moderation',
   cors: {
     origin: corsOriginDelegate,
     credentials: true,
   },
 })
 export class SessionModerationGateway
-  implements OnGatewayConnection, OnGatewayDisconnect
+  implements
+    OnGatewayConnection,
+    OnGatewayDisconnect,
+    OnGatewayInit
 {
+  private static readonly GUEST_SOCKET_TOKEN_GRACE_MS =
+    24 * 60 * 60 * 1000;
   @WebSocketServer()
   server!: Server;
 
@@ -42,52 +49,50 @@ export class SessionModerationGateway
     this.logger.setContext(SessionModerationGateway.name);
   }
 
-  async handleConnection(client: Socket) {
-    try {
-      const token =
-        client.handshake.auth?.token ||
-        client.handshake.headers?.authorization?.replace('Bearer ', '');
-
-      if (!token) {
-        this.logger.warn('No token provided in WebSocket handshake');
-        client.disconnect();
-        return;
-      }
-
+  /**
+   * Auth must complete in Socket.IO middleware before the client receives `connect`.
+   * Otherwise the client emits `join-session` immediately and races async `handleConnection`,
+   * producing `Not authenticated` and no host mic/camera notifications for joinees.
+   */
+  afterInit(server: Server) {
+    server.use(async (socket: Socket, next: (err?: Error) => void) => {
       try {
-        // Use environment variable or construct from PORT
-        const baseUrl =
-          process.env.API_URL || `http://localhost:${process.env.PORT || 3001}`;
-        const clerkRequest = new Request(baseUrl, {
-          method: 'GET',
-          headers: {
-            authorization: `Bearer ${token}`,
-          },
-        });
+        await this.authenticateModerationSocket(socket);
+        next();
+      } catch (err: unknown) {
+        const message =
+          err instanceof Error ? err.message : 'Authentication failed';
+        this.logger.warn(`Session moderation auth rejected: ${message}`);
+        next(err instanceof Error ? err : new Error(message));
+      }
+    });
+  }
 
-        const requestState = await this.clerkClient.authenticateRequest(
-          clerkRequest,
-          { jwtKey: process.env.CLERK_JWT_KEY },
-        );
+  private async authenticateModerationSocket(client: Socket): Promise<void> {
+    const token =
+      client.handshake.auth?.token ||
+      client.handshake.headers?.authorization?.replace('Bearer ', '');
 
-        if (!requestState.isSignedIn) {
-          this.logger.warn('User is not authenticated');
-          client.disconnect();
-          return;
-        }
+    if (!token) {
+      throw new Error('No token provided in WebSocket handshake');
+    }
 
-        const auth = requestState.toAuth();
-        if (!auth.userId) {
-          this.logger.warn('User ID not found in token');
-          client.disconnect();
-          return;
-        }
+    try {
+      const baseUrl =
+        process.env.API_URL || `http://localhost:${process.env.PORT || 3001}`;
+      const clerkRequest = new Request(baseUrl, {
+        method: 'GET',
+        headers: {
+          authorization: `Bearer ${token}`,
+        },
+      });
 
-        client.data.userId = auth.userId; // clerkId
-        this.logger.log(
-          `🔌 Session Moderation Socket connected - User: ${auth.userId}, Client: ${client.id}`,
-        );
-      } catch (verifyError: any) {
+      const requestState = await this.clerkClient.authenticateRequest(
+        clerkRequest,
+        { jwtKey: process.env.CLERK_JWT_KEY },
+      );
+
+      if (!requestState.isSignedIn) {
         const guestAccess =
           await this.prisma.studyRoomGuestAccessToken.findUnique({
             where: { token },
@@ -96,29 +101,59 @@ export class SessionModerationGateway
               studyRoom: { select: { sessionMode: true } },
             },
           });
+        const expiredByMs = guestAccess
+          ? Date.now() - guestAccess.expiresAt.getTime()
+          : Number.POSITIVE_INFINITY;
         if (
           !guestAccess ||
-          guestAccess.expiresAt < new Date() ||
-          (guestAccess.studyRoom.sessionMode === 'WEBINAR' &&
-            !guestAccess.guestParticipant.approvedBy)
+          expiredByMs > SessionModerationGateway.GUEST_SOCKET_TOKEN_GRACE_MS
         ) {
-          this.logger.error(
-            'Token verification failed:',
-            verifyError.message || verifyError,
-          );
-          client.disconnect();
-          return;
+          throw new Error('User is not authenticated');
         }
         client.data.userId = guestAccess.guestParticipant.livekitIdentity;
         client.data.guest = true;
-        this.logger.log(
-          `🔌 Session Moderation Socket connected - Guest: ${guestAccess.guestParticipant.livekitIdentity}, Client: ${client.id}`,
-        );
+        return;
       }
-    } catch (error) {
-      this.logger.error('WebSocket connection error:', error);
-      client.disconnect();
+
+      const auth = requestState.toAuth();
+      if (!auth.userId) {
+        throw new Error('User ID not found in token');
+      }
+
+      client.data.userId = auth.userId;
+    } catch (verifyError: unknown) {
+      const guestAccess =
+        await this.prisma.studyRoomGuestAccessToken.findUnique({
+          where: { token },
+          include: {
+            guestParticipant: true,
+            studyRoom: { select: { sessionMode: true } },
+          },
+        });
+      const expiredByMs = guestAccess
+        ? Date.now() - guestAccess.expiresAt.getTime()
+        : Number.POSITIVE_INFINITY;
+      if (
+        !guestAccess ||
+        expiredByMs > SessionModerationGateway.GUEST_SOCKET_TOKEN_GRACE_MS
+      ) {
+        const msg =
+          verifyError instanceof Error
+            ? verifyError.message
+            : String(verifyError);
+        throw new Error(msg || 'Token verification failed');
+      }
+      client.data.userId = guestAccess.guestParticipant.livekitIdentity;
+      client.data.guest = true;
     }
+  }
+
+  async handleConnection(client: Socket) {
+    const userId = client.data?.userId ?? 'unknown';
+    const guest = client.data?.guest ? ' (guest)' : '';
+    this.logger.log(
+      `🔌 Session Moderation Socket connected - User: ${userId}${guest}, Client: ${client.id}`,
+    );
   }
 
   handleDisconnect(client: Socket) {
@@ -421,45 +456,50 @@ export class SessionModerationGateway
     }
 
     try {
-      // Verify host
       const clerkId = client.data.userId;
+      const startTime = Date.now();
 
-      if (sessionType === 'studyRoom') {
-        // Check if already completed to avoid duplicate completion
-        const roomDetails =
-          await this.studyRoomsService.getStudyRoomDetails(sessionId);
-        if (
-          roomDetails.sessionStatus !== 'DONE' &&
-          roomDetails.sessionStatus !== 'NOT_COMPLETED' &&
-          roomDetails.sessionStatus !== 'CANCELLED'
-        ) {
-          await this.studyRoomsService.completeStudyRoom(sessionId, clerkId);
-        }
-      } else {
-        // Check if already completed to avoid duplicate completion
-        const sessionDetails =
-          await this.peerSessionsService.getPeerSessionDetails(sessionId);
-        if (
-          sessionDetails.sessionStatus !== 'DONE' &&
-          sessionDetails.sessionStatus !== 'NOT_COMPLETED' &&
-          sessionDetails.sessionStatus !== 'CANCELLED'
-        ) {
-          await this.peerSessionsService.completePeerSession(
-            sessionId,
-            clerkId,
-          );
-        }
-      }
-
-      // Cleanup Redis permissions for this session
-      await this.permissionsService.cleanupSession(sessionId);
-
-      // Broadcast meeting ended to all in the room
+      // 1. BROADCAST IMMEDIATELY for 1s response time goal
       this.server
         .to(sessionId)
         .emit('meeting-ended', { sessionId, sessionType, endedBy: clerkId });
 
       client.emit('end-meeting:ok', { message: 'Meeting ended' });
+
+      this.logger.log(`⚡ [handleEndMeeting] Initial events emitted in ${Date.now() - startTime}ms`);
+
+      // 2. Background all service calls and cleanup (non-awaited)
+      (async () => {
+        try {
+          this.logger.debug(`🚀 [handleEndMeeting] Starting background cleanup for ${sessionId}`);
+          
+          if (sessionType === 'studyRoom') {
+            const roomDetails = await this.studyRoomsService.getStudyRoomDetails(sessionId);
+            if (
+              roomDetails.sessionStatus !== 'DONE' &&
+              roomDetails.sessionStatus !== 'NOT_COMPLETED' &&
+              roomDetails.sessionStatus !== 'CANCELLED'
+            ) {
+              await this.studyRoomsService.completeStudyRoom(sessionId, clerkId);
+            }
+          } else {
+            const sessionDetails = await this.peerSessionsService.getPeerSessionDetails(sessionId);
+            if (
+              sessionDetails.sessionStatus !== 'DONE' &&
+              sessionDetails.sessionStatus !== 'NOT_COMPLETED' &&
+              sessionDetails.sessionStatus !== 'CANCELLED'
+            ) {
+              await this.peerSessionsService.completePeerSession(sessionId, clerkId);
+            }
+          }
+
+          // Cleanup Redis permissions for this session
+          await this.permissionsService.cleanupSession(sessionId);
+          this.logger.log(`✅ [handleEndMeeting] Background cleanup completed for ${sessionId} in ${Date.now() - startTime}ms`);
+        } catch (bgError) {
+          this.logger.error(`❌ [handleEndMeeting] Background cleanup failed for ${sessionId}:`, bgError);
+        }
+      })();
     } catch (error: any) {
       this.logger.error('Error ending meeting:', error);
       client.emit('moderation-error', {

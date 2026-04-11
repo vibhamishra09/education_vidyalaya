@@ -7,43 +7,49 @@ import { cn } from "@/lib/utils";
 
 interface SessionEndWarningDialogProps {
   open: boolean;
-  minutesRemaining: number;
+  currentEndTime: number;
   onClose?: () => void;
 }
 
 export function SessionEndWarningDialog({
   open,
-  minutesRemaining,
+  currentEndTime,
   onClose,
 }: SessionEndWarningDialogProps) {
-  const [countdown, setCountdown] = useState(minutesRemaining * 60);
+  const [countdown, setCountdown] = useState(0);
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
     if (open) {
-      // Sync countdown with actual remaining time
-      setCountdown(minutesRemaining * 60);
-      // Trigger animation
       setTimeout(() => setIsVisible(true), 10);
     } else {
       setIsVisible(false);
     }
-  }, [open, minutesRemaining]);
+  }, [open]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || !currentEndTime) return;
 
-    const interval = setInterval(() => {
-      setCountdown((prev) => Math.max(0, prev - 1));
-    }, 1000);
+    const update = () => {
+      const now = Date.now();
+      const remaining = Math.max(
+        0,
+        Math.floor((currentEndTime - now) / 1000)
+      );
+      setCountdown(remaining);
+    };
+
+    update();
+
+    const interval = setInterval(update, 1000);
 
     return () => clearInterval(interval);
-  }, [open]);
+  }, [open, currentEndTime]);
+
+  if (!open) return null;
 
   const minutes = Math.floor(countdown / 60);
   const seconds = countdown % 60;
-
-  if (!open) return null;
 
   return (
     <div 

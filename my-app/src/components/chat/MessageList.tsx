@@ -86,6 +86,10 @@ export function MessageList({
 					const senderAvatar = m.sender?.avatar
 					const initials = (senderName.charAt(0) || '?').toUpperCase()
 					const audienceType = m.audienceType || 'EVERYONE'
+					const isHostMessage =
+						!!hostUserId &&
+						(m.senderId === hostUserId ||
+							(typeof m.sender?.id === 'string' && m.sender.id === hostUserId))
 					const targetLabel =
 						audienceType === 'EVERYONE'
 							? 'Everyone'
@@ -110,7 +114,7 @@ export function MessageList({
 								<div className="flex items-baseline gap-2 mb-1">
 									<span className="font-semibold text-sm text-white/95 truncate">
 										{senderName}
-										{hostUserId && m.senderId && m.senderId === hostUserId ? ' (Host)' : ''}
+										{isHostMessage ? ' (Host)' : ''}
 									</span>
 									<span className="text-[10px] text-white/50 flex-shrink-0">{formatTime(m.createdAt)}</span>
 								</div>

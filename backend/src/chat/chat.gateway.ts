@@ -15,6 +15,7 @@ import { corsOriginDelegate } from '../common/cors';
 import { UsersService } from '../users/users.service';
 
 @WebSocketGateway({
+  namespace: '/chat',
   cors: {
     origin: corsOriginDelegate,
     credentials: true,
@@ -76,6 +77,19 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     };
   }
 
+  /**
+   * Prisma / JSON may surface audience as enum or string; strict `=== EVERYONE` can miss and
+   * fall through to the recipient branch. Guest sends have `senderId: null` — if EVERYONE was
+   * misclassified, `recipients` is empty and **no** `message:new` fires (host never sees joinee).
+   */
+  private isEveryoneAudience(
+    audienceType: MessageAudienceType | string | undefined | null,
+  ): boolean {
+    if (audienceType == null) return true;
+    if (audienceType === MessageAudienceType.EVERYONE) return true;
+    return String(audienceType).toUpperCase() === 'EVERYONE';
+  }
+
   private async emitScopedMessage(
     channelId: string,
     message: {
@@ -85,7 +99,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       targetUserId?: string | null;
     },
   ) {
-    if (message.audienceType === MessageAudienceType.EVERYONE) {
+    if (this.isEveryoneAudience(message.audienceType)) {
       // Single broadcast to the channel room — all sockets (host, participants, guests)
       // joined via join:channel receive once. Do not also emit per user:${dbId}: senders
       // are in both rooms and would see every message twice.
@@ -99,6 +113,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
     if (message.targetUserId) {
       recipients.add(message.targetUserId);
+    }
+
+    if (recipients.size === 0) {
+      this.logger.warn(
+        `emitScopedMessage: no recipients for scoped message (audience=${String(message.audienceType)}); broadcasting to channel ${channelId} as fallback`,
+      );
+      this.server.to(channelId).emit('message:new', message);
+      return;
     }
 
     for (const userId of recipients) {
@@ -208,12 +230,28 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const sessionInfo = await this.chatService.getSessionInfoFromChannelId(
         payload.channelId,
       );
-      if (
-        sessionInfo?.externalType === 'studyRoom' &&
-        sessionInfo.externalId === client.data.studyRoomId
-      ) {
-        client.join(payload.channelId);
-        client.emit('chat:joined', { channelId: payload.channelId });
+      if (sessionInfo?.externalType === 'studyRoom') {
+        const channelRoomId = await this.chatService.canonicalStudyRoomId(
+          sessionInfo.externalId,
+        );
+        const tokenRoomId = await this.chatService.canonicalStudyRoomId(
+          client.data.studyRoomId as string,
+        );
+        if (
+          channelRoomId &&
+          tokenRoomId &&
+          channelRoomId === tokenRoomId
+        ) {
+          client.join(payload.channelId);
+          client.emit('chat:joined', { channelId: payload.channelId });
+        } else {
+          this.logger.warn(
+            `Guest join:channel room mismatch channelExt=${sessionInfo.externalId} tokenStudyRoom=${String(client.data.studyRoomId)} resolvedChannel=${channelRoomId} resolvedToken=${tokenRoomId}`,
+          );
+          client.emit('chat:error', {
+            message: 'Not authorized to join this channel',
+          });
+        }
       } else {
         client.emit('chat:error', { message: 'Not authorized to join this channel' });
       }
@@ -262,25 +300,65 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       targetUserId?: string;
     },
   ) {
-    // Guest path: save message to database and emit to host
+    // Guest path: same visibility rules as signed-in users; EVERYONE → channel broadcast (all participants)
     if (client.data.isGuest) {
       try {
+        const sessionInfo = await this.chatService.getSessionInfoFromChannelId(
+          payload.channelId,
+        );
+        const audienceType = this.normalizeAudienceType(payload.audienceType);
+        const guestPermKey = client.data.guestIdentity as string;
+
+        if (sessionInfo && guestPermKey) {
+          const canChat = await this.permissionsService.hasPermission(
+            sessionInfo.externalId,
+            guestPermKey,
+            'chat',
+            false,
+          );
+          if (!canChat) {
+            client.emit('chat:error', {
+              code: 'CHAT_DISABLED',
+              message: 'Chat is disabled by the host',
+            });
+            return;
+          }
+
+          const canSendToAudience =
+            await this.permissionsService.hasAudiencePermission(
+              sessionInfo.externalId,
+              guestPermKey,
+              audienceType,
+              false,
+            );
+          if (!canSendToAudience) {
+            client.emit('chat:error', {
+              code: 'CHAT_SCOPE_RESTRICTED',
+              message: 'The host has restricted this chat target for you',
+            });
+            return;
+          }
+        }
+
         const hostDbUserId = await this.chatService.getChannelHostUserId(
           payload.channelId,
         );
-        if (!hostDbUserId) {
+        if (
+          audienceType === MessageAudienceType.HOST &&
+          !hostDbUserId
+        ) {
           client.emit('chat:error', { message: 'Host not found for this channel' });
           return;
         }
 
-        // Save guest message to database
         const message = await this.chatService.sendGuestMessage(
           payload.channelId,
           client.data.guestParticipantId,
           client.data.guestEmail,
           client.data.guestName,
           payload.content,
-          hostDbUserId,
+          audienceType,
+          audienceType === MessageAudienceType.HOST ? hostDbUserId : payload.targetUserId,
         );
 
         const base = this.serializeMessageForSocket({
@@ -297,11 +375,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
         const messageToEmit = { ...base, isGuest: true };
 
-        // Emit to host and sender
-        this.server
-          .to(`user:${hostDbUserId}`)
-          .emit('message:new', messageToEmit);
-        client.emit('message:new', messageToEmit);
+        await this.emitScopedMessage(payload.channelId, messageToEmit);
+
+        // Guests are not in user:{dbId} rooms; echo non-EVERYONE sends here (EVERYONE already hits channel room)
+        if (audienceType !== MessageAudienceType.EVERYONE) {
+          client.emit('message:new', messageToEmit);
+        }
       } catch (error: any) {
         this.logger.debug('Error sending guest message:', error);
         client.emit('chat:error', { message: error.message || 'Failed to send message' });

@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Image, SafeAreaView, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Image, ActivityIndicator, Alert } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@clerk/clerk-expo';
+import { useSidebar } from '../../lib/SidebarContext';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, Calendar, Clock, Users, Video, Globe, Shield, MessageSquare, Share2 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -34,8 +36,10 @@ export default function StudyRoomDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { isSignedIn } = useAuth();
+  const { openSidebar } = useSidebar();
   const { request } = useApi();
   const { ready: backendReady } = useBackendUser();
+  const insets = useSafeAreaInsets();
 
   const [room, setRoom] = useState<StudyRoomDetails | null>(null);
   const [loading, setLoading] = useState(true);
@@ -157,7 +161,7 @@ export default function StudyRoomDetailScreen() {
     room?.skills?.map((skill) => (typeof skill === 'string' ? skill : skill.name)) || [];
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
+    <View className="flex-1 bg-white">
       {loading ? (
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator color="#10b981" />
@@ -272,7 +276,10 @@ export default function StudyRoomDetailScreen() {
             </View>
           </ScrollView>
           {/* Sticky Bottom Join Button */}
-          <View className="absolute bottom-0 left-0 right-0 border-t border-slate-100 bg-white p-5 shadow-lg">
+          <View 
+            style={{ paddingBottom: Math.max(insets.bottom, 20), paddingTop: 20 }}
+            className="absolute bottom-0 left-0 right-0 border-t border-slate-100 bg-white px-5 shadow-lg"
+          >
             <TouchableOpacity
               onPress={() => void handleJoin()}
               disabled={joining}
@@ -294,6 +301,6 @@ export default function StudyRoomDetailScreen() {
           />
         </>
       ) : null}
-    </SafeAreaView>
+    </View>
   );
 }

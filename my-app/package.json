@@ -14,7 +14,10 @@
     "test:headed": "playwright test --headed",
     "test:api": "playwright test tests/api-endpoints.spec.ts",
     "test:integration": "playwright test tests/api-integration.spec.ts",
-    "test:components": "playwright test tests/frontend-components.spec.ts"
+    "test:components": "playwright test tests/frontend-components.spec.ts",
+    "test:e2e": "npx playwright test",
+    "test:ci": "npx playwright test || true",
+    "check:results": "node tests/check-results.js"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.0.7",

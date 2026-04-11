@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
+import { getSocketIoBaseUrl } from '@/lib/socket-base-url';
 
 interface ExtensionRequest {
   userId: string;
@@ -54,7 +55,7 @@ export function useSessionExtension({
 
     const connectSocket = () => {
       try {
-        const url = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:3002';
+        const url = getSocketIoBaseUrl();
 
         socketInstance = io(url, {
           transports: ['websocket'],
@@ -143,23 +144,13 @@ export function useSessionExtension({
       return;
     }
 
-    if (hasExtended) {
-      setError('Session has already been extended');
-      return;
-    }
-
     socket.emit('request-extension', { sessionId, sessionType, extensionMinutes: minutes });
-  }, [socket, sessionId, sessionType, hasExtended]);
+  }, [socket, sessionId, sessionType]);
 
   // Approve extension (for host)
   const approveExtension = useCallback((currentEndTime: number, minutes: number = 10) => {
     if (!socket || !sessionId || !sessionType) {
       setError('Not connected to extension service');
-      return;
-    }
-
-    if (hasExtended) {
-      setError('Session has already been extended');
       return;
     }
 
@@ -169,7 +160,7 @@ export function useSessionExtension({
       currentEndTime,
       extensionMinutes: minutes,
     });
-  }, [socket, sessionId, sessionType, hasExtended]);
+  }, [socket, sessionId, sessionType]);
 
   // Dismiss pending request
   const dismissRequest = useCallback(() => {

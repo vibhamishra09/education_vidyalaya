@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import {
   PrometheusModule,
@@ -36,12 +37,14 @@ import { SentryModule } from './common/sentry';
 import { LoggerModule } from './common/logger';
 import { CacheModule } from './redis/cache.module';
 import { ScratchPadModule } from './scratch-pad/scratch-pad.module';
+import { RecordingModule } from './recording/recording.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    ScheduleModule.forRoot(),
     LoggerModule,
     PrometheusModule.register({
       path: '/metrics',
@@ -74,6 +77,8 @@ import { ScratchPadModule } from './scratch-pad/scratch-pad.module';
     DebateChatModule,
     SessionExtensionModule,
     SessionModerationModule,
+    ScratchPadModule,
+    RecordingModule,
     EngagementModule,
   ],
   controllers: [AppController],

@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useAuth, useUser } from '@clerk/nextjs';
 import { io, Socket } from 'socket.io-client';
 import { useQueryClient } from '@tanstack/react-query';
+import { API_CONFIG } from '@/lib/api-config';
 import {
   DebateState,
   DebateStatus,
@@ -21,6 +22,7 @@ import {
   DebateRoom,
 } from '@/types/debate.types';
 import { debateRoomKeys } from './use-debate-rooms';
+import { getSocketIoBaseUrl } from '@/lib/socket-base-url';
 
 interface UseDebateSocketOptions {
   roomId: string;
@@ -137,7 +139,7 @@ export function useDebateSocket({
         const authToken = await getToken();
         if (!authToken || !mounted) return;
 
-        const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:3002';
+        const baseUrl = getSocketIoBaseUrl();
 
         const newSocket = io(`${baseUrl}/debate`, {
           transports: ['websocket'],

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { Navigation } from "@/components/layout/navigation";
@@ -49,7 +49,7 @@ import {
   getStudyRoomPagePath,
   getStudyRoomShareUrl,
 } from "@/lib/utils/study-room-share";
-import { toAbsoluteAppUrl } from "@/lib/utils/public-url";
+import { getDisplayAppOrigin } from "@/lib/utils/public-url";
 
 interface StudyRoomFormData {
   title: string;
@@ -105,19 +105,31 @@ function parseDateOnly(value: string): Date | null {
 
 /**
  * Public page where attendees register for a webinar. Same URL for the success dialog, copy, and Share.
+ * Uses {@link getDisplayAppOrigin} so localhost dev shows `http://localhost:…` while production shows webyalaya.com.
  */
 function getWebinarRegistrationAbsUrl(room: StudyRoom): string | null {
   const slug = room.webinarRegistrationSlug;
   const raw = room.webinarRegistrationUrl?.trim();
+  const origin = getDisplayAppOrigin();
 
+  let pathWithQuery = "";
   if (raw) {
-    if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;
-    if (raw.startsWith("/")) return toAbsoluteAppUrl(raw);
+    if (raw.startsWith("http://") || raw.startsWith("https://")) {
+      try {
+        const u = new URL(raw);
+        pathWithQuery = `${u.pathname}${u.search}${u.hash}`;
+      } catch {
+        return raw;
+      }
+    } else if (raw.startsWith("/")) {
+      pathWithQuery = raw;
+    }
   }
-  if (slug) {
-    return toAbsoluteAppUrl(`/webinar/register/${encodeURIComponent(slug)}`);
+  if (!pathWithQuery && slug) {
+    pathWithQuery = `/webinar/register/${encodeURIComponent(slug)}`;
   }
-  return null;
+  if (!pathWithQuery) return null;
+  return `${origin}${pathWithQuery.startsWith("/") ? "" : "/"}${pathWithQuery}`;
 }
 
 function estimateOccurrences(formData: StudyRoomFormData): number {
@@ -218,6 +230,7 @@ export function CreateStudyRoomClient() {
   const [isCopied, setIsCopied] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const defaultsHydratedRef = useRef(false);
 
   // Sync instant room time
   useEffect(() => {
@@ -227,10 +240,25 @@ export function CreateStudyRoomClient() {
         ...prev,
         date: now.toISOString().split("T")[0],
         time: now.toTimeString().slice(0, 5),
-        recurrenceEnabled: false,
       }));
     }
   }, [isInstantRoom, setFormData]);
+
+  // Backfill persisted drafts that may have blank numeric defaults.
+  useEffect(() => {
+    if (defaultsHydratedRef.current) return;
+    defaultsHydratedRef.current = true;
+    setFormData((prev) => ({
+      ...prev,
+      duration: prev.duration?.trim() ? prev.duration : initialFormData.duration,
+      maxParticipants: prev.maxParticipants?.trim()
+        ? prev.maxParticipants
+        : initialFormData.maxParticipants,
+      joiningFee: prev.joiningFee?.trim()
+        ? prev.joiningFee
+        : initialFormData.joiningFee,
+    }));
+  }, [setFormData]);
 
   useEffect(() => {
     if (!formData.date || formData.recurrenceRepeatUntil) return;
@@ -456,8 +484,6 @@ export function CreateStudyRoomClient() {
 
     const isRecurring = !isInstantRoom && formData.recurrenceEnabled;
 
-    console.log("MUTATION :: ", isRecurring);
-    
     const mutation = isRecurring ? createRecurringRoomMutation : createStudyRoomMutation;    
 
     mutation.mutate(createData, {
@@ -805,7 +831,7 @@ export function CreateStudyRoomClient() {
                 </Card>
                 )}
 
-                <Card className="border-muted bg-card/50 backdrop-blur-sm shadow-sm hover:shadow-md transition-shadow">
+                <Card className="border-muted bg-card/50 backdrop-blur-sm shadow-sm hover:shadow-md transition-shadow" style={{position: "relative", zIndex: 10}}>
                   <CardHeader className="pb-3">
                     <CardTitle className="flex items-center gap-3 text-lg font-medium text-foreground/80">
                       <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900/20 flex items-center justify-center text-blue-600 dark:text-blue-400">
@@ -1408,11 +1434,6 @@ export function CreateStudyRoomClient() {
                 const isWebinarRoom =
                   createdRoom.sessionMode === "WEBINAR" ||
                   !!createdRoom.webinarRegistrationSlug;
-                const studyRoomPageUrl = getStudyRoomShareUrl(createdRoom.id);
-                /** Webinars: Share must use the registration URL only (not /studyroom/?join=). */
-                const shareUrl = isWebinarRoom
-                  ? webinarRegUrl ?? studyRoomPageUrl
-                  : studyRoomPageUrl;
                 return (
               <div className="w-full space-y-3 sm:space-y-4">
                 {isWebinarRoom && webinarRegUrl && (
@@ -1448,14 +1469,16 @@ export function CreateStudyRoomClient() {
                     </p>
                     <div className="w-full relative flex items-center justify-between gap-1.5 p-1 pl-2 sm:p-1.5 sm:pl-3 rounded-lg sm:rounded-xl border border-input bg-muted/40 hover:bg-muted/60 transition-colors">
                     <span className="text-[10px] sm:text-xs text-foreground/70 truncate flex-1 font-mono text-center select-all">
-                      {window.location.origin + '/studyroom/' + createdRoom.slug}
+                      {getStudyRoomShareUrl(createdRoom.slug || createdRoom.id)}
                     </span>
                     <Button 
                       size="sm" 
                       variant="outline"
                       className="h-7 px-2 sm:h-8 sm:px-3 text-[9px] sm:text-[10px] uppercase tracking-wider font-bold rounded-md sm:rounded-lg bg-background shadow-sm border-border/60 hover:bg-accent hover:text-accent-foreground shrink-0"
                       onClick={() => {
-                         navigator.clipboard.writeText(window.location.origin + '/studyroom/' + createdRoom.slug);
+                         navigator.clipboard.writeText(
+                           getStudyRoomShareUrl(createdRoom.slug || createdRoom.id),
+                         );
                          setIsCopied(true);
                          setTimeout(() => setIsCopied(false), 2000);
                       }}
@@ -1469,7 +1492,7 @@ export function CreateStudyRoomClient() {
                 {/* Action Buttons */}
                 <div className="flex flex-col gap-2 w-full sm:grid sm:grid-cols-2 sm:gap-3">
                   <ShareButton
-                    url={window.location.origin + '/studyroom/' + createdRoom.slug}
+                    url={getStudyRoomShareUrl(createdRoom.slug || createdRoom.id)}
                     title={createdRoom.title}
                     description={
                       isWebinarRoom
@@ -1481,7 +1504,7 @@ export function CreateStudyRoomClient() {
                   <Button
                     onClick={() =>
                       router.push(
-                        `/studyroom/${createdRoom.slug || createdRoom.id}`,
+                        getStudyRoomPagePath(createdRoom.slug || createdRoom.id),
                       )
                     }
                     className="w-full h-10 sm:h-11 text-xs sm:text-sm rounded-lg sm:rounded-xl font-bold shadow-sm hover:shadow-md transition-all bg-green-100 text-green-800 hover:bg-green-200 border border-green-300 dark:bg-green-900/40 dark:text-green-300 dark:border-green-800 dark:hover:bg-green-900/60 px-2 sm:px-3"

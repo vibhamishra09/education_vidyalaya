@@ -17,6 +17,19 @@ export function useSessionTimer({ startTime, duration, onTimeUp, onWarning, enab
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const isMountedRef = useRef(false);
 
+  // Use refs to store the latest callbacks to avoid re-triggering effects
+  const onTimeUpRef = useRef(onTimeUp);
+  const onWarningRef = useRef(onWarning);
+
+  // Update refs when callbacks change
+  useEffect(() => {
+    onTimeUpRef.current = onTimeUp;
+  }, [onTimeUp]);
+
+  useEffect(() => {
+    onWarningRef.current = onWarning;
+  }, [onWarning]);
+
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
@@ -73,7 +86,7 @@ export function useSessionTimer({ startTime, duration, onTimeUp, onWarning, enab
       // Trigger warning at exactly 5:00 (300 seconds = 300000ms)
       if (remainingMs <= 300000 && remainingMs > 240000 && !warningShownRef.current) {
         warningShownRef.current = true;
-        onWarning(5);
+        onWarningRef.current(5);
       }
       
       // Trigger time up (only once)
@@ -82,7 +95,7 @@ export function useSessionTimer({ startTime, duration, onTimeUp, onWarning, enab
         if (intervalRef.current) {
           clearInterval(intervalRef.current);
         }
-        onTimeUp();
+        onTimeUpRef.current();
       }
     }, 1000);
 
@@ -92,7 +105,7 @@ export function useSessionTimer({ startTime, duration, onTimeUp, onWarning, enab
         clearInterval(intervalRef.current);
       }
     };
-  }, [startTime, currentDuration, enabled, onTimeUp, onWarning, extendedEndTime]);
+  }, [startTime, currentDuration, enabled, extendedEndTime]);
 
   const formatTime = useCallback(() => {
     const durationMs = currentDuration * 60000;

@@ -140,14 +140,45 @@ jobs:
             --force-new-deployment \
             --region ${{ env.AWS_REGION }}
 
+      - name: Wait for ECS deployment to stabilize (fail on real deploy issues)
+        run: |
+          set -euo pipefail
+          echo "Waiting for ECS service to become stable..."
+          aws ecs wait services-stable \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services ${{ env.ECS_SERVICE }} \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Verify ECS rollout state
+        run: |
+          set -euo pipefail
+          ROLLOUT_STATE=$(aws ecs describe-services \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services ${{ env.ECS_SERVICE }} \
+            --region ${{ env.AWS_REGION }} \
+            --query "services[0].deployments[?status=='PRIMARY'].rolloutState | [0]" \
+            --output text)
+          echo "Primary rollout state: ${ROLLOUT_STATE}"
+          if [ "${ROLLOUT_STATE}" != "COMPLETED" ]; then
+            echo "Backend rollout did not complete successfully."
+            echo "Recent ECS events:"
+            aws ecs describe-services \
+              --cluster ${{ env.ECS_CLUSTER }} \
+              --services ${{ env.ECS_SERVICE }} \
+              --region ${{ env.AWS_REGION }} \
+              --query "services[0].events[0:10].[createdAt,message]" \
+              --output table || true
+            exit 1
+          fi
+
       - name: Deployment summary
         run: |
-          echo "✅ Backend deployment triggered successfully!"
+          echo "✅ Backend deployment completed and service is stable."
           echo "Image: ${{ steps.build-image.outputs.image }}"
           echo "ECS Service: ${{ env.ECS_SERVICE }}"
           echo "Cluster: ${{ env.ECS_CLUSTER }}"
           echo "AWS Credentials: Namaste profile (via static credentials)"
-          echo "Deployment is in progress. ECS will pull the updated image."
+          echo "Rollout state: COMPLETED"
 
   deploy-frontend:
     name: Deploy Frontend to Vercel (Dev - Namaste)
@@ -172,21 +203,38 @@ jobs:
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
 
-      - name: Deploy to Vercel (Dev Environment Preview)
+      - name: Install frontend deps
+        working-directory: ./my-app
+        run: pnpm install --frozen-lockfile
+
+      - name: Build frontend (CI prebuild)
+        working-directory: ./my-app
+        run: pnpm build
+
+      - name: Deploy to Vercel (Dev Environment Production)
         working-directory: ./my-app
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_DEV2 }}
         run: |
-          # Link project if not already linked (non-interactive)
-          if [ ! -f .vercel/project.json ]; then
-            echo "Linking Vercel dev project..."
-            vercel link --yes --token=$VERCEL_TOKEN --scope=$VERCEL_ORG_ID --project=$VERCEL_PROJECT_ID || true
-          fi
+          set -euo pipefail
 
-           # Deploy to production on test environment
-          vercel deploy --prod --yes --token=$VERCEL_TOKEN
+          # Ensure project settings are present locally for deterministic prebuilt deploy.
+          vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --debug
+          vercel build --prod --token="$VERCEL_TOKEN" --debug
+
+          deploy_once() {
+            vercel deploy --prebuilt --prod --yes --token="$VERCEL_TOKEN" --debug
+          }
+
+          echo "Deploy attempt 1/2..."
+          if ! deploy_once; then
+            echo "First Vercel deploy attempt failed. Retrying once in 10s..."
+            sleep 10
+            echo "Deploy attempt 2/2..."
+            deploy_once
+          fi
 
       - name: Deployment summary
         run: |
@@ -194,3 +242,61 @@ jobs:
           echo "Preview deployment is in progress. Check Vercel dashboard for status."
           echo "Project ID: ${{ secrets.VERCEL_PROJECT_ID_DEV2 }}"
 
+  e2e-tests:
+    name: Run E2E Tests (Dev)
+    runs-on: ubuntu-latest
+    needs: [deploy-backend, deploy-frontend]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install deps (dev-e2e)
+        working-directory: ./dev-e2e
+        run: pnpm install
+
+      - name: Install Playwright browsers
+        working-directory: ./dev-e2e
+        run: npx playwright install --with-deps
+
+      - name: Wait for dev site to be ready
+        run: |
+          echo "Waiting for dev.webyalaya.com..."
+          for i in {1..30}; do
+            if curl -s https://dev.webyalaya.com > /dev/null; then
+              echo "Dev site is up!"
+              exit 0
+            fi
+            echo "Waiting..."
+            sleep 10
+          done
+          echo "Site did not come up in time"
+          exit 1
+
+      - name: Run Playwright tests
+        working-directory: ./dev-e2e
+        env:
+          BASE_URL: https://dev.webyalaya.com
+        run: |
+          npx playwright test
+
+      - name: Check 50% pass threshold
+        working-directory: ./dev-e2e
+        run: node check-results.js
+
+      - name: Upload Playwright HTML Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: dev-e2e/playwright-report
