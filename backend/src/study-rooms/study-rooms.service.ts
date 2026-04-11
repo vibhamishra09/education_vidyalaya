@@ -4,6 +4,8 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 import {
+  Inject,
+  forwardRef,
   Injectable,
   NotFoundException,
   BadRequestException,
@@ -23,6 +25,7 @@ import { EngagementService } from '../engagement/engagement.service';
 import { UsersService } from '../users/users.service';
 import { LoggerService } from '../common/logger/logger.service';
 import { CacheService } from '../redis/cache.service';
+import { LivekitService } from '../livekit/livekit.service';
 import { isConnectionError } from '../common/db-error-handler';
 import {
   CreateStudyRoomDto,
@@ -117,6 +120,8 @@ export class StudyRoomsService {
     private readonly logger: LoggerService,
     private readonly cacheService: CacheService,
     private readonly usersService: UsersService,
+    @Inject(forwardRef(() => LivekitService))
+    private readonly livekitService: LivekitService,
   ) {
     this.logger.setContext(StudyRoomsService.name);
   }
@@ -183,14 +188,36 @@ export class StudyRoomsService {
     return DEFAULT_PRODUCTION_APP_ORIGIN;
   }
 
+  /**
+   * Base URL for webinar join / waiting links in emails and guest join redirects.
+   * In development, avoids using a production FRONTEND_URL (common .env mistake) so
+   * links open local Next.js. Override with WEBINAR_EMAIL_PUBLIC_URL or EMAIL_APP_PUBLIC_URL.
+   */
+  private resolveWebinarEmailClientBaseUrl(): string {
+    const explicit =
+      process.env.WEBINAR_EMAIL_PUBLIC_URL?.trim() ||
+      process.env.EMAIL_APP_PUBLIC_URL?.trim();
+    if (explicit && /^https?:\/\//i.test(explicit)) {
+      return explicit.replace(/\/$/, '');
+    }
+    if (process.env.NODE_ENV === 'production') {
+      return this.resolveAppPublicBaseUrl().replace(/\/$/, '');
+    }
+    const fe = process.env.FRONTEND_URL?.trim();
+    if (fe && /^https?:\/\//i.test(fe) && isLocalDevOrigin(fe)) {
+      return fe.replace(/\/$/, '');
+    }
+    return 'http://localhost:3000';
+  }
+
   private buildWebinarJoinUrl(studyRoomId: string, joinLinkToken: string): string {
-    const base = this.resolveAppPublicBaseUrl().replace(/\/$/, '');
+    const base = this.resolveWebinarEmailClientBaseUrl().replace(/\/$/, '');
     const path = `/webinar/join?room=studyroom-${studyRoomId}&token=${encodeURIComponent(joinLinkToken)}`;
     return `${base}${path}`;
   }
 
   private buildWebinarWaitingUrl(studyRoomId: string, joinLinkToken: string): string {
-    const base = this.resolveAppPublicBaseUrl().replace(/\/$/, '');
+    const base = this.resolveWebinarEmailClientBaseUrl().replace(/\/$/, '');
     const path = `/webinar/waiting?room=studyroom-${studyRoomId}&token=${encodeURIComponent(joinLinkToken)}`;
     return `${base}${path}`;
   }
@@ -1945,7 +1972,7 @@ export class StudyRoomsService {
     };
   }
 
-  /** Webinar audience: subscribe-only; host publishes A/V (unless permissions allow mic/video). */
+  /** Webinar gate for signed-in path: host only; attendees must use registration guest link. */
   async getLivekitPublishPolicyForStudyRoom(
     studyRoomId: string,
     clerkUserId: string,
@@ -1955,7 +1982,6 @@ export class StudyRoomsService {
       select: {
         sessionMode: true,
         createdById: true,
-        webinarConfig: true,
       },
     });
     if (!room || room.sessionMode !== StudyRoomSessionMode.WEBINAR) {
@@ -1968,16 +1994,13 @@ export class StudyRoomsService {
     if (user?.id === room.createdById) {
       return { publish: true, publishData: true };
     }
-    const cfg = this.mergeWebinarConfig(
-      (room.webinarConfig as Record<string, unknown>) || undefined,
-    );
-    // LiveKit canPublish must be true for guests to start camera/mic tracks when the host
-    // unlocks or requests media; webinar defaults are enforced in UI and moderation, not here.
-    const publish = true;
-    const { publishData } = this.webinarChatPublishData(
-      cfg as Record<string, unknown>,
-    );
-    return { publish, publishData };
+    // Webinar hard gate: only host may join directly with signed-in token.
+    // All other attendees must use the registration/join link guest token flow.
+    throw new ForbiddenException({
+      code: 'WEBINAR_REGISTRATION_REQUIRED',
+      message:
+        'Only host/cohost can join directly. Please register first and join from your webinar email link.',
+    });
   }
 
   private webinarChatPublishData(cfg: Record<string, unknown>): {
@@ -2110,7 +2133,10 @@ export class StudyRoomsService {
       room.id,
       guest.id,
     );
-    const appPublicUrl = this.resolveAppPublicBaseUrl().replace(/\/$/, '');
+    const appPublicUrl = this.resolveWebinarEmailClientBaseUrl().replace(
+      /\/$/,
+      '',
+    );
     const joinPath = `/rooms/studyroom/studyroom-${room.id}?guestAccessToken=${guestAccessToken}`;
     const joinUrl = `${appPublicUrl}${joinPath}`;
     return {
@@ -2298,6 +2324,73 @@ export class StudyRoomsService {
     await this.prisma.studyRoomGuestParticipant.delete({
       where: { id: guest.id },
     });
+    // Force immediate removal from active LiveKit room (if currently connected).
+    try {
+      await this.livekitService.removeParticipant(
+        `studyroom-${room.id}`,
+        guest.livekitIdentity,
+      );
+    } catch (err) {
+      // Guest may already be offline; do not fail host action for that.
+      this.logger.warn(
+        `Failed to remove webinar guest ${guest.livekitIdentity} from LiveKit room studyroom-${room.id}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+    return { success: true };
+  }
+
+  async kickWebinarGuest(
+    studyRoomId: string,
+    guestParticipantId: string,
+    hostUserId: string,
+  ) {
+    const room = await this.resolveStudyRoomByIdOrSlug(studyRoomId, {
+      select: { id: true, slug: true, createdById: true, sessionMode: true },
+    });
+    if (!room || room.sessionMode !== StudyRoomSessionMode.WEBINAR) {
+      throw new NotFoundException('Webinar not found');
+    }
+    const actor = await this.resolveUserIdentity(hostUserId);
+    if (room.createdById !== actor.id) {
+      throw new ForbiddenException('Only the host can kick attendees');
+    }
+    const guest = await this.prisma.studyRoomGuestParticipant.findFirst({
+      where: { id: guestParticipantId, studyRoomId: room.id },
+    });
+    if (!guest) {
+      throw new NotFoundException('Guest not found');
+    }
+
+    // Kick from active room only; keep registration/approval data intact.
+    // Try canonical room name first, then slug for older non-canonical sessions.
+    const candidateRoomNames = Array.from(
+      new Set(
+        [`studyroom-${room.id}`, room.slug?.trim() || ''].filter(
+          (name): name is string => !!name,
+        ),
+      ),
+    );
+    let kicked = false;
+    let lastErr: string | null = null;
+    for (const roomName of candidateRoomNames) {
+      try {
+        await this.livekitService.removeParticipant(
+          roomName,
+          guest.livekitIdentity,
+        );
+        kicked = true;
+        break;
+      } catch (err) {
+        lastErr = err instanceof Error ? err.message : String(err);
+      }
+    }
+    if (!kicked) {
+      throw new BadRequestException(
+        lastErr ||
+          'Could not remove attendee from live meeting. Ask attendee to rejoin and try again.',
+      );
+    }
+
     return { success: true };
   }
 
@@ -2332,357 +2425,315 @@ export class StudyRoomsService {
     return { success: true, chatEnabled: enabled };
   }
 
-  async updateStudyRoom(
-    studyRoomId: string,
-    userId: string,
-    updateDto: UpdateStudyRoomDto,
-  ) {
-    const studyRoom = await this.resolveStudyRoomByIdOrSlug(studyRoomId, {
-      select: {
-        id: true,
-        title: true,
-        description: true,
-        imageUrl: true,
-        sessionStatus: true,
-        date: true,
-        duration: true,
-        maxParticipants: true,
-        joiningFee: true,
-        createdById: true,
-        seriesId: true,
-        seriesRootId: true,
-        occurrenceIndex: true,
-        occurrenceDateLocal: true,
-        timezone: true,
-      },
-    });
 
-    if (!studyRoom) {
-      throw new NotFoundException('Study room not found');
-    }
-
-    const actor = await this.resolveUserIdentity(userId);
-    if (studyRoom.createdById !== actor.id) {
-      throw new ForbiddenException(
-        'Only the creator can update this study room',
-      );
-    }
-
-    const studyRoomEditClosedStatuses: SessionStatus[] = [
-      SessionStatus.DONE,
-      SessionStatus.CANCELLED,
-      SessionStatus.NOT_COMPLETED,
-    ];
-    if (studyRoomEditClosedStatuses.includes(studyRoom.sessionStatus)) {
-      throw new BadRequestException(
-        'Cannot edit this study room after the meeting has ended, been cancelled, or was marked not completed.',
-      );
-    }
-
-    const editScope = updateDto.editScope ?? StudyRoomEditScope.SINGLE;
-    const timezone = updateDto.timezone ?? studyRoom.timezone ?? 'UTC';
-
-    const updateData: Record<string, unknown> = {};
-    if (updateDto.title !== undefined && updateDto.title.trim() !== "") {
-      updateData.title = updateDto.title.trim();
-    }
-    if (updateDto.description !== undefined) {
-      const d =
-        typeof updateDto.description === "string"
-          ? updateDto.description.trim()
-          : updateDto.description;
-      updateData.description = d === "" ? null : d;
-    }
-    if (updateDto.imageUrl !== undefined)
-      updateData.imageUrl = updateDto.imageUrl;
-    if (updateDto.duration) updateData.duration = updateDto.duration;
-    if (updateDto.maxParticipants)
-      updateData.maxParticipants = updateDto.maxParticipants;
-    if (updateDto.joiningFee !== undefined)
-      updateData.joiningFee = updateDto.joiningFee;
-    if (updateDto.status) {
-      updateData.sessionStatus = updateDto.status;
-    }
-    if (updateDto.timezone) {
-      updateData.timezone = updateDto.timezone;
-    }
-
-    if (updateDto.date || updateDto.time) {
-      const oldDate = studyRoom.date.toISOString().split('T')[0];
-      const oldTime = studyRoom.date.toISOString().substring(11, 16);
-      updateData.date = convertLocalToUTC(
-        updateDto.date ?? oldDate,
-        updateDto.time ?? oldTime,
-        timezone,
-      );
-    }
-
-    const newScheduledStart =
-      updateData.date != null
-        ? new Date(updateData.date as Date)
-        : studyRoom.date;
-    const dateOrTimeChanged = Boolean(updateDto.date || updateDto.time);
-    const willRegenerateSeries =
-      !!updateDto.recurrence &&
-      editScope !== StudyRoomEditScope.SINGLE &&
-      !!studyRoom.seriesId;
-
-    if (
-      !willRegenerateSeries &&
-      studyRoom.sessionStatus === SessionStatus.ONGOING &&
-      updateDto.status === undefined &&
-      dateOrTimeChanged &&
-      newScheduledStart.getTime() > Date.now()
-    ) {
-      updateData.sessionStatus = SessionStatus.UPCOMING;
-    }
-
-    const updateFieldKeys = Object.keys(updateData);
-    const hasNonStatusChange = updateFieldKeys.some(
-      (k) => k !== 'sessionStatus',
+ assertNotInPast = (utcDate: Date, label = 'date') => {
+  if (utcDate.getTime() < Date.now()) {
+    throw new BadRequestException(
+      `Cannot reschedule a study room to a past ${label}.`,
     );
-    const shouldMarkHostDetailsEdited =
-      hasNonStatusChange || updateDto.skills !== undefined;
-    if (shouldMarkHostDetailsEdited) {
-      updateData.hostDetailsUpdatedAt = new Date();
-    }
+  }
+};
+async updateStudyRoom(
+  studyRoomId: string,
+  userId: string,
+  updateDto: UpdateStudyRoomDto,
+) {
+  const studyRoom = await this.resolveStudyRoomByIdOrSlug(studyRoomId, {
+    select: {
+      id: true,
+      slug: true,
+      title: true,
+      description: true,
+      imageUrl: true,
+      sessionStatus: true,
+      date: true,
+      duration: true,
+      maxParticipants: true,
+      joiningFee: true,
+      createdById: true,
+      seriesId: true,
+      seriesRootId: true,
+      occurrenceIndex: true,
+      occurrenceDateLocal: true,
+      timezone: true,
+    },
+  });
 
-    const whereForScope =
-      editScope === StudyRoomEditScope.SINGLE || !studyRoom.seriesId
-        ? { id: studyRoom.id }
-        : editScope === StudyRoomEditScope.THIS_AND_FUTURE
-          ? { seriesId: studyRoom.seriesId, date: { gte: studyRoom.date } }
-          : { seriesId: studyRoom.seriesId };
+  if (!studyRoom) throw new NotFoundException('Study room not found');
 
-    const targetRooms = await this.prisma.studyRoom.findMany({
-      where: whereForScope as never,
-      select: { id: true, date: true },
-      orderBy: { date: 'asc' },
+  const actor = await this.resolveUserIdentity(userId);
+  if (studyRoom.createdById !== actor.id) {
+    throw new ForbiddenException('Only the creator can update this study room');
+  }
+
+  const closedStatuses: SessionStatus[] = [
+    SessionStatus.DONE,
+    SessionStatus.CANCELLED,
+    SessionStatus.NOT_COMPLETED,
+  ];
+  if (closedStatuses.includes(studyRoom.sessionStatus)) {
+    throw new BadRequestException(
+      'Cannot edit this study room after the meeting has ended, been cancelled, or was marked not completed.',
+    );
+  }
+
+  const editScope  = updateDto.editScope ?? StudyRoomEditScope.SINGLE;
+  const timezone   = updateDto.timezone  ?? studyRoom.timezone ?? 'UTC';
+  const isSeriesEdit = editScope !== StudyRoomEditScope.SINGLE && !!studyRoom.seriesId;
+
+  const currentLocalDate = studyRoom.date.toLocaleDateString('en-CA', {
+    timeZone: timezone,
+  });
+
+  const dateChanged =
+    updateDto.date !== undefined
+
+  const oldTime = studyRoom.date.toLocaleTimeString('en-GB', {
+      timeZone: timezone,
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    
+  
+  const timeChanged =
+    updateDto.time !== undefined 
+
+  const updateData: Record<string, unknown> = {};
+
+  if (updateDto.title !== undefined && updateDto.title.trim() !== '') {
+    updateData.title = updateDto.title.trim();
+  }
+  if (updateDto.description !== undefined) {
+    const d =
+      typeof updateDto.description === 'string'
+        ? updateDto.description.trim()
+        : updateDto.description;
+    updateData.description = d === '' ? null : d;
+  }
+  if (updateDto.imageUrl    !== undefined) updateData.imageUrl       = updateDto.imageUrl;
+  if (updateDto.duration)                  updateData.duration       = updateDto.duration;
+  if (updateDto.maxParticipants)           updateData.maxParticipants = updateDto.maxParticipants;
+  if (updateDto.joiningFee  !== undefined) updateData.joiningFee     = updateDto.joiningFee;
+  if (updateDto.status)                    updateData.sessionStatus   = updateDto.status;
+  if (updateDto.timezone)                  updateData.timezone        = updateDto.timezone;
+
+  if (!isSeriesEdit && (dateChanged || timeChanged)) {
+    const oldLocalDate = studyRoom.date.toLocaleDateString('en-CA', { //this is locale
+      timeZone: timezone,
+    });
+    const oldTime = studyRoom.date.toLocaleTimeString('en-GB', {
+      timeZone: timezone,
+      hour: '2-digit',
+      minute: '2-digit',
     });
 
-    if (targetRooms.length === 0) {
-      throw new NotFoundException(
-        'No study room occurrences found for requested scope',
-      );
+    const newLocalDate = updateDto.date ?? oldLocalDate;
+    const newTime      = updateDto.time ?? oldTime;
+
+    const newUtc = convertLocalToUTC(newLocalDate, newTime, timezone); //converts back to utc
+    this.assertNotInPast(new Date(newUtc as Date));
+
+    const existingRoom = await this.prisma.studyRoom.findFirst({
+        where: {
+          slug: studyRoom.slug,
+          date: newUtc,
+          NOT: { id: studyRoom.id },
+        },
+        select: { id: true },
+      });
+
+      if (existingRoom) {
+        throw new BadRequestException(
+          'Another session already exists at this date and time in the series',
+        );
     }
 
-    const shouldRegenerateSeries =
-      !!updateDto.recurrence &&
-      editScope !== StudyRoomEditScope.SINGLE &&
-      !!studyRoom.seriesId;
+    updateData.date = newUtc;
 
-    if (shouldRegenerateSeries) {
-      const startDate =
-        updateDto.date ??
-        (studyRoom.occurrenceDateLocal
-          ? studyRoom.occurrenceDateLocal.toISOString().split('T')[0]
-          : studyRoom.date.toISOString().split('T')[0]);
-      const time =
-        updateDto.time ?? studyRoom.date.toISOString().substring(11, 16);
+    if (dateChanged) {
+      updateData.occurrenceDateLocal = convertLocalToUTC(newLocalDate, '00:00', timezone);
+    }
+  }
 
-      let regeneratedOccurrences;
-      try {
-        regeneratedOccurrences = buildStudyRoomOccurrences({
-          startDate,
-          time,
-          timezone,
-          recurrence: updateDto.recurrence,
-        });
-      } catch (error) {
-        throw new BadRequestException({
-          code: 'INVALID_RECURRENCE',
-          message:
-            error instanceof Error
-              ? error.message
-              : 'Invalid recurrence config',
-        });
-      }
+  if (
+    !isSeriesEdit &&
+    studyRoom.sessionStatus === SessionStatus.ONGOING &&
+    updateDto.status === undefined &&
+    updateData.date !== undefined &&
+    new Date(updateData.date as Date).getTime() > Date.now()
+  ) {
+    updateData.sessionStatus = SessionStatus.UPCOMING;
+  }
 
-      const skillIds =
-        updateDto.skills && updateDto.skills.length > 0
-          ? (
+  const hasNonStatusChange = Object.keys(updateData).some(
+    (k) => k !== 'sessionStatus',
+  );
+  const shouldMarkHostDetailsEdited =
+    hasNonStatusChange ||
+    updateDto.skills !== undefined ||
+    (isSeriesEdit && (dateChanged || timeChanged));
+
+  if (shouldMarkHostDetailsEdited) {
+    updateData.hostDetailsUpdatedAt = new Date();
+  }
+
+  const whereForScope =
+    editScope === StudyRoomEditScope.SINGLE || !studyRoom.seriesId
+      ? { id: studyRoom.id }
+      : editScope === StudyRoomEditScope.THIS_AND_FUTURE
+        ? { seriesId: studyRoom.seriesId, occurrenceDateLocal: { gte: studyRoom.occurrenceDateLocal } }
+        : { slug: studyRoom.slug };
+
+  const targetRooms = await this.prisma.studyRoom.findMany({
+    where: whereForScope as never,
+    select: { id: true },
+  });
+
+  if (targetRooms.length === 0) {
+    throw new NotFoundException(
+      'No study room occurrences found for the requested scope',
+    );
+  }
+
+  const roomIds = targetRooms.map((r) => r.id);
+
+  if (Object.keys(updateData).length > 0) {
+    await this.prisma.studyRoom.updateMany({
+      where: { id: { in: roomIds } },
+      data: updateData as never,
+    });
+  }
+
+if (isSeriesEdit && (dateChanged || timeChanged)) {
+  let offsetDays = 0;
+
+  if (dateChanged) {
+    const anchorLocalDateStr = (studyRoom.occurrenceDateLocal ?? studyRoom.date)
+      .toLocaleDateString('en-CA', { timeZone: timezone });
+
+    const anchorMs = new Date(anchorLocalDateStr).getTime();
+    const targetMs = new Date(updateDto.date!).getTime();
+    offsetDays = Math.round((targetMs - anchorMs) / (1000 * 60 * 60 * 24));
+  }
+
+  const newTime = updateDto.time ?? oldTime;
+
+  const anchorLocalDateStr = (studyRoom.occurrenceDateLocal ?? studyRoom.date)
+    .toLocaleDateString('en-CA', { timeZone: timezone });
+
+  const anchorNewLocalDate = new Date(
+    new Date(anchorLocalDateStr).getTime() + offsetDays * 24 * 60 * 60 * 1000,
+  ).toISOString().split('T')[0];
+
+  const anchorNewUtc = convertLocalToUTC(anchorNewLocalDate, newTime, timezone);
+  this.assertNotInPast(new Date(anchorNewUtc as Date));
+
+  if (timeChanged && !dateChanged) {
+    const newTimeInterval = `${newTime}:00`;
+    const oldTimeInterval = `${oldTime}:00`;
+
+    await this.prisma.$queryRawUnsafe(
+      `UPDATE "StudyRoom"
+       SET
+         "date"              = "occurrenceDateLocal" + $2::interval,
+         "recurrenceEndDate" = "recurrenceEndDate" - $3::interval + $2::interval
+     WHERE "id"::text = ANY($1)`,
+      roomIds,         
+      newTimeInterval, 
+      oldTimeInterval, 
+    );
+
+    await this.prisma.$queryRawUnsafe(
+      `UPDATE "StudyRoom"
+      SET "recurrenceEndDate" = sub.max_date
+      FROM (
+        SELECT MAX("date") as max_date
+        FROM "StudyRoom"
+        WHERE "slug" = $1
+      ) sub
+      WHERE "slug" = $1`,
+      studyRoom.slug
+    );
+
+  } else if (dateChanged && !timeChanged) {
+
+    await this.prisma.$queryRawUnsafe(    // $1 = roomIds array, $2 = offsetDays
+      `UPDATE "StudyRoom"
+       SET
+         "date"                = "date"                + ($2::int * INTERVAL '1 day'),
+         "occurrenceDateLocal" = "occurrenceDateLocal" + ($2::int * INTERVAL '1 day'),
+         "recurrenceEndDate"   = "recurrenceEndDate"   + ($2::int * INTERVAL '1 day')
+        WHERE "id"::text = ANY($1)`,
+      roomIds,    
+      offsetDays, 
+    );
+
+  } else {
+    const newTimeInterval = `${newTime}:00`;
+    const oldTimeInterval = `${oldTime}:00`;
+
+    await this.prisma.$queryRawUnsafe(
+      `UPDATE "StudyRoom"
+      SET
+        "date" = ("occurrenceDateLocal" + ($2::int * INTERVAL '1 day'))
+                  + $3::interval,
+        "occurrenceDateLocal" = "occurrenceDateLocal" + ($2::int * INTERVAL '1 day')
+      WHERE "id"::text = ANY($1)`,
+      roomIds,
+      offsetDays,
+      newTimeInterval,
+    );
+
+      await this.prisma.$queryRawUnsafe(
+      `UPDATE "StudyRoom"
+      SET "recurrenceEndDate" = sub.max_date
+      FROM (
+        SELECT MAX("date") as max_date
+        FROM "StudyRoom"
+        WHERE "slug" = $1
+      ) sub
+      WHERE "slug" = $1`,
+      studyRoom.slug
+    );
+  }
+}
+
+  if (updateDto.skills !== undefined) {
+    const skillIds =
+      updateDto.skills.length > 0
+        ? (
             await this.prisma.skill.findMany({
               where: { name: { in: updateDto.skills } },
               select: { id: true },
             })
-          ).map((skill) => skill.id)
-          : null;
+          ).map((s) => s.id)
+        : [];
 
-      const createdRoomIds = await this.prisma.$transaction(async (tx) => {
-        const createdIds: string[] = [];
-
-        for (
-          let i = 0;
-          i < Math.max(targetRooms.length, regeneratedOccurrences.length);
-          i++
-        ) {
-          const target = targetRooms[i];
-          const occurrence = regeneratedOccurrences[i];
-
-          if (target && occurrence) {
-            await tx.studyRoom.update({
-              where: { id: target.id },
-              data: {
-                ...(updateData as object),
-                date: occurrence.utcDate,
-                occurrenceDateLocal: convertLocalToUTC(
-                  occurrence.localDate,
-                  '00:00',
-                  timezone,
-                ),
-                occurrenceIndex: occurrence.occurrenceIndex,
-                recurrenceMode: updateDto.recurrence!.mode,
-                recurrenceEndDate: convertLocalToUTC(
-                  updateDto.recurrence!.repeatUntil,
-                  time,
-                  timezone,
-                ),
-                timezone,
-                isRecurring: true,
-              },
-            });
-
-            if (skillIds) {
-              await tx.studyRoomSkill.deleteMany({
-                where: { studyRoomId: target.id },
-              });
-              if (skillIds.length > 0) {
-                await tx.studyRoomSkill.createMany({
-                  data: skillIds.map((skillId) => ({
-                    studyRoomId: target.id,
-                    skillId,
-                  })),
-                  skipDuplicates: true,
-                });
-              }
-            }
-          } else if (target && !occurrence) {
-            await tx.studyRoom.update({
-              where: { id: target.id },
-              data: {
-                ...(updateData as object),
-                sessionStatus: SessionStatus.CANCELLED,
-              },
-            });
-          } else if (!target && occurrence) {
-            const created = await tx.studyRoom.create({
-              data: {
-                title: updateDto.title ?? studyRoom.title,
-                description: updateDto.description ?? studyRoom.description,
-                imageUrl: updateDto.imageUrl ?? studyRoom.imageUrl,
-                date: occurrence.utcDate,
-                duration: updateDto.duration ?? studyRoom.duration,
-                maxParticipants:
-                  updateDto.maxParticipants ?? studyRoom.maxParticipants,
-                joiningFee:
-                  updateDto.joiningFee ?? (studyRoom.joiningFee as any),
-                sessionStatus: updateDto.status ?? SessionStatus.UPCOMING,
-                createdById: studyRoom.createdById,
-                isRecurring: true,
-                recurrenceMode: updateDto.recurrence!.mode,
-                seriesId: studyRoom.seriesId,
-                seriesRootId: studyRoom.seriesRootId ?? studyRoom.id,
-                occurrenceIndex: occurrence.occurrenceIndex,
-                recurrenceEndDate: convertLocalToUTC(
-                  updateDto.recurrence!.repeatUntil,
-                  time,
-                  timezone,
-                ),
-                occurrenceDateLocal: convertLocalToUTC(
-                  occurrence.localDate,
-                  '00:00',
-                  timezone,
-                ),
-                timezone,
-              },
-              select: { id: true },
-            });
-            createdIds.push(created.id);
-
-            const baseSkillIds = skillIds
-              ? skillIds
-              : (
-                await tx.studyRoomSkill.findMany({
-                  where: { studyRoomId: studyRoom.id },
-                  select: { skillId: true },
-                })
-              ).map((row) => row.skillId);
-            if (baseSkillIds.length > 0) {
-              await tx.studyRoomSkill.createMany({
-                data: baseSkillIds.map((skillId) => ({
-                  studyRoomId: created.id,
-                  skillId,
-                })),
-                skipDuplicates: true,
-              });
-            }
-          }
-        }
-
-        return createdIds;
-      });
-
-      for (const createdId of createdRoomIds) {
-        await this.chatService.getOrCreateChannelForStudyRoom(createdId, [
-          studyRoom.createdById,
-        ]);
-      }
-
-      if (shouldMarkHostDetailsEdited) {
-        await this.notifyStudyRoomLearnersDetailsUpdated(
-          targetRooms.map((r) => r.id),
-          studyRoom.createdById,
-          updateDto.title?.trim() ?? studyRoom.title,
-          studyRoom.id,
-        );
-      }
-
-      return this.getStudyRoomDetails(studyRoom.id, userId);
-    }
-
-    await this.prisma.studyRoom.updateMany({
-      where: whereForScope as never,
-      data: updateData as never,
+    await this.prisma.studyRoomSkill.deleteMany({
+      where: { studyRoomId: { in: roomIds } },
     });
 
-    if (updateDto.skills) {
-      const skillIds = (
-        await this.prisma.skill.findMany({
-          where: { name: { in: updateDto.skills } },
-          select: { id: true },
-        })
-      ).map((skill) => skill.id);
-
-      await this.prisma.$transaction(async (tx) => {
-        for (const room of targetRooms) {
-          await tx.studyRoomSkill.deleteMany({
-            where: { studyRoomId: room.id },
-          });
-          if (skillIds.length > 0) {
-            await tx.studyRoomSkill.createMany({
-              data: skillIds.map((skillId) => ({
-                studyRoomId: room.id,
-                skillId,
-              })),
-              skipDuplicates: true,
-            });
-          }
-        }
+    if (skillIds.length > 0) {
+      await this.prisma.studyRoomSkill.createMany({
+        data: roomIds.flatMap((roomId) =>
+          skillIds.map((skillId) => ({ studyRoomId: roomId, skillId })),
+        ),
+        skipDuplicates: true,
       });
     }
-
-    if (shouldMarkHostDetailsEdited) {
-      await this.notifyStudyRoomLearnersDetailsUpdated(
-        targetRooms.map((r) => r.id),
-        studyRoom.createdById,
-        updateDto.title?.trim() ?? studyRoom.title,
-        studyRoom.id,
-      );
-    }
-
-    return this.getStudyRoomDetails(studyRoom.id, userId);
   }
 
+  if (shouldMarkHostDetailsEdited) {
+    await this.notifyStudyRoomLearnersDetailsUpdated(
+      roomIds,
+      studyRoom.createdById,
+      updateDto.title?.trim() ?? studyRoom.title,
+      studyRoom.id,
+    );
+  }
+
+  return this.getStudyRoomDetails(studyRoom.id, userId);
+}
   async joinStudyRoom(studyRoomId: string, userId: string) {
     const actor = await this.resolveUserIdentity(userId);
 
@@ -2861,10 +2912,17 @@ export class StudyRoomsService {
     const now = new Date();
     const twoMinutesAgo = now.getTime() - 2 * 60 * 1000;
 
-    if (occurrences[0].utcDate.getTime() < twoMinutesAgo) {
+    const firstStart = occurrences[0].utcDate;
+
+    const firstEnd = new Date(
+      firstStart.getTime() + createDto.duration * 60 * 1000,
+    );
+
+    if (firstEnd.getTime() <= twoMinutesAgo) {
       throw new BadRequestException({
         code: 'PAST_TIME_NOT_ALLOWED',
-        message: 'Study rooms cannot be scheduled in the past',
+        message:
+          'Recurring session cannot be created if the first occurrence is already over',
       });
     }
 

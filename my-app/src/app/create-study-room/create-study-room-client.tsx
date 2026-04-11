@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { Navigation } from "@/components/layout/navigation";
@@ -49,7 +49,7 @@ import {
   getStudyRoomPagePath,
   getStudyRoomShareUrl,
 } from "@/lib/utils/study-room-share";
-import { toAbsoluteAppUrl } from "@/lib/utils/public-url";
+import { getDisplayAppOrigin } from "@/lib/utils/public-url";
 
 interface StudyRoomFormData {
   title: string;
@@ -105,19 +105,31 @@ function parseDateOnly(value: string): Date | null {
 
 /**
  * Public page where attendees register for a webinar. Same URL for the success dialog, copy, and Share.
+ * Uses {@link getDisplayAppOrigin} so localhost dev shows `http://localhost:…` while production shows webyalaya.com.
  */
 function getWebinarRegistrationAbsUrl(room: StudyRoom): string | null {
   const slug = room.webinarRegistrationSlug;
   const raw = room.webinarRegistrationUrl?.trim();
+  const origin = getDisplayAppOrigin();
 
+  let pathWithQuery = "";
   if (raw) {
-    if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;
-    if (raw.startsWith("/")) return toAbsoluteAppUrl(raw);
+    if (raw.startsWith("http://") || raw.startsWith("https://")) {
+      try {
+        const u = new URL(raw);
+        pathWithQuery = `${u.pathname}${u.search}${u.hash}`;
+      } catch {
+        return raw;
+      }
+    } else if (raw.startsWith("/")) {
+      pathWithQuery = raw;
+    }
   }
-  if (slug) {
-    return toAbsoluteAppUrl(`/webinar/register/${encodeURIComponent(slug)}`);
+  if (!pathWithQuery && slug) {
+    pathWithQuery = `/webinar/register/${encodeURIComponent(slug)}`;
   }
-  return null;
+  if (!pathWithQuery) return null;
+  return `${origin}${pathWithQuery.startsWith("/") ? "" : "/"}${pathWithQuery}`;
 }
 
 function estimateOccurrences(formData: StudyRoomFormData): number {
@@ -218,6 +230,7 @@ export function CreateStudyRoomClient() {
   const [isCopied, setIsCopied] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const defaultsHydratedRef = useRef(false);
 
   // Sync instant room time
   useEffect(() => {
@@ -227,10 +240,25 @@ export function CreateStudyRoomClient() {
         ...prev,
         date: now.toISOString().split("T")[0],
         time: now.toTimeString().slice(0, 5),
-        recurrenceEnabled: false,
       }));
     }
   }, [isInstantRoom, setFormData]);
+
+  // Backfill persisted drafts that may have blank numeric defaults.
+  useEffect(() => {
+    if (defaultsHydratedRef.current) return;
+    defaultsHydratedRef.current = true;
+    setFormData((prev) => ({
+      ...prev,
+      duration: prev.duration?.trim() ? prev.duration : initialFormData.duration,
+      maxParticipants: prev.maxParticipants?.trim()
+        ? prev.maxParticipants
+        : initialFormData.maxParticipants,
+      joiningFee: prev.joiningFee?.trim()
+        ? prev.joiningFee
+        : initialFormData.joiningFee,
+    }));
+  }, [setFormData]);
 
   useEffect(() => {
     if (!formData.date || formData.recurrenceRepeatUntil) return;
@@ -456,8 +484,6 @@ export function CreateStudyRoomClient() {
 
     const isRecurring = !isInstantRoom && formData.recurrenceEnabled;
 
-    console.log("MUTATION :: ", isRecurring);
-    
     const mutation = isRecurring ? createRecurringRoomMutation : createStudyRoomMutation;    
 
     mutation.mutate(createData, {

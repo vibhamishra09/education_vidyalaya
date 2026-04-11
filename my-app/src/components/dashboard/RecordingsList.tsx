@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@clerk/nextjs';
 import { 
   Video, Play, Download, Trash2, Clock, Calendar, 
@@ -19,6 +19,8 @@ export function RecordingsList() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const hasFetchedOnMountRef = useRef(false);
+  const hasShownLoadErrorRef = useRef(false);
 
   const fetchRecordings = async () => {
     setLoading(true);
@@ -34,13 +36,18 @@ export function RecordingsList() {
         throw new Error('Failed to fetch recordings');
       }
     } catch (err) {
-      showError('Error', 'Could not load recordings. Please try again.');
+      if (!hasShownLoadErrorRef.current) {
+        hasShownLoadErrorRef.current = true;
+        showError('Error', 'Could not load recordings. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
+    if (hasFetchedOnMountRef.current) return;
+    hasFetchedOnMountRef.current = true;
     fetchRecordings();
   }, []);
 

@@ -70,11 +70,12 @@ export default function StudyRoomClient({ roomId, slug }: StudyRoomClientProps) 
   const [isJoining, setIsJoining] = useState(false);
   const [canJoinVideoCall, setCanJoinVideoCall] = useState(false);
   
-  const { data: room, isLoading, error } = useStudyRoomDetails(roomId);
+  const { data: room, isLoading, error } = useStudyRoomDetails(slug);
   const joinStudyRoom = useJoinStudyRoom();
   const cancelStudyRoom = useCancelStudyRoom();
   const [hostEditOpen, setHostEditOpen] = useState(false);
   const { data: currentUserData } = useCurrentUser();
+  const [stableUserId, setStableUserId] = useState<string | null>(null);
 
   // Video join: hosts can enter anytime while upcoming; learners within 5 min of start
   useEffect(() => {
@@ -200,6 +201,12 @@ export default function StudyRoomClient({ roomId, slug }: StudyRoomClientProps) 
     handleJoinRoom,
   ]);
 
+  useEffect(() => {
+  if (currentUserData?.user?.id) {
+      setStableUserId(currentUserData.user.id);
+    }
+  }, [currentUserData]);
+
   const handleCancelRoom = async () => {
     if (!room) return;
     const hasSeries = !!room.seriesId;
@@ -296,7 +303,7 @@ export default function StudyRoomClient({ roomId, slug }: StudyRoomClientProps) 
   const showHostDetailMenu =
     role === "teacher" &&
     canStudyRoomHostEditFromCard({
-      currentUserId: currentUserData?.user?.id ?? null,
+      currentUserId: currentUserData?.user?.id ?? stableUserId ?? null,
       hostUserId: room.createdBy?.id ?? "",
       sessionStatus: room.sessionStatus,
     });

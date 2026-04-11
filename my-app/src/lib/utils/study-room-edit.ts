@@ -1,5 +1,4 @@
 import { SessionStatus } from "@/types";
-
 export function formatDateTimeInTimezone(
   isoDate: string | Date,
   timeZone: string,
