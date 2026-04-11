@@ -1407,9 +1407,27 @@ export class StudyRoomsService {
       });
     }
 
+    const now = new Date();
+
+    // Infrastructure Guardrails: Check for concurrent ONGOING rooms
+    const ongoingRoomsCount = await this.prisma.studyRoom.count({
+      where: { sessionStatus: SessionStatus.ONGOING },
+    });
+
+    if (ongoingRoomsCount >= 12) {
+      this.logger.error(`[GUARDRAIL] Hard limit reached: ${ongoingRoomsCount} ongoing rooms. Blocking creation.`);
+      throw new BadRequestException({
+        code: 'SERVER_AT_CAPACITY',
+        message: 'The platform is currently at its maximum concurrent room capacity (12). Please try again later.',
+      });
+    }
+
+    if (ongoingRoomsCount >= 10) {
+      this.logger.warn(`[GUARDRAIL] Soft limit reached: ${ongoingRoomsCount} ongoing rooms. High load warning.`);
+    }
+
     // Validate that first occurrence is not scheduled too far in the past.
     // Allow a small buffer (2 minutes) for instant rooms to account for form fill time.
-    const now = new Date();
     const twoMinutesAgo = now.getTime() - 2 * 60 * 1000;
     if (occurrences[0].utcDate.getTime() < twoMinutesAgo) {
       throw new BadRequestException({
@@ -2697,10 +2715,17 @@ export class StudyRoomsService {
       };
     }
 
-    if (
-      studyRoom.learners.length + studyRoom.guestParticipants.length >=
-      studyRoom.maxParticipants
-    ) {
+    // Global Infrastructure Guardrail: Hard cap at 12 participants
+    const totalParticipants = studyRoom.learners.length + studyRoom.guestParticipants.length;
+    if (totalParticipants >= 12) {
+      this.logger.warn(`[GUARDRAIL] Blocking join for room ${studyRoom.id}: Global cap of 12 reached.`);
+      throw new BadRequestException({
+        code: 'ROOM_FULL',
+        message: 'This study room has reached the global platform capacity for participants (12).',
+      });
+    }
+
+    if (totalParticipants >= studyRoom.maxParticipants) {
       throw new BadRequestException({
         code: 'ROOM_FULL',
         message: 'Study room is at capacity',

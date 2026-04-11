@@ -38,6 +38,7 @@ import { LoggerModule } from './common/logger';
 import { CacheModule } from './redis/cache.module';
 import { ScratchPadModule } from './scratch-pad/scratch-pad.module';
 import { RecordingModule } from './recording/recording.module';
+import { MeetingLogModule } from './meeting-log/meeting-log.module';
 
 @Module({
   imports: [
@@ -80,6 +81,7 @@ import { RecordingModule } from './recording/recording.module';
     ScratchPadModule,
     RecordingModule,
     EngagementModule,
+    MeetingLogModule,
   ],
   controllers: [AppController],
   providers: [

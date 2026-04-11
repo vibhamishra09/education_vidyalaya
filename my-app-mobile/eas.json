@@ -11,23 +11,28 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_dGVhY2hpbmctbGxhbWEtOC5jbGVyay5hY2NvdW50cy5kZXYk",
-        "EXPO_PUBLIC_API_URL": "https://be.dev.webyalaya.com",
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_cXVpZXQtYW50ZWxvcGUtOTQuY2xlcmsuYWNjb3VudHMuZGV2JA",
+        "EXPO_PUBLIC_API_URL": "http://192.168.29.42:3001",
+        "EXPO_PUBLIC_CHAT_WS_URL": "http://192.168.29.42:3001",
         "NPM_CONFIG_CI": "false"
       }
     },
     "preview": {
       "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
       "env": {
-        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_dGVhY2hpbmctbGxhbWEtOC5jbGVyay5hY2NvdW50cy5kZXYk",
-        "EXPO_PUBLIC_API_URL": "https://be.dev.webyalaya.com"
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_cXVpZXQtYW50ZWxvcGUtOTQuY2xlcmsuYWNjb3VudHMuZGV2JA",
+        "EXPO_PUBLIC_API_URL": "http://192.168.29.42:3001",
+        "EXPO_PUBLIC_CHAT_WS_URL": "http://192.168.29.42:3001"
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_dGVhY2hpbmctbGxhbWEtOC5jbGVyay5hY2NvdW50cy5kZXYk",
-        "EXPO_PUBLIC_API_URL": "https://be.dev.webyalaya.com"
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_cXVpZXQtYW50ZWxvcGUtOTQuY2xlcmsuYWNjb3VudHMuZGV2JA",
+        "EXPO_PUBLIC_API_URL": "https://be.test.webyalaya.com"
       }
     }
   },
