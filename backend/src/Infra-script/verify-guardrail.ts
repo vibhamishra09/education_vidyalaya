@@ -1,4 +1,4 @@
-import { PrismaClient, SessionStatus } from '@prisma/client';
+import { PrismaClient, SessionStatus } from '../generated/prisma';
 import { Logger } from '@nestjs/common';
 
 async function verifyGuardrail() {

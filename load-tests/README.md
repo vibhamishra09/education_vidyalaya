@@ -27,6 +27,12 @@ Uses headless browsers to collect deep WebRTC statistics directly from the RTC P
 *   **Script**: `src/concurrency-test.js`
 *   **Metrics**: Round-Trip Time (RTT), NACK rates, and Jitter/Packet Loss.
 
+### 5. Incremental Webinar Stress (Shell Script)
+Specifically tests large-scale "Hub and Spoke" scenarios like 100-person webinars.
+*   **Command**: `./scripts/webinar-incremental-test.sh`
+*   **Scenario**: 1 Host + 10 Panelists (Video/Audio) + 89 Participants (Listeners).
+*   **Telemetry**: Outputs `logs/webinar_telemetry.csv` with a focus on **PPS (Packets Per Second)**.
+
 ---
 
 ## 🛡️ Infrastructure Guardrails
@@ -50,19 +56,27 @@ cd load-tests
 pnpm install
 ```
 
-### Running an Endurance Run
-1.  Ensure your backend is running (`pnpm start:dev`).
-2.  Run the orchestration script:
+### Running a Webinar Stress Test
+1.  Run the webinar-specific orchestration script:
     ```bash
-    chmod +x scripts/livekit-stress-test.sh
-    ./scripts/livekit-stress-test.sh
+    chmod +x scripts/webinar-incremental-test.sh
+    ./scripts/webinar-incremental-test.sh
     ```
-3.  Observe result in **stress-room-1** via your local frontend.
-4.  Analyze results in `logs/performance_telemetry.csv`.
+2.  This script will add 100 subscribers every 2 minutes until the server threshold is hit.
+3.  Analyze results in `logs/webinar_telemetry.csv`.
 
 ---
 
-## 📊 Metrics Target Thresholds
+## 📊 Performance Benchmarks & Limits
+Based on Azure D4s v5 (4 vCPU, 16 GB RAM) hardware:
+
+| Scenario | Max Concurrency | Limiting Factor | Status |
+| :--- | :--- | :--- | :--- |
+| **Study Rooms** (20 users/room) | **30 Rooms** (~600 users) | PPS (~40k) | Stable |
+| **Webinars** (100 users/room) | **3 Rooms** (~300 users) | PPS (~40k) | Hard Limit |
+| **Global Load** | ~600 Concurrent Users | PPS (Packets/Sec) | Throttled |
+
+### Metrics Target Thresholds
 | Metric | Healthy | Critical |
 | :--- | :--- | :--- |
 | **CPU Usage** | < 40% | > 80% |
