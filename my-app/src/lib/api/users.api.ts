@@ -1,5 +1,10 @@
 import apiClient from '../api-client';
-import { User, CurrentUserResponse, UpdateUserDto } from '@/types/api.types';
+import {
+  User,
+  CurrentUserResponse,
+  FollowMutationResponse,
+  UpdateUserDto,
+} from '@/types/api.types';
 import { cleanQueryParams } from '../utils/api-utils';
 
 export const usersApi = {
@@ -32,6 +37,20 @@ export const usersApi = {
   checkUsernameAvailability: async (username: string): Promise<{ available: boolean }> => {
     const params = cleanQueryParams({ username });
     const response = await apiClient.get<{ available: boolean }>('/api/users/check-username', { params });
+    return response.data;
+  },
+
+  followUser: async (userId: string): Promise<FollowMutationResponse> => {
+    const response = await apiClient.post<FollowMutationResponse>(
+      `/api/users/${userId}/follow`,
+    );
+    return response.data;
+  },
+
+  unfollowUser: async (userId: string): Promise<FollowMutationResponse> => {
+    const response = await apiClient.delete<FollowMutationResponse>(
+      `/api/users/${userId}/follow`,
+    );
     return response.data;
   },
 };

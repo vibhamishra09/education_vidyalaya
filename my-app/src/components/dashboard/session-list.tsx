@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { LucideIcon } from "lucide-react";
 import { SessionSummaryModal } from "./session-summary-modal";
+import { getStudyRoomPagePath } from "@/lib/utils/study-room-share";
 
 interface Session {
   id: string;
@@ -96,13 +97,13 @@ export function SessionList({
     });
   };
 
-  const SessionCard = ({ 
-    session, 
-    showActions = true, 
+  const SessionCard = ({
+    session,
+    showActions = true,
     showSummaryButton = false,
-    onViewSummary 
-  }: { 
-    session: Session; 
+    onViewSummary
+  }: {
+    session: Session;
     showActions?: boolean;
     showSummaryButton?: boolean;
     onViewSummary?: () => void;
@@ -110,9 +111,9 @@ export function SessionList({
     const isExpanded = expandedSession === session.id;
     // A session is a peer session if it has requestedBy AND doesn't have participantCount/maxParticipants
     // Study rooms have participantCount/maxParticipants, peer sessions don't
-    const isPeerSession = session.requestedBy !== undefined && 
-                          session.participantCount === undefined && 
-                          session.maxParticipants === undefined;
+    const isPeerSession = session.requestedBy !== undefined &&
+      session.participantCount === undefined &&
+      session.maxParticipants === undefined;
 
     return (
       <Card className="hover:shadow-md transition-shadow">
@@ -165,26 +166,26 @@ export function SessionList({
               </div>
 
               <div className="flex items-center gap-1 flex-shrink-0">
-              {isPeerSession && session.peerSessionEditable && (
-                <Link href={`/sessions/${session.id}`}>
-                  <Button variant="outline" size="sm" className="h-8 gap-1 px-2">
-                    <Pencil className="h-3.5 w-3.5" />
-                    Edit
-                  </Button>
-                </Link>
-              )}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => toggleExpand(session.id)}
-                className="flex-shrink-0"
-              >
-                {isExpanded ? (
-                  <ChevronUp className="h-4 w-4" />
-                ) : (
-                  <ChevronDown className="h-4 w-4" />
+                {isPeerSession && session.peerSessionEditable && (
+                  <Link href={`/sessions/${session.id}`}>
+                    <Button variant="outline" size="sm" className="h-8 gap-1 px-2">
+                      <Pencil className="h-3.5 w-3.5" />
+                      Edit
+                    </Button>
+                  </Link>
                 )}
-              </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => toggleExpand(session.id)}
+                  className="flex-shrink-0"
+                >
+                  {isExpanded ? (
+                    <ChevronUp className="h-4 w-4" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4" />
+                  )}
+                </Button>
               </div>
             </div>
 
@@ -231,8 +232,8 @@ export function SessionList({
                     <Link
                       href={
                         isPeerSession
-                         ? `/sessions/${session.id}`
-                         : `/studyroom/${session.slug || session.id}`
+                          ? `/sessions/${session.id}`
+                          : getStudyRoomPagePath(session.slug || session.id)
                       }
                       className="flex-1"
                     >
@@ -256,8 +257,8 @@ export function SessionList({
                       const timeDifferenceMs = sessionTime.getTime() - now.getTime();
                       const minutesBeforeStart = timeDifferenceMs / (1000 * 60);
 
-                      const canJoin = 
-                        isPeerSession && 
+                      const canJoin =
+                        isPeerSession &&
                         (session.sessionStatus === "UPCOMING" || session.sessionStatus === "ONGOING") &&
                         minutesBeforeStart <= 5;
 
@@ -279,8 +280,8 @@ export function SessionList({
                 )}
                 {showSummaryButton && onViewSummary && (
                   <div className="flex gap-2 pt-2">
-                    <Button 
-                      className="flex-1" 
+                    <Button
+                      className="w-full"
                       size="sm"
                       onClick={onViewSummary}
                     >
@@ -405,9 +406,9 @@ export function SessionList({
               pastSessions.map((session) => {
                 const isPeerSession = "requestedBy" in session;
                 return (
-                  <SessionCard 
-                    key={session.id} 
-                    session={session} 
+                  <SessionCard
+                    key={session.id}
+                    session={session}
                     showActions={false}
                     showSummaryButton={true}
                     onViewSummary={() => handleViewSummary(session.id, isPeerSession)}
@@ -439,8 +440,8 @@ export function SessionList({
             size="sm"
             onClick={() => onPageChange(currentPage + 1)}
             disabled={!hasNextPage && (
-               (activeTab === "upcoming" && upcomingSessions.length < 10) ||
-               (activeTab === "past" && pastSessions.length < 10)
+              (activeTab === "upcoming" && upcomingSessions.length < 10) ||
+              (activeTab === "past" && pastSessions.length < 10)
             )}
           >
             Next

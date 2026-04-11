@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useMemo, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Navigation } from "@/components/layout/navigation";
@@ -12,28 +12,43 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, X, Sparkles, ArrowLeft, Swords, Presentation, Plus } from "lucide-react";
+import { Search, X, Sparkles, ArrowLeft, Swords, Users, GraduationCap, Plus, Loader2 } from "lucide-react";
 import { useBrowse, useBrowseRecommendations, usePeerMatches } from "@/hooks/use-browse";
+import { useDebateRooms, useCreateDebateRoom } from "@/hooks/use-debate-rooms";
 import { useSkills } from "@/hooks/use-skills";
 import { useCurrentUser } from "@/hooks/use-users";
+import { useToast } from "@/contexts/toast-context";
+import { DebateRoomCard } from "@/components/cards/debate-room-card";
 import {
   Skill,
   BrowseFilters,
   SessionStatus,
   type StudyRoomCard,
 } from "@/types/api.types";
+import { DebateStatus, type DebateRoomFilters } from "@/types/debate.types";
 import { useTabPersistence, useLocalStorage } from "@/hooks/use-local-storage";
 import { cn } from "@/lib/utils";
 import { studyRoomCardDisplayLive } from "@/lib/utils/study-room-edit";
 import { getStudyRoomPagePathWithJoinIntent } from "@/lib/utils/study-room-share";
 
-const BROWSE_TABS = ["peers", "studyRooms", "webinars"] as const;
+const BROWSE_TABS = ["peers", "studyRooms", "debateRooms"] as const;
 type BrowseTab = typeof BROWSE_TABS[number];
 
 /** Default first page: trending / most-active lists (max 10 each). */
@@ -95,6 +110,7 @@ function studyRoomCardHost(room: {
 function BrowsePageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { showError, showSuccess } = useToast();
   // Persist active tab to localStorage
   const [activeTab, setActiveTab] = useTabPersistence<BrowseTab>(
     "browse_tab",
@@ -119,24 +135,17 @@ function BrowsePageContent() {
   const [currentPage, setCurrentPage] = useState(1);
   const [peerCount, setPeerCount] = useState<number>(0);
   const [studyRoomCount, setStudyRoomCount] = useState<number>(0);
-  const [webinarCount, setWebinarCount] = useState<number>(0);
   const [peerHasSocialLinks, setPeerHasSocialLinks] = useState<"all" | "withSocial">("all");
   const [studyRoomStatusFilter, setStudyRoomStatusFilter] = useState<
     "all" | SessionStatus.UPCOMING | SessionStatus.ONGOING
   >("all");
-  /** Debate-style webinar filters: ALL = upcoming + ongoing (active) */
-  const [webinarStatusFilter, setWebinarStatusFilter] = useState<
-    | "all"
-    | SessionStatus.UPCOMING
-    | SessionStatus.PENDING
-    | SessionStatus.ONGOING
-    | SessionStatus.DONE
-    | SessionStatus.CANCELLED
-  >("all");
-
-  const effectiveStudyStatus =
-    activeTab === "webinars" ? webinarStatusFilter : studyRoomStatusFilter;
   const [studyFreeOnly, setStudyFreeOnly] = useState<"all" | "free">("all");
+  const [debateStatusFilter, setDebateStatusFilter] = useState<"ALL" | "SCHEDULED" | "LIVE">("ALL");
+  const [debateTrendingOnly, setDebateTrendingOnly] = useState(false);
+  const [debatePage, setDebatePage] = useState(1);
+  const [isCreateDebateOpen, setIsCreateDebateOpen] = useState(false);
+  const [newDebateTopic, setNewDebateTopic] = useState("");
+  const [newDebateDescription, setNewDebateDescription] = useState("");
 
   // Get current user for recommendations
   const { data: currentUserData } = useCurrentUser();
@@ -150,12 +159,11 @@ function BrowsePageContent() {
     }
 
     const tabParam = searchParams.get("tab");
-    if (
-      tabParam === "peers" ||
-      tabParam === "studyRooms" ||
-      tabParam === "webinars"
-    ) {
+    if (tabParam === "peers" || tabParam === "studyRooms" || tabParam === "debateRooms") {
       setActiveTab(tabParam);
+    }
+    if (tabParam === "webinars") {
+      setActiveTab("studyRooms");
     }
   }, [searchParams, setSearchQuery, setActiveTab]);
 
@@ -168,9 +176,11 @@ function BrowsePageContent() {
     selectedSkills,
     peerHasSocialLinks,
     studyRoomStatusFilter,
-    webinarStatusFilter,
     studyFreeOnly,
   ]);
+  useEffect(() => {
+    setDebatePage(1);
+  }, [searchQuery, debateStatusFilter, debateTrendingOnly]);
 
   const isDefaultBrowseView =
     currentPage === 1 &&
@@ -178,7 +188,7 @@ function BrowsePageContent() {
     selectedSkills.length === 0;
 
   const browseFilters: BrowseFilters = {
-    tab: activeTab,
+    tab: activeTab === "debateRooms" ? "peers" : activeTab,
     page: currentPage,
     limit: isDefaultBrowseView ? BROWSE_DEFAULT_LIMIT : BROWSE_FILTERED_LIMIT,
   };
@@ -195,17 +205,11 @@ function BrowsePageContent() {
     browseFilters.peerHasSocialLinks = true;
   }
 
-  if (
-    (activeTab === "studyRooms" || activeTab === "webinars") &&
-    effectiveStudyStatus !== "all"
-  ) {
-    browseFilters.studyStatus = effectiveStudyStatus;
+  if (activeTab === "studyRooms" && studyRoomStatusFilter !== "all") {
+    browseFilters.studyStatus = studyRoomStatusFilter;
   }
 
-  if (
-    (activeTab === "studyRooms" || activeTab === "webinars") &&
-    studyFreeOnly === "free"
-  ) {
+  if (activeTab === "studyRooms" && studyFreeOnly === "free") {
     browseFilters.studyFreeOnly = true;
   }
 
@@ -219,25 +223,11 @@ function BrowsePageContent() {
     browseFilters.trendingLimit = BROWSE_TRENDING_LIMIT;
   }
 
-  if (
-    activeTab === "webinars" &&
-    isDefaultBrowseView &&
-    webinarStatusFilter === "all"
-  ) {
-    browseFilters.includeTrendingWebinars = true;
-    browseFilters.trendingLimit = BROWSE_TRENDING_LIMIT;
-  }
-
   const showStudyTrendingDefaultOnly =
     activeTab === "studyRooms" &&
     isDefaultBrowseView &&
     studyRoomStatusFilter === "all" &&
     studyFreeOnly === "all";
-
-  const showWebinarTrendingDefaultOnly =
-    activeTab === "webinars" &&
-    isDefaultBrowseView &&
-    webinarStatusFilter === "all";
 
   /** Page 1, no search/skills, all peers — API sorts by reviews (most active); show at most 10, no pagination. */
   const showPeersMostActiveDefaultOnly =
@@ -254,7 +244,6 @@ function BrowsePageContent() {
       if (browseData.counts) {
         setPeerCount(browseData.counts.peers);
         setStudyRoomCount(browseData.counts.studyRooms);
-        setWebinarCount(browseData.counts.webinars ?? 0);
       }
     }
   }, [browseData]);
@@ -274,8 +263,60 @@ function BrowsePageContent() {
   const peers = browseData?.peers || [];
   const studyRooms = browseData?.studyRooms || [];
   const trendingStudyRooms = browseData?.trendingStudyRooms || [];
-  const trendingWebinars = browseData?.trendingWebinars || [];
   const skills = skillsData?.skills || [];
+  const debateFilters: DebateRoomFilters = {
+    search: searchQuery.trim() || undefined,
+    status: debateStatusFilter === "LIVE" ? DebateStatus.LIVE : undefined,
+    page: debatePage,
+    limit: 12,
+    trending: debateTrendingOnly || undefined,
+    sort: debateTrendingOnly ? "hybrid" : "newest",
+  };
+  const { data: debateData, isLoading: debateLoading, error: debateError } = useDebateRooms(
+    activeTab === "debateRooms" ? debateFilters : undefined,
+  );
+  const createDebateRoom = useCreateDebateRoom();
+  const filteredDebateRooms = useMemo(() => {
+    const rooms = debateData?.debateRooms ?? [];
+    const visible = rooms.filter(
+      (room) =>
+        room.status === DebateStatus.WAITING ||
+        room.status === DebateStatus.PREP ||
+        room.status === DebateStatus.LIVE,
+    );
+    if (debateStatusFilter === "SCHEDULED") {
+      return visible.filter(
+        (room) =>
+          room.status === DebateStatus.WAITING || room.status === DebateStatus.PREP,
+      );
+    }
+    if (debateStatusFilter === "LIVE") {
+      return visible.filter((room) => room.status === DebateStatus.LIVE);
+    }
+    return visible;
+  }, [debateData?.debateRooms, debateStatusFilter]);
+
+  const handleCreateDebate = async () => {
+    const topic = newDebateTopic.trim();
+    if (!topic) {
+      showError("Validation Error", "Debate topic is required.");
+      return;
+    }
+    try {
+      const created = await createDebateRoom.mutateAsync({
+        topic,
+        description: newDebateDescription.trim() || undefined,
+        debateDurationMinutes: 60,
+      });
+      showSuccess("Debate Created", "Your debate room has been created.");
+      setIsCreateDebateOpen(false);
+      setNewDebateTopic("");
+      setNewDebateDescription("");
+      router.push(`/debateroom/${created.id}`);
+    } catch {
+      showError("Error", "Failed to create debate room. Please try again.");
+    }
+  };
 
   // Fetch recommendations based on user's "want to learn" skills
   const { data: recommendationsData, isLoading: recommendationsLoading } = useBrowseRecommendations(
@@ -291,10 +332,22 @@ function BrowsePageContent() {
   
   const recommendedPeers = peerMatchesData?.matches || recommendationsData?.peers || [];
   const recommendedRooms = recommendationsData?.studyRooms || [];
-  
-  const isRecLoading = activeTab === "peers" ? peerMatchesLoading : recommendationsLoading;
-  const hasRecommendations = (activeTab === "peers" ? recommendedPeers.length > 0 : recommendedRooms.length > 0);
-  const showRecommendations = hasRecommendations && !searchQuery && selectedSkills.length === 0;
+
+  const isRecommendationsTab =
+    activeTab === "peers" || activeTab === "studyRooms";
+  const isRecLoading =
+    activeTab === "peers" ? peerMatchesLoading : recommendationsLoading;
+  const hasRecommendations =
+    activeTab === "peers"
+      ? recommendedPeers.length > 0
+      : activeTab === "studyRooms"
+        ? recommendedRooms.length > 0
+        : false;
+  const showRecommendations =
+    isRecommendationsTab &&
+    hasRecommendations &&
+    !searchQuery &&
+    selectedSkills.length === 0;
 
   const handleRoomAction = (room: { slug?: string; id: string }) => {
     router.push(getStudyRoomPagePathWithJoinIntent(room.slug || room.id));
@@ -305,13 +358,7 @@ function BrowsePageContent() {
       <Navigation />
 
       <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12 max-w-7xl">
-        {/* Header — on Webinars tab, only back link here; title lives in webinars block below */}
-        <div
-          className={cn(
-            "flex flex-col md:flex-row md:items-start justify-between gap-4",
-            activeTab === "webinars" ? "mb-4" : "mb-8"
-          )}
-        >
+        <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-8">
           <div className="space-y-3 w-full">
             <Link 
               href="/dashboard" 
@@ -320,21 +367,19 @@ function BrowsePageContent() {
               <ArrowLeft className="h-3.5 w-3.5 group-hover:-translate-x-0.5 transition-transform" /> 
               Back to Dashboard
             </Link>
-            {activeTab !== "webinars" && (
             <div className="space-y-1">
               <h1 className="text-3xl font-extrabold tracking-tight lg:text-4xl text-foreground">
                  Browse Community
               </h1>
               <p className="text-muted-foreground text-sm sm:text-base max-w-2xl leading-relaxed">
-                Discover peers, study rooms, and webinars to learn and grow together
+                Discover peers, study rooms, and debate rooms to learn and grow together
               </p>
             </div>
-            )}
           </div>
         </div>
 
         {/* Recommendations Section - Based on user's wantSkills */}
-        {showRecommendations && activeTab !== "webinars" && (
+        {showRecommendations && (
           <div className="mb-10 rounded-3xl bg-gradient-to-br from-green-50/50 to-emerald-50/20 border border-green-100/50 p-6 dark:from-green-950/10 dark:to-emerald-950/5 dark:border-green-900/20">
             <div className="flex items-center gap-2 mb-4">
               <Sparkles className="h-5 w-5 text-green-600 fill-green-100 dark:fill-green-900/20" />
@@ -405,34 +450,6 @@ function BrowsePageContent() {
           </div>
         )}
 
-        {/* Webinars — primary title for this tab (replaces Browse Community) */}
-        {activeTab === "webinars" && (
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-            <div>
-              <h1 className="text-3xl font-extrabold tracking-tight lg:text-4xl text-foreground flex items-center gap-3">
-                <Presentation
-                  className="h-8 w-8 lg:h-9 lg:w-9 shrink-0 text-emerald-600 dark:text-emerald-400"
-                  strokeWidth={2}
-                  aria-hidden
-                />
-                Webinars
-              </h1>
-              <p className="text-muted-foreground text-sm sm:text-base mt-1 max-w-2xl leading-relaxed">
-                Host live sessions or join community webinars
-              </p>
-            </div>
-            <Button
-              asChild
-              className="w-full sm:w-auto bg-green-500/10 text-green-700 hover:bg-green-500/20 border border-green-500/20 dark:text-green-400 shadow-sm"
-            >
-              <Link href="/create-study-room?mode=webinar">
-                <Plus className="h-4 w-4 mr-2" />
-                Create webinar
-              </Link>
-            </Button>
-          </div>
-        )}
-
         {/* Filters & Search Container */}
         <div className="flex flex-col md:flex-row md:flex-nowrap md:gap-3 gap-4 mb-8 items-start md:items-center justify-between w-full sticky top-0 z-30 bg-background/80 backdrop-blur-md py-4 -mx-4 px-4 border-b border-border/40">
             {/* Search Bar */}
@@ -457,18 +474,19 @@ function BrowsePageContent() {
                 />
             </div>
             
-            {/* Tabs — height matches Debate Rooms / Create webinar (h-11); flex-1 on search */}
-             <div className="grid grid-cols-3 h-11 items-center justify-center shrink-0 rounded-2xl bg-muted p-1 text-muted-foreground w-full md:w-auto md:max-w-[min(100%,520px)] border border-border/10 gap-0.5">
+            {/* Tabs + Debate CTA in one segmented control */}
+             <div className="grid grid-cols-3 h-11 items-center justify-center shrink-0 rounded-2xl bg-muted p-1 text-muted-foreground w-full md:max-w-[560px] border border-border/10 gap-0.5">
                 <button
                 type="button"
                 className={cn(
-                    "inline-flex items-center justify-center whitespace-nowrap rounded-xl px-3 sm:px-5 py-1.5 text-xs sm:text-sm font-bold ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 gap-1.5",
+                    "inline-flex min-w-0 items-center justify-center whitespace-nowrap rounded-xl px-2.5 sm:px-4 py-1.5 text-xs sm:text-sm font-bold ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 gap-1.5",
                     activeTab === "peers" 
                     ? "bg-emerald-600 text-white shadow-md shadow-emerald-900/20" 
                     : "hover:bg-background/60 hover:text-foreground"
                 )}
                 onClick={() => setActiveTab("peers")}
                 >
+                <Users className="h-4 w-4 shrink-0" />
                 <span>Peers</span>
                 {(searchQuery || selectedSkills.length > 0) && peerCount > 0 && (
                     <Badge variant="secondary" className={cn("text-[10px] h-5 px-1.5 min-w-5", activeTab === "peers" ? "bg-white/20 text-white" : "bg-emerald-100 text-emerald-700")}>
@@ -479,13 +497,14 @@ function BrowsePageContent() {
                 <button
                 type="button"
                 className={cn(
-                    "inline-flex items-center justify-center whitespace-nowrap rounded-xl px-3 sm:px-5 py-1.5 text-xs sm:text-sm font-bold ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 gap-1.5",
+                    "inline-flex min-w-0 items-center justify-center whitespace-nowrap rounded-xl px-2.5 sm:px-4 py-1.5 text-xs sm:text-sm font-bold ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 gap-1.5",
                     activeTab === "studyRooms" 
                     ? "bg-emerald-600 text-white shadow-md shadow-emerald-900/20" 
                     : "hover:bg-background/60 hover:text-foreground"
                 )}
                 onClick={() => setActiveTab("studyRooms")}
                 >
+                <GraduationCap className="h-4 w-4 shrink-0" />
                 <span className="hidden sm:inline">Study Rooms</span>
                 <span className="sm:hidden">Study</span>
                 {(searchQuery || selectedSkills.length > 0) && studyRoomCount > 0 && (
@@ -495,34 +514,19 @@ function BrowsePageContent() {
                 )}
                 </button>
                 <button
-                type="button"
-                className={cn(
-                    "inline-flex items-center justify-center whitespace-nowrap rounded-xl px-3 sm:px-5 py-1.5 text-xs sm:text-sm font-bold ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 gap-1.5",
-                    activeTab === "webinars" 
-                    ? "bg-emerald-600 text-white shadow-md shadow-emerald-900/20" 
-                    : "hover:bg-background/60 hover:text-foreground"
-                )}
-                onClick={() => setActiveTab("webinars")}
+                  type="button"
+                  onClick={() => setActiveTab("debateRooms")}
+                  className={cn(
+                    "inline-flex min-w-0 items-center justify-center whitespace-nowrap rounded-xl px-2.5 sm:px-4 py-1.5 text-xs sm:text-sm font-bold ring-offset-background transition-all gap-1.5",
+                    activeTab === "debateRooms"
+                      ? "bg-emerald-600 text-white shadow-md shadow-emerald-900/20"
+                      : "hover:bg-background/60 hover:text-foreground",
+                  )}
                 >
-                <span>Webinars</span>
-                {(searchQuery || selectedSkills.length > 0) && webinarCount > 0 && (
-                    <Badge variant="secondary" className={cn("text-[10px] h-5 px-1.5 min-w-5", activeTab === "webinars" ? "bg-white/20 text-white" : "bg-emerald-100 text-emerald-700")}>
-                    {webinarCount}
-                    </Badge>
-                )}
+                  <Swords className="h-4 w-4 shrink-0" />
+                  <span className="hidden sm:inline">Debate Rooms</span>
+                  <span className="sm:hidden">Debate</span>
                 </button>
-            </div>
-            
-            <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto shrink-0">
-            <Link href="/debateroom" className="w-full sm:w-auto">
-              <Button 
-                variant="outline" 
-                className="h-11 w-full rounded-2xl border-muted bg-muted/20 hover:bg-muted/40 text-sm font-semibold"
-              >
-                <Swords className="h-4 w-4 mr-2" />
-                Debate Rooms
-              </Button>
-            </Link>
             </div>
         </div>
 
@@ -578,61 +582,104 @@ function BrowsePageContent() {
                 </Select>
               </>
             )}
-
-            {activeTab === "webinars" && (
+            {activeTab === "debateRooms" && (
               <>
                 <Select
-                  value={webinarStatusFilter}
+                  value={debateStatusFilter}
                   onValueChange={(value) =>
-                    setWebinarStatusFilter(
-                      value as
-                        | "all"
-                        | SessionStatus.UPCOMING
-                        | SessionStatus.PENDING
-                        | SessionStatus.ONGOING
-                        | SessionStatus.DONE
-                        | SessionStatus.CANCELLED
-                    )
+                    setDebateStatusFilter(value as "ALL" | "SCHEDULED" | "LIVE")
                   }
                 >
-                  <SelectTrigger className="w-[180px] h-11 rounded-2xl border-muted bg-muted/20">
-                    <SelectValue placeholder="Status" />
+                  <SelectTrigger className="w-[200px] h-9 rounded-xl border-muted bg-muted/20">
+                    <SelectValue placeholder="Debate status" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Active webinars</SelectItem>
-                    <SelectItem value={SessionStatus.UPCOMING}>Waiting</SelectItem>
-                    <SelectItem value={SessionStatus.PENDING}>In Prep</SelectItem>
-                    <SelectItem value={SessionStatus.ONGOING}>Live</SelectItem>
-                    <SelectItem value={SessionStatus.DONE}>Ended</SelectItem>
-                    <SelectItem value={SessionStatus.CANCELLED}>Cancelled</SelectItem>
+                    <SelectItem value="ALL">All debates</SelectItem>
+                    <SelectItem value="SCHEDULED">Scheduled</SelectItem>
+                    <SelectItem value="LIVE">Live</SelectItem>
                   </SelectContent>
                 </Select>
-
-                <Select
-                  value={studyFreeOnly}
-                  onValueChange={(value) => setStudyFreeOnly(value as "all" | "free")}
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-9 rounded-xl border-muted bg-muted/20 hover:bg-muted/40 text-sm font-semibold"
+                  onClick={() => setDebateTrendingOnly((prev) => !prev)}
                 >
-                  <SelectTrigger className="w-[170px] h-11 rounded-2xl border-muted bg-muted/20">
-                    <SelectValue placeholder="Fee" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All fees</SelectItem>
-                    <SelectItem value="free">Free only</SelectItem>
-                  </SelectContent>
-                </Select>
+                  Trending: {debateTrendingOnly ? "On" : "Off"}
+                </Button>
+                <Dialog open={isCreateDebateOpen} onOpenChange={setIsCreateDebateOpen}>
+                  <DialogTrigger asChild>
+                    <Button className="h-9 rounded-xl bg-green-500/10 text-green-700 hover:bg-green-500/20 border border-green-500/20 shadow-sm">
+                      <Plus className="h-4 w-4 mr-1.5" />
+                      Create Debate
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-[460px]">
+                    <DialogHeader>
+                      <DialogTitle>Create Debate Room</DialogTitle>
+                      <DialogDescription>
+                        Add a topic and start a new debate.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-3 py-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="browse-debate-topic">Topic *</Label>
+                        <Input
+                          id="browse-debate-topic"
+                          value={newDebateTopic}
+                          onChange={(e) => setNewDebateTopic(e.target.value)}
+                          placeholder="e.g., Is AI good for education?"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="browse-debate-desc">Description</Label>
+                        <Textarea
+                          id="browse-debate-desc"
+                          value={newDebateDescription}
+                          onChange={(e) => setNewDebateDescription(e.target.value)}
+                          placeholder="Optional context..."
+                          rows={3}
+                        />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button
+                        variant="outline"
+                        onClick={() => setIsCreateDebateOpen(false)}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={handleCreateDebate}
+                        disabled={createDebateRoom.isPending}
+                        className="bg-green-600 hover:bg-green-700 text-white"
+                      >
+                        {createDebateRoom.isPending ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Creating...
+                          </>
+                        ) : (
+                          "Create Debate"
+                        )}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
               </>
             )}
           </div>
 
+          {activeTab !== "debateRooms" && (
           <div className="flex flex-wrap gap-2 mb-4">
             {skillsLoading ? (
               Array.from({ length: 6 }).map((_, index) => (
                 <Skeleton key={index} className="h-8 w-20 rounded-full" />
               ))
             ) : (
-              skills.slice(0, 6).map((skill) => (
+              skills.slice(0, 6).map((skill, index) => (
                 <Badge
-                  key={skill.id}
+                  key={`browse-skill-${index}-${skill.id ?? skill.name}`}
                   variant="outline"
                   className={cn(
                     "cursor-pointer text-xs py-1.5 px-3 rounded-full hover:bg-green-50 hover:text-green-700 hover:border-green-200 transition-all",
@@ -647,15 +694,16 @@ function BrowsePageContent() {
               ))
             )}
           </div>
+          )}
 
-          {selectedSkills.length > 0 && (
+          {activeTab !== "debateRooms" && selectedSkills.length > 0 && (
             <div className="flex flex-wrap gap-2 items-center">
               <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mr-2">
                 Active:
               </span>
-              {selectedSkills.map((skill) => (
+              {selectedSkills.map((skill, index) => (
                 <Badge
-                  key={skill.id}
+                  key={`browse-selected-${index}-${skill.id ?? skill.name}`}
                   className="cursor-pointer text-xs py-1 px-2.5 rounded-full bg-green-100 text-green-800 hover:bg-green-200 border-green-200 gap-1 pl-3"
                   onClick={() => removeSkill(skill.id)}
                 >
@@ -789,7 +837,7 @@ function BrowsePageContent() {
                             Trending Study Rooms
                           </h2>
                         </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                           {trendingStudyRooms
                             .slice(0, BROWSE_TRENDING_LIMIT)
                             .map((room) => (
@@ -902,150 +950,49 @@ function BrowsePageContent() {
                     )}
                   </>
                 )}
-
-                {activeTab === "webinars" && (
+                {activeTab === "debateRooms" && (
                   <>
-                    {showWebinarTrendingDefaultOnly ? (
-                      <>
-                        <div className="mb-6 flex items-center gap-2">
-                          <Sparkles className="h-5 w-5 text-green-600 shrink-0" />
-                          <h2 className="text-lg font-bold text-foreground">
-                            Trending Webinars
-                          </h2>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                      {filteredDebateRooms.map((room) => (
+                        <DebateRoomCard
+                          key={room.id}
+                          room={room}
+                          currentUserId={currentUserData?.user?.id ?? null}
+                        />
+                      ))}
+                      {filteredDebateRooms.length === 0 && !debateLoading && !debateError && (
+                        <div className="col-span-full text-center py-12 text-muted-foreground text-sm sm:text-base">
+                          No active debates found for selected filters
                         </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-                          {trendingWebinars
-                            .slice(0, BROWSE_TRENDING_LIMIT)
-                            .map((room) => (
-                              <StudyRoomCardComponent
-                                key={`trending-${room.id}`}
-                                roomId={room.id}
-                                slug={room.slug ?? room.id}
-                                status={
-                                  studyRoomCardDisplayLive(
-                                    room.sessionStatus,
-                                    room.date,
-                                  )
-                                    ? "live"
-                                    : "scheduled"
-                                }
-                                title={room.title}
-                                description={room.description}
-                                date={room.date}
-                                duration={room.duration}
-                                imageUrl={room.imageUrl}
-                                participants={{
-                                  current: room.participantCount,
-                                  max: room.maxParticipants,
-                                }}
-                                host={studyRoomCardHost(room)}
-                                category={studyRoomCategoryLabel(room.skills)}
-                                skillNames={studyRoomSkillNames(room.skills)}
-                                sessionStatus={room.sessionStatus}
-                                currentUserId={currentUserData?.user?.id ?? null}
-                                seriesId={room.seriesId ?? null}
-                                joiningFee={room.joiningFee}
-                                timezone={room.timezone ?? null}
-                                actionLabel="Register"
-                                onAction={() => {
-                                  const slug = room.webinarRegistrationSlug;
-                                  if (slug) {
-                                    router.push(
-                                      `/webinar/register/${encodeURIComponent(slug)}`,
-                                    );
-                                  } else {
-                                    router.push(
-                                      getStudyRoomPagePathWithJoinIntent(room.id),
-                                    );
-                                  }
-                                }}
-                              />
-                            ))}
-                          {trendingWebinars.length === 0 && !browseLoading && (
-                            <div className="col-span-full text-center py-12 text-muted-foreground text-sm sm:text-base">
-                              No trending webinars right now. Try a search or filters
-                              below.
-                            </div>
-                          )}
+                      )}
+                    </div>
+                    {debateError && (
+                      <div className="text-center py-8 text-muted-foreground text-sm sm:text-base">
+                        Failed to load debates. Please try again.
+                      </div>
+                    )}
+                    {debateData?.totalPages && debateData.totalPages > 1 && (
+                      <div className="mt-6 flex justify-center">
+                        <div className="flex items-center gap-2">
+                          <Button
+                            onClick={() => setDebatePage((p) => Math.max(1, p - 1))}
+                            disabled={debatePage === 1 || debateLoading}
+                            variant="outline"
+                          >
+                            Previous
+                          </Button>
+                          <span className="text-sm text-muted-foreground px-2">
+                            Page {debateData.page} of {debateData.totalPages}
+                          </span>
+                          <Button
+                            onClick={() => setDebatePage((p) => p + 1)}
+                            disabled={debatePage >= debateData.totalPages || debateLoading}
+                            variant="outline"
+                          >
+                            Next
+                          </Button>
                         </div>
-                      </>
-                    ) : (
-                      <>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                          {studyRooms.map((room) => (
-                            <StudyRoomCardComponent
-                              key={room.id}
-                              roomId={room.id}
-                              slug={room.slug ?? room.id}
-                              status={
-                                studyRoomCardDisplayLive(room.sessionStatus, room.date)
-                                  ? "live"
-                                  : "scheduled"
-                              }
-                              title={room.title}
-                              description={room.description}
-                              date={room.date}
-                              duration={room.duration}
-                              imageUrl={room.imageUrl}
-                              participants={{
-                                current: room.participantCount,
-                                max: room.maxParticipants,
-                              }}
-                              host={studyRoomCardHost(room)}
-                              category={studyRoomCategoryLabel(room.skills)}
-                              skillNames={studyRoomSkillNames(room.skills)}
-                              sessionStatus={room.sessionStatus}
-                              currentUserId={currentUserData?.user?.id ?? null}
-                              seriesId={room.seriesId ?? null}
-                              joiningFee={room.joiningFee}
-                              timezone={room.timezone ?? null}
-                              actionLabel="Register"
-                              onAction={() => {
-                                const slug = room.webinarRegistrationSlug;
-                                if (slug) {
-                                  router.push(
-                                    `/webinar/register/${encodeURIComponent(slug)}`,
-                                  );
-                                } else {
-                                  router.push(
-                                    getStudyRoomPagePathWithJoinIntent(room.id),
-                                  );
-                                }
-                              }}
-                            />
-                          ))}
-                          {studyRooms.length === 0 && !browseLoading && (
-                            <div className="col-span-full text-center py-12 text-muted-foreground text-sm sm:text-base">
-                              No webinars found matching your criteria
-                            </div>
-                          )}
-                        </div>
-                        {browseData?.pagination.totalPages &&
-                          browseData.pagination.totalPages > 1 && (
-                            <div className="mt-6 flex justify-center">
-                              <div className="flex items-center gap-2">
-                                <Button
-                                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                                  disabled={currentPage === 1 || browseLoading}
-                                  variant="outline"
-                                >
-                                  Previous
-                                </Button>
-                                <span className="text-sm text-muted-foreground px-2">
-                                  Page {browseData.pagination.page} of{" "}
-                                  {browseData.pagination.totalPages}
-                                </span>
-                                <Button
-                                  onClick={() => setCurrentPage((p) => p + 1)}
-                                  disabled={!browseData.pagination.hasMore || browseLoading}
-                                  variant="outline"
-                                >
-                                  Next
-                                </Button>
-                              </div>
-                            </div>
-                          )}
-                      </>
+                      </div>
                     )}
                   </>
                 )}

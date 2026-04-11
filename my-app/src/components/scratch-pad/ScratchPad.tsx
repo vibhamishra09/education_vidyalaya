@@ -66,34 +66,62 @@ export const ScratchPad = memo(function ScratchPad({ roomId, room, isHost, canEd
             {/* Header with Title and Save Action */}
             <div className="h-12 bg-white/5 border-b border-white/5 flex items-center justify-between px-4 z-[9999]">
                 <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2 text-xs font-semibold text-white/60">
-                        <div className="h-6 w-6 rounded-lg bg-purple-500/10 flex items-center justify-center">
-                            {mode === 'personal' ? (
-                                <User className="h-3.5 w-3.5 text-purple-400" />
-                            ) : (
-                                <Users className="h-3.5 w-3.5 text-blue-400" />
-                            )}
-                        </div>
-                        {mode === 'personal' ? 'Personal Workspace' : 'Meeting Whiteboard'}
+                    {/* Mode Toggle */}
+                    <div className="flex bg-white/5 rounded-lg p-0.5 mr-2">
+								<button 
+									onClick={() => setMode('personal')}
+									title="Individual workspace for your personal notes"
+									className={`flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold rounded-md transition-all duration-300 ${
+										mode === 'personal' 
+										? 'bg-purple-600 text-white shadow-[0_0_10px_rgba(168,85,247,0.3)]' 
+										: 'text-white/40 hover:text-white/70 hover:bg-white/5'
+									}`}
+								>
+									<User className="h-3 w-3" />
+									PERSONAL
+								</button>
+								<button 
+									onClick={() => setMode('shared')}
+									title="Collaborative whiteboard for all meeting participants"
+									className={`flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold rounded-md transition-all duration-300 ${
+										mode === 'shared' 
+										? 'bg-sky-600 text-white shadow-[0_0_10px_rgba(14,165,233,0.3)]' 
+										: 'text-white/40 hover:text-white/70 hover:bg-white/5'
+									}`}
+								>
+									<Users className="h-3 w-3" />
+									MEETING
+								</button>
+                    </div>
+
+                    <div className="h-4 w-px bg-white/10 mx-1" />
+
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-white/50 tracking-tight">
+                            Viewing:
+                        </span>
+                        <span className={`text-xs font-bold tracking-tight ${mode === 'personal' ? 'text-purple-400' : 'text-sky-400'}`}>
+                            {mode === 'personal' ? 'Personal Notes' : 'Shared Whiteboard'}
+                        </span>
                     </div>
 
                     {/* Sync Status Indicator */}
-                    <div className="flex items-center gap-2 transition-all duration-500">
+                    <div className="flex items-center gap-3 transition-all duration-500 ml-2">
                         {isSaving && (
-                            <div className="flex items-center gap-1.5 text-[10px] font-medium text-sky-400/80 animate-pulse">
-                                <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                            <div className="flex items-center gap-1.5 text-[10px] font-bold text-sky-400 tracking-widest uppercase">
+                                <Loader2 className="h-3 w-3 animate-spin" />
                                 SAVING...
                             </div>
                         )}
                         {syncStatus === 'saved' && (
-                            <div className="flex items-center gap-1.5 text-[10px] font-medium text-green-400/80">
-                                <Check className="h-2.5 w-2.5" />
+                            <div className="flex items-center gap-1.5 text-[10px] font-bold text-[#00DC6E] tracking-widest uppercase">
+                                <Check className="h-3 w-3" />
                                 CHANGES SAVED
                             </div>
                         )}
                         {syncStatus === 'error' && (
-                            <div className="flex items-center gap-1.5 text-[10px] font-medium text-red-400/80">
-                                <div className="h-1 w-1 rounded-full bg-red-500" />
+                            <div className="flex items-center gap-1.5 text-[10px] font-bold text-red-400 tracking-widest uppercase">
+                                <div className="h-1.5 w-1.5 rounded-full bg-red-500" />
                                 SYNC ERROR
                             </div>
                         )}
@@ -124,6 +152,7 @@ export const ScratchPad = memo(function ScratchPad({ roomId, room, isHost, canEd
             
             <div className="flex-1 relative">
                 <Tldraw 
+                    key={mode}
                     store={store}
                     autoFocus 
                     onMount={onEditorMount}

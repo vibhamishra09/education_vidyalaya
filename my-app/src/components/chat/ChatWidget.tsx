@@ -1,170 +1,51 @@
 'use client'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { io, Socket } from 'socket.io-client'
 import { useUser, useAuth } from '@clerk/nextjs'
 import apiClient from '@/lib/api-client'
+import { getSocketIoBaseUrl } from '@/lib/socket-base-url'
 import { MessageList } from '@/components/chat/MessageList'
 import {
 	ChatRecipient,
 	MessageAudienceType,
 	MessageInput,
 } from '@/components/chat/MessageInput'
+import {
+	type ChatMessageRow,
+	type ChatViewerSessionRole,
+	buildInboundChatFlowMeta,
+	buildOutboundChatFlowMeta,
+	collapseNearDuplicateChatRows,
+	isOptimisticEchoOfInbound,
+	isOptimisticMessageId,
+	mergeMessages,
+	normalizeChatMessage,
+} from '@/components/chat/chat-message-utils'
+import {
+	chatFlowLog,
+	chatFlowShortId,
+	isChatFlowFileEnabled,
+} from '@/lib/chat-flow-log'
+import {
+	isJoineeFlowFileEnabled,
+	joineeFlowLog,
+	shouldTraceJoinee,
+} from '@/lib/joinee-flow-log'
 
-type Message = {
-	id: string
-	senderId: string | null
-	audienceType?: MessageAudienceType
-	targetUserId?: string | null
-	content: string
-	createdAt: string
-	guestEmail?: string | null
-	guestSenderId?: string | null
-	sender?: {
-		id: string
-		name: string
-		avatar?: string | null
-	}
-	targetUser?: {
-		id: string
-		name: string
-		avatar?: string | null
-	} | null
-}
+type Message = ChatMessageRow
 
-function normalizeChatMessage(raw: unknown): Message {
-	const m =
-		raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
-	const createdRaw = m.createdAt
-	let createdAt: string
-	if (createdRaw instanceof Date) {
-		createdAt = createdRaw.toISOString()
-	} else if (typeof createdRaw === 'number' && Number.isFinite(createdRaw)) {
-		const d = new Date(createdRaw)
-		createdAt = Number.isNaN(d.getTime()) ? new Date(0).toISOString() : d.toISOString()
-	} else if (typeof createdRaw === 'string' && createdRaw.length > 0) {
-		const d = new Date(createdRaw)
-		createdAt = Number.isNaN(d.getTime()) ? new Date(0).toISOString() : d.toISOString()
-	} else {
-		createdAt = new Date(0).toISOString()
-	}
+/** Slow networks / tab backgrounding: allow longer before showing fatal chat banner */
+const CHAT_CONNECT_WATCHDOG_MS = 40_000
 
-	const guestEmail =
-		typeof m.guestEmail === 'string' && m.guestEmail.length > 0 ? m.guestEmail : null
-	const guestSenderId =
-		typeof m.guestSenderId === 'string' && m.guestSenderId.length > 0
-			? m.guestSenderId
-			: null
-
-	const baseSender = m.sender as Record<string, unknown> | null | undefined
-	let sender: Message['sender']
-	if (baseSender && typeof baseSender.name === 'string' && baseSender.name.length > 0) {
-		sender = {
-			id: String(baseSender.id ?? guestSenderId ?? 'unknown'),
-			name: baseSender.name,
-			avatar: (baseSender.avatar as string | null | undefined) ?? null,
-		}
-	} else if (guestEmail) {
-		const local = guestEmail.split('@')[0] || 'Guest'
-		sender = {
-			id: guestSenderId || 'guest',
-			name: local,
-			avatar: null,
-		}
-	} else {
-		sender = {
-			id: guestSenderId || (typeof m.senderId === 'string' ? m.senderId : '') || 'guest',
-			name: 'Guest',
-			avatar: null,
-		}
-	}
-
-	const senderId =
-		typeof m.senderId === 'string' && m.senderId.length > 0
-			? m.senderId
-			: guestSenderId || ''
-
-	return {
-		id: String(m.id ?? ''),
-		senderId,
-		audienceType: m.audienceType as Message['audienceType'],
-		targetUserId:
-			typeof m.targetUserId === 'string' || m.targetUserId === null
-				? (m.targetUserId as string | null)
-				: null,
-		content: typeof m.content === 'string' ? m.content : '',
-		createdAt,
-		guestEmail,
-		guestSenderId,
-		sender,
-		targetUser: m.targetUser as Message['targetUser'],
-	}
-}
-
-// Keep chat history in-memory per channel so closing/reopening the panel
-// does not wipe the current message list.
 const channelMessageCache = new Map<string, Message[]>()
 
-function mergeMessages(existing: Message[], incoming: Message[]): Message[] {
-	if (incoming.length === 0) return existing
-
-	const byId = new Map<string, Message>()
-	for (const message of existing) {
-		byId.set(message.id, message)
-	}
-	for (const message of incoming) {
-		byId.set(message.id, message)
-	}
-
-	return Array.from(byId.values()).sort((a, b) => {
-		const ta = new Date(a.createdAt).getTime()
-		const tb = new Date(b.createdAt).getTime()
-		const na = Number.isNaN(ta) ? 0 : ta
-		const nb = Number.isNaN(tb) ? 0 : tb
-		return na - nb
-	})
-}
-
-function isOptimisticMessageId(id: string): boolean {
-	return id.startsWith('optimistic-')
-}
-
-/** EVERYONE is often undefined on optimistic vs enum on server — compare consistently. */
-function normalizeAudience(a?: Message['audienceType']): string {
-	return (a ?? 'EVERYONE') as string
-}
-
-/**
- * Drop the optimistic row when the real `message:new` is the same send.
- * Host/viewer labels in the UI differ (e.g. “(Host)”) but senderId on the server echo must match.
- */
-function shouldRemoveOptimisticForEcho(
-	local: Message,
-	server: Message,
-	viewerDbUserId?: string | null,
-	viewerGuestEmail?: string | null,
-): boolean {
-	if (!isOptimisticMessageId(local.id)) return false
-	if (local.content !== server.content) return false
-	if (normalizeAudience(local.audienceType) !== normalizeAudience(server.audienceType)) {
-		return false
-	}
-	if ((local.targetUserId ?? null) !== (server.targetUserId ?? null)) return false
-
-	// Guest: match by email (viewer + server row)
-	const guestLocal = (local.guestEmail || viewerGuestEmail || '').trim().toLowerCase()
-	const guestServer = (server.guestEmail || '').trim().toLowerCase()
-	if (guestLocal.length > 0 && guestServer.length > 0 && guestLocal === guestServer) {
-		return true
-	}
-
-	// Signed-in: server echo is always from our DB user id (covers empty/wrong optimistic senderId)
-	if (viewerDbUserId && server.senderId && viewerDbUserId === server.senderId) {
-		return true
-	}
-	if (local.senderId && server.senderId && local.senderId === server.senderId) {
-		return true
-	}
-	return false
+function pickTrimmedUserId(
+	primary: string | null | undefined,
+	fallback: string | null | undefined,
+): string | null {
+	const a = typeof primary === 'string' && primary.trim() ? primary.trim() : ''
+	const b = typeof fallback === 'string' && fallback.trim() ? fallback.trim() : ''
+	return a || b || null
 }
 
 interface ChatWidgetProps {
@@ -177,6 +58,10 @@ interface ChatWidgetProps {
 	allowedAudiences?: Partial<Record<MessageAudienceType, boolean>>
 	guestToken?: string | null
 	guestEmail?: string | null
+	/** When false (e.g. chat drawer closed), we still mount for sockets; set false from video room. */
+	chatPanelActive?: boolean
+	/** Who is viewing chat (for file logs + sync notes). Standalone /chat defaults to joinee. */
+	viewerSessionRole?: ChatViewerSessionRole
 }
 
 export function ChatWidget({
@@ -189,42 +74,217 @@ export function ChatWidget({
 	allowedAudiences,
 	guestToken,
 	guestEmail,
+	chatPanelActive = true,
+	viewerSessionRole = 'joinee',
 }: ChatWidgetProps) {
 	const { user, isLoaded } = useUser()
 	const { getToken } = useAuth()
 	const userId = user?.id
-	/** Guest link chat only when not signed in; stray ?guestAccessToken= would otherwise use an expired token and the server would disconnect the socket. */
-	const isGuestMode = Boolean(guestToken && !userId)
+	/**
+	 * When the room URL includes `guestAccessToken`, chat must use the **guest** Socket.IO path
+	 * (same identity as LiveKit + Redis moderation). Using Clerk here while the join link is
+	 * guest-based breaks permissions, join:channel, and sends — socket stays disconnected.
+	 * Signed-in users with a guest link still authenticate chat with the guest token.
+	 */
+	const isGuestMode = Boolean(guestToken?.trim())
+	const logJoinee = (step: string, detail?: Record<string, unknown>) => {
+		if (!isJoineeFlowFileEnabled() || !shouldTraceJoinee(isGuestMode, viewerSessionRole)) {
+			return
+		}
+		joineeFlowLog(step, {
+			...detail,
+			authPath: isGuestMode ? 'guest_token' : 'signed_in_joinee',
+			viewerSessionRole,
+		})
+	}
+	/** Keep socket effect from re-running on every parent render (was reconnecting constantly → missed message:new). */
+	const getTokenRef = useRef(getToken)
+	getTokenRef.current = getToken
+	const viewerSessionRoleRef = useRef(viewerSessionRole)
+	viewerSessionRoleRef.current = viewerSessionRole
+	const hostUserIdRef = useRef(hostUserId)
+	hostUserIdRef.current = hostUserId
 	const channelIdRef = useRef<string | null | undefined>(channelId)
 	channelIdRef.current = channelId
 	const [viewerGuestEmail, setViewerGuestEmail] = useState<string | null>(
 		() => guestEmail ?? null,
 	)
 	const viewerDbUserIdRef = useRef(currentUserDbId)
+	/** Latest prop for dedupe when ref is cleared before `/api/users/me` or socket runs. */
+	const currentUserDbIdPropRef = useRef(currentUserDbId)
+	currentUserDbIdPropRef.current = currentUserDbId
 	const viewerGuestEmailRef = useRef<string | null>(guestEmail ?? null)
+	/** Bumps when `/api/users/me` resolves inside this widget so dedupe effects re-run (ref alone does not). */
+	const [fetchedDbUserId, setFetchedDbUserId] = useState<string | null>(null)
+	/** Same as `fetchedDbUserId` state — socket `message:new` must read latest without stale closures. */
+	const fetchedDbUserIdRef = useRef<string | null>(null)
+	useEffect(() => {
+		fetchedDbUserIdRef.current = fetchedDbUserId
+	}, [fetchedDbUserId])
+
 	useEffect(() => {
 		viewerDbUserIdRef.current = currentUserDbId
 	}, [currentUserDbId])
+
+	/** Same as study-room page `/api/users/me` — fills ref when prop is still null; does not block send. */
+	useEffect(() => {
+		if (!channelId || !userId || isGuestMode || currentUserDbId) return
+		let cancelled = false
+		void (async () => {
+			try {
+				const token = await getToken()
+				if (!token || cancelled) return
+				const res = await apiClient.get<{ id?: string }>('/api/users/me', {
+					headers: { Authorization: `Bearer ${token}` },
+				})
+				const id = typeof res.data?.id === 'string' ? res.data.id : null
+				if (id && !cancelled) {
+					viewerDbUserIdRef.current = id
+					fetchedDbUserIdRef.current = id
+					setFetchedDbUserId(id)
+				}
+			} catch {
+				/* ignore */
+			}
+		})()
+		return () => {
+			cancelled = true
+		}
+	}, [channelId, userId, isGuestMode, getToken, currentUserDbId])
+
+	useEffect(() => {
+		fetchedDbUserIdRef.current = null
+		setFetchedDbUserId(null)
+	}, [channelId])
+
 	useEffect(() => {
 		viewerGuestEmailRef.current = viewerGuestEmail ?? guestEmail ?? null
 	}, [viewerGuestEmail, guestEmail])
+
+	/** When DB user id arrives (prop or `/api/users/me`), re-run dedupe so optimistic + echo collapse. */
+	useEffect(() => {
+		if (!channelId || isGuestMode) return
+		const vid = pickTrimmedUserId(
+			pickTrimmedUserId(viewerDbUserIdRef.current, currentUserDbIdPropRef.current),
+			fetchedDbUserId,
+		)
+		if (!vid) return
+		setMessages((prev) => {
+			const next = collapseNearDuplicateChatRows(
+				prev.map(normalizeChatMessage),
+				vid,
+			)
+			const same =
+				next.length === prev.length &&
+				next.every((m, i) => m.id === prev[i]?.id)
+			if (same) return prev
+			channelMessageCache.set(channelId, next)
+			return next
+		})
+	}, [channelId, currentUserDbId, fetchedDbUserId, isGuestMode])
 
 	const [messages, setMessages] = useState<Message[]>(() => {
 		if (!channelId) return []
 		const cached = channelMessageCache.get(channelId) || []
 		return cached.map(normalizeChatMessage)
 	})
+	const messageCountRef = useRef(0)
+	useEffect(() => {
+		messageCountRef.current = messages.length
+	}, [messages.length])
 	const socketRef = useRef<Socket | null>(null)
 	const [error, setError] = useState<string | null>(null)
 	const [isConnecting, setIsConnecting] = useState(false)
 
+	const mergeMessagesFromServer = useCallback(async () => {
+		if (!channelId) return
+		const activeChannelId = channelId
+		try {
+			const params: Record<string, string | number> = { limit: 200 }
+			if (isGuestMode) {
+				params.includeMeta = '1'
+				if (guestEmail) {
+					params.guestEmail = guestEmail
+				} else if (guestToken) {
+					params.guestAccessToken = guestToken
+				}
+			}
+			const res = await apiClient.get(`/api/chat/channels/${activeChannelId}/messages`, {
+				params,
+				skipClerkAuth: isGuestMode,
+			})
+			if (channelIdRef.current !== activeChannelId) return
+			let rawList: unknown[] = []
+			if (
+				isGuestMode &&
+				res.data &&
+				typeof res.data === 'object' &&
+				!Array.isArray(res.data)
+			) {
+				const body = res.data as {
+					messages?: unknown[]
+					meta?: { viewerGuestEmail?: string }
+				}
+				rawList = Array.isArray(body.messages) ? body.messages : []
+				if (body.meta?.viewerGuestEmail) {
+					setViewerGuestEmail(body.meta.viewerGuestEmail)
+				}
+			} else {
+				rawList = Array.isArray(res.data) ? res.data : []
+			}
+			const incoming = rawList.map(normalizeChatMessage)
+			setMessages((prev) => {
+				if (channelIdRef.current !== activeChannelId) return prev
+				const viewerId = pickTrimmedUserId(
+					pickTrimmedUserId(
+						viewerDbUserIdRef.current,
+						currentUserDbIdPropRef.current,
+					),
+					fetchedDbUserIdRef.current,
+				)
+				const merged = mergeMessages(prev, incoming)
+				const next = collapseNearDuplicateChatRows(merged, viewerId)
+				channelMessageCache.set(activeChannelId, next)
+				return next
+			})
+		} catch {
+			/* best-effort sync */
+		}
+	}, [channelId, isGuestMode, guestEmail, guestToken])
+
+	const wasChatPanelOpenRef = useRef(false)
+	useEffect(() => {
+		wasChatPanelOpenRef.current = false
+	}, [channelId])
+
+	useEffect(() => {
+		if (!channelId) return
+		const wasOpen = wasChatPanelOpenRef.current
+		wasChatPanelOpenRef.current = chatPanelActive
+		if (!chatPanelActive) return
+		if (!wasOpen) {
+			void mergeMessagesFromServer()
+		}
+	}, [channelId, chatPanelActive, mergeMessagesFromServer])
+
+	useEffect(() => {
+		if (!channelId) return
+		let t: ReturnType<typeof setTimeout> | undefined
+		const onVis = () => {
+			if (document.visibilityState !== 'visible') return
+			if (t) clearTimeout(t)
+			t = setTimeout(() => void mergeMessagesFromServer(), 400)
+		}
+		document.addEventListener('visibilitychange', onVis)
+		return () => {
+			document.removeEventListener('visibilitychange', onVis)
+			if (t) clearTimeout(t)
+		}
+	}, [channelId, mergeMessagesFromServer])
+
 	useEffect(() => {
 		setViewerGuestEmail(guestEmail ?? null)
 	}, [guestEmail])
-
-	useEffect(() => {
-		console.log('[ChatWidget] chatDisabled prop changed to:', chatDisabled)
-	}, [chatDisabled])
 
 	useEffect(() => {
 		if (!channelId) {
@@ -246,7 +306,16 @@ export function ChatWidget({
 		let mounted = true
 		async function loadHistory() {
 			try {
-				console.log('Loading chat history for channel:', channelId)
+				chatFlowLog('history:request', {
+					channelId: chatFlowShortId(activeChannelId),
+					guestMode: isGuestMode,
+					viewerSessionRole: isGuestMode ? 'guest' : viewerSessionRole,
+				})
+				logJoinee('joinee:history_request', {
+					channelId: chatFlowShortId(activeChannelId),
+					hasGuestEmail: Boolean(guestEmail?.trim()),
+					hasGuestToken: Boolean(guestToken?.trim()),
+				})
 				const params: Record<string, string | number> = { limit: 200 }
 				if (isGuestMode) {
 					params.includeMeta = '1'
@@ -281,27 +350,52 @@ export function ChatWidget({
 					rawList = Array.isArray(res.data) ? res.data : []
 				}
 
-				const historyMessages = rawList.map(normalizeChatMessage)
-				console.log('Loaded messages:', historyMessages.length, 'messages')
+				const historyMessages = collapseNearDuplicateChatRows(
+					rawList.map(normalizeChatMessage),
+					pickTrimmedUserId(
+						pickTrimmedUserId(
+							viewerDbUserIdRef.current,
+							currentUserDbIdPropRef.current,
+						),
+						fetchedDbUserIdRef.current,
+					),
+				)
 				// Replace server history for this channel only — do not merge with prior room’s list.
 				if (channelIdRef.current !== activeChannelId) return
 				setMessages(historyMessages)
 				channelMessageCache.set(activeChannelId, historyMessages)
+				chatFlowLog('history:loaded', {
+					channelId: chatFlowShortId(activeChannelId),
+					count: historyMessages.length,
+					viewerSessionRole: isGuestMode ? 'guest' : viewerSessionRole,
+				})
+				logJoinee('joinee:history_loaded', {
+					channelId: chatFlowShortId(activeChannelId),
+					count: historyMessages.length,
+				})
 			} catch (e: unknown) {
 				if (!mounted || channelIdRef.current !== activeChannelId) return
 				const errorMessage = e instanceof Error ? e.message : 'Failed to load messages'
+				chatFlowLog('history:error', {
+					error: errorMessage,
+					viewerSessionRole: isGuestMode ? 'guest' : viewerSessionRole,
+				})
+				logJoinee('joinee:history_error', { error: errorMessage })
 				console.error('Failed to load chat history:', errorMessage)
-				setError(errorMessage)
+				// Do not set the red banner — history is best-effort; socket may still work.
 			}
 		}
 		loadHistory()
 		return () => {
 			mounted = false
 		}
-	}, [channelId, isGuestMode, guestEmail, guestToken])
+	}, [channelId, isGuestMode, guestEmail, guestToken, viewerSessionRole])
 
+	// Guest links: do not require Clerk `isLoaded` — joinee may be signed out or Clerk slow.
 	useEffect(() => {
-		if (!channelId || !isLoaded || (!userId && !isGuestMode)) {
+		const guestReady = isGuestMode && Boolean(guestToken?.trim())
+		const signedInReady = !isGuestMode && isLoaded && Boolean(userId)
+		if (!channelId || (!guestReady && !signedInReady)) {
 			if (socketRef.current) {
 				socketRef.current.disconnect()
 				socketRef.current = null
@@ -318,12 +412,16 @@ export function ChatWidget({
 				setIsConnecting(true)
 				setError(null)
 
-				let token = isGuestMode ? guestToken : await getToken()
+				let token = isGuestMode ? guestToken : await getTokenRef.current()
 				if (!token && !isGuestMode) {
 					await new Promise((r) => setTimeout(r, 400))
-					token = (await getToken()) ?? null
+					token = (await getTokenRef.current()) ?? null
 				}
 				if (!token) {
+					logJoinee('joinee:socket_no_token', {
+						isGuestMode,
+						clerkLoaded: isLoaded,
+					})
 					if (isMounted) {
 						setError('Authentication required')
 						setIsConnecting(false)
@@ -333,19 +431,21 @@ export function ChatWidget({
 
 				if (!isMounted) return
 
-				const url =
-					process.env.NEXT_PUBLIC_CHAT_WS_URL ||
-					process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') ||
-					'http://localhost:3002'
+				const url = getSocketIoBaseUrl()
 
-				console.log(
-					'[Chat] Preparing WebSocket connection:',
+				chatFlowLog('socket:prepare', {
 					url,
-					'for channel:',
-					activeChannelId,
-				)
+					channelId: chatFlowShortId(activeChannelId),
+					role: isGuestMode ? 'guest' : 'signed-in',
+					viewerSessionRole: viewerSessionRoleRef.current,
+				})
+				logJoinee('joinee:socket_prepare', {
+					socketIoBaseUrl: url,
+					channelId: chatFlowShortId(activeChannelId),
+					tokenLen: typeof token === 'string' ? token.length : 0,
+				})
 
-				const s = io(url, {
+				const s = io(`${url}/chat`, {
 					transports: ['websocket', 'polling'],
 					auth: { token },
 					reconnection: true,
@@ -363,11 +463,17 @@ export function ChatWidget({
 				let joinedForCurrentSocket = false
 				/** Only for UI: avoid flashing errors on the first flaky attempts */
 				let connectErrorCount = 0
+				let connectWatchdog: ReturnType<typeof setTimeout> | null = null
 
 				const joinChannel = () => {
 					if (joinedForCurrentSocket) return
 					joinedForCurrentSocket = true
-					console.log('[Chat] Joining channel:', activeChannelId)
+					chatFlowLog('socket:emit_join_channel', {
+						channelId: chatFlowShortId(activeChannelId),
+					})
+					logJoinee('joinee:socket_emit_join_channel', {
+						channelId: chatFlowShortId(activeChannelId),
+					})
 					s.emit('join:channel', { channelId: activeChannelId })
 				}
 
@@ -377,7 +483,9 @@ export function ChatWidget({
 					setIsConnecting(true)
 					setError(null)
 					try {
-						const fresh = isGuestMode ? guestToken : await getToken({ skipCache: true })
+						const fresh = isGuestMode
+							? guestToken
+							: await getTokenRef.current({ skipCache: true })
 						if (fresh) {
 							s.auth = { token: fresh }
 						}
@@ -387,7 +495,13 @@ export function ChatWidget({
 				})
 
 				s.on('connect', () => {
-					console.log('[Chat] Socket connected:', activeChannelId)
+					chatFlowLog('socket:transport_connected', {
+						channelId: chatFlowShortId(activeChannelId),
+					})
+					if (connectWatchdog) {
+						clearTimeout(connectWatchdog)
+						connectWatchdog = null
+					}
 					connectErrorCount = 0
 					joinedForCurrentSocket = false
 					if (isMounted && channelIdRef.current === activeChannelId) {
@@ -396,7 +510,13 @@ export function ChatWidget({
 				})
 
 				s.on('chat:authenticated', () => {
-					console.log('[Chat] Socket authenticated')
+					chatFlowLog('socket:chat_authenticated', {
+						channelId: chatFlowShortId(activeChannelId),
+					})
+					if (connectWatchdog) {
+						clearTimeout(connectWatchdog)
+						connectWatchdog = null
+					}
 					if (isMounted) {
 						setIsConnecting(false)
 						setError(null)
@@ -405,7 +525,13 @@ export function ChatWidget({
 				})
 
 				s.on('chat:joined', () => {
-					console.log('[Chat] Successfully joined channel:', activeChannelId)
+					chatFlowLog('socket:chat_joined_room', {
+						channelId: chatFlowShortId(activeChannelId),
+					})
+					if (connectWatchdog) {
+						clearTimeout(connectWatchdog)
+						connectWatchdog = null
+					}
 					if (isMounted) {
 						setIsConnecting(false)
 						setError(null)
@@ -415,21 +541,60 @@ export function ChatWidget({
 				s.on('message:new', (msg: unknown) => {
 					if (channelIdRef.current !== activeChannelId) return
 					const normalized = normalizeChatMessage(msg)
+					const viewerIdForLog = pickTrimmedUserId(
+						pickTrimmedUserId(
+							viewerDbUserIdRef.current,
+							currentUserDbIdPropRef.current,
+						),
+						fetchedDbUserIdRef.current,
+					)
+					const inboundFlow = buildInboundChatFlowMeta(
+						normalized,
+						viewerSessionRoleRef.current,
+						hostUserIdRef.current,
+						viewerIdForLog,
+						viewerGuestEmailRef.current,
+						isGuestMode,
+					)
+					chatFlowLog('message:inbound', {
+						channelId: chatFlowShortId(activeChannelId),
+						messageId: chatFlowShortId(normalized.id),
+						audienceType: normalized.audienceType,
+						senderId: chatFlowShortId(normalized.senderId ?? undefined),
+						targetUserId: chatFlowShortId(normalized.targetUserId ?? undefined),
+						viewerSessionRole: viewerSessionRoleRef.current,
+						senderKind: inboundFlow.senderKind,
+						syncNote: inboundFlow.syncNote,
+						preview: (normalized.content || '').slice(0, 80),
+						...(isChatFlowFileEnabled()
+							? { content: normalized.content ?? '' }
+							: {}),
+					})
 					setMessages((prev) => {
 						if (channelIdRef.current !== activeChannelId) return prev
 						if (prev.some((m) => m.id === normalized.id)) {
 							return prev
 						}
+						const viewerId = pickTrimmedUserId(
+							pickTrimmedUserId(
+								viewerDbUserIdRef.current,
+								currentUserDbIdPropRef.current,
+							),
+							fetchedDbUserIdRef.current,
+						)
 						const withoutMatchingOptimistic = prev.filter((m) => {
 							if (!isOptimisticMessageId(m.id)) return true
-							return !shouldRemoveOptimisticForEcho(
+							return !isOptimisticEchoOfInbound(
 								m,
 								normalized,
-								viewerDbUserIdRef.current,
+								viewerId,
 								viewerGuestEmailRef.current,
 							)
 						})
-						const next = mergeMessages(withoutMatchingOptimistic, [normalized])
+						const next = collapseNearDuplicateChatRows(
+							mergeMessages(withoutMatchingOptimistic, [normalized]),
+							viewerId,
+						)
 						channelMessageCache.set(activeChannelId, next)
 						return next
 					})
@@ -441,7 +606,15 @@ export function ChatWidget({
 
 				s.on('connect_error', (err: Error) => {
 					connectErrorCount++
-					console.warn(`[Chat] Connection attempt ${connectErrorCount} failed:`, err.message)
+					chatFlowLog('socket:connect_error', {
+						attempt: connectErrorCount,
+						message: err.message,
+					})
+					logJoinee('joinee:socket_connect_error', {
+						attempt: connectErrorCount,
+						message: err.message,
+						name: err.name,
+					})
 
 					const looksLikeAuthFailure =
 						/401|403|unauthorized|forbidden/i.test(err.message) ||
@@ -451,7 +624,7 @@ export function ChatWidget({
 					if (isMounted && channelIdRef.current === activeChannelId && looksLikeAuthFailure && !isGuestMode) {
 						void (async () => {
 							try {
-								const fresh = await getToken({ skipCache: true })
+								const fresh = await getTokenRef.current({ skipCache: true })
 								if (fresh && isMounted && channelIdRef.current === activeChannelId) {
 									s.auth = { token: fresh }
 								}
@@ -460,10 +633,31 @@ export function ChatWidget({
 							}
 						})()
 					}
+
+					// Avoid a stuck red banner while Socket.IO is still retrying (websocket → polling, etc.).
+					if (isMounted && channelIdRef.current === activeChannelId && connectErrorCount < 4) {
+						setError(null)
+					}
+					if (isMounted && channelIdRef.current === activeChannelId && connectErrorCount >= 4) {
+						logJoinee('joinee:socket_connect_error_fatal', {
+							attempt: connectErrorCount,
+							message: err.message,
+							ui: 'banner_guest_or_signed_in',
+						})
+						setIsConnecting(false)
+						setError(
+							isGuestMode
+								? 'Unable to connect to chat right now. Please refresh or reopen your guest link.'
+								: 'Unable to connect to chat. Please check your connection and retry.',
+						)
+					}
 				})
 
 				s.io.on('reconnect_failed', () => {
 					if (!isMounted || channelIdRef.current !== activeChannelId) return
+					logJoinee('joinee:socket_reconnect_failed', {
+						channelId: chatFlowShortId(activeChannelId),
+					})
 					setIsConnecting(false)
 					setError(
 						isGuestMode
@@ -481,20 +675,25 @@ export function ChatWidget({
 					const hasErrorInfo = !!(errorData.code || errorData.message || errorData.error)
 
 					if (hasErrorInfo) {
-						console.error('[Chat] Socket error:', data)
+						chatFlowLog('socket:chat_error', {
+							code: errorData.code,
+							message: errorData.message || errorData.error,
+						})
+						logJoinee('joinee:socket_chat_error', {
+							code: errorData.code,
+							message: errorData.message || errorData.error,
+						})
 					}
 
 					if (isMounted) {
-						if (errorData.code === 'CHAT_DISABLED') {
-							console.log('[Chat] Chat is disabled by host')
-						} else if (errorData.code === 'CHAT_SCOPE_RESTRICTED') {
+						if (errorData.code === 'CHAT_SCOPE_RESTRICTED') {
 							setError('Host has restricted this chat target for you')
-						} else if (errorData.code === 'RECONNECTING') {
-							console.log('[Chat] Reconnecting...')
 						} else if (hasErrorInfo && (errorData.message || errorData.error)) {
 							const msg = (errorData.message || errorData.error || '').toLowerCase()
 							if (
-								/\breconnect|disconnect|transport|ping\s*time|network/i.test(msg)
+								/\breconnect|disconnect|transport|ping\s*time|network|websocket|xhr|poll|closed before|connection/i.test(
+									msg,
+								)
 							) {
 								return
 							}
@@ -505,7 +704,7 @@ export function ChatWidget({
 				})
 
 				s.on('disconnect', (reason) => {
-					console.log('[Chat] Socket disconnected:', reason)
+					chatFlowLog('socket:disconnect', { reason })
 					if (
 						isMounted &&
 						reason !== 'io client disconnect' &&
@@ -519,7 +718,9 @@ export function ChatWidget({
 					if (isMounted && reason === 'io server disconnect' && channelIdRef.current === activeChannelId) {
 						void (async () => {
 							try {
-								const fresh = isGuestMode ? guestToken : await getToken({ skipCache: true })
+								const fresh = isGuestMode
+									? guestToken
+									: await getTokenRef.current({ skipCache: true })
 								if (fresh && isMounted && channelIdRef.current === activeChannelId) {
 									s.auth = { token: fresh }
 								}
@@ -535,18 +736,52 @@ export function ChatWidget({
 				})
 
 				s.io.on('reconnect', () => {
-					console.log('[Chat] Reconnected successfully')
+					chatFlowLog('socket:reconnected', {
+						channelId: chatFlowShortId(activeChannelId),
+						syncNote:
+							'Transport reconnected — re-emit join:channel if server did not re-authenticate yet',
+					})
+					logJoinee('joinee:socket_reconnected', {
+						channelId: chatFlowShortId(activeChannelId),
+					})
 					connectErrorCount = 0
+					joinedForCurrentSocket = false
+					window.setTimeout(() => {
+						if (!isMounted || channelIdRef.current !== activeChannelId) return
+						joinChannel()
+					}, 350)
 					if (isMounted && channelIdRef.current === activeChannelId) {
 						setError(null)
 					}
 				})
 
 				s.connect()
+				connectWatchdog = setTimeout(() => {
+					if (!isMounted || channelIdRef.current !== activeChannelId) return
+					if (s.connected) return
+					// REST history can work while Socket.IO is still handshaking — do not show red error if messages already loaded.
+					if (messageCountRef.current > 0) {
+						setIsConnecting(false)
+						setError(null)
+						return
+					}
+					logJoinee('joinee:socket_watchdog_timeout', {
+						ms: CHAT_CONNECT_WATCHDOG_MS,
+						connected: s.connected,
+						channelId: chatFlowShortId(activeChannelId),
+					})
+					setIsConnecting(false)
+					setError(
+						isGuestMode
+							? 'Chat is taking too long to connect. Please refresh this page.'
+							: 'Chat is taking too long to connect. Please refresh and try again.',
+					)
+				}, CHAT_CONNECT_WATCHDOG_MS)
 			} catch (err: unknown) {
 				console.error('[Chat] Failed to connect socket:', err)
+				const errorMessage = err instanceof Error ? err.message : 'Failed to connect'
+				logJoinee('joinee:socket_connect_exception', { message: errorMessage })
 				if (isMounted) {
-					const errorMessage = err instanceof Error ? err.message : 'Failed to connect'
 					setError(errorMessage)
 					setIsConnecting(false)
 				}
@@ -558,12 +793,14 @@ export function ChatWidget({
 		return () => {
 			isMounted = false
 			if (socketInstance) {
+				socketInstance.removeAllListeners()
 				socketInstance.disconnect()
 				socketInstance = null
 			}
 			socketRef.current = null
 		}
-	}, [channelId, isLoaded, userId, getToken, guestToken, isGuestMode])
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- getToken/viewerSessionRole/hostUserId via refs; including them reconnects socket every render
+	}, [channelId, isLoaded, userId, guestToken, isGuestMode])
 
 	useEffect(() => {
 		if (!channelId) return
@@ -578,7 +815,7 @@ export function ChatWidget({
 		)
 	}
 
-	if (!isLoaded) {
+	if (!isLoaded && !isGuestMode) {
 		return (
 			<div className={`p-4 border rounded ${className}`}>
 				<p className="text-muted-foreground text-sm">Loading chat...</p>
@@ -609,38 +846,93 @@ export function ChatWidget({
 		const trimmed = text.trim()
 		if (!trimmed) return
 
-		const optimisticId = `optimistic-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`}`
-		const now = new Date().toISOString()
+		const outboundFlow = buildOutboundChatFlowMeta(
+			isGuestMode ? 'guest' : viewerSessionRole,
+		)
 
-		let optimistic: Message
-		if (isGuestMode) {
-			const email = viewerGuestEmail || guestEmail || ''
-			const localName = email.split('@')[0] || 'Guest'
-			optimistic = {
-				id: optimisticId,
-				senderId: null,
-				audienceType,
-				targetUserId: targetUserId ?? null,
-				content: trimmed,
-				createdAt: now,
-				guestEmail: email || null,
-				guestSenderId: guestToken || null,
-				sender: {
-					id: guestToken || 'guest',
-					name: localName,
-					avatar: null,
-				},
+		chatFlowLog('message:outbound_send', {
+			channelId: chatFlowShortId(channelId),
+			audienceType,
+			targetUserId: targetUserId ? chatFlowShortId(targetUserId) : undefined,
+			role: isGuestMode ? 'guest' : 'signed-in',
+			viewerSessionRole: isGuestMode ? 'guest' : viewerSessionRole,
+			syncNote: outboundFlow.syncNote,
+			preview: trimmed.slice(0, 80),
+			...(isChatFlowFileEnabled() ? { content: trimmed } : {}),
+		})
+		logJoinee('joinee:message_outbound_prepare', {
+			channelId: chatFlowShortId(channelId),
+			audienceType,
+			socketConnected: s.connected,
+		})
+
+		// Resolve DB user id from props/refs only — do not await before socket emit (was delaying host↔joinee sync by seconds).
+		let sid =
+			(currentUserDbId && String(currentUserDbId)) ||
+			(viewerDbUserIdRef.current && String(viewerDbUserIdRef.current)) ||
+			(fetchedDbUserIdRef.current && String(fetchedDbUserIdRef.current)) ||
+			''
+
+		s.emit('message:send', {
+			channelId,
+			content: trimmed,
+			audienceType,
+			targetUserId,
+		})
+		chatFlowLog('message:emit_message_send', {
+			channelId: chatFlowShortId(channelId),
+			audienceType,
+			viewerSessionRole: isGuestMode ? 'guest' : viewerSessionRole,
+			syncNote:
+				'Socket emitted message:send immediately — other clients should get message:new without waiting for /api/users/me',
+		})
+		logJoinee('joinee:message_emit_message_send', {
+			channelId: chatFlowShortId(channelId),
+			audienceType,
+		})
+
+		if (!isGuestMode && !sid) {
+			try {
+				const token = await getToken()
+				if (token) {
+					const res = await apiClient.get<{ id?: string }>('/api/users/me', {
+						headers: { Authorization: `Bearer ${token}` },
+					})
+					const id = typeof res.data?.id === 'string' ? res.data.id : null
+					if (id) {
+						sid = id
+						viewerDbUserIdRef.current = id
+						fetchedDbUserIdRef.current = id
+						setFetchedDbUserId(id)
+					}
+				}
+			} catch {
+				/* ignore */
 			}
-		} else {
-			const sid = currentUserDbId || ''
-			const displayName =
-				user?.fullName ||
-				[user?.firstName, user?.lastName].filter(Boolean).join(' ') ||
-				user?.primaryEmailAddress?.emailAddress?.split('@')[0] ||
-				'You'
-			optimistic = {
+		}
+		if (sid) viewerDbUserIdRef.current = sid
+
+		// Signed-in without a DB user id: skip optimistic row so we never show two lines (placeholder + echo).
+		// Joinee (signed-in or guest): same optimistic path as host when we have a stable sender key.
+		const canUseOptimistic = isGuestMode || (!!sid && sid.trim() !== '')
+
+		if (canUseOptimistic) {
+			const optimisticId = `optimistic-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`}`
+			const now = new Date().toISOString()
+			const fallbackGuestEmail =
+				(viewerGuestEmailRef.current && viewerGuestEmailRef.current.trim()) ||
+				(guestEmail && guestEmail.trim()) ||
+				null
+			const displayName = isGuestMode
+				? fallbackGuestEmail?.split('@')[0] || 'You'
+				: user?.fullName ||
+					[user?.firstName, user?.lastName].filter(Boolean).join(' ') ||
+					user?.primaryEmailAddress?.emailAddress?.split('@')[0] ||
+					'You'
+			const optimistic: Message = {
 				id: optimisticId,
-				senderId: sid,
+				senderId: isGuestMode ? null : sid,
+				guestEmail: isGuestMode ? fallbackGuestEmail : null,
 				audienceType,
 				targetUserId: targetUserId ?? null,
 				content: trimmed,
@@ -651,30 +943,20 @@ export function ChatWidget({
 					avatar: user?.imageUrl ?? null,
 				},
 			}
-		}
-
-		setMessages((prev) => {
-			const next = mergeMessages(prev, [optimistic])
-			if (channelId) channelMessageCache.set(channelId, next)
-			return next
-		})
-
-		// If the server never echoes (rare), drop the placeholder so the thread doesn’t lie forever.
-		window.setTimeout(() => {
 			setMessages((prev) => {
-				if (!prev.some((m) => m.id === optimisticId)) return prev
-				const next = prev.filter((m) => m.id !== optimisticId)
+				const next = mergeMessages(prev, [optimistic])
 				if (channelId) channelMessageCache.set(channelId, next)
 				return next
 			})
-		}, 20_000)
-
-		s.emit('message:send', {
-			channelId,
-			content: trimmed,
-			audienceType,
-			targetUserId,
-		})
+			window.setTimeout(() => {
+				setMessages((prev) => {
+					if (!prev.some((m) => m.id === optimisticId)) return prev
+					const next = prev.filter((m) => m.id !== optimisticId)
+					if (channelId) channelMessageCache.set(channelId, next)
+					return next
+				})
+			}, 20_000)
+		}
 	}
 
 	return (

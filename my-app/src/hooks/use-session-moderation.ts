@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { toast } from 'sonner';
+import { getSocketIoBaseUrl } from '@/lib/socket-base-url';
+import { joineeFlowLog } from '@/lib/joinee-flow-log';
 
 // Room permissions interface for the "Lock" system
 export interface RoomPermissions {
@@ -72,7 +74,44 @@ export interface FlashQuestion {
   fontSize?: 'sm' | 'md' | 'lg' | 'xl';
 }
 
-export function useSessionModeration({ sessionId, sessionType, isHost: _isHost, token, userId, enabled = true } : { sessionId: string | null; sessionType: 'studyRoom' | 'peerSession' | null; isHost: boolean; token: string | null; userId?: string | null; enabled?: boolean }) {
+function uniqStrings(ids: (string | null | undefined)[]): string[] {
+  return [...new Set(ids.filter((x): x is string => typeof x === 'string' && x.length > 0))];
+}
+
+function normalizeIdentity(id: string | null | undefined): string {
+  return (id ?? '').trim().toLowerCase();
+}
+
+function matchesIdentity(
+  candidate: string | null | undefined,
+  pool: string[],
+): boolean {
+  const normalized = normalizeIdentity(candidate);
+  if (!normalized) return false;
+  return pool.some((id) => normalizeIdentity(id) === normalized);
+}
+
+export function useSessionModeration({
+  sessionId,
+  sessionType,
+  isHost: _isHost,
+  token,
+  userId,
+  /** LiveKit identity, Clerk id, DB id — host targets `participant.identity` which may differ from Clerk id for guest links */
+  identityMatchIds,
+  enabled = true,
+  /** Joinee-only: log meet/moderation socket steps to `logs/joinee-flow.txt` when NEXT_PUBLIC_JOINEE_FLOW_FILE=1 */
+  meetFlowTrace = false,
+}: {
+  sessionId: string | null;
+  sessionType: 'studyRoom' | 'peerSession' | null;
+  isHost: boolean;
+  token: string | null;
+  userId?: string | null;
+  identityMatchIds?: string[] | null;
+  enabled?: boolean;
+  meetFlowTrace?: boolean;
+}) {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [meetingEnded, setMeetingEnded] = useState(false);
@@ -124,20 +163,37 @@ export function useSessionModeration({ sessionId, sessionType, isHost: _isHost, 
   const [flashQuestions, setFlashQuestions] = useState<FlashQuestion[]>([]);
 
   const connectingRef = useRef(false);
+  const meetFlowTraceRef = useRef(meetFlowTrace);
+  meetFlowTraceRef.current = meetFlowTrace;
   const userIdRef = useRef(userId);
-  
+  const identityMatchRef = useRef<string[]>(uniqStrings([userId, ...(identityMatchIds ?? [])]));
+
   // Keep the ref up to date
   useEffect(() => {
     userIdRef.current = userId;
   }, [userId]);
 
   useEffect(() => {
+    identityMatchRef.current = uniqStrings([userId, ...(identityMatchIds ?? [])]);
+  }, [userId, identityMatchIds]);
+
+  useEffect(() => {
     if (!sessionId || !sessionType || !token || !enabled || connectingRef.current) return;
 
+    const traceMeet = (step: string, detail?: Record<string, unknown>) => {
+      if (!meetFlowTraceRef.current) return;
+      joineeFlowLog(step, { subsystem: 'meet_moderation', ...detail });
+    };
+
     connectingRef.current = true;
-    const url = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:3002';
-    const s = io(url, {
-      transports: ['websocket'],
+    const url = getSocketIoBaseUrl();
+    traceMeet('meet:moderation_socket_prepare', {
+      url,
+      sessionId: sessionId.slice(0, 8),
+      sessionType,
+    });
+    const s = io(`${url}/session-moderation`, {
+      transports: ['websocket', 'polling'],
       auth: { token },
       reconnection: true,
     });
@@ -145,11 +201,27 @@ export function useSessionModeration({ sessionId, sessionType, isHost: _isHost, 
     s.on('connect', () => {
       setIsConnected(true);
       setSocket(s);
+      traceMeet('meet:moderation_transport_connected', {
+        sessionId: sessionId.slice(0, 8),
+        sessionType,
+      });
       s.emit('join-session', { sessionId, sessionType });
+      traceMeet('meet:moderation_emit_join_session', {
+        sessionId: sessionId.slice(0, 8),
+        sessionType,
+      });
     });
 
-    s.on('disconnect', () => {
+    s.on('connect_error', (err: Error) => {
+      traceMeet('meet:moderation_connect_error', {
+        message: err?.message,
+        name: err?.name,
+      });
+    });
+
+    s.on('disconnect', (reason: string) => {
       setIsConnected(false);
+      traceMeet('meet:moderation_disconnect', { reason });
     });
 
     // New sync-permissions event from Redis-backed backend
@@ -161,6 +233,14 @@ export function useSessionModeration({ sessionId, sessionType, isHost: _isHost, 
       flashQuestions?: FlashQuestion[];
       activeFlashMessage?: FlashMessage;
     }) => {
+      traceMeet('meet:sync_permissions', {
+        sessionId:
+          typeof data.sessionId === 'string' ? data.sessionId.slice(0, 8) : undefined,
+        isHost: data.isHost,
+        allowChat: data.permissions?.allowChat,
+        allowAudio: data.permissions?.allowAudio,
+        allowVideo: data.permissions?.allowVideo,
+      });
       console.log('[moderation] sync-permissions:', data);
       if (data.permissions) {
         setPermissions(data.permissions);
@@ -190,13 +270,28 @@ export function useSessionModeration({ sessionId, sessionType, isHost: _isHost, 
 
     // User-specific permissions updated
     s.on('user-permissions-updated', (data: { targetUserId: string; permissions: RoomPermissions }) => {
-      if (data.targetUserId === userIdRef.current && data.permissions) {
+      if (matchesIdentity(data.targetUserId, identityMatchRef.current) && data.permissions) {
         setPermissions(data.permissions);
         setChatDisabled(!data.permissions.allowChat);
+        if (data.permissions.allowAudio === false) {
+          setPendingPermissionRequest((prev) =>
+            prev?.type === 'audio' ? null : prev,
+          );
+        }
+        if (data.permissions.allowVideo === false) {
+          setPendingPermissionRequest((prev) =>
+            prev?.type === 'video' ? null : prev,
+          );
+        }
       }
     });
 
     s.on('moderation-joined', (data: { sessionId: string; permissions?: RoomPermissions }) => {
+      traceMeet('meet:moderation_joined', {
+        sessionId:
+          typeof data.sessionId === 'string' ? data.sessionId.slice(0, 8) : undefined,
+        allowChat: data.permissions?.allowChat,
+      });
       console.log('[moderation] joined session with permissions:', data.permissions);
       if (data.permissions) {
         setPermissions(data.permissions);
@@ -221,10 +316,20 @@ export function useSessionModeration({ sessionId, sessionType, isHost: _isHost, 
         if (data.permissions.allowChat !== undefined) {
           setChatDisabled(!data.permissions.allowChat);
         }
-      } else if (data.targetUserId === userIdRef.current) {
+      } else if (data.targetUserId && identityMatchRef.current.includes(data.targetUserId)) {
         setPermissions(prev => ({ ...prev, ...data.permissions }));
         if (data.permissions.allowChat !== undefined) {
           setChatDisabled(!data.permissions.allowChat);
+        }
+        if (data.permissions.allowAudio === false) {
+          setPendingPermissionRequest((prev) =>
+            prev?.type === 'audio' ? null : prev,
+          );
+        }
+        if (data.permissions.allowVideo === false) {
+          setPendingPermissionRequest((prev) =>
+            prev?.type === 'video' ? null : prev,
+          );
         }
       }
       // Update participant locks for UI feedback
@@ -246,17 +351,105 @@ export function useSessionModeration({ sessionId, sessionType, isHost: _isHost, 
 
     // Host requested participant to turn on audio
     s.on('host-requested-audio', (data: { targetUserId: string; hostId: string }) => {
-      if (data.targetUserId === userIdRef.current) {
+      const forMe = matchesIdentity(data.targetUserId, identityMatchRef.current);
+      traceMeet('meet:host_requested_audio', {
+        forMe,
+        hostId:
+          typeof data.hostId === 'string'
+            ? data.hostId.slice(0, 12)
+            : undefined,
+        targetUserId:
+          typeof data.targetUserId === 'string'
+            ? data.targetUserId.slice(0, 12)
+            : undefined,
+      });
+      if (meetFlowTraceRef.current) {
+        joineeFlowLog('meet:host_request_audio_received', {
+          subsystem: 'meet_moderation',
+          forMe,
+          hostId:
+            typeof data.hostId === 'string' ? data.hostId.slice(0, 12) : null,
+          targetUserId:
+            typeof data.targetUserId === 'string'
+              ? data.targetUserId.slice(0, 12)
+              : null,
+          sessionId: sessionId ? sessionId.slice(0, 8) : null,
+        });
+      }
+      if (forMe) {
         setPendingPermissionRequest({ type: 'audio', hostId: data.hostId });
       }
     });
 
     // Host requested participant to turn on video
     s.on('host-requested-video', (data: { targetUserId: string; hostId: string }) => {
-      if (data.targetUserId === userIdRef.current) {
+      const forMe = matchesIdentity(data.targetUserId, identityMatchRef.current);
+      traceMeet('meet:host_requested_video', {
+        forMe,
+        hostId:
+          typeof data.hostId === 'string'
+            ? data.hostId.slice(0, 12)
+            : undefined,
+        targetUserId:
+          typeof data.targetUserId === 'string'
+            ? data.targetUserId.slice(0, 12)
+            : undefined,
+      });
+      if (meetFlowTraceRef.current) {
+        joineeFlowLog('meet:host_request_video_received', {
+          subsystem: 'meet_moderation',
+          forMe,
+          hostId:
+            typeof data.hostId === 'string' ? data.hostId.slice(0, 12) : null,
+          targetUserId:
+            typeof data.targetUserId === 'string'
+              ? data.targetUserId.slice(0, 12)
+              : null,
+          sessionId: sessionId ? sessionId.slice(0, 8) : null,
+        });
+      }
+      if (forMe) {
         setPendingPermissionRequest({ type: 'video', hostId: data.hostId });
       }
     });
+
+    // Host muted / disabled video — apply on device without joinee consent (handled in EnhancedVideoRoom).
+    // If a "host asked you to turn on mic/camera" modal is open, close it; host override wins.
+    s.on(
+      'moderation-mute',
+      (data: {
+        action: 'mute' | 'unmute';
+        targetUserId?: string;
+        hostClerkId?: string;
+      }) => {
+        if (data.action !== 'mute') return;
+        const ids = identityMatchRef.current;
+        const appliesToMe =
+          !data.targetUserId || matchesIdentity(data.targetUserId, ids);
+        if (!appliesToMe) return;
+        setPendingPermissionRequest((prev) =>
+          prev?.type === 'audio' ? null : prev,
+        );
+      },
+    );
+
+    s.on(
+      'moderation-video',
+      (data: {
+        action: 'disable' | 'enable';
+        targetUserId?: string;
+        hostClerkId?: string;
+      }) => {
+        if (data.action !== 'disable') return;
+        const ids = identityMatchRef.current;
+        const appliesToMe =
+          !data.targetUserId || matchesIdentity(data.targetUserId, ids);
+        if (!appliesToMe) return;
+        setPendingPermissionRequest((prev) =>
+          prev?.type === 'video' ? null : prev,
+        );
+      },
+    );
 
     // Participant requested audio permission (host receives this)
     s.on('participant-requested-audio', (data: { userId: string }) => {
@@ -276,7 +469,7 @@ export function useSessionModeration({ sessionId, sessionType, isHost: _isHost, 
 
     // Host responded to participant's audio request
     s.on('host-responded-participant-audio', (data: { userId: string; accepted: boolean }) => {
-      if (data.userId === userIdRef.current) {
+      if (matchesIdentity(data.userId, identityMatchRef.current)) {
         if (data.accepted) {
           toast.success('🎤 Host approved your request!', { description: 'You can now unmute your microphone' });
         } else {
@@ -287,7 +480,7 @@ export function useSessionModeration({ sessionId, sessionType, isHost: _isHost, 
 
     // Host responded to participant's video request
     s.on('host-responded-participant-video', (data: { userId: string; accepted: boolean }) => {
-      if (data.userId === userIdRef.current) {
+      if (matchesIdentity(data.userId, identityMatchRef.current)) {
         if (data.accepted) {
           toast.success('Host approved your request', { description: 'You can now enable your camera' });
         } else {
@@ -306,6 +499,7 @@ export function useSessionModeration({ sessionId, sessionType, isHost: _isHost, 
     });
 
     s.on('moderation-error', (data: { message?: string }) => {
+      traceMeet('meet:moderation_error_event', { message: data?.message });
       setError(data?.message || 'Moderation error');
     });
 
@@ -427,12 +621,30 @@ export function useSessionModeration({ sessionId, sessionType, isHost: _isHost, 
   }, [socket, sessionId, sessionType]);
 
   const respondToAudioRequest = useCallback((accepted: boolean) => {
+    const pending = pendingPermissionRequestRef.current;
+    if (meetFlowTraceRef.current) {
+      joineeFlowLog('meet:emit_respond_audio_request', {
+        subsystem: 'meet_moderation',
+        accepted,
+        hostId: pending?.hostId ? pending.hostId.slice(0, 12) : null,
+        sessionId: sessionId ? sessionId.slice(0, 8) : null,
+      });
+    }
     if (!socket || !sessionId || !sessionType) return;
     socket.emit('respond-audio-request', { sessionId, sessionType, accepted });
     setPendingPermissionRequest(null);
   }, [socket, sessionId, sessionType]);
 
   const respondToVideoRequest = useCallback((accepted: boolean) => {
+    const pending = pendingPermissionRequestRef.current;
+    if (meetFlowTraceRef.current) {
+      joineeFlowLog('meet:emit_respond_video_request', {
+        subsystem: 'meet_moderation',
+        accepted,
+        hostId: pending?.hostId ? pending.hostId.slice(0, 12) : null,
+        sessionId: sessionId ? sessionId.slice(0, 8) : null,
+      });
+    }
     if (!socket || !sessionId || !sessionType) return;
     socket.emit('respond-video-request', { sessionId, sessionType, accepted });
     setPendingPermissionRequest(null);
@@ -446,6 +658,14 @@ export function useSessionModeration({ sessionId, sessionType, isHost: _isHost, 
   // Dismiss pending permission request (revert host-request unlock so room defaults apply again)
   const dismissPermissionRequest = useCallback(() => {
     const pending = pendingPermissionRequestRef.current;
+    if (meetFlowTraceRef.current && pending) {
+      joineeFlowLog('meet:permission_request_dismissed', {
+        subsystem: 'meet_moderation',
+        type: pending.type,
+        hostId: pending.hostId ? pending.hostId.slice(0, 12) : null,
+        sessionId: sessionId ? sessionId.slice(0, 8) : null,
+      });
+    }
     if (socket && sessionId && sessionType && pending) {
       if (pending.type === 'audio') {
         socket.emit('respond-audio-request', { sessionId, sessionType, accepted: false });
@@ -456,12 +676,33 @@ export function useSessionModeration({ sessionId, sessionType, isHost: _isHost, 
     setPendingPermissionRequest(null);
   }, [socket, sessionId, sessionType]);
 
+  // Clear local request UI state without emitting accept/deny back to host.
+  const clearPendingPermissionRequestLocal = useCallback(() => {
+    setPendingPermissionRequest(null);
+  }, []);
+
   const participantRequestAudio = useCallback(() => {
+    if (meetFlowTraceRef.current) {
+      joineeFlowLog('meet:emit_participant_request_audio', {
+        subsystem: 'meet_moderation',
+        sessionId: sessionId ? sessionId.slice(0, 8) : null,
+        sessionType,
+        socketConnected: !!socket?.connected,
+      });
+    }
     if (!socket || !sessionId || !sessionType) return;
     socket.emit('participant-request-audio', { sessionId, sessionType });
   }, [socket, sessionId, sessionType]);
 
   const participantRequestVideo = useCallback(() => {
+    if (meetFlowTraceRef.current) {
+      joineeFlowLog('meet:emit_participant_request_video', {
+        subsystem: 'meet_moderation',
+        sessionId: sessionId ? sessionId.slice(0, 8) : null,
+        sessionType,
+        socketConnected: !!socket?.connected,
+      });
+    }
     if (!socket || !sessionId || !sessionType) return;
     socket.emit('participant-request-video', { sessionId, sessionType });
   }, [socket, sessionId, sessionType]);
@@ -564,6 +805,7 @@ export function useSessionModeration({ sessionId, sessionType, isHost: _isHost, 
     respondToVideoRequest,
     pendingPermissionRequest,
     dismissPermissionRequest,
+    clearPendingPermissionRequestLocal,
     moderationNotification,
     clearModerationNotification,
     participantRequestAudio,

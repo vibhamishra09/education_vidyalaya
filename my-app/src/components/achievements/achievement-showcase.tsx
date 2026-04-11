@@ -39,40 +39,40 @@ type CategoryConfig = {
 const categoryConfig: Record<Achievement["category"], CategoryConfig> = {
   learning: {
     label: "Learning",
-    description: "Collect study NFTs by finishing learning quests",
-    actionLabel: "Find a session",
+    description: "Earn collectibles from learning.",
+    actionLabel: "Explore",
     actionHref: "/browse",
     icon: GraduationCap,
     badgeClass: "bg-emerald-100 text-emerald-700",
   },
   teaching: {
     label: "Teaching",
-    description: "Mint mentor collectibles as you host sessions",
-    actionLabel: "Teach today",
+    description: "Unlock rewards by hosting.",
+    actionLabel: "Host",
     actionHref: "/create-study-room",
     icon: Trophy,
     badgeClass: "bg-sky-100 text-sky-700",
   },
   social: {
     label: "Community",
-    description: "Unlock social drops by growing your circle",
-    actionLabel: "Invite peers",
+    description: "Grow your circle for drops.",
+    actionLabel: "Invite",
     actionHref: "/browse?tab=peers",
     icon: Users,
     badgeClass: "bg-pink-100 text-pink-700",
   },
   milestone: {
     label: "Milestones",
-    description: "Secure headline NFTs for major platform wins",
-    actionLabel: "See your next goal",
+    description: "Track major platform wins.",
+    actionLabel: "Goals",
     actionHref: "/dashboard",
     icon: Medal,
     badgeClass: "bg-amber-100 text-amber-700",
   },
   streak: {
     label: "Streaks",
-    description: "Protect your streak to reveal timed collectibles",
-    actionLabel: "Protect streak",
+    description: "Keep streaks alive for timed rewards.",
+    actionLabel: "Streak",
     actionHref: "/dashboard",
     icon: Flame,
     badgeClass: "bg-orange-100 text-orange-700",
@@ -421,11 +421,8 @@ export function AchievementShowcase({
                   </div>
                 </div>
                 <p className="text-base font-semibold">{config.label}</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {config.description}
-                </p>
-                <Progress value={stat.completion} className="mt-4 h-2" />
-                <div className="mt-4 flex items-center justify-between text-xs font-medium">
+                <Progress value={stat.completion} className="mt-3 h-2" />
+                <div className="mt-3 flex items-center justify-between text-xs font-medium">
                   <span className="text-muted-foreground">{config.actionLabel}</span>
                   <span className="text-violet-600">Open collection</span>
                 </div>

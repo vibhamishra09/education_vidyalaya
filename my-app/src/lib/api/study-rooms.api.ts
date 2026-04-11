@@ -153,6 +153,13 @@ export const studyRoomsApi = {
     return response.data as { success: boolean };
   },
 
+  kickWebinarGuest: async (studyRoomId: string, guestId: string) => {
+    const response = await apiClient.post(
+      `/api/study-rooms/webinar/${encodeURIComponent(studyRoomId)}/guests/${encodeURIComponent(guestId)}/kick`,
+    );
+    return response.data as { success: boolean };
+  },
+
   setWebinarChatEnabled: async (studyRoomId: string, enabled: boolean) => {
     const response = await apiClient.patch(
       `/api/study-rooms/webinar/${encodeURIComponent(studyRoomId)}/chat-enabled`,

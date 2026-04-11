@@ -4,10 +4,11 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { X, Plus, Loader2 } from "lucide-react";
+import { X, Plus, Loader2, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { skillsApi } from "@/lib/api/skills.api";
-import { AxiosError } from "axios";
+
+type SkillStatus = "validating" | "valid" | "invalid";
 
 interface SkillInputProps {
   placeholder?: string;
@@ -33,98 +34,152 @@ export function SkillInput({
   const [isLoadingSkills, setIsLoadingSkills] = useState(false);
   const [skillsLoaded, setSkillsLoaded] = useState(false);
   const [isClickingSuggestion, setIsClickingSuggestion] = useState(false);
+  const [validationStatus, setValidationStatus] = useState<SkillStatus | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
 
-  // Fetch skills from API
   const fetchSkills = async (search?: string) => {
-    if (skillsLoaded && !search) return; // Don't refetch if already loaded and no search
-    
+    if (skillsLoaded && !search) return;
     setIsLoadingSkills(true);
     try {
       const response = await skillsApi.getAllSkills(search, undefined, 100, 0);
-      const skills = response.skills?.map(skill => skill.name) || [];
+      const skills =
+        response.skills
+          ?.map((s) => (typeof s?.name === "string" ? s.name.trim() : ""))
+          .filter((n) => n.length > 0) ?? [];
       setAvailableSkills(skills);
       setSkillsLoaded(true);
     } catch (_error) {
-      // Fallback to empty array if API fails
       setAvailableSkills([]);
     } finally {
       setIsLoadingSkills(false);
     }
   };
 
-  // Filter suggestions based on input and exclude already selected skills
-  const filteredSuggestions = availableSkills.filter(
-    (skill) =>
-      skill.toLowerCase().includes(inputValue.toLowerCase()) &&
-      !selectedSkills.includes(skill) &&
-      inputValue.trim() !== ""
-  );
+  const filteredSuggestions = availableSkills.filter((skill) => {
+    if (typeof skill !== "string" || skill.trim() === "") return false;
+    const q = inputValue.trim();
+    if (q === "") return false;
+    return (
+      skill.toLowerCase().includes(q.toLowerCase()) &&
+      !selectedSkills.includes(skill)
+    );
+  });
 
-  // Check if input value is a valid new skill
-  const isValidNewSkill = inputValue.trim() !== "" && 
+  const isValidNewSkill =
+    inputValue.trim() !== "" &&
     !selectedSkills.includes(inputValue.trim()) &&
     !availableSkills.includes(inputValue.trim());
 
-  // Check if input contains multiple skills separated by commas
-  const hasMultipleSkills = inputValue.includes(",") && 
-    inputValue.split(",").some(skill => skill.trim() !== "");
+  const hasMultipleSkills =
+    inputValue.includes(",") &&
+    inputValue.split(",").some((skill) => skill.trim() !== "");
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setInputValue(value);
     setShowSuggestions(value.trim() !== "");
     setHighlightedIndex(-1);
-    
-    // Fetch skills when user starts typing
+    setValidationStatus(null);
+    setValidationError(null);
     if (value.trim() !== "") {
       fetchSkills(value.trim());
     }
   };
 
-  const persistSkill = useCallback(async (skillName: string) => {
-    const normalizedSkill = skillName.trim();
-    if (!normalizedSkill) return;
+  const validateAndPersistSkill = useCallback(
+    async (skillName: string) => {
+      const normalizedSkill = skillName.trim();
+      if (!normalizedSkill) return;
 
-    try {
-      await skillsApi.createSkill({ name: normalizedSkill });
-      setAvailableSkills((prev) =>
-        prev.includes(normalizedSkill) ? prev : [...prev, normalizedSkill]
-      );
-    } catch (error) {
-      const axiosError = error as AxiosError;
-      if (axiosError?.response?.status === 409) {
-        // Skill already exists—ensure it appears in the dropdown locally
+      setValidationStatus("validating");
+      setShowSuggestions(false)
+      setValidationError(null);
+
+      try {
+        await skillsApi.createSkill({ name: normalizedSkill });
+
+        onSkillsChange([...selectedSkills, normalizedSkill]);
         setAvailableSkills((prev) =>
           prev.includes(normalizedSkill) ? prev : [...prev, normalizedSkill]
         );
-        return;
+        setValidationStatus(null);
+        setInputValue("");
+        setShowSuggestions(false);
+      } catch (error) {
+        const axiosError = error as {statusCode: number}
+
+        if (axiosError.statusCode === 409) {
+          // Already exists in DB — still valid, just add it
+          onSkillsChange([...selectedSkills, normalizedSkill]);
+          setAvailableSkills((prev) =>
+            prev.includes(normalizedSkill) ? prev : [...prev, normalizedSkill]
+          );
+          setValidationStatus(null);
+          setInputValue("");
+          setShowSuggestions(false);
+          return;
+        }
+
+        if (axiosError.statusCode === 400) {
+          setValidationStatus("invalid");
+          setValidationError(`"${normalizedSkill}" is not a valid skill`);
+          setTimeout(() => {
+            setValidationStatus(null);
+            setInputValue("");
+            setValidationError(null);
+          }, 2000);
+          return;
+        }
+
+        setValidationStatus("invalid");
+        setValidationError("Could not validate skill. Please try again.");
+        setTimeout(() => {
+          setValidationStatus(null);
+          setValidationError(null);
+        }, 2000);
       }
-      // Error creating skill
+    },
+    [selectedSkills, onSkillsChange]
+  );
+
+  // Dropdown picks only — already in DB, skip validation
+  const addExistingSkill = (skill: string) => {
+    if (selectedSkills.length >= maxSkills) return;
+    const trimmedSkill = skill.trim();
+    if (trimmedSkill && !selectedSkills.includes(trimmedSkill)) {
+      onSkillsChange([...selectedSkills, trimmedSkill]);
     }
-  }, []);
+    setInputValue("");
+    setShowSuggestions(false);
+    setHighlightedIndex(-1);
+  };
 
   const parseAndAddSkills = (input: string) => {
     const skills = input
-      .split(',')
-      .map(skill => skill.trim())
-      .filter(skill => skill !== "" && !selectedSkills.includes(skill));
-    
+      .split(",")
+      .map((skill) => skill.trim())
+      .filter((skill) => skill !== "" && !selectedSkills.includes(skill));
+
     if (skills.length > 0) {
       setIsClickingSuggestion(true);
-      const newSkills = [...selectedSkills];
-      const skillsToPersist: string[] = [];
-      skills.forEach(skill => {
-        if (newSkills.length < maxSkills && !newSkills.includes(skill)) {
-          newSkills.push(skill);
-          if (!availableSkills.includes(skill)) {
-            skillsToPersist.push(skill);
-          }
+      const existingToAdd: string[] = [];
+      const newToValidate: string[] = [];
+
+      skills.forEach((skill) => {
+        if (selectedSkills.length + existingToAdd.length >= maxSkills) return;
+        if (availableSkills.includes(skill)) {
+          existingToAdd.push(skill);
+        } else {
+          newToValidate.push(skill);
         }
       });
-      onSkillsChange(newSkills);
-      skillsToPersist.forEach((skill) => void persistSkill(skill));
+
+      if (existingToAdd.length > 0) {
+        onSkillsChange([...selectedSkills, ...existingToAdd]);
+      }
+      newToValidate.forEach((skill) => void validateAndPersistSkill(skill));
       setShowSuggestions(false);
       setHighlightedIndex(-1);
       setInputValue("");
@@ -135,28 +190,25 @@ export function SkillInput({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "," || e.key === "Enter") {
       e.preventDefault();
-      
-      // Check if input contains commas for multiple skills
+
+      if (validationStatus === "validating") return;
+
       if (inputValue.includes(",")) {
         parseAndAddSkills(inputValue);
-        setInputValue("");
-        setShowSuggestions(false);
-        setHighlightedIndex(-1);
         return;
       }
-      
-      // Single skill selection (existing logic)
+
       if (highlightedIndex >= 0 && filteredSuggestions[highlightedIndex]) {
-        addSkill(filteredSuggestions[highlightedIndex]);
+        // Selected from dropdown — existing skill, no validation
+        addExistingSkill(filteredSuggestions[highlightedIndex]);
       } else if (isValidNewSkill) {
-        addSkill(inputValue.trim(), { persist: true });
+        // New skill typed — validate first
+        void validateAndPersistSkill(inputValue.trim());
       }
       return;
     }
 
-    if (!showSuggestions && filteredSuggestions.length === 0 && !isValidNewSkill) {
-      return;
-    }
+    if (!showSuggestions && filteredSuggestions.length === 0 && !isValidNewSkill) return;
 
     switch (e.key) {
       case "ArrowDown":
@@ -176,40 +228,17 @@ export function SkillInput({
     }
   };
 
-  const addSkill = (skill: string, options?: { persist?: boolean }) => {
-    if (selectedSkills.length >= maxSkills) return;
-    
-    const trimmedSkill = skill.trim();
-    if (trimmedSkill && !selectedSkills.includes(trimmedSkill)) {
-      onSkillsChange([...selectedSkills, trimmedSkill]);
-      if (options?.persist) {
-        void persistSkill(trimmedSkill);
-      }
-    }
-    setInputValue("");
-    setShowSuggestions(false);
-    setHighlightedIndex(-1);
-  };
-
   const removeSkill = (skillToRemove: string) => {
     onSkillsChange(selectedSkills.filter((skill) => skill !== skillToRemove));
   };
 
   const handleInputFocus = () => {
-    if (inputValue.trim() !== "") {
-      setShowSuggestions(true);
-    }
-    // Load initial skills when focusing
-    if (!skillsLoaded) {
-      fetchSkills();
-    }
+    if (inputValue.trim() !== "") setShowSuggestions(true);
+    if (!skillsLoaded) fetchSkills();
   };
 
   const handleInputBlur = () => {
-    // Don't hide suggestions if we're clicking on a suggestion
     if (isClickingSuggestion) return;
-    
-    // Delay hiding suggestions to allow for clicks
     setTimeout(() => {
       if (!isClickingSuggestion) {
         setShowSuggestions(false);
@@ -220,26 +249,17 @@ export function SkillInput({
 
   const handleSuggestionClick = (skill: string) => {
     setIsClickingSuggestion(true);
-    addSkill(skill);
-    setShowSuggestions(false);
-    setHighlightedIndex(-1);
-    setInputValue("");
-    // Reset clicking state after a short delay
+    addExistingSkill(skill);
     setTimeout(() => setIsClickingSuggestion(false), 100);
   };
 
   const handleAddCustomSkill = () => {
-    if (isValidNewSkill) {
-      setIsClickingSuggestion(true);
-      addSkill(inputValue.trim(), { persist: true });
-      setShowSuggestions(false);
-      setHighlightedIndex(-1);
-      setInputValue("");
-      setTimeout(() => setIsClickingSuggestion(false), 100);
-    }
+    if (!isValidNewSkill || validationStatus === "validating") return;
+    setShowSuggestions(false);
+    setHighlightedIndex(-1);
+    void validateAndPersistSkill(inputValue.trim());
   };
 
-  // Close suggestions when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -252,18 +272,15 @@ export function SkillInput({
         setHighlightedIndex(-1);
       }
     };
-
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   return (
     <div className={cn("space-y-3", className)}>
-      {label && (
-        <label className="text-sm font-medium">{label}</label>
-      )}
+      {label && <label className="text-sm font-medium">{label}</label>}
 
-      {/* Selected tags */}
+      {/* Selected badges */}
       <div className="flex flex-wrap gap-2 mb-2">
         {selectedSkills.map((skill) => (
           <Badge
@@ -283,8 +300,8 @@ export function SkillInput({
           </Badge>
         ))}
       </div>
-      
-      <div className="relative">
+
+      <div className="relative overflow-visible">
         <Input
           ref={inputRef}
           placeholder={placeholder}
@@ -294,102 +311,111 @@ export function SkillInput({
           onFocus={handleInputFocus}
           onBlur={handleInputBlur}
           className="pr-10"
+          disabled={validationStatus === "validating"}
         />
-        
-        {/* Add custom skill button */}
+
+        {/* + button — only shows for new skills not in DB */}
         {isValidNewSkill && (
           <Button
             type="button"
             size="sm"
             variant="ghost"
-            className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 p-0"
+            disabled={validationStatus === "validating"}
+            className={cn(
+              "absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 p-0",
+              validationStatus === "invalid" && "text-red-500 hover:text-red-500"
+            )}
             onClick={handleAddCustomSkill}
             title={`Add "${inputValue.trim()}"`}
           >
-            <Plus className="h-4 w-4" />
+            {validationStatus === "validating" && <Loader2 className="h-4 w-4 animate-spin" />}
+            { validationStatus === "invalid" && <X className="h-4 w-4 text-red-500" />}
+            {!validationStatus && <Plus className="h-4 w-4" />}
           </Button>
         )}
 
+    
+
         {/* Suggestions dropdown */}
-        {showSuggestions && (filteredSuggestions.length > 0 || isValidNewSkill || hasMultipleSkills || isLoadingSkills) && (
-          <div
-            ref={suggestionsRef}
-            className="absolute z-50 w-full mt-1 bg-background border border-border rounded-md shadow-lg max-h-60 overflow-y-auto"
-          >
-            {/* Loading state */}
-            {isLoadingSkills && (
-              <div className="px-3 py-2 flex items-center gap-2 text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>Loading skills...</span>
-              </div>
-            )}
-            
-            {/* Available suggestions */}
-            {!isLoadingSkills && filteredSuggestions.map((skill, index) => (
-              <div
-                key={skill}
-                className={cn(
-                  "px-3 py-2 cursor-pointer hover:bg-accent hover:text-accent-foreground",
-                  highlightedIndex === index && "bg-accent text-accent-foreground"
-                )}
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  handleSuggestionClick(skill);
-                }}
-              >
-                {skill}
-              </div>
-            ))}
-            
-            {/* Multiple skills option */}
-            {!isLoadingSkills && hasMultipleSkills && (
-              <div
-                className={cn(
-                  "px-3 py-2 cursor-pointer hover:bg-accent hover:text-accent-foreground border-t border-border",
-                  highlightedIndex === filteredSuggestions.length && "bg-accent text-accent-foreground"
-                )}
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  parseAndAddSkills(inputValue);
-                }}
-              >
-                <div className="flex items-center gap-2">
-                  <Plus className="h-4 w-4" />
-                  <span>Add multiple skills</span>
+        {showSuggestions &&
+          (filteredSuggestions.length > 0 || isValidNewSkill || hasMultipleSkills || isLoadingSkills) && (
+            <div
+              ref={suggestionsRef}
+              className="absolute z-[999] w-full mt-1 bg-background border border-border rounded-md shadow-lg max-h-60 overflow-y-auto"
+            >
+              {isLoadingSkills && (
+                <div className="px-3 py-2 flex items-center gap-2 text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Loading skills...</span>
                 </div>
-              </div>
-            )}
-            
-            {/* Custom skill option */}
-            {!isLoadingSkills && isValidNewSkill && !hasMultipleSkills && (
-              <div
-                className={cn(
-                  "px-3 py-2 cursor-pointer hover:bg-accent hover:text-accent-foreground border-t border-border",
-                  highlightedIndex === filteredSuggestions.length + (hasMultipleSkills ? 1 : 0) && "bg-accent text-accent-foreground"
-                )}
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  handleAddCustomSkill();
-                }}
-              >
-                <div className="flex items-center gap-2">
-                  <Plus className="h-4 w-4" />
-                  <span>Add &quot;{inputValue.trim()}&quot;</span>
+              )}
+
+              {!isLoadingSkills &&
+                filteredSuggestions.map((skill, index) => (
+                  <div
+                    key={skill}
+                    className={cn(
+                      "px-3 py-2 cursor-pointer hover:bg-accent hover:text-accent-foreground",
+                      highlightedIndex === index && "bg-accent text-accent-foreground"
+                    )}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      handleSuggestionClick(skill);
+                    }}
+                  >
+                    {skill}
+                  </div>
+                ))}
+
+              {!isLoadingSkills && hasMultipleSkills && (
+                <div
+                  className={cn(
+                    "px-3 py-2 cursor-pointer hover:bg-accent hover:text-accent-foreground border-t border-border",
+                    highlightedIndex === filteredSuggestions.length && "bg-accent text-accent-foreground"
+                  )}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    parseAndAddSkills(inputValue);
+                  }}
+                >
+                  <div className="flex items-center gap-2">
+                    <Plus className="h-4 w-4" />
+                    <span>Add multiple skills</span>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+
+              {!isLoadingSkills && isValidNewSkill && !hasMultipleSkills && (
+                <div
+                  className={cn(
+                    "px-3 py-2 cursor-pointer hover:bg-accent hover:text-accent-foreground border-t border-border",
+                    highlightedIndex ===
+                      filteredSuggestions.length + (hasMultipleSkills ? 1 : 0) &&
+                      "bg-accent text-accent-foreground"
+                  )}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    handleAddCustomSkill();
+                  }}
+                >
+                  <div className="flex items-center gap-2">
+                    <Plus className="h-4 w-4" />
+                    <span>Add &quot;{inputValue.trim()}&quot;</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+      </div>
+          
+        {/* Error message below input */}
+        {validationError && (
+          <div className="mt-1  flex items-center gap-1 text-xs text-red-500 z-10">
+            <AlertCircle className="h-3 w-3" />
+            <span>{validationError}</span>
           </div>
         )}
-      </div>
 
-      {/* Selected skills */}
-      {selectedSkills.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-            
-        </div>
-      )}
-
-      {/* Skill count */}
       <p className="text-xs text-muted-foreground">
         {selectedSkills.length}/{maxSkills} skills selected
       </p>

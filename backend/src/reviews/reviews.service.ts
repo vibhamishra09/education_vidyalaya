@@ -53,6 +53,7 @@ export class ReviewsService {
     page: number = 1,
     limit: number = 10,
   ) {
+
     // Cache for 2 minutes - reviews change when new reviews are added
     const cacheKey = this.cacheService.createKey('reviews:list', {
       userId,
@@ -98,7 +99,6 @@ export class ReviewsService {
             this.prisma.review.findMany({
               where,
               skip,
-              take: limit,
               include: {
                 reviewer: { select: { id: true, name: true, avatar: true } },
                 reviewee: { select: { id: true, name: true, avatar: true } },
@@ -107,7 +107,7 @@ export class ReviewsService {
             }),
             this.prisma.review.count({ where }),
           ]);
-
+          
           return {
             reviews: reviews.map((r) => ({
               id: r.id,
