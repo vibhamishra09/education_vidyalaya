@@ -24,7 +24,8 @@ interface StudyRoomData {
     avatar?: string;
   };
   skills?: SkillData[];
-  slug: string
+  slug: string;
+  timezone?: string | null;
 }
 
 // Server-side function to fetch room data for metadata
@@ -71,15 +72,22 @@ export async function generateMetadata({
   }
 
   // Format date and time for display
-  const formattedDate = new Date(room.date).toLocaleDateString("en-US", {
+  const dateOptions: Intl.DateTimeFormatOptions = {
     weekday: "short",
     month: "short",
     day: "numeric",
-  });
-  const formattedTime = new Date(room.date).toLocaleTimeString("en-US", {
+    ...(room.timezone && { timeZone: room.timezone }),
+  };
+  
+  const timeOptions: Intl.DateTimeFormatOptions = {
     hour: "2-digit",
     minute: "2-digit",
-  });
+    timeZoneName: "shortOffset",
+    ...(room.timezone && { timeZone: room.timezone }),
+  };
+
+  const formattedDate = new Date(room.date).toLocaleDateString("en-US", dateOptions);
+  const formattedTime = new Date(room.date).toLocaleTimeString("en-US", timeOptions);
 
   // Skills as comma-separated string
   const skillsList = room.skills
