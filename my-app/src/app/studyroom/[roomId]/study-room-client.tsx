@@ -129,7 +129,7 @@ export default function StudyRoomClient({ roomId, slug }: StudyRoomClientProps) 
         setAuthToken(token);
       }
 
-      await joinStudyRoom.mutateAsync(roomId);
+      await joinStudyRoom.mutateAsync({studyRoomId: roomId, slug});
 
       showSuccess(
         "Successfully Joined!",
@@ -318,7 +318,7 @@ export default function StudyRoomClient({ roomId, slug }: StudyRoomClientProps) 
       scope === "ALL" ? "FOLLOWING" : "THIS";
 
     try {
-      await joinRecurring({ roomId: recurringRoom.id ?? recurringRoom.id, scope: apiScope });
+      await joinRecurring({ roomId: recurringRoom.id ?? recurringRoom.id, scope: apiScope,slug: slug });
       showSuccess("Joined Room successfully!");
     } catch (error: unknown) {
       const err = error as { response?: { data?: { message?: string } } };

@@ -1164,3 +1164,173 @@ MessageId: 0109019d71d6e694-594df465-86b0-44e5-9ec6-0c27369c505b-000000
       </html>
     
 Mail Log Cleared during merge conflict resolution.
+
+================================================================================
+Time (UTC): 2026-04-11T03:25:06.558Z
+Transport: ses
+From: notifications@webyalaya.com
+To: cybrtr1@gmail.com
+Subject: Study Room Ended - Leave Review
+Status: FAILED
+Error: The security token included in the request is invalid.
+--- HTML ---
+
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Webyalaya Notification</title>
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h1 style="color: #2c3e50; margin-top: 0;">Webyalaya Notification</h1>
+          </div>
+          <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0;">
+            <p style="margin-top: 0;">Hello manas,</p>
+            <div style="margin: 12px 0;">Study room "daily meets" has ended. Please leave a review!</div>
+            <p style="margin-bottom: 0;">Best regards,<br>The Webyalaya Team</p>
+          </div>
+          <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; text-align: center; font-size: 12px; color: #666;">
+            <p style="margin: 0;">This is an automated notification from Webyalaya.</p>
+            <p style="margin: 5px 0 0 0;">© 2026 Webyalaya. All rights reserved.</p>
+          </div>
+        </body>
+      </html>
+    
+
+================================================================================
+Time (UTC): 2026-04-11T03:25:07.252Z
+Transport: ses
+From: notifications@webyalaya.com
+To: test@gmail.com
+Subject: Study Room Ended - Leave Review
+Status: FAILED
+Error: The security token included in the request is invalid.
+--- HTML ---
+
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Webyalaya Notification</title>
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h1 style="color: #2c3e50; margin-top: 0;">Webyalaya Notification</h1>
+          </div>
+          <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0;">
+            <p style="margin-top: 0;">Hello PlayWright,</p>
+            <div style="margin: 12px 0;">Study room "daily meets" has ended. Please leave a review!</div>
+            <p style="margin-bottom: 0;">Best regards,<br>The Webyalaya Team</p>
+          </div>
+          <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; text-align: center; font-size: 12px; color: #666;">
+            <p style="margin: 0;">This is an automated notification from Webyalaya.</p>
+            <p style="margin: 5px 0 0 0;">© 2026 Webyalaya. All rights reserved.</p>
+          </div>
+        </body>
+      </html>
+    
+
+================================================================================
+Time (UTC): 2026-04-11T03:25:07.949Z
+Transport: ses
+From: notifications@webyalaya.com
+To: havilahbodde@gmail.com
+Subject: Study Room Ended - Leave Review
+Status: FAILED
+Error: The security token included in the request is invalid.
+--- HTML ---
+
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Webyalaya Notification</title>
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h1 style="color: #2c3e50; margin-top: 0;">Webyalaya Notification</h1>
+          </div>
+          <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0;">
+            <p style="margin-top: 0;">Hello havilah bodde,</p>
+            <div style="margin: 12px 0;">Study room "daily meets" has ended. Please leave a review!</div>
+            <p style="margin-bottom: 0;">Best regards,<br>The Webyalaya Team</p>
+          </div>
+          <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; text-align: center; font-size: 12px; color: #666;">
+            <p style="margin: 0;">This is an automated notification from Webyalaya.</p>
+            <p style="margin: 5px 0 0 0;">© 2026 Webyalaya. All rights reserved.</p>
+          </div>
+        </body>
+      </html>
+    
+
+================================================================================
+Time (UTC): 2026-04-12T17:50:03.993Z
+Transport: ses
+From: notifications@webyalaya.com
+To: yashjec77@gmail.com
+Subject: Study Room Starting Now!
+Status: FAILED
+Error: The security token included in the request is invalid.
+--- HTML ---
+
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Webyalaya Notification</title>
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h1 style="color: #2c3e50; margin-top: 0;">Webyalaya Notification</h1>
+          </div>
+          <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0;">
+            <p style="margin-top: 0;">Hello Yash Saxena,</p>
+            <div style="margin: 12px 0;">Study room "skill validation super quick.." starts now!</div>
+            <p style="margin-bottom: 0;">Best regards,<br>The Webyalaya Team</p>
+          </div>
+          <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; text-align: center; font-size: 12px; color: #666;">
+            <p style="margin: 0;">This is an automated notification from Webyalaya.</p>
+            <p style="margin: 5px 0 0 0;">© 2026 Webyalaya. All rights reserved.</p>
+          </div>
+        </body>
+      </html>
+    
+
+================================================================================
+Time (UTC): 2026-04-12T17:50:04.920Z
+Transport: ses
+From: notifications@webyalaya.com
+To: saxenay117@gmail.com
+Subject: Study Room Starting Now!
+Status: FAILED
+Error: The security token included in the request is invalid.
+--- HTML ---
+
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Webyalaya Notification</title>
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h1 style="color: #2c3e50; margin-top: 0;">Webyalaya Notification</h1>
+          </div>
+          <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0;">
+            <p style="margin-top: 0;">Hello Yash Saxena,</p>
+            <div style="margin: 12px 0;">Study room "skill validation super quick.." starts now!</div>
+            <p style="margin-bottom: 0;">Best regards,<br>The Webyalaya Team</p>
+          </div>
+          <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; text-align: center; font-size: 12px; color: #666;">
+            <p style="margin: 0;">This is an automated notification from Webyalaya.</p>
+            <p style="margin: 5px 0 0 0;">© 2026 Webyalaya. All rights reserved.</p>
+          </div>
+        </body>
+      </html>
+    
