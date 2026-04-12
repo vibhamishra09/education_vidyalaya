@@ -14,6 +14,7 @@ import { BackendUserProvider } from '../lib/backend-user-context';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!;
+const frontendApi = process.env.EXPO_PUBLIC_CLERK_FRONTEND_API;
 
 if (!publishableKey) {
   throw new Error(
@@ -107,7 +108,11 @@ function LayoutContent() {
 
 export default function Layout() {
   return (
-    <ClerkProvider tokenCache={tokenCache} publishableKey={publishableKey}>
+    <ClerkProvider 
+      tokenCache={tokenCache} 
+      publishableKey={publishableKey}
+      frontendApi={frontendApi}
+    >
       <ClerkLoaded>
         <BackendUserProvider>
           <SafeAreaProvider>

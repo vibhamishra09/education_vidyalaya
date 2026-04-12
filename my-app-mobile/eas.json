@@ -11,9 +11,10 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_cXVpZXQtYW50ZWxvcGUtOTQuY2xlcmsuYWNjb3VudHMuZGV2JA",
-        "EXPO_PUBLIC_API_URL": "http://192.168.29.42:3001",
-        "EXPO_PUBLIC_CHAT_WS_URL": "http://192.168.29.42:3001",
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_live_Y2xlcmsud2VieWFsYXlhLmNvbSQ",
+        "EXPO_PUBLIC_CLERK_FRONTEND_API": "https://clerk.webyalaya.com",
+        "EXPO_PUBLIC_API_URL": "https://be.test.webyalaya.com",
+        "EXPO_PUBLIC_CHAT_WS_URL": "https://be.test.webyalaya.com",
         "NPM_CONFIG_CI": "false"
       }
     },
@@ -23,15 +24,17 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_cXVpZXQtYW50ZWxvcGUtOTQuY2xlcmsuYWNjb3VudHMuZGV2JA",
-        "EXPO_PUBLIC_API_URL": "http://192.168.29.42:3001",
-        "EXPO_PUBLIC_CHAT_WS_URL": "http://192.168.29.42:3001"
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_live_Y2xlcmsud2VieWFsYXlhLmNvbSQ",
+        "EXPO_PUBLIC_CLERK_FRONTEND_API": "https://clerk.webyalaya.com",
+        "EXPO_PUBLIC_API_URL": "https://be.test.webyalaya.com",
+        "EXPO_PUBLIC_CHAT_WS_URL": "https://be.test.webyalaya.com"
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_cXVpZXQtYW50ZWxvcGUtOTQuY2xlcmsuYWNjb3VudHMuZGV2JA",
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_live_Y2xlcmsud2VieWFsYXlhLmNvbSQ",
+        "EXPO_PUBLIC_CLERK_FRONTEND_API": "https://clerk.webyalaya.com",
         "EXPO_PUBLIC_API_URL": "https://be.test.webyalaya.com"
       }
     }

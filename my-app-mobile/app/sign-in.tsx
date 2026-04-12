@@ -24,7 +24,7 @@ export default function SignInScreen() {
   const oauthRedirectUrl = useMemo(
     () =>
       AuthSession.makeRedirectUri({
-        scheme: 'myappmobile',
+        scheme: 'webyalaya',
         path: 'oauth-native-callback',
       }),
     [],

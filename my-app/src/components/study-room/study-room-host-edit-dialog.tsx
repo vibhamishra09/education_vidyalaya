@@ -52,6 +52,7 @@ export type StudyRoomHostEditDialogProps = {
   initialTimezone?: string | null;
   initialImageUrl?: string | null;
   seriesId?: string | null;
+  sessionMode?: StudyRoomSessionMode;
 };
 
 export function StudyRoomHostEditDialog({
@@ -68,6 +69,7 @@ export function StudyRoomHostEditDialog({
   initialTimezone,
   initialImageUrl,
   seriesId,
+  sessionMode = "STANDARD",
 }: StudyRoomHostEditDialogProps) {
   const { getToken, isLoaded } = useAuth();
   const { showSuccess, showError } = useToast();
@@ -445,6 +447,7 @@ export function StudyRoomHostEditDialog({
                 id="host-edit-max"
                 type="number"
                 min={1}
+                max={sessionMode === "WEBINAR" ? 100 : 12}
                 value={maxParticipants}
                 onChange={(e) => setMaxParticipants(e.target.value)}
               />

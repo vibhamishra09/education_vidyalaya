@@ -46,6 +46,7 @@ import {
 import { convertLocalToUTC } from '../utils/timezone';
 import { buildStudyRoomOccurrences } from './recurrence.util';
 import { StudyRoomParticipantRoleDto } from './dto/study-room.dto';
+import { INFRA_LIMITS } from '../common/constants';
 import { createClerkClient } from '@clerk/backend';
 
 /** If FRONTEND_URL is unset, production webinar/register and join links use this (never localhost). */
@@ -2766,13 +2767,17 @@ if (isSeriesEdit && (dateChanged || timeChanged)) {
       };
     }
 
-    // Global Infrastructure Guardrail: Hard cap at 12 participants
+    // Global Infrastructure Guardrail: Cap based on room type
     const totalParticipants = studyRoom.learners.length + studyRoom.guestParticipants.length;
-    if (totalParticipants >= 12) {
-      this.logger.warn(`[GUARDRAIL] Blocking join for room ${studyRoom.id}: Global cap of 12 reached.`);
+    const maxParticipantLimit = studyRoom.sessionMode === StudyRoomSessionMode.WEBINAR 
+      ? INFRA_LIMITS.WEBINAR_MAX_PARTICIPANTS 
+      : INFRA_LIMITS.STUDY_ROOM_MAX_PARTICIPANTS;
+
+    if (totalParticipants >= maxParticipantLimit) {
+      this.logger.warn(`[GUARDRAIL] Blocking join for room ${studyRoom.id}: Capacity of ${maxParticipantLimit} reached.`);
       throw new BadRequestException({
         code: 'ROOM_FULL',
-        message: 'This study room has reached the global platform capacity for participants (12).',
+        message: `This room has reached the global platform capacity for participants (${maxParticipantLimit}).`,
       });
     }
 
