@@ -78,6 +78,19 @@ function uniqStrings(ids: (string | null | undefined)[]): string[] {
   return [...new Set(ids.filter((x): x is string => typeof x === 'string' && x.length > 0))];
 }
 
+function normalizeIdentity(id: string | null | undefined): string {
+  return (id ?? '').trim().toLowerCase();
+}
+
+function matchesIdentity(
+  candidate: string | null | undefined,
+  pool: string[],
+): boolean {
+  const normalized = normalizeIdentity(candidate);
+  if (!normalized) return false;
+  return pool.some((id) => normalizeIdentity(id) === normalized);
+}
+
 export function useSessionModeration({
   sessionId,
   sessionType,
@@ -257,7 +270,7 @@ export function useSessionModeration({
 
     // User-specific permissions updated
     s.on('user-permissions-updated', (data: { targetUserId: string; permissions: RoomPermissions }) => {
-      if (identityMatchRef.current.includes(data.targetUserId) && data.permissions) {
+      if (matchesIdentity(data.targetUserId, identityMatchRef.current) && data.permissions) {
         setPermissions(data.permissions);
         setChatDisabled(!data.permissions.allowChat);
         if (data.permissions.allowAudio === false) {
@@ -338,7 +351,7 @@ export function useSessionModeration({
 
     // Host requested participant to turn on audio
     s.on('host-requested-audio', (data: { targetUserId: string; hostId: string }) => {
-      const forMe = identityMatchRef.current.includes(data.targetUserId);
+      const forMe = matchesIdentity(data.targetUserId, identityMatchRef.current);
       traceMeet('meet:host_requested_audio', {
         forMe,
         hostId:
@@ -370,7 +383,7 @@ export function useSessionModeration({
 
     // Host requested participant to turn on video
     s.on('host-requested-video', (data: { targetUserId: string; hostId: string }) => {
-      const forMe = identityMatchRef.current.includes(data.targetUserId);
+      const forMe = matchesIdentity(data.targetUserId, identityMatchRef.current);
       traceMeet('meet:host_requested_video', {
         forMe,
         hostId:
@@ -412,7 +425,7 @@ export function useSessionModeration({
         if (data.action !== 'mute') return;
         const ids = identityMatchRef.current;
         const appliesToMe =
-          !data.targetUserId || ids.some((id) => id === data.targetUserId);
+          !data.targetUserId || matchesIdentity(data.targetUserId, ids);
         if (!appliesToMe) return;
         setPendingPermissionRequest((prev) =>
           prev?.type === 'audio' ? null : prev,
@@ -430,7 +443,7 @@ export function useSessionModeration({
         if (data.action !== 'disable') return;
         const ids = identityMatchRef.current;
         const appliesToMe =
-          !data.targetUserId || ids.some((id) => id === data.targetUserId);
+          !data.targetUserId || matchesIdentity(data.targetUserId, ids);
         if (!appliesToMe) return;
         setPendingPermissionRequest((prev) =>
           prev?.type === 'video' ? null : prev,
@@ -456,7 +469,7 @@ export function useSessionModeration({
 
     // Host responded to participant's audio request
     s.on('host-responded-participant-audio', (data: { userId: string; accepted: boolean }) => {
-      if (identityMatchRef.current.includes(data.userId)) {
+      if (matchesIdentity(data.userId, identityMatchRef.current)) {
         if (data.accepted) {
           toast.success('🎤 Host approved your request!', { description: 'You can now unmute your microphone' });
         } else {
@@ -467,7 +480,7 @@ export function useSessionModeration({
 
     // Host responded to participant's video request
     s.on('host-responded-participant-video', (data: { userId: string; accepted: boolean }) => {
-      if (identityMatchRef.current.includes(data.userId)) {
+      if (matchesIdentity(data.userId, identityMatchRef.current)) {
         if (data.accepted) {
           toast.success('Host approved your request', { description: 'You can now enable your camera' });
         } else {
@@ -663,6 +676,11 @@ export function useSessionModeration({
     setPendingPermissionRequest(null);
   }, [socket, sessionId, sessionType]);
 
+  // Clear local request UI state without emitting accept/deny back to host.
+  const clearPendingPermissionRequestLocal = useCallback(() => {
+    setPendingPermissionRequest(null);
+  }, []);
+
   const participantRequestAudio = useCallback(() => {
     if (meetFlowTraceRef.current) {
       joineeFlowLog('meet:emit_participant_request_audio', {
@@ -787,6 +805,7 @@ export function useSessionModeration({
     respondToVideoRequest,
     pendingPermissionRequest,
     dismissPermissionRequest,
+    clearPendingPermissionRequestLocal,
     moderationNotification,
     clearModerationNotification,
     participantRequestAudio,

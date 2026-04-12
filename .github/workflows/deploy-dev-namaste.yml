@@ -203,21 +203,38 @@ jobs:
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
 
-      - name: Deploy to Vercel (Dev Environment Preview)
+      - name: Install frontend deps
+        working-directory: ./my-app
+        run: pnpm install --frozen-lockfile
+
+      - name: Build frontend (CI prebuild)
+        working-directory: ./my-app
+        run: pnpm build
+
+      - name: Deploy to Vercel (Dev Environment Production)
         working-directory: ./my-app
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_DEV2 }}
         run: |
-          # Link project if not already linked (non-interactive)
-          if [ ! -f .vercel/project.json ]; then
-            echo "Linking Vercel dev project..."
-            vercel link --yes --token=$VERCEL_TOKEN --scope=$VERCEL_ORG_ID --project=$VERCEL_PROJECT_ID || true
-          fi
+          set -euo pipefail
 
-           # Deploy to production on test environment
-          vercel deploy --prod --yes --token=$VERCEL_TOKEN
+          # Ensure project settings are present locally for deterministic prebuilt deploy.
+          vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --debug
+          vercel build --prod --token="$VERCEL_TOKEN" --debug
+
+          deploy_once() {
+            vercel deploy --prebuilt --prod --yes --token="$VERCEL_TOKEN" --debug
+          }
+
+          echo "Deploy attempt 1/2..."
+          if ! deploy_once; then
+            echo "First Vercel deploy attempt failed. Retrying once in 10s..."
+            sleep 10
+            echo "Deploy attempt 2/2..."
+            deploy_once
+          fi
 
       - name: Deployment summary
         run: |
