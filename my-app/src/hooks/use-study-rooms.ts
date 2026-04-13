@@ -122,7 +122,7 @@ export function useJoinStudyRoom() {
   const { getToken, isLoaded } = useAuth();
 
   return useMutation({
-    mutationFn: async (studyRoomId: string) => {
+    mutationFn: async ({studyRoomId, slug}: {studyRoomId: string, slug: string}) => {
       // Ensure token is set before making the request
       if (isLoaded) {
         const token = await getToken();
@@ -132,9 +132,10 @@ export function useJoinStudyRoom() {
       }
       return studyRoomsApi.joinStudyRoom(studyRoomId);
     },
-    onSuccess: async (_, studyRoomId) => {
+    onSuccess: async (_, {studyRoomId , slug}) => {
       // Invalidate queries (marks them as stale)
       queryClient.invalidateQueries({ queryKey: studyRoomKeys.detail(studyRoomId) });
+      queryClient.invalidateQueries({ queryKey: studyRoomKeys.detail(slug) });
       queryClient.invalidateQueries({ queryKey: studyRoomKeys.lists() });
       // Invalidate current user to refresh webya balance
       queryClient.invalidateQueries({ queryKey: ['users', 'current'] });
@@ -166,10 +167,12 @@ export function useJoinRecurringStudyRoom() {
   return useMutation({
     mutationFn: async ({
       roomId,
+      slug,
       scope,
     }: {
       roomId: string;
       scope: 'THIS' | 'FOLLOWING';
+      slug: string
     }) => {
       if (isLoaded) {
         const token = await getToken();
@@ -177,10 +180,11 @@ export function useJoinRecurringStudyRoom() {
       }
       return studyRoomsApi.joinRecurringRooms(roomId, scope);
     },
-    onSuccess: async (_, { roomId}) => {
+    onSuccess: async (_, { roomId, slug}) => {
       
       queryClient.invalidateQueries({ queryKey: studyRoomKeys.lists() });
       queryClient.invalidateQueries({ queryKey: studyRoomKeys.detail(roomId) });
+      queryClient.invalidateQueries({ queryKey: studyRoomKeys.detail(slug) });
       
       queryClient.invalidateQueries({ queryKey: ['users', 'current'] });
       queryClient.invalidateQueries({ queryKey: ['transactions'] });

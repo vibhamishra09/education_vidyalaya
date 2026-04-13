@@ -5,7 +5,7 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { useUser, useAuth } from "@clerk/nextjs";
+import { useUser, useAuth, SignInButton } from "@clerk/nextjs";
 import { AuthPromptButtons } from "@/components/auth/auth-prompt-buttons";
 import { NotificationDropdown } from "./notification-dropdown";
 import { UserDropdown } from "./user-dropdown";
@@ -47,12 +47,14 @@ export function Navigation() {
     ? [
         { href: "/browse", label: "Browse" },
         { href: "/how-it-works", label: "How it works" },
+        { href: "/pricing", label: "Pricing" },
         { href: "/dashboard", label: "Dashboard" },
         { href: "https://www.webyalaya.com/updates", label: "Webya Updates", external: true },
       ]
     : [
         { href: "/browse", label: "Browse" },
         { href: "/how-it-works", label: "How it works" },
+        { href: "/pricing", label: "Pricing" },
         { href: "https://www.webyalaya.com/updates", label: "Webya Updates", external: true },
       ];
 
@@ -128,11 +130,23 @@ export function Navigation() {
 
             {/* Mobile: utilities + menu toggle */}
             <div className="md:hidden flex items-center gap-1.5 sm:gap-2 shrink-0">
-              {isSignedIn && (
+              {isSignedIn ? (
                 <>
                   <CoinDropdown coins={userCoins} isLoading={isUserLoading} />
                   <NotificationDropdown />
                 </>
+              ) : (
+                <div className="flex items-center">
+                  <SignInButton mode="modal">
+                    <Button
+                      variant="default"
+                      size="sm"
+                      className="bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 shadow-none h-8 px-3 text-xs sm:h-9 sm:px-4 sm:text-sm mr-1"
+                    >
+                      Sign In
+                    </Button>
+                  </SignInButton>
+                </div>
               )}
 
               <Button

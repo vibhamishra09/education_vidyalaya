@@ -75,3 +75,5 @@ dev-e2e/playwright-report/
 dev-e2e/test-results.json
 dev-e2e/storageState.*.json
 dev-e2e/test-results
+
+load-tests/src/*.html
