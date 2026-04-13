@@ -402,7 +402,7 @@ export function CreateStudyRoomClient() {
       time: formData.time,
       duration: parseInt(formData.duration),
       maxParticipants: Math.min(
-        100,
+        sessionMode === "WEBINAR" ? 100 : 12,
         Math.max(2, parseInt(formData.maxParticipants, 10) || 2),
       ),
       joiningFee:
@@ -1194,7 +1194,7 @@ export function CreateStudyRoomClient() {
                           </p>
                         ) : (
                           <p className="text-xs text-muted-foreground mt-0.5">
-                            Up to 100 per session
+                            Up to 12 per session
                           </p>
                         )}
                       </div>
@@ -1206,7 +1206,7 @@ export function CreateStudyRoomClient() {
                       <input
                         type="range"
                         min="2"
-                        max="100"
+                        max={sessionMode === "WEBINAR" ? "100" : "12"}
                         step="1"
                         value={maxParticipantsClamped}
                         onChange={(e) =>
@@ -1246,7 +1246,7 @@ export function CreateStudyRoomClient() {
                       />
                       <div className="flex justify-between text-xs text-muted-foreground mt-2 px-1">
                         <span>2</span>
-                        <span>100</span>
+                        <span>{sessionMode === "WEBINAR" ? "100" : "12"}</span>
                       </div>
                     </div>
                   </div>

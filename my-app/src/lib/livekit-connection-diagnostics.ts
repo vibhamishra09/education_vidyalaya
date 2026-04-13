@@ -73,6 +73,7 @@ type PCTransportLike = { pc?: RTCPeerConnection }
 export function attachLiveKitConnectionDiagnostics(
 	room: Room | undefined,
 	meta: LiveKitDiagnosticsMeta,
+	onLog?: (step: string, detail: Record<string, unknown>) => void,
 ): () => void {
 	if (!room || typeof window === 'undefined') return () => {}
 
@@ -85,11 +86,15 @@ export function attachLiveKitConnectionDiagnostics(
 	})
 
 	const log = (step: string, detail?: Record<string, unknown>) => {
-		console.info(TAG, step, { ...base(), ...detail })
+		const payload = { ...base(), ...detail }
+		console.info(TAG, step, payload)
+		onLog?.(step, payload)
 	}
 
 	const logWarn = (step: string, detail?: Record<string, unknown>) => {
-		console.warn(TAG, step, { ...base(), ...detail })
+		const payload = { ...base(), ...detail }
+		console.warn(TAG, step, payload)
+		onLog?.(step, payload)
 	}
 
 	log('diagnostics_attached', {

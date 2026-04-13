@@ -2,7 +2,7 @@
 import '@/lib/livekit-benign-log-filter'
 import React, { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react'
 import dynamic from 'next/dynamic'
-import { LiveKitRoom, useParticipants, useTracks, RoomAudioRenderer, useSpeakingParticipants, VideoTrack, useLocalParticipant, isTrackReference, useRoomContext } from '@livekit/components-react'
+import { LiveKitRoom, useParticipants, useTracks, RoomAudioRenderer, useSpeakingParticipants, VideoTrack, useLocalParticipant, isTrackReference, useRoomContext, useConnectionQualityIndicator } from '@livekit/components-react'
 import {
 	Track,
 	RoomOptions,
@@ -10,6 +10,7 @@ import {
 	LocalVideoTrack,
 	RoomEvent,
 	DisconnectReason,
+	ConnectionQuality,
 } from 'livekit-client'
 import '@livekit/components-styles'
 import { BackgroundProcessor, BackgroundBlur, VirtualBackground, BackgroundOptions } from '@livekit/track-processors'
@@ -23,12 +24,13 @@ import {
 	PinOff, User, PictureInPicture2, Camera, CameraOff, Sparkles, Lock, Settings2,
 	PhoneOff, ChevronUp, ChevronLeft, ChevronRight, ShieldCheck, Ban, Aperture,
 	ImageIcon, LayoutGrid, Check, Timer, Power, LogOut, ZoomIn, ZoomOut, MousePointer2, Pencil,
-	Share2
+	Share2, Radio, CircleStop, Circle
 } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { useSessionTimer } from '@/hooks/use-session-timer'
 import { SessionEndWarningDialog } from '@/components/study-room/session-end-warning-dialog'
+import { useRecording } from '@/hooks/use-recording'
 
 // Type the dynamic import to ensure props like roomId are recognized
 const ScratchPad = dynamic<any>(() => import('@/components/scratch-pad/ScratchPad').then(mod => mod.ScratchPad), { 
@@ -740,24 +742,30 @@ export function EnhancedVideoRoom({
 	}, [router, isHost, sessionData?.id, sessionData?.sessionType, pushSessionFeedback])
 
 	// Memoize LiveKit room options to avoid passing a new object every render
-	const roomOptions = useMemo(() => ({
-		videoCaptureDefaults: {
-			resolution: isMobileDevice ? VideoPresets.h360 : VideoPresets.h720,
-			frameRate: isMobileDevice ? 15 : 24,
-		},
-		audioCaptureDefaults: {
-			echoCancellation: true,
-			noiseSuppression: true,
-			autoGainControl: true,
-		},
-		adaptiveStream: true,
-		dynacast: true,
-		publishDefaults: {
-			videoSimulcastLayers: isMobileDevice
-				? [VideoPresets.h180]
-				: [VideoPresets.h180, VideoPresets.h360],
-		},
-	} as RoomOptions), [isMobileDevice])
+	const roomOptions = useMemo(() => {
+		const isTeacher = isHost // Map internal isHost to teacher concept for quality
+		return {
+			videoCaptureDefaults: {
+				// Everyone on desktop gets 720p by default for a premium experience
+				resolution: (isMobileDevice && !isTeacher) ? VideoPresets.h360 : VideoPresets.h720,
+				frameRate: (isMobileDevice && !isTeacher) ? 15 : 24,
+			},
+			audioCaptureDefaults: {
+				echoCancellation: true,
+				noiseSuppression: true,
+				autoGainControl: true,
+			},
+			adaptiveStream: true,
+			dynacast: true,
+			publishDefaults: {
+				// Enable 720p simulcast for all desktop participants to support 15-room concurrency with high quality
+				videoSimulcastLayers: (isMobileDevice && !isTeacher)
+					? [VideoPresets.h180] 
+					: [VideoPresets.h180, VideoPresets.h360, VideoPresets.h720],
+				videoCodec: 'vp8', // Use VP8 for maximum compatibility in large multi-room scenarios
+			},
+		} as RoomOptions
+	}, [isMobileDevice, isHost])
 
 	/** Passed to room.connect(); defaults were 15s PC / 15s WS — too aggressive on slower networks. */
 	const liveConnectOptions = useMemo(
@@ -1157,6 +1165,41 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	const params = useParams<{ room: string }>()
 	const { showWarning, showSuccess, showInfo, showError } = useToast()
 
+	// Recording Hook
+	const {
+		isRecording,
+		startRecording,
+		stopRecording,
+		loading: recordingLoading,
+		error: recordingError
+	} = useRecording({ roomId: sessionStableId || (sessionInfo?.id || '') })
+
+	// Log recording errors for analysis
+	useEffect(() => {
+		if (recordingError && sessionInfo?.id) {
+			apiClient.post(`/api/meetings/${sessionInfo.id}/logs`, {
+				participantIdentity: currentUserId || 'host',
+				event: 'recording_error',
+				details: { error: recordingError },
+			}).catch(() => { })
+			showError('Recording Error', recordingError)
+		}
+	}, [recordingError, sessionInfo?.id, currentUserId, showError])
+
+	const handleToggleRecording = async () => {
+		try {
+			if (isRecording) {
+				await stopRecording()
+				showSuccess('Recording Stopped', 'Your session recording has ended and is being processed.')
+			} else {
+				await startRecording()
+				showSuccess('Recording Started', 'This session is now being recorded.')
+			}
+		} catch (err) {
+			// Error is already handled by the useEffect above
+		}
+	}
+
 	// Remote Control Hook
 	const {
 		isControlling,
@@ -1211,8 +1254,62 @@ const VideoRoomContent = memo(function VideoRoomContent({
 		return attachLiveKitConnectionDiagnostics(lkRoom, {
 			sessionStableId: sessionStableId ?? null,
 			liveKitServerUrl: liveKitServerUrl || undefined,
+		}, (step, detail) => {
+			// Sync diagnostic logs to backend for analysis as requested
+			if (sessionInfo?.id) {
+				apiClient.post(`/api/meetings/${sessionInfo.id}/logs`, {
+					participantIdentity: localParticipant?.identity || 'unknown',
+					event: step,
+					details: detail,
+				}).catch(() => {
+					// Fail silently to not impact meeting performance
+				})
+			}
 		})
-	}, [lkRoom, sessionStableId, liveKitServerUrl])
+	}, [lkRoom, sessionStableId, liveKitServerUrl, sessionInfo?.id, localParticipant?.identity])
+
+
+	// Cooldown tracking for non-intrusive notifications
+	const lastToastAtRef = useRef<Record<string, number>>({})
+	const shouldShowToast = useCallback((key: string, cooldownMs: number = 5000) => {
+		const now = Date.now()
+		const lastAt = lastToastAtRef.current[key] || 0
+		if (now - lastAt < cooldownMs) return false
+		lastToastAtRef.current[key] = now
+		return true
+	}, [])
+
+	// Bandwidth monitoring and notifications
+	const { quality: connectionQuality } = useConnectionQualityIndicator({ participant: localParticipant || undefined })
+	useEffect(() => {
+		const logQuality = (quality: ConnectionQuality) => {
+			if (sessionInfo?.id && localParticipant) {
+				apiClient.post(`/api/meetings/${sessionInfo.id}/logs`, {
+					participantIdentity: localParticipant.identity,
+					event: 'connection_quality_drop',
+					details: { quality: ConnectionQuality[quality] },
+				}).catch(() => {})
+			}
+		}
+
+		if (connectionQuality === ConnectionQuality.Lost) {
+			logQuality(ConnectionQuality.Lost)
+			if (shouldShowToast('lost-connection-warning', 10000)) {
+				showError(
+					'Connection Lost',
+					'We lost connection to the server. Attempting to reconnect automatically...'
+				)
+			}
+		} else if (connectionQuality === ConnectionQuality.Poor) {
+			logQuality(ConnectionQuality.Poor)
+			if (shouldShowToast('low-bandwidth-warning', 30000)) {
+				showWarning(
+					'Low Bandwidth Detected', 
+					'Your connection is unstable. To prioritize smooth audio and chat, please consider pausing your video.'
+				)
+			}
+		}
+	}, [connectionQuality, showWarning, showError, shouldShowToast, sessionInfo?.id, localParticipant])
 
 	// When the host ends the call, LiveKit closes the room; redirect if moderation socket missed `meeting-ended`.
 	useEffect(() => {
@@ -1384,14 +1481,6 @@ const VideoRoomContent = memo(function VideoRoomContent({
 
 	// Track pending requests to show toast when new requests arrive
 	const prevRequestCountRef = useRef(0)
-	const lastToastAtRef = useRef<Record<string, number>>({})
-	const shouldShowToast = useCallback((key: string, cooldownMs: number = 5000) => {
-		const now = Date.now()
-		const lastAt = lastToastAtRef.current[key] || 0
-		if (now - lastAt < cooldownMs) return false
-		lastToastAtRef.current[key] = now
-		return true
-	}, [])
 	useEffect(() => {
 		if (!isHost || !pendingParticipantRequests) return
 
@@ -4385,6 +4474,26 @@ const VideoRoomContent = memo(function VideoRoomContent({
 									title="Share Screen"
 								>
 									{isScreenShareEnabled ? <MonitorOff className="h-4 w-4 md:h-5 md:w-5 font-bold" /> : <MonitorUp className="h-4 w-4 md:h-5 md:w-5" />}
+								</button>
+							</div>
+						)}
+
+						{/* Recording - Only for host */}
+						{isHost && (
+							<div className="flex flex-col items-center justify-center group">
+								<button
+									onClick={handleToggleRecording}
+									disabled={recordingLoading}
+									className={`h-9 w-9 md:h-11 md:w-11 flex items-center justify-center rounded-lg md:rounded-xl hover:bg-red-500/20 active:scale-95 transition-all relative ${isRecording ? 'bg-red-500/20 text-red-500 animate-pulse' : 'text-white/80 hover:text-red-500'}`}
+									title={isRecording ? 'Stop Recording' : 'Start Recording'}
+								>
+									{recordingLoading ? (
+										<Loader2 className="h-5 w-5 animate-spin" />
+									) : isRecording ? (
+										<CircleStop className="h-5 w-5" />
+									) : (
+										<Circle className="h-5 w-5" />
+									)}
 								</button>
 							</div>
 						)}

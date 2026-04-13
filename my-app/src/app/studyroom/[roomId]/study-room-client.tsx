@@ -764,6 +764,7 @@ export default function StudyRoomClient({ roomId, slug }: StudyRoomClientProps) 
           initialTimezone={room.timezone ?? null}
           initialImageUrl={room.imageUrl ?? null}
           seriesId={room.seriesId ?? null}
+          sessionMode={room.sessionMode}
         />
       )}
     </div>
