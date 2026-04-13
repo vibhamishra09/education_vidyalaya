@@ -117,48 +117,17 @@ export class SkillsService {
 
     async validateSkill(validateDto: CreateSkillDto) {
       if(validateDto.name.length < 3) return {valid: false}
-      const prompt = `You are a skill validator for an online edtech platform. Your only job is to classify whether a given skill is acceptable or not.
-
-      ACCEPT if the skill is:
-      * An academic subject (maths, science, history, physics, biology)
-      * A meaningfull skill academically 
-      * A technical skill (programming languages and their abbreviations, web development, AWS, machine learning)
-      * A professional skill (communication, leadership, project management)
-      * A creative skill (graphic design, video editing, music theory)
-      * A language (English, Hindi, French, Sanskrit)
-      * A vocational or digital skill teachable online
-      * Vague but positive and harmless (like "communication" or "thinking")
-
-      REJECT if the skill is:
-      * Gibberish or random characters (asdfgh, xyzabc)
-      * Profanity or offensive words
-      * Violence or illegal activity
-      * A purely physical skill not teachable online (swimming, weightlifting)
-      * Meaningless or not a real concept
-      * Vague words that CANT be a skill like "ok", "hello", "first", "firsttime", "skill", "newskill" 
-
-      Reply with YES if acceptable, NO if not. Reply with ONLY the word YES or NO. No explanation. No punctuation. No extra words.
-
-      Skill: "${validateDto.name}"`;
-
-        try {
+       try {
           const response = await fetch(
-            `${process.env.OLLAMA_PROXY_URL}/api/generate`,
+            `${process.env.OLLAMA_PROXY_URL}/classify`,
             {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                'x-api-key': process.env.OLLAMA_API_KEY!,
+                'X-API-Key': process.env.SKILLS_API!,
               },
               body: JSON.stringify({
-                model: "gemma3:1b", 
-                prompt,
-                stream: false,
-                keep_alive: "10m",
-                options: {
-                  "num_predict": 2,
-                  "temperature": 0
-                }
+               skill: validateDto.name
               }),
             },
           );
@@ -169,7 +138,7 @@ export class SkillsService {
           }
 
           const data = await response.json();
-          const answer = data.response?.trim().toUpperCase();
+          const answer = data.label[0]
 
           this.logger.log(`Skill "${validateDto.name}" validation result: ${answer}`);
 
@@ -181,6 +150,73 @@ export class SkillsService {
           );
           throw new Error('Skill validation service is currently unavailable');
         }
+
+
+      // if(validateDto.name.length < 3) return {valid: false}
+      // const prompt = `You are a skill validator for an online edtech platform. Your only job is to classify whether a given skill is acceptable or not.
+
+      // ACCEPT if the skill is:
+      // * An academic subject (maths, science, history, physics, biology)
+      // * A meaningfull skill academically 
+      // * A technical skill (programming languages and their abbreviations, web development, AWS, machine learning)
+      // * A professional skill (communication, leadership, project management)
+      // * A creative skill (graphic design, video editing, music theory)
+      // * A language (English, Hindi, French, Sanskrit)
+      // * A vocational or digital skill teachable online
+      // * Vague but positive and harmless (like "communication" or "thinking")
+
+      // REJECT if the skill is:
+      // * Gibberish or random characters (asdfgh, xyzabc)
+      // * Profanity or offensive words
+      // * Violence or illegal activity
+      // * A purely physical skill not teachable online (swimming, weightlifting)
+      // * Meaningless or not a real concept
+      // * Vague words that CANT be a skill like "ok", "hello", "first", "firsttime", "skill", "newskill" 
+
+      // Reply with YES if acceptable, NO if not. Reply with ONLY the word YES or NO. No explanation. No punctuation. No extra words.
+
+      // Skill: "${validateDto.name}"`;
+
+      //   try {
+      //     const response = await fetch(
+      //       `${process.env.OLLAMA_PROXY_URL}/api/generate`,
+      //       {
+      //         method: 'POST',
+      //         headers: {
+      //           'Content-Type': 'application/json',
+      //           'x-api-key': process.env.OLLAMA_API_KEY!,
+      //         },
+      //         body: JSON.stringify({
+      //           model: "gemma3:1b", 
+      //           prompt,
+      //           stream: false,
+      //           keep_alive: "10m",
+      //           options: {
+      //             "num_predict": 2,
+      //             "temperature": 0
+      //           }
+      //         }),
+      //       },
+      //     );
+
+      //     if (!response.ok) {
+      //       this.logger.error(`Ollama proxy returned ${response.status}`);
+      //       throw new Error('Validation service unavailable');
+      //     }
+
+      //     const data = await response.json();
+      //     const answer = data.response?.trim().toUpperCase();
+
+      //     this.logger.log(`Skill "${validateDto.name}" validation result: ${answer}`);
+
+      //     return { valid: answer === 'YES' };
+      //   } catch (error) {
+      //     this.logger.error(
+      //       'Skill validation failed:',
+      //       error instanceof Error ? error.message : String(error),
+      //     );
+      //     throw new Error('Skill validation service is currently unavailable');
+      //   }
       }
   }
 
