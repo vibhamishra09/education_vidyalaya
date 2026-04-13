@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Check, GraduationCap, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -57,6 +57,7 @@ export function PricingClient() {
   const { showSuccess, showError } = useToast();
 
   const [code, setCode] = useState("");
+  const [showCampusForm, setShowCampusForm] = useState(false);
   const [requestSubmitted, setRequestSubmitted] = useState(false);
   const [requestForm, setRequestForm] = useState({
     name: "",
@@ -67,8 +68,24 @@ export function PricingClient() {
     hodContact: "",
   });
 
-  const scrollToId = useCallback((id: string) => {
-    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.location.hash === "#request-access") {
+      setShowCampusForm(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!showCampusForm) return;
+    const id = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        document.getElementById("request-access")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [showCampusForm]);
+
+  const openCampusForm = useCallback(() => {
+    setShowCampusForm(true);
   }, []);
 
   const handleUnlock = (e: React.FormEvent) => {
@@ -194,7 +211,7 @@ export function PricingClient() {
                   type="button"
                   variant="link"
                   className="w-full text-secondary h-auto py-0"
-                  onClick={() => scrollToId("request-access")}
+                  onClick={openCampusForm}
                 >
                   Request Access
                 </Button>
@@ -204,131 +221,95 @@ export function PricingClient() {
         </div>
       </section>
 
-      <section
-        className="pb-12 sm:pb-16 px-4"
-        aria-labelledby="limit-nudge-heading"
-      >
-        <div className="container mx-auto max-w-3xl">
-          <Card className="border-amber-200/80 bg-amber-50/40 dark:bg-amber-950/20 dark:border-amber-900/40">
-            <CardHeader>
-              <CardTitle id="limit-nudge-heading" className="text-lg sm:text-xl">
-                Upgrade / Access Nudges
-              </CardTitle>
-              <CardDescription>
-                When you hit your limit as a non-student user, you’ll see something like this:
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <p className="text-base font-medium text-foreground">You’ve reached your limit.</p>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                Go unlimited with Plus for ₹29/month or unlock free access with your college code.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-3 pt-1">
-                <Button size="lg" className="sm:flex-1" asChild>
-                  <Link href="/sign-up">Upgrade to Plus</Link>
-                </Button>
-                <Button
-                  type="button"
-                  size="lg"
-                  variant="outline"
-                  className="sm:flex-1 border-secondary text-secondary hover:bg-secondary/10"
-                  onClick={() => scrollToId("student-access")}
-                >
-                  Enter Code
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </section>
-
-      <section
-        id="request-access"
-        className="pb-16 sm:pb-20 px-4"
-        aria-labelledby="request-heading"
-      >
-        <div className="container mx-auto max-w-xl">
-          <Card>
-            <CardHeader>
-              <CardTitle id="request-heading" className="text-2xl">
-                Bring Webyalaya to your campus.
-              </CardTitle>
-              <CardDescription>
-                Tell us about your institution and we’ll help onboard your students.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {requestSubmitted ? (
-                <p className="text-center text-base font-medium text-primary py-8" role="status">
-                  We’ll reach out to your institution soon.
-                </p>
-              ) : (
-                <form onSubmit={handleRequestSubmit} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="req-name">Your Name</Label>
-                    <Input
-                      id="req-name"
-                      required
-                      value={requestForm.name}
-                      onChange={(e) => setRequestForm((f) => ({ ...f, name: e.target.value }))}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="req-school">College/School Name</Label>
-                    <Input
-                      id="req-school"
-                      required
-                      value={requestForm.institution}
-                      onChange={(e) => setRequestForm((f) => ({ ...f, institution: e.target.value }))}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="req-city">City</Label>
-                    <Input
-                      id="req-city"
-                      required
-                      value={requestForm.city}
-                      onChange={(e) => setRequestForm((f) => ({ ...f, city: e.target.value }))}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="req-contact">Email / Phone</Label>
-                    <Input
-                      id="req-contact"
-                      required
-                      type="text"
-                      inputMode="email"
-                      value={requestForm.contact}
-                      onChange={(e) => setRequestForm((f) => ({ ...f, contact: e.target.value }))}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="req-hod">Principal/HoD Name</Label>
-                    <Input
-                      id="req-hod"
-                      required
-                      value={requestForm.hodName}
-                      onChange={(e) => setRequestForm((f) => ({ ...f, hodName: e.target.value }))}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="req-hod-contact">Principal/HoD Email or Number</Label>
-                    <Input
-                      id="req-hod-contact"
-                      required
-                      value={requestForm.hodContact}
-                      onChange={(e) => setRequestForm((f) => ({ ...f, hodContact: e.target.value }))}
-                    />
-                  </div>
-                  <Button type="submit" className="w-full" size="lg">
-                    Submit Request
-                  </Button>
-                </form>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </section>
+      {showCampusForm ? (
+        <section
+          id="request-access"
+          className="pb-16 sm:pb-20 px-4"
+          aria-labelledby="request-heading"
+        >
+          <div className="container mx-auto max-w-xl">
+            <Card>
+              <CardHeader>
+                <CardTitle id="request-heading" className="text-2xl">
+                  Bring Webyalaya to your campus.
+                </CardTitle>
+                <CardDescription>
+                  Tell us about your institution and we’ll help onboard your students.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {requestSubmitted ? (
+                  <p className="text-center text-base font-medium text-primary py-8" role="status">
+                    We’ll reach out to your institution soon.
+                  </p>
+                ) : (
+                  <form onSubmit={handleRequestSubmit} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="req-name">Your Name</Label>
+                      <Input
+                        id="req-name"
+                        required
+                        value={requestForm.name}
+                        onChange={(e) => setRequestForm((f) => ({ ...f, name: e.target.value }))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="req-school">College/School Name</Label>
+                      <Input
+                        id="req-school"
+                        required
+                        value={requestForm.institution}
+                        onChange={(e) => setRequestForm((f) => ({ ...f, institution: e.target.value }))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="req-city">City</Label>
+                      <Input
+                        id="req-city"
+                        required
+                        value={requestForm.city}
+                        onChange={(e) => setRequestForm((f) => ({ ...f, city: e.target.value }))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="req-contact">Email / Phone</Label>
+                      <Input
+                        id="req-contact"
+                        required
+                        type="text"
+                        inputMode="email"
+                        value={requestForm.contact}
+                        onChange={(e) => setRequestForm((f) => ({ ...f, contact: e.target.value }))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="req-hod">Principal/HoD Name</Label>
+                      <Input
+                        id="req-hod"
+                        required
+                        value={requestForm.hodName}
+                        onChange={(e) => setRequestForm((f) => ({ ...f, hodName: e.target.value }))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="req-hod-contact">Principal/HoD Email or Number</Label>
+                      <Input
+                        id="req-hod-contact"
+                        required
+                        value={requestForm.hodContact}
+                        onChange={(e) => setRequestForm((f) => ({ ...f, hodContact: e.target.value }))}
+                      />
+                    </div>
+                    <Button type="submit" className="w-full" size="lg">
+                      Submit Request
+                    </Button>
+                  </form>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </section>
+      ) : null}
 
       <section className="pb-10 px-4 text-center" aria-label="Tagline">
         <p className="text-lg sm:text-xl font-medium text-muted-foreground font-tagline max-w-lg mx-auto leading-relaxed">
