@@ -47,12 +47,14 @@ export function Navigation() {
     ? [
         { href: "/browse", label: "Browse" },
         { href: "/how-it-works", label: "How it works" },
+        { href: "/pricing", label: "Pricing" },
         { href: "/dashboard", label: "Dashboard" },
         { href: "https://www.webyalaya.com/updates", label: "Webya Updates", external: true },
       ]
     : [
         { href: "/browse", label: "Browse" },
         { href: "/how-it-works", label: "How it works" },
+        { href: "/pricing", label: "Pricing" },
         { href: "https://www.webyalaya.com/updates", label: "Webya Updates", external: true },
       ];
 
