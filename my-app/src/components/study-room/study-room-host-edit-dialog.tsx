@@ -22,11 +22,11 @@ import { useToast } from "@/contexts/toast-context";
 import {
   StudyRoomEditScope,
   UpdateStudyRoomDto,
+  StudyRoomSessionMode
 } from "@/types/api.types";
 import { formatDateTimeInTimezone } from "@/lib/utils/study-room-edit";
 import { uploadFile, validateImageFile } from "@/lib/upload";
 import { setAuthToken } from "@/lib/api-client";
-
 /** Whole coins / fee amounts only — rejects decimals so we never truncate silently. */
 function parseNonNegativeIntegerOrZero(raw: string): number | "invalid" {
   const s = raw.trim();

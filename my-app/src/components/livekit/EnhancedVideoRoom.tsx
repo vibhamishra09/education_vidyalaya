@@ -24,7 +24,7 @@ import {
 	PinOff, User, PictureInPicture2, Camera, CameraOff, Sparkles, Lock, Settings2,
 	PhoneOff, ChevronUp, ChevronLeft, ChevronRight, ShieldCheck, Ban, Aperture,
 	ImageIcon, LayoutGrid, Check, Timer, Power, LogOut, ZoomIn, ZoomOut, MousePointer2, Pencil,
-	Share2, Radio, CircleStop, Circle
+	Share2, Radio, CircleStop, Circle, Loader2
 } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
@@ -1287,7 +1287,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				apiClient.post(`/api/meetings/${sessionInfo.id}/logs`, {
 					participantIdentity: localParticipant.identity,
 					event: 'connection_quality_drop',
-					details: { quality: ConnectionQuality[quality] },
+					details: { quality },
 				}).catch(() => {})
 			}
 		}
