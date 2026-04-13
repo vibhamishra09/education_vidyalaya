@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 
 /** Directory containing this config (`my-app/`). Used so Turbopack does not pick the monorepo root from a parent lockfile (which can cause App Router 404s). */
 const nextAppRoot = path.dirname(fileURLToPath(import.meta.url));
+const workspaceRoot = path.join(nextAppRoot, "..");
 
 function getHostname(value?: string): string | undefined {
   const trimmed = value?.trim();
@@ -68,7 +69,7 @@ const allowedDevOrigins = Array.from(
 const nextConfig: NextConfig = {
   allowedDevOrigins,
   turbopack: {
-    root: nextAppRoot,
+    root: workspaceRoot,
   },
   // async redirects() {
   //   return [
