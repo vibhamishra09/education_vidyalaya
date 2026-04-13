@@ -80,6 +80,22 @@ export function Footer() {
             ))}
           </div>
         </div>
+
+        <div className="mt-4 border-t border-black/5 pt-3">
+          <p className="mb-2 text-center text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground/80 sm:text-left">
+            Incubated At & Recognized By
+          </p>
+          <div className="mx-auto w-full max-w-4xl sm:mx-0">
+            <Image
+              src="/incubated-recognized-strip.png"
+              alt="Incubated at and recognized by JIIT, UIML EIC, STPI, Shiv Nadar Atal Incubation Centre, DPIIT Startup India, and MeitY Startup Hub"
+              width={1360}
+              height={114}
+              className="h-auto w-full object-contain"
+              sizes="(max-width: 768px) 100vw, 900px"
+            />
+          </div>
+        </div>
       </div>
     </footer>
   );
