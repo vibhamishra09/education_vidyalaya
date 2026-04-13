@@ -50,6 +50,7 @@ import {
   getStudyRoomShareUrl,
 } from "@/lib/utils/study-room-share";
 import { getDisplayAppOrigin } from "@/lib/utils/public-url";
+import { SpamShield } from "@/components/spamguard/spamguard";
 
 interface StudyRoomFormData {
   title: string;
@@ -592,6 +593,7 @@ export function CreateStudyRoomClient() {
               <div className="relative group transition-all duration-200">
                 <div className="absolute -inset-0.5 bg-gradient-to-r from-primary/20 to-primary/0 rounded-xl blur opacity-0 group-focus-within:opacity-100 transition duration-500" />
                 <div className="relative bg-card border-2 border-dashed border-muted group-hover:border-primary/30 group-focus-within:border-primary/50 group-focus-within:border-solid rounded-xl transition-all duration-200 flex items-center">
+                 <SpamShield context="title">
                   <Input
                     id="title"
                     placeholder="Enter a catchy title..."
@@ -600,6 +602,7 @@ export function CreateStudyRoomClient() {
                     className="h-auto py-4 px-4 text-2xl md:text-3xl font-bold border-none shadow-none focus-visible:ring-0 bg-transparent text-foreground placeholder:text-muted-foreground/30 w-full"
                     autoFocus
                   />
+                </SpamShield>
                   <div className="absolute right-4 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                     <span className="text-[10px] uppercase font-semibold text-muted-foreground bg-muted/50 px-2 py-1 rounded border">
                       Edit
