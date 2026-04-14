@@ -42,7 +42,7 @@ import {
   PaymentStatus,
   StudyRoomParticipantRole,
   StudyRoomSessionMode,
-} from '../generated/prisma/client';
+} from '../generated/prisma';
 import { convertLocalToUTC } from '../utils/timezone';
 import { buildStudyRoomOccurrences } from './recurrence.util';
 import { StudyRoomParticipantRoleDto } from './dto/study-room.dto';

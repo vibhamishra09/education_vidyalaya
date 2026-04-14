@@ -19,7 +19,7 @@ import {
   UpdatePeerSessionDto,
 } from './dto/peer-session.dto';
 import { SessionFeedbackDto } from '../common/dto/session-feedback.dto';
-import { SessionStatus } from '../generated/prisma/client';
+import { SessionStatus } from '../generated/prisma';
 
 @Controller('api/peer-sessions')
 export class PeerSessionsController {

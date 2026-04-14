@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { SessionStatus, StudyRoomSessionMode } from '../generated/prisma/client';
+import { SessionStatus, StudyRoomSessionMode } from '../generated/prisma';
 import { CacheService } from '../redis/cache.service';
 import { LoggerService } from '../common/logger';
 import { isConnectionError } from '../common/db-error-handler';

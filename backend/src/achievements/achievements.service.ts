@@ -4,7 +4,7 @@ import {
   AchievementCategory,
   AchievementRarity,
   Prisma,
-} from '../generated/prisma/client';
+} from '../generated/prisma';
 import { LoggerService } from '../common/logger';
 import { CacheService } from '../redis/cache.service';
 import { isConnectionError } from '../common/db-error-handler';

@@ -45,14 +45,14 @@ export function Navigation() {
 
   const links = isSignedIn
     ? [
-        { href: "/browse", label: "Browse" },
+        { href: "/browse", label: "Feed" },
         { href: "/how-it-works", label: "How it works" },
         { href: "/pricing", label: "Pricing" },
         { href: "/dashboard", label: "Dashboard" },
         { href: "https://www.webyalaya.com/updates", label: "Webya Updates", external: true },
       ]
     : [
-        { href: "/browse", label: "Browse" },
+        { href: "/browse", label: "Feed" },
         { href: "/how-it-works", label: "How it works" },
         { href: "/pricing", label: "Pricing" },
         { href: "https://www.webyalaya.com/updates", label: "Webya Updates", external: true },

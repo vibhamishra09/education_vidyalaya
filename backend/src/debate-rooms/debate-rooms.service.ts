@@ -25,7 +25,7 @@ import {
   DebateSide,
   ParticipantStatus,
   TurnOrderType,
-} from '../generated/prisma/client';
+} from '../generated/prisma';
 import { redisClient } from '../redis/redis.provider';
 import { DebateAiService } from './debate-ai.service';
 import { DebateMicControlService } from './debate-mic-control.service';

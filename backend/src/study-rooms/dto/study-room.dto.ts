@@ -16,7 +16,7 @@ import {
   IsObject,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { SessionStatus } from '../../generated/prisma/client';
+import { SessionStatus } from '../../generated/prisma';
 
 export enum StudyRoomRecurrenceMode {
   DAILY = 'DAILY',

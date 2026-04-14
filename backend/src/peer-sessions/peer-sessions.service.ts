@@ -18,7 +18,7 @@ import {
   PaymentStatus,
   NotifType,
   Prisma,
-} from '../generated/prisma/client';
+} from '../generated/prisma';
 import {
   normalizeGoogleMeetLink,
   isValidGoogleMeetLink,
