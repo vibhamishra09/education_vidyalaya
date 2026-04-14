@@ -186,6 +186,7 @@ export function CreateStudyRoomClient() {
   const { isLoaded: isAuthLoaded, getToken } = useAuth();
   const createStudyRoomMutation = useCreateStudyRoom();
   const createRecurringRoomMutation = useCreateRecurringRoom()
+  const [spamStatus, setSpamStatus] = useState({ isSafe: true, isVerifying: false });
 
   const { formData, setFormData, updateField, clearForm, hasStoredData } = useFormPersistence<StudyRoomFormData>(
     "create_study_room",
@@ -289,6 +290,7 @@ export function CreateStudyRoomClient() {
     clearForm();
     setFormData(initialFormData);
     setImagePreview(null);
+    setSpamStatus({isSafe: false, isVerifying: false})
   }, [clearForm, setFormData]);
 
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -593,7 +595,7 @@ export function CreateStudyRoomClient() {
               <div className="relative group transition-all duration-200">
                 <div className="absolute -inset-0.5 bg-gradient-to-r from-primary/20 to-primary/0 rounded-xl blur opacity-0 group-focus-within:opacity-100 transition duration-500" />
                 <div className="relative bg-card border-2 border-dashed border-muted group-hover:border-primary/30 group-focus-within:border-primary/50 group-focus-within:border-solid rounded-xl transition-all duration-200 flex items-center">
-                 <SpamShield context="title">
+                 <SpamShield context="title" onStatusChange={setSpamStatus}>
                   <Input
                     id="title"
                     placeholder="Enter a catchy title..."
@@ -849,14 +851,16 @@ export function CreateStudyRoomClient() {
                         Description{" "}
                         <span className="text-[10px] normal-case bg-muted px-1.5 rounded-sm">Optional</span>
                       </Label>
-                      <Textarea
-                        id="description"
-                        placeholder="Provide a brief agenda or learning outcomes..."
-                        value={formData.description}
-                        onChange={(e) => updateField("description", e.target.value)}
-                        rows={4}
-                        className="resize-none bg-background/50 focus:bg-background transition-colors"
-                      />
+                      <SpamShield context="description">
+                        <Textarea
+                          id="description"
+                          placeholder="Provide a brief agenda or learning outcomes..."
+                          value={formData.description}
+                          onChange={(e) => updateField("description", e.target.value)}
+                          rows={4}
+                          className="resize-none bg-background/50 focus:bg-background transition-colors"
+                        />
+                      </SpamShield>
                     </div>
 
                     {/* Image Upload */}
@@ -1370,7 +1374,7 @@ export function CreateStudyRoomClient() {
                         className="w-full h-14 text-base font-bold shadow-sm hover:shadow-md transition-all rounded-lg bg-green-100 text-green-800 hover:bg-green-200 border border-green-300 dark:bg-green-900/40 dark:text-green-300 dark:border-green-800 dark:hover:bg-green-900/60"
                         disabled={
                           createStudyRoomMutation.isPending || createRecurringRoomMutation.isPending ||
-                          !isAuthLoaded
+                          !isAuthLoaded || spamStatus.isVerifying || !spamStatus.isSafe
                         }
                       >
                         {(createStudyRoomMutation.isPending || createRecurringRoomMutation.isPending) ? (

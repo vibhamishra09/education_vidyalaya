@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Send, Search, ChevronDown } from 'lucide-react'
+import { SpamShield } from '../spamguard/spamguard'
 
 export type MessageAudienceType = 'EVERYONE' | 'HOST' | 'USER'
 
@@ -43,7 +44,8 @@ export function MessageInput({
 	const [showUserDropdown, setShowUserDropdown] = useState(false)
 	const userDropdownRef = useRef<HTMLDivElement>(null)
 	const searchInputRef = useRef<HTMLInputElement>(null)
-
+	const [spamStatus, setSpamStatus] = useState({ isSafe: true, isVerifying: false });
+	
 	// Filter out the current user (no self-messaging) and host (host has its own option)
 	const availableRecipients = recipients.filter(
 		(recipient) => {
@@ -249,20 +251,23 @@ export function MessageInput({
 				)}
 			</div>
 
-			<div className="flex gap-2">
-				<input
-					value={text}
-					onChange={(e) => setText(e.target.value)}
-					placeholder={disabled ? 'Chat is disabled...' : 'Type a message...'}
-					disabled={disabled}
-					className="flex-1 bg-[#1f1f1f] border border-white/10 rounded-full px-4 py-2.5 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-					autoComplete="off"
-				/>
+			<div className="flex gap-2 mb-6">
+				<SpamShield onStatusChange={setSpamStatus} context='chat_message'>
+					<input
+						value={text}
+						onChange={(e) => setText(e.target.value)}
+						placeholder={disabled || spamStatus.isVerifying || !spamStatus.isSafe ? 'Chat is disabled...' : 'Type a message...'}
+						disabled={disabled}
+						className="flex-1 bg-[#1f1f1f] border border-white/10 rounded-full px-4 py-2.5 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+						autoComplete="off"
+					/>
+				</SpamShield>
 				<Button
 					type="submit"
 					disabled={
 						!text.trim() ||
 						disabled ||
+						spamStatus.isVerifying || !spamStatus.isSafe ||
 						(audienceType === 'USER' && !targetUserId) ||
 						(audienceType === 'EVERYONE' && !canSendEveryone) ||
 						(audienceType === 'HOST' && !canSendHost) ||
