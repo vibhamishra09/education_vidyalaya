@@ -11,7 +11,7 @@ import { ChatService } from './chat.service';
 import { ClerkAuthGuard } from '../common/guards/clerk-auth.guard';
 import { OptionalClerkAuthGuard } from '../common/guards/optional-clerk-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { MessageAudienceType } from '../generated/prisma/client';
+import { MessageAudienceType } from '../generated/prisma';
 
 @Controller('api/chat')
 export class ChatController {

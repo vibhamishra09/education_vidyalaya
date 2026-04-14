@@ -1,14 +1,17 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { SignInButton, useUser } from "@clerk/nextjs";
 import {
+  ArrowRight,
   Flame,
-  IndianRupee,
+  Loader2,
   Radio,
   Sparkles,
+  Star,
   TrendingUp,
-  Users,
 } from "lucide-react";
 import { useDashboardFeed } from "@/hooks/use-dashboard";
 import {
@@ -19,7 +22,6 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
@@ -28,48 +30,86 @@ const FEED_TABS: Array<{ value: FeedMode; label: string }> = [
   { value: "following", label: "Following" },
 ];
 
+type ActivityFeedProps = {
+  variant?: "dashboard" | "page";
+  limit?: number;
+  className?: string;
+};
+
+function cleanFeedText(value?: string | null): string {
+  if (!value) {
+    return "";
+  }
+
+  return value
+    .replace(/â€¢/g, "|")
+    .replace(/â‚¹/g, "INR ")
+    .replace(/^INR 0 Study Room -\s*/i, "Free Study Room: ")
+    .trim();
+}
+
 function formatWhen(startsAt?: string | null, isLive?: boolean): string {
   if (isLive) {
     return "Live now";
   }
 
   if (!startsAt) {
-    return "Happening soon";
+    return "Opening soon";
   }
 
-  const date = new Date(startsAt);
   return new Intl.DateTimeFormat("en-IN", {
     month: "short",
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
-  }).format(date);
+  }).format(new Date(startsAt));
+}
+
+function getEntityLabel(item: ActivityFeedItem): string {
+  return item.entityType === "study_room" ? "Study Room" : "Debate Room";
 }
 
 function reasonLabel(reason: ActivityFeedReason): string {
   switch (reason) {
     case "following":
-      return "Following";
+      return "From your network";
     case "trending":
-      return "Trending";
+      return "Trending now";
     case "free":
-      return "Free";
+      return "Free entry";
     case "low_cost":
-      return "Low cost";
+      return "Budget friendly";
     case "new":
-      return "New";
+      return "Fresh post";
     case "limited_seats":
-      return "Few seats left";
+      return "Almost full";
     case "live":
-      return "Live";
+      return "Live now";
     case "upcoming":
-      return "Upcoming";
+      return "Starting soon";
     case "mentor":
-      return "Top mentor";
+      return "Top rated host";
     case "interest_match":
-      return "Matches you";
+      return "Matches your interests";
     default:
       return reason;
+  }
+}
+
+function reasonClasses(reason: ActivityFeedReason): string {
+  switch (reason) {
+    case "live":
+      return "border-red-200 bg-red-50 text-red-700";
+    case "trending":
+      return "border-amber-200 bg-amber-50 text-amber-700";
+    case "following":
+      return "border-sky-200 bg-sky-50 text-sky-700";
+    case "mentor":
+      return "border-violet-200 bg-violet-50 text-violet-700";
+    case "interest_match":
+      return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    default:
+      return "border-slate-200 bg-slate-50 text-slate-700";
   }
 }
 
@@ -77,136 +117,286 @@ function reasonIcon(reason: ActivityFeedReason) {
   switch (reason) {
     case "trending":
       return <TrendingUp className="h-3.5 w-3.5" />;
-    case "free":
-    case "low_cost":
-      return <IndianRupee className="h-3.5 w-3.5" />;
     case "live":
       return <Radio className="h-3.5 w-3.5" />;
-    case "following":
     case "mentor":
-      return <Users className="h-3.5 w-3.5" />;
+      return <Star className="h-3.5 w-3.5" />;
     default:
       return <Sparkles className="h-3.5 w-3.5" />;
   }
 }
 
-function FeedCard({ item }: { item: ActivityFeedItem }) {
-  const primaryReasons = item.reasons.slice(0, 3);
-  const avatarFallback = item.host.name?.charAt(0)?.toUpperCase() || "W";
-
-  return (
-    <Card className="border-border/60 shadow-sm transition-all hover:border-primary/30 hover:shadow-md">
-      <CardContent className="p-5">
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div className="min-w-0 flex-1">
-            <div className="mb-3 flex flex-wrap gap-2">
-              {primaryReasons.map((reason) => (
-                <Badge
-                  key={`${item.id}-${reason}`}
-                  variant="secondary"
-                  className="gap-1 rounded-full px-2.5 py-1"
-                >
-                  {reasonIcon(reason)}
-                  {reasonLabel(reason)}
-                </Badge>
-              ))}
-            </div>
-
-            <div className="mb-3 flex items-center gap-3">
-              <Avatar className="h-10 w-10">
-                <AvatarImage src={item.host.avatar || undefined} alt={item.host.name} />
-                <AvatarFallback>{avatarFallback}</AvatarFallback>
-              </Avatar>
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium">{item.host.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {formatWhen(item.startsAt, item.isLive)}
-                </p>
-              </div>
-            </div>
-
-            <h4 className="text-lg font-semibold leading-tight">{item.headline}</h4>
-            <p className="mt-1 text-sm text-muted-foreground">{item.subheadline}</p>
-
-            {item.description ? (
-              <p className="mt-3 line-clamp-2 text-sm text-muted-foreground">
-                {item.description}
-              </p>
-            ) : null}
-
-            <div className="mt-4 flex flex-wrap gap-3 text-xs text-muted-foreground">
-              <span className="rounded-full bg-muted px-2.5 py-1">
-                {item.entityType === "study_room" ? "Study room" : "Debate room"}
-              </span>
-              <span className="rounded-full bg-muted px-2.5 py-1">
-                {item.participantCount}/{item.maxParticipants} joined
-              </span>
-              {typeof item.seatsLeft === "number" && item.seatsLeft >= 0 ? (
-                <span className="rounded-full bg-muted px-2.5 py-1">
-                  {item.seatsLeft} seats left
-                </span>
-              ) : null}
-              {typeof item.price === "number" ? (
-                <span className="rounded-full bg-muted px-2.5 py-1">
-                  {item.price === 0 ? "Free" : `₹${item.price}`}
-                </span>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="flex shrink-0 items-center gap-3">
-            <Link href={item.href}>
-              <Button className={cn(item.isLive ? "shadow-sm" : "")}>
-                {item.ctaLabel}
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
+function coverShellClasses(item: ActivityFeedItem): string {
+  return item.entityType === "study_room"
+    ? "from-emerald-800 via-emerald-500 to-cyan-300"
+    : "from-slate-900 via-sky-600 to-cyan-300";
 }
 
-function FeedSkeleton() {
+function fallbackTags(item: ActivityFeedItem): string[] {
+  const existing = item.topicTags?.filter(Boolean) ?? [];
+  if (existing.length > 0) {
+    return existing.slice(0, 3);
+  }
+
+  if (item.entityType === "study_room") {
+    return ["Live learning", "Peer-led", "Seats open"];
+  }
+
+  return ["Debate", "Hot topic", "Community"];
+}
+
+function FeedCover({ item }: { item: ActivityFeedItem }) {
+  const cleanedTitle = cleanFeedText(item.title);
+  const tags = fallbackTags(item);
+
   return (
-    <div className="space-y-4">
-      {Array.from({ length: 3 }).map((_, index) => (
-        <Card key={index} className="border-border/60 shadow-sm">
-          <CardContent className="p-5">
-            <div className="space-y-4">
-              <div className="flex gap-2">
-                <Skeleton className="h-7 w-24 rounded-full" />
-                <Skeleton className="h-7 w-28 rounded-full" />
-              </div>
-              <div className="flex items-center gap-3">
-                <Skeleton className="h-10 w-10 rounded-full" />
-                <div className="space-y-2">
-                  <Skeleton className="h-4 w-28" />
-                  <Skeleton className="h-3 w-24" />
-                </div>
-              </div>
-              <Skeleton className="h-6 w-4/5" />
-              <Skeleton className="h-4 w-3/5" />
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-10 w-28" />
-            </div>
-          </CardContent>
-        </Card>
-      ))}
+    <div className="relative overflow-hidden rounded-[28px] border border-emerald-200/50 bg-emerald-900 text-white shadow-[0_24px_60px_-28px_rgba(52,211,153,0.3)]">
+      {item.coverImageUrl ? (
+        <>
+          <Image
+            src={item.coverImageUrl}
+            alt={cleanedTitle}
+            fill
+            className="object-cover"
+            sizes="(max-width: 768px) 100vw, 720px"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-emerald-950/80 via-emerald-900/35 to-emerald-950/5" />
+        </>
+      ) : (
+        <div
+          className={cn(
+            "absolute inset-0 bg-gradient-to-br",
+            coverShellClasses(item),
+          )}
+        >
+          <div className="absolute -left-8 top-8 h-32 w-32 rounded-full bg-white/16 blur-2xl" />
+          <div className="absolute bottom-0 right-0 h-48 w-48 rounded-full bg-cyan-100/18 blur-3xl" />
+          <div className="absolute inset-x-0 top-0 h-28 bg-[linear-gradient(180deg,rgba(255,255,255,0.28),rgba(255,255,255,0.03))]" />
+        </div>
+      )}
+
+      <div className="relative flex min-h-64 flex-col justify-between p-5 sm:min-h-72 sm:p-6">
+        <div className="flex items-start justify-between gap-3">
+          <Badge className="rounded-full border border-white/20 bg-white/12 px-3 py-1 text-[11px] font-semibold text-white backdrop-blur">
+            {getEntityLabel(item)}
+          </Badge>
+          <Badge
+            className={cn(
+              "rounded-full border px-3 py-1 text-[11px] font-semibold backdrop-blur",
+              item.isLive
+                ? "border-red-200/30 bg-red-500/15 text-red-50"
+                : "border-white/20 bg-white/10 text-white",
+            )}
+          >
+            {item.isLive ? "Live session" : "Next up"}
+          </Badge>
+        </div>
+
+        <div className="space-y-4">
+          <div className="max-w-2xl space-y-2">
+            <p className="font-tagline text-xs uppercase tracking-[0.24em] text-white/70">
+              Community spotlight
+            </p>
+            <h3 className="font-tagline text-2xl font-bold leading-tight text-white sm:text-[2rem]">
+              {cleanedTitle}
+            </h3>
+            <p className="max-w-xl text-sm text-white/78 sm:text-[15px]">
+              {cleanFeedText(item.description) || cleanFeedText(item.subheadline)}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {tags.map((tag) => (
+              <span
+                key={`${item.id}-${tag}`}
+                className="rounded-full border border-white/16 bg-white/10 px-3 py-1 text-xs font-medium text-white/92 backdrop-blur"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
 
-export function ActivityFeed() {
+function FeedPostCard({ item }: { item: ActivityFeedItem }) {
+  const avatarFallback = item.host.name?.charAt(0)?.toUpperCase() || "W";
+  const topReasons = item.reasons.slice(0, 3);
+
+  return (
+    <article className="rounded-[32px] border border-emerald-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(245,255,249,0.95))] p-4 shadow-[0_28px_70px_-42px_rgba(34,197,94,0.28)] backdrop-blur sm:p-5">
+      <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
+          <Avatar className="h-12 w-12 ring-2 ring-white shadow-sm">
+            <AvatarImage src={item.host.avatar || undefined} alt={item.host.name} />
+            <AvatarFallback>{avatarFallback}</AvatarFallback>
+          </Avatar>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="truncate text-sm font-semibold text-slate-900">
+                {item.host.name}
+              </p>
+              {item.host.reviewCount > 0 ? (
+                <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                  {item.host.avgRating.toFixed(1)} rating
+                </span>
+              ) : null}
+            </div>
+            <p className="truncate text-sm text-slate-500">
+              {cleanFeedText(item.headline)}
+            </p>
+            <p className="text-xs text-slate-400">{formatWhen(item.startsAt, item.isLive)}</p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2 sm:justify-end">
+          <Badge className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-700">
+            {getEntityLabel(item)}
+          </Badge>
+          {item.isLive ? (
+            <Badge className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-[11px] font-semibold text-red-700">
+              Live now
+            </Badge>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="mb-5 space-y-4">
+        <div className="space-y-2">
+          <h4 className="font-tagline text-xl font-bold leading-tight text-slate-950 sm:text-2xl">
+            {cleanFeedText(item.title)}
+          </h4>
+          <p className="text-sm leading-6 text-slate-600">
+            {cleanFeedText(item.description) || cleanFeedText(item.subheadline)}
+          </p>
+        </div>
+
+        <FeedCover item={item} />
+
+        <div className="flex flex-wrap gap-2">
+          {topReasons.map((reason) => (
+            <span
+              key={`${item.id}-${reason}`}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium",
+                reasonClasses(reason),
+              )}
+            >
+              {reasonIcon(reason)}
+              {reasonLabel(reason)}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-5 flex flex-col gap-3 border-t border-emerald-100/80 pt-5 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm text-slate-500">
+          {cleanFeedText(item.subheadline)}
+        </p>
+        <Link href={item.href} className="sm:shrink-0">
+          <Button className="h-11 rounded-full px-5 shadow-sm">
+            {item.ctaLabel}
+            <ArrowRight className="ml-2 h-4 w-4" />
+          </Button>
+        </Link>
+      </div>
+    </article>
+  );
+}
+
+function FeedSkeletonCard() {
+  return (
+    <div className="rounded-[32px] border border-slate-200/80 bg-white/95 p-4 shadow-[0_28px_70px_-42px_rgba(15,23,42,0.4)] sm:p-5">
+      <div className="mb-4 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <Skeleton className="h-12 w-12 rounded-full" />
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-36" />
+            <Skeleton className="h-3 w-52" />
+            <Skeleton className="h-3 w-24" />
+          </div>
+        </div>
+        <Skeleton className="h-7 w-20 rounded-full" />
+      </div>
+
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <Skeleton className="h-7 w-4/5" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-3/4" />
+        </div>
+
+        <Skeleton className="h-64 rounded-[28px]" />
+
+        <div className="flex gap-2">
+          <Skeleton className="h-8 w-28 rounded-full" />
+          <Skeleton className="h-8 w-24 rounded-full" />
+          <Skeleton className="h-8 w-32 rounded-full" />
+        </div>
+
+        <div className="flex items-center justify-between gap-4 pt-2">
+          <Skeleton className="h-4 w-2/3" />
+          <Skeleton className="h-11 w-32 rounded-full" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SignedOutFeedState({ variant }: { variant: "dashboard" | "page" }) {
+  return (
+    <div
+      className={cn(
+        "rounded-[32px] border border-emerald-200/70 bg-[linear-gradient(135deg,rgba(236,253,245,0.98),rgba(239,246,255,0.96))] p-6 shadow-[0_28px_70px_-42px_rgba(16,185,129,0.55)]",
+        variant === "page" ? "sm:p-8" : "",
+      )}
+    >
+      <div className="flex max-w-2xl flex-col gap-4">
+        <Badge className="w-fit rounded-full border border-emerald-200 bg-white/80 px-3 py-1 text-[11px] font-semibold text-emerald-700">
+          Personalized feed
+        </Badge>
+        <div className="space-y-2">
+          <h3 className="font-tagline text-2xl font-bold text-slate-950">
+            Sign in to unlock your community feed
+          </h3>
+          <p className="max-w-xl text-sm leading-6 text-slate-600">
+            The new feed is tailored around live rooms, trending debates, your network,
+            and the topics you want to learn next.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <SignInButton mode="modal">
+            <Button className="h-11 rounded-full px-5">Sign in to continue</Button>
+          </SignInButton>
+          <Link href="/how-it-works">
+            <Button variant="outline" className="h-11 rounded-full px-5">
+              See how Webyalaya works
+            </Button>
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function ActivityFeed({
+  variant = "dashboard",
+  limit = 8,
+  className,
+}: ActivityFeedProps) {
   const [mode, setMode] = useState<FeedMode>("for_you");
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const { isLoaded, isSignedIn } = useUser();
   const {
     data,
     isLoading,
     isFetchingNextPage,
     hasNextPage,
     fetchNextPage,
-  } = useDashboardFeed(mode, 8);
+  } = useDashboardFeed(mode, limit);
 
   const items = useMemo(
     () => data?.pages.flatMap((page) => page.items) ?? [],
@@ -215,7 +405,8 @@ export function ActivityFeed() {
 
   useEffect(() => {
     const node = loadMoreRef.current;
-    if (!node || !hasNextPage) {
+    const root = scrollContainerRef.current;
+    if (!node || !root || !hasNextPage || !isSignedIn) {
       return;
     }
 
@@ -225,74 +416,122 @@ export function ActivityFeed() {
           void fetchNextPage();
         }
       },
-      { rootMargin: "200px" },
+      {
+        root,
+        rootMargin: "220px 0px",
+      },
     );
 
     observer.observe(node);
     return () => observer.disconnect();
-  }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage, isSignedIn]);
+
+  const isPage = variant === "page";
+  const feedViewportClassName = isPage
+    ? "max-h-[72vh] lg:max-h-[60rem]"
+    : "max-h-[68vh] lg:max-h-[52rem]";
 
   return (
-    <Card className="border-border/60 shadow-sm">
-      <CardHeader className="pb-3">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Flame className="h-5 w-5 text-orange-500" />
-              Activity Feed
-            </CardTitle>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Discover live rooms, trending debates, and people worth joining.
-            </p>
+    <section
+      className={cn(
+        "relative overflow-hidden rounded-[32px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.97),rgba(248,250,252,0.98))] shadow-[0_32px_90px_-50px_rgba(15,23,42,0.35)]",
+        className,
+      )}
+    >
+      <div className="absolute inset-x-0 top-0 h-40 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_55%),radial-gradient(circle_at_top_right,rgba(14,165,233,0.14),transparent_50%)]" />
+
+      <div className={cn("relative p-5 sm:p-6", isPage ? "lg:p-8" : "")}>
+        <div className="flex flex-col gap-4 border-b border-slate-200/80 pb-5 sm:flex-row sm:items-end sm:justify-between">
+          <div className="max-w-2xl space-y-3">
+            <Badge className="w-fit rounded-full border border-emerald-200 bg-white/80 px-3 py-1 text-[11px] font-semibold text-emerald-700 backdrop-blur">
+              Premium community feed
+            </Badge>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-slate-900">
+                <Flame className="h-5 w-5 text-orange-500" />
+                <h2 className="font-tagline text-2xl font-bold tracking-tight">
+                  {isPage ? "Community Feed" : "Activity Feed"}
+                </h2>
+              </div>
+
+            </div>
           </div>
 
-          <div className="grid h-9 w-full grid-cols-2 rounded-md bg-muted p-1 sm:w-[200px]">
-            {FEED_TABS.map((tab) => (
-              <button
-                key={tab.value}
-                type="button"
-                className={cn(
-                  "rounded-sm px-3 text-sm font-medium transition-all",
-                  mode === tab.value
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-                onClick={() => setMode(tab.value)}
-              >
-                {tab.label}
-              </button>
-            ))}
+          <div className="flex flex-col gap-3 sm:items-end">
+            <div className="grid h-11 w-full grid-cols-2 rounded-full border border-slate-200 bg-white/85 p-1 shadow-sm sm:w-[220px]">
+              {FEED_TABS.map((tab) => (
+                <button
+                  key={tab.value}
+                  type="button"
+                  className={cn(
+                    "rounded-full px-4 text-sm font-medium transition-all",
+                    mode === tab.value
+                      ? "bg-slate-950 text-white shadow-sm"
+                      : "text-slate-500 hover:text-slate-900",
+                  )}
+                  onClick={() => setMode(tab.value)}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-2 text-xs text-slate-500 sm:justify-end">
+              <span className="rounded-full bg-slate-100 px-3 py-1">Cover stories</span>
+              <span className="rounded-full bg-slate-100 px-3 py-1">Infinite scroll</span>
+              <span className="rounded-full bg-slate-100 px-3 py-1">Live signals</span>
+            </div>
           </div>
         </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {isLoading ? <FeedSkeleton /> : null}
 
-        {!isLoading && items.length === 0 ? (
-          <div className="rounded-xl border border-dashed p-8 text-center">
-            <p className="text-sm font-medium">
-              {mode === "following"
-                ? "Follow a few peers to build your following feed."
-                : "Your feed will light up as new rooms and debates appear."}
-            </p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Trending sessions, low-cost rooms, and active creators will appear here.
-            </p>
+        <div
+          ref={scrollContainerRef}
+          className={cn(
+            "mt-6 overflow-y-auto pr-1 sm:pr-2",
+            feedViewportClassName,
+          )}
+        >
+          <div className="space-y-6">
+            {!isLoaded || isLoading ? (
+              <>
+                <FeedSkeletonCard />
+                <FeedSkeletonCard />
+              </>
+            ) : null}
+
+            {isLoaded && !isSignedIn ? <SignedOutFeedState variant={variant} /> : null}
+
+            {isLoaded && isSignedIn && !isLoading && items.length === 0 ? (
+              <div className="rounded-[28px] border border-dashed border-slate-300 bg-slate-50/70 p-10 text-center">
+                <p className="text-base font-semibold text-slate-900">
+                  {mode === "following"
+                    ? "Follow a few peers to build your network feed."
+                    : "Fresh community posts will land here as new rooms and debates open."}
+                </p>
+                <p className="mt-2 text-sm text-slate-500">
+                  We will surface live sessions, strong hosts, low-cost rooms, and topics
+                  aligned with what you want to learn.
+                </p>
+              </div>
+            ) : null}
+
+            {isLoaded && isSignedIn && !isLoading
+              ? items.map((item) => <FeedPostCard key={item.id} item={item} />)
+              : null}
+
+            {isLoaded && isSignedIn ? <div ref={loadMoreRef} className="h-4" /> : null}
+
+            {isFetchingNextPage ? (
+              <div className="space-y-6 pb-2">
+                <div className="flex items-center justify-center gap-2 py-2 text-sm text-slate-500">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading more posts
+                </div>
+                <FeedSkeletonCard />
+              </div>
+            ) : null}
           </div>
-        ) : null}
-
-        {!isLoading && items.length > 0
-          ? items.map((item) => <FeedCard key={item.id} item={item} />)
-          : null}
-
-        <div ref={loadMoreRef} className="h-4" />
-
-        {isFetchingNextPage ? (
-          <div className="space-y-4 pt-2">
-            <FeedSkeleton />
-          </div>
-        ) : null}
-      </CardContent>
-    </Card>
+        </div>
+      </div>
+    </section>
   );
 }

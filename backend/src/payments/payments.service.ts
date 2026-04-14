@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { PaymentStatus, Prisma } from '../generated/prisma/client';
+import { PaymentStatus, Prisma } from '../generated/prisma';
 import { CacheService } from '../redis/cache.service';
 import { LoggerService } from '../common/logger';
 

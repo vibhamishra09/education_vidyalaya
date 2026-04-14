@@ -9,7 +9,7 @@ import {
   Max,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { SessionStatus } from '../../generated/prisma/client';
+import { SessionStatus } from '../../generated/prisma';
 
 export class PeerSessionDto {
   id: string;

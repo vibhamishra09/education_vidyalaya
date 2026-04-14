@@ -22,7 +22,7 @@ export function BottomNav() {
   const navItems = [
     {
       href: "/browse",
-      label: "Browse",
+      label: "Feed",
       icon: Compass,
       isActive: pathname === "/browse" || pathname.startsWith("/browse/"),
     },

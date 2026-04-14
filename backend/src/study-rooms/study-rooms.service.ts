@@ -42,7 +42,7 @@ import {
   PaymentStatus,
   StudyRoomParticipantRole,
   StudyRoomSessionMode,
-} from '../generated/prisma/client';
+} from '../generated/prisma';
 import { convertLocalToUTC } from '../utils/timezone';
 import { buildStudyRoomOccurrences } from './recurrence.util';
 import { StudyRoomParticipantRoleDto } from './dto/study-room.dto';
@@ -2434,6 +2434,30 @@ export class StudyRoomsService {
     );
   }
 };
+
+private assertSessionNotExpired(startTime: Date, durationMinutes: number) {
+  const completionTime = startTime.getTime() + durationMinutes * 60000;
+  if (completionTime <= Date.now()) {
+    throw new BadRequestException(
+      'The requested time change would result in a session that has already ended.',
+    );
+  }
+}
+
+private validateRoomTiming(startTime: Date, duration: number, isPartOfSeries: boolean) {
+  const now = Date.now();
+  
+  if (isPartOfSeries) {
+    const completionTime = startTime.getTime() + duration * 60000;
+    if (completionTime <= now) {
+      throw new BadRequestException('Recurring room sessions cannot be updated to a time that has already ended.');
+    }
+  } else {
+    if (startTime.getTime() <= now) {
+      throw new BadRequestException('Standalone rooms must be scheduled in the future.');
+    }
+  }
+}
 async updateStudyRoom(
   studyRoomId: string,
   userId: string,
@@ -2532,8 +2556,11 @@ async updateStudyRoom(
     const newTime      = updateDto.time ?? oldTime;
 
     const newUtc = convertLocalToUTC(newLocalDate, newTime, timezone); //converts back to utc
-    this.assertNotInPast(new Date(newUtc as Date));
 
+    const duration = updateDto.duration ?? studyRoom.duration;
+    const isPartOfSeries = !!studyRoom.seriesId; 
+      
+    this.validateRoomTiming(newUtc, duration, isPartOfSeries);
     const existingRoom = await this.prisma.studyRoom.findFirst({
         where: {
           slug: studyRoom.slug,
@@ -2627,8 +2654,9 @@ if (isSeriesEdit && (dateChanged || timeChanged)) {
   ).toISOString().split('T')[0];
 
   const anchorNewUtc = convertLocalToUTC(anchorNewLocalDate, newTime, timezone);
-  this.assertNotInPast(new Date(anchorNewUtc as Date));
-
+  
+  const duration = updateDto.duration ?? studyRoom.duration;
+  this.assertSessionNotExpired(anchorNewUtc, duration);
   if (timeChanged && !dateChanged) {
     const newTimeInterval = `${newTime}:00`;
     const oldTimeInterval = `${oldTime}:00`;
