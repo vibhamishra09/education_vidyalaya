@@ -2,17 +2,22 @@ import Image from "next/image";
 import Link from "next/link";
 import { Facebook, Instagram, Linkedin, Youtube } from "lucide-react";
 
-export function Footer() {
-  // Landing site URL for Terms and Privacy Policy
-  const _landingSiteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://webyalaya.com";
-  
-  const socialLinks = [
-    { icon: Linkedin, label: "LinkedIn", url: "https://www.linkedin.com/company/webyalaya/?viewAsMember=true" },
-    { icon: Facebook, label: "Facebook", url: "https://facebook.com/webyalaya" },
-    { icon: Instagram, label: "Instagram", url: "https://www.instagram.com/webyalaya" },
-    { icon: Youtube, label: "YouTube", url: "http://www.youtube.com/@webyalaya" },
-  ];
+const socialLinks = [
+  {
+    icon: Linkedin,
+    label: "LinkedIn",
+    url: "https://www.linkedin.com/company/webyalaya/?viewAsMember=true",
+  },
+  { icon: Facebook, label: "Facebook", url: "https://facebook.com/webyalaya" },
+  {
+    icon: Instagram,
+    label: "Instagram",
+    url: "https://www.instagram.com/webyalaya",
+  },
+  { icon: Youtube, label: "YouTube", url: "http://www.youtube.com/@webyalaya" },
+] as const;
 
+export function Footer() {
   return (
     <footer className="mt-6 border-t border-black/5 bg-background/60">
       <div className="mx-auto w-full max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
@@ -38,31 +43,36 @@ export function Footer() {
             className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground"
           >
             <Link
-              className="hover:text-foreground transition-colors"
+              className="transition-colors hover:text-foreground"
               href="/about"
             >
               About
             </Link>
             <Link
-              className="hover:text-foreground transition-colors"
+              className="transition-colors hover:text-foreground"
               href="/careers"
             >
               Careers
             </Link>
             <Link
-              className="hover:text-foreground transition-colors"
+              className="transition-colors hover:text-foreground"
               href="/terms-of-use"
             >
               Terms of Use
             </Link>
             <Link
-              className="hover:text-foreground transition-colors"
+              className="transition-colors hover:text-foreground"
               href="/privacy-policy"
             >
               Privacy Policy
             </Link>
-            <span className="hidden sm:inline text-muted-foreground/60">•</span>
-            <span className="whitespace-nowrap">© {new Date().getFullYear()} Humitra Pvt Ltd. All rights reserved.</span>
+            <span className="hidden text-muted-foreground/60 sm:inline">
+              &middot;
+            </span>
+            <span className="whitespace-nowrap">
+              &copy; {new Date().getFullYear()} Humitra Pvt Ltd. All rights
+              reserved.
+            </span>
           </nav>
 
           <div className="flex items-center gap-1">
@@ -72,12 +82,56 @@ export function Footer() {
                 href={url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-foreground hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                 aria-label={label}
               >
                 <Icon className="h-4 w-4" />
               </Link>
             ))}
+          </div>
+        </div>
+
+        <div className="mt-5 border-t border-black/5 pt-4">
+          <div className="relative overflow-hidden rounded-[28px] border border-primary/10 bg-[linear-gradient(135deg,rgba(0,220,110,0.10),rgba(0,140,210,0.05),rgba(255,255,255,0.98))] px-4 py-5 shadow-[0_20px_60px_-45px_rgba(0,78,50,0.45)] sm:px-6 sm:py-6">
+            <div className="pointer-events-none absolute -left-10 top-0 h-28 w-28 rounded-full bg-primary/10 blur-3xl" />
+            <div className="pointer-events-none absolute -right-8 bottom-0 h-32 w-32 rounded-full bg-secondary/10 blur-3xl" />
+
+            <div className="relative grid gap-5 lg:grid-cols-[minmax(0,260px)_1fr] lg:items-center">
+              <div className="max-w-sm">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/80">
+                  Incubated At & Recognized By
+                </p>
+                <h3 className="mt-2 text-lg font-semibold tracking-tight text-foreground sm:text-xl">
+                  Trusted by India&apos;s startup ecosystem
+                </h3>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  The original partner icons stay visible, now anchored in a
+                  more intentional composition instead of a flat footer strip.
+                </p>
+              </div>
+
+              <div className="relative">
+                <div className="absolute -top-3 left-4 z-10 inline-flex rounded-full border border-primary/15 bg-white/90 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-primary shadow-[0_12px_28px_-24px_rgba(0,78,50,0.55)] backdrop-blur-sm sm:left-6">
+                  Incubated At
+                </div>
+                <div className="absolute -bottom-3 right-4 z-10 inline-flex rounded-full border border-secondary/15 bg-white/90 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-secondary shadow-[0_12px_28px_-24px_rgba(0,86,130,0.55)] backdrop-blur-sm sm:right-6">
+                  Recognized By
+                </div>
+
+                <div className="rounded-[24px] border border-white/80 bg-white/85 p-4 shadow-[0_24px_55px_-36px_rgba(15,23,42,0.55)] backdrop-blur-sm sm:p-5">
+                  <div className="rounded-[20px] border border-black/5 bg-[linear-gradient(180deg,rgba(255,255,255,0.94),rgba(243,244,246,0.86))] p-3 sm:p-4">
+                    <Image
+                      src="/incubated-recognized-strip.png"
+                      alt="Incubated at and recognized by JIIT, UIML EIC, STPI, Shiv Nadar Atal Incubation Centre, DPIIT Startup India, and MeitY Startup Hub"
+                      width={1360}
+                      height={114}
+                      className="h-auto w-full object-contain"
+                      sizes="(max-width: 768px) 100vw, 900px"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>

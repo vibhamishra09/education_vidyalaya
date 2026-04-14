@@ -1,7 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { CheckCircle2, Coins, Flame, Lock, Sparkles, Trophy } from "lucide-react";
+import {
+  ArrowRight,
+  CheckCircle2,
+  Coins,
+  Flame,
+  Lock,
+  Sparkles,
+  Trophy,
+} from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -31,28 +39,80 @@ function missionStatusStyles(status: DashboardMission["status"]) {
   if (status === "locked") {
     return "border-slate-200 bg-slate-100 text-slate-500";
   }
-  return "border-amber-200 bg-amber-50 text-amber-700";
+  return "border-sky-200 bg-sky-50 text-sky-700";
+}
+
+function missionStatusLabel(status: DashboardMission["status"]) {
+  if (status === "completed") {
+    return "Completed";
+  }
+  if (status === "locked") {
+    return "Locked";
+  }
+  return "Ready";
+}
+
+function missionTone(id: string) {
+  if (id.includes("teach")) {
+    return {
+      iconShell: "border-sky-200 bg-sky-50 text-sky-700",
+      reward: "border-sky-200 bg-sky-50 text-sky-700",
+      button:
+        "border-sky-200 bg-sky-100 text-sky-800 hover:bg-sky-200 hover:border-sky-300",
+    };
+  }
+
+  if (id.includes("review")) {
+    return {
+      iconShell: "border-amber-200 bg-amber-50 text-amber-700",
+      reward: "border-amber-200 bg-amber-50 text-amber-700",
+      button:
+        "border-amber-200 bg-amber-100 text-amber-800 hover:bg-amber-200 hover:border-amber-300",
+    };
+  }
+
+  return {
+    iconShell: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    reward: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    button:
+      "border-emerald-200 bg-emerald-100 text-emerald-800 hover:bg-emerald-200 hover:border-emerald-300",
+  };
+}
+
+function formatRewardTime(value: string | Date) {
+  return new Intl.DateTimeFormat("en-IN", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(value));
 }
 
 function MissionCard({ mission }: { mission: DashboardMission }) {
   const Icon = missionIcon(mission.id);
+  const tone = missionTone(mission.id);
 
   return (
-    <div className="flex h-full min-h-[320px] flex-col overflow-hidden rounded-2xl border border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.94))] p-4 text-slate-900 shadow-sm backdrop-blur">
+    <div className="flex h-full min-h-[320px] flex-col overflow-hidden rounded-[28px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,250,252,0.94))] p-5 text-slate-900 shadow-[0_24px_60px_-42px_rgba(15,23,42,0.28)] backdrop-blur">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
-          <div className="rounded-2xl bg-slate-900 p-2 text-white shadow-sm">
+          <div
+            className={cn(
+              "rounded-2xl border p-2.5 shadow-sm",
+              tone.iconShell,
+            )}
+          >
             <Icon className="h-4 w-4" />
           </div>
           <div className="min-w-0">
             <p className="!text-lg !font-semibold !leading-tight !text-slate-900">
               {mission.title}
             </p>
-            <p className="!text-xs !text-slate-500">{mission.progressLabel}</p>
+            <p className="!text-xs !font-medium !text-slate-500">{mission.progressLabel}</p>
           </div>
         </div>
         <Badge className={cn("shrink-0 border", missionStatusStyles(mission.status))}>
-          {mission.status}
+          {missionStatusLabel(mission.status)}
         </Badge>
       </div>
 
@@ -60,8 +120,13 @@ function MissionCard({ mission }: { mission: DashboardMission }) {
         {mission.description}
       </p>
 
-      <div className="mt-5 grid gap-3 border-t border-slate-200 pt-4">
-        <div className="inline-flex items-center gap-1 self-start rounded-full bg-yellow-100 px-3 py-1 text-xs font-semibold text-yellow-700 shadow-sm">
+      <div className="mt-5 grid gap-3 border-t border-slate-200/80 pt-4">
+        <div
+          className={cn(
+            "inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold shadow-sm",
+            tone.reward,
+          )}
+        >
           <Sparkles className="h-3.5 w-3.5" />
           +{formatCoins(mission.rewardPoints)} Points
         </div>
@@ -70,14 +135,18 @@ function MissionCard({ mission }: { mission: DashboardMission }) {
           size="sm"
           variant={mission.status === "locked" ? "outline" : "default"}
           className={cn(
-            "!flex h-auto min-h-11 w-full min-w-0 !shrink justify-center whitespace-normal rounded-full px-4 py-3 text-center text-sm leading-5",
+            "!flex h-auto min-h-11 w-full min-w-0 !shrink justify-center whitespace-normal rounded-2xl px-4 py-3 text-center text-sm leading-5",
             mission.status === "locked"
-              ? "border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
-              : "border border-emerald-200 bg-emerald-100 text-emerald-800 hover:bg-emerald-200",
+              ? "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 hover:border-slate-300"
+              : tone.button,
           )}
         >
-          <Link href={mission.actionHref} className="w-full min-w-0">
-            {mission.actionLabel}
+          <Link
+            href={mission.actionHref}
+            className="flex w-full min-w-0 items-center justify-center gap-2"
+          >
+            <span>{mission.actionLabel}</span>
+            {mission.status !== "locked" ? <ArrowRight className="h-4 w-4" /> : null}
           </Link>
         </Button>
       </div>
@@ -98,48 +167,49 @@ export function DailyMomentumCard({
   }
 
   return (
-    <Card className="relative overflow-hidden border-0 bg-[radial-gradient(circle_at_top_left,_rgba(251,191,36,0.22),_transparent_32%),radial-gradient(circle_at_top_right,_rgba(16,185,129,0.22),_transparent_28%),linear-gradient(135deg,#0f172a_0%,#111827_48%,#052e2b_100%)] text-white shadow-[0_30px_100px_-45px_rgba(15,23,42,1)]">
-      <div className="absolute -left-10 top-0 h-40 w-40 rounded-full bg-emerald-400/10 blur-3xl" />
-      <div className="absolute right-0 top-0 h-32 w-32 rounded-full bg-amber-300/10 blur-3xl" />
-      <CardContent className="relative p-6">
+    <Card className="relative overflow-hidden rounded-[34px] border border-emerald-200/70 bg-[radial-gradient(circle_at_top_left,rgba(0,220,110,0.16),transparent_28%),radial-gradient(circle_at_top_right,rgba(0,140,210,0.14),transparent_24%),radial-gradient(circle_at_bottom_right,rgba(251,191,36,0.14),transparent_24%),linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.96))] text-slate-900 shadow-[0_34px_90px_-48px_rgba(34,197,94,0.35)]">
+      <div className="absolute -left-10 top-0 h-44 w-44 rounded-full bg-emerald-300/25 blur-3xl" />
+      <div className="absolute right-0 top-0 h-36 w-36 rounded-full bg-sky-200/35 blur-3xl" />
+      <div className="absolute bottom-0 right-20 h-28 w-28 rounded-full bg-amber-200/35 blur-3xl" />
+      <CardContent className="relative p-6 sm:p-7">
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(340px,0.8fr)]">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <Badge className="border-0 bg-white/10 text-white hover:bg-white/10">
-                Daily habit loop
+              <Badge className="border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
+                Daily momentum
               </Badge>
-              <Badge className="border-0 bg-emerald-400/20 text-emerald-100 hover:bg-emerald-400/20">
-                {engagement.completedCount}/{engagement.totalCount} missions wrapped
+              <Badge className="border border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-50">
+                {engagement.completedCount}/{engagement.totalCount} missions completed
               </Badge>
             </div>
 
             <div className="mt-4 max-w-2xl">
-              <p className="!m-0 !text-2xl !font-semibold !leading-tight !tracking-tight !text-white md:!text-3xl">
+              <p className="!m-0 !text-2xl !font-semibold !leading-tight !tracking-tight !text-slate-950 md:!text-3xl">
                 {engagement.headline}
               </p>
-              <p className="mt-2 !text-sm !leading-6 !text-slate-200 md:!text-base">
+              <p className="mt-2 !text-sm !leading-6 !text-slate-600 md:!text-base">
                 {engagement.subtitle}
               </p>
             </div>
 
             <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:max-w-2xl">
-              <div className="rounded-2xl border border-white/10 bg-white/8 px-4 py-3 backdrop-blur">
-                <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-300">
+              <div className="rounded-[24px] border border-white/80 bg-white/85 px-4 py-4 shadow-sm backdrop-blur">
+                <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
                   Weekly Points
                 </p>
-                <p className="mt-1 text-2xl font-semibold text-amber-300">
+                <p className="mt-1 text-2xl font-semibold text-emerald-700">
                   +{formatCoins(engagement.weeklyPoints)}
                 </p>
               </div>
-              <div className="rounded-2xl border border-white/10 bg-white/8 px-4 py-3 backdrop-blur">
-                <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-300">
+              <div className="rounded-[24px] border border-white/80 bg-white/85 px-4 py-4 shadow-sm backdrop-blur">
+                <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
                   Total Points
                 </p>
-                <p className="mt-1 text-2xl font-semibold text-white">
+                <p className="mt-1 text-2xl font-semibold text-slate-900">
                   {formatCoins(engagement.totalPoints)}
                 </p>
               </div>
-              <p className="sm:col-span-2 text-sm text-emerald-200">
+              <p className="sm:col-span-2 text-sm font-medium text-slate-600">
                 Points are tracked separately from your wallet coins.
               </p>
             </div>
@@ -151,16 +221,16 @@ export function DailyMomentumCard({
             </div>
           </div>
 
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-5 backdrop-blur">
+          <div className="rounded-[30px] border border-emerald-200/70 bg-[linear-gradient(180deg,rgba(240,253,244,0.88),rgba(248,250,252,0.82))] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] backdrop-blur">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold text-white">Fresh points activity</p>
-                <p className="mt-1 text-sm text-slate-300">
+                <p className="text-sm font-semibold text-slate-900">Fresh points activity</p>
+                <p className="mt-1 text-sm text-slate-600">
                   Short-cycle point rewards that landed recently.
                 </p>
               </div>
-              <div className="rounded-full bg-white/10 p-2">
-                <Sparkles className="h-4 w-4 text-amber-300" />
+              <div className="rounded-full border border-emerald-200 bg-white/80 p-2 shadow-sm">
+                <Sparkles className="h-4 w-4 text-emerald-600" />
               </div>
             </div>
 
@@ -169,44 +239,39 @@ export function DailyMomentumCard({
                 engagement.recentRewards.map((reward) => (
                   <div
                     key={reward.id}
-                    className="rounded-2xl border border-white/10 bg-black/10 p-4"
+                    className="rounded-[24px] border border-white/80 bg-white/90 p-4 shadow-sm"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="font-medium text-white">{reward.title}</p>
-                        <p className="mt-1 text-sm text-slate-300">
+                        <p className="font-medium text-slate-900">{reward.title}</p>
+                        <p className="mt-1 text-sm text-slate-600">
                           {reward.description || "Bonus points awarded"}
                         </p>
                       </div>
-                      <div className="rounded-full bg-amber-400/15 px-3 py-1 text-xs font-semibold text-amber-200">
+                      <div className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
                         +{formatCoins(reward.pointsAmount)} pts
                       </div>
                     </div>
-                    <p className="mt-3 text-xs text-slate-400">
-                      {new Date(reward.createdAt).toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
+                    <p className="mt-3 text-xs font-medium text-slate-400">
+                      {formatRewardTime(reward.createdAt)}
                     </p>
                   </div>
                 ))
               ) : (
-                <div className="rounded-2xl border border-dashed border-white/15 bg-black/10 p-5 text-center">
-                  <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-white/10">
-                    <Lock className="h-4 w-4 text-slate-300" />
+                <div className="rounded-[24px] border border-dashed border-emerald-200 bg-white/70 p-6 text-center">
+                  <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-emerald-50">
+                    <Lock className="h-4 w-4 text-emerald-600" />
                   </div>
-                  <p className="font-medium text-white">No points activity yet</p>
-                  <p className="mt-1 text-sm text-slate-300">
+                  <p className="font-medium text-slate-900">No points activity yet</p>
+                  <p className="mt-1 text-sm text-slate-600">
                     Complete one mission and this panel will start lighting up.
                   </p>
                 </div>
               )}
             </div>
 
-            <div className="mt-4 flex items-center gap-2 text-sm text-emerald-200">
-              <CheckCircle2 className="h-4 w-4" />
+            <div className="mt-4 flex items-center gap-2 text-sm font-medium text-emerald-700">
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
               Points land automatically. No manual claiming flow needed.
             </div>
           </div>
