@@ -1,4 +1,4 @@
-import { PrismaClient, Prisma } from '../src/generated/prisma/client';
+import { PrismaClient } from '../src/generated/prisma/client';
 
 // Source database (old)
 const sourceDb = new PrismaClient({
@@ -161,13 +161,7 @@ async function migrateData() {
     const studyRooms = await sourceDb.studyRoom.findMany();
     if (studyRooms.length > 0) {
       await targetDb.studyRoom.createMany({
-        data: studyRooms.map((r) => ({
-          ...r,
-          webinarConfig:
-            r.webinarConfig === null
-              ? Prisma.DbNull
-              : (r.webinarConfig as Prisma.InputJsonValue),
-        })),
+        data: studyRooms,
         skipDuplicates: true,
       });
       console.log(`✅ Migrated ${studyRooms.length} study rooms\n`);

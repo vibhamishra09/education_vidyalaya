@@ -201,14 +201,15 @@ export class StudyRoomsService {
     if (explicit && /^https?:\/\//i.test(explicit)) {
       return explicit.replace(/\/$/, '');
     }
-    if (process.env.NODE_ENV === 'production') {
-      return this.resolveAppPublicBaseUrl().replace(/\/$/, '');
-    }
     const fe = process.env.FRONTEND_URL?.trim();
     if (fe && /^https?:\/\//i.test(fe) && isLocalDevOrigin(fe)) {
       return fe.replace(/\/$/, '');
     }
-    return 'http://localhost:3000';
+    const apiUrl = process.env.API_URL?.trim() || '';
+    if (/^https?:\/\/127\.0\.0\.1:\d+/i.test(apiUrl) || /^https?:\/\/localhost:\d+/i.test(apiUrl)) {
+      return 'http://localhost:3000';
+    }
+    return this.resolveAppPublicBaseUrl().replace(/\/$/, '');
   }
 
   private buildWebinarJoinUrl(studyRoomId: string, joinLinkToken: string): string {
