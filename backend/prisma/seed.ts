@@ -34,7 +34,7 @@ async function main() {
         category: 'STREAK',
         rarity: 'COMMON',
         maxProgress: 1,
-        pointReward: 5,
+        coinReward: 5,
       },
     }),
     prisma.achievement.upsert({
@@ -48,7 +48,7 @@ async function main() {
         category: 'STREAK',
         rarity: 'COMMON',
         maxProgress: 3,
-        pointReward: 15,
+        coinReward: 15,
       },
     }),
     prisma.achievement.upsert({
@@ -62,7 +62,7 @@ async function main() {
         category: 'STREAK',
         rarity: 'RARE',
         maxProgress: 7,
-        pointReward: 50,
+        coinReward: 50,
       },
     }),
     prisma.achievement.upsert({
@@ -76,7 +76,7 @@ async function main() {
         category: 'STREAK',
         rarity: 'RARE',
         maxProgress: 14,
-        pointReward: 100,
+        coinReward: 100,
       },
     }),
     prisma.achievement.upsert({
@@ -90,7 +90,7 @@ async function main() {
         category: 'STREAK',
         rarity: 'EPIC',
         maxProgress: 30,
-        pointReward: 250,
+        coinReward: 250,
       },
     }),
     prisma.achievement.upsert({
@@ -104,7 +104,7 @@ async function main() {
         category: 'STREAK',
         rarity: 'EPIC',
         maxProgress: 60,
-        pointReward: 500,
+        coinReward: 500,
       },
     }),
     prisma.achievement.upsert({
@@ -118,7 +118,7 @@ async function main() {
         category: 'STREAK',
         rarity: 'LEGENDARY',
         maxProgress: 100,
-        pointReward: 1000,
+        coinReward: 1000,
       },
     }),
 
@@ -134,7 +134,7 @@ async function main() {
         category: 'MILESTONE',
         rarity: 'COMMON',
         maxProgress: 1,
-        pointReward: 10,
+        coinReward: 10,
       },
     }),
     prisma.achievement.upsert({
@@ -148,7 +148,7 @@ async function main() {
         category: 'LEARNING',
         rarity: 'COMMON',
         maxProgress: 5,
-        pointReward: 25,
+        coinReward: 25,
       },
     }),
     prisma.achievement.upsert({
@@ -162,7 +162,7 @@ async function main() {
         category: 'LEARNING',
         rarity: 'RARE',
         maxProgress: 25,
-        pointReward: 100,
+        coinReward: 100,
       },
     }),
     prisma.achievement.upsert({
@@ -176,7 +176,7 @@ async function main() {
         category: 'LEARNING',
         rarity: 'EPIC',
         maxProgress: 50,
-        pointReward: 250,
+        coinReward: 250,
       },
     }),
     prisma.achievement.upsert({
@@ -190,7 +190,7 @@ async function main() {
         category: 'LEARNING',
         rarity: 'LEGENDARY',
         maxProgress: 100,
-        pointReward: 500,
+        coinReward: 500,
       },
     }),
 
@@ -206,7 +206,7 @@ async function main() {
         category: 'TEACHING',
         rarity: 'COMMON',
         maxProgress: 1,
-        pointReward: 15,
+        coinReward: 15,
       },
     }),
     prisma.achievement.upsert({
@@ -220,7 +220,7 @@ async function main() {
         category: 'TEACHING',
         rarity: 'RARE',
         maxProgress: 10,
-        pointReward: 50,
+        coinReward: 50,
       },
     }),
     prisma.achievement.upsert({
@@ -234,7 +234,7 @@ async function main() {
         category: 'TEACHING',
         rarity: 'LEGENDARY',
         maxProgress: 50,
-        pointReward: 500,
+        coinReward: 500,
       },
     }),
 
@@ -250,7 +250,7 @@ async function main() {
         category: 'SOCIAL',
         rarity: 'RARE',
         maxProgress: 20,
-        pointReward: 75,
+        coinReward: 75,
       },
     }),
   ]);

@@ -2,6 +2,8 @@ import { appendFile, mkdir } from 'fs/promises'
 import path from 'path'
 import { NextRequest, NextResponse } from 'next/server'
 
+export const runtime = 'nodejs'
+
 const LOG_DIR = path.join(process.cwd(), 'logs')
 const LOG_FILE = path.join(LOG_DIR, 'chat-flow.txt')
 
