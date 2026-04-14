@@ -6,7 +6,7 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
-    "build": "nest build && powershell -NoProfile -Command \"New-Item -ItemType Directory -Force -Path 'dist/src/generated/prisma' | Out-Null; Copy-Item -Recurse -Force 'src/generated/prisma/*' 'dist/src/generated/prisma/'\"",
+    "build": "nest build && powershell -NoProfile -Command \"$dest = 'dist/src/generated/prisma'; New-Item -ItemType Directory -Force -Path $dest | Out-Null; Copy-Item -Recurse -Force 'src/generated/prisma/*' $dest -Exclude 'query_engine-windows.dll.node', 'query_engine-windows.dll.node.tmp*'; if (-not (Test-Path (Join-Path $dest 'query_engine-windows.dll.node'))) { Copy-Item -Force 'src/generated/prisma/query_engine-windows.dll.node' $dest }\"",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "npm run build && node dist/src/main.js",
     "start:dev": "nest start --watch",
