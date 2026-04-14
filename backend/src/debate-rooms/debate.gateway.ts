@@ -938,7 +938,7 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const countdownKey = `prep:${roomId}`;
     let remaining = Math.ceil(duration / 1000);
 
-    const interval = setInterval(() => {
+    const interval = global.setInterval(() => {
       remaining--;
       this.server.to(roomId).emit(DEBATE_EVENTS.PREP_COUNTDOWN, {
         secondsRemaining: remaining,
@@ -948,14 +948,14 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
         clearInterval(interval);
         this.countdownIntervals.delete(countdownKey);
       }
-    }, 1000);
+    }, 1000) as any;
 
     this.countdownIntervals.set(countdownKey, interval);
 
     // Main timer for prep end
-    const timer = setTimeout(() => {
+    const timer = global.setTimeout(() => {
       this.handlePrepEnd(roomId);
-    }, duration);
+    }, duration) as any;
 
     this.prepTimers.set(roomId, timer);
   }
@@ -1038,7 +1038,7 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const countdownKey = `turn:${roomId}`;
     let remaining = Math.ceil(duration / 1000);
 
-    const interval = setInterval(() => {
+    const interval = global.setInterval(() => {
       remaining--;
       this.server.to(roomId).emit(DEBATE_EVENTS.TURN_COUNTDOWN, {
         secondsRemaining: remaining,
@@ -1048,14 +1048,14 @@ export class DebateGateway implements OnGatewayConnection, OnGatewayDisconnect {
         clearInterval(interval);
         this.countdownIntervals.delete(countdownKey);
       }
-    }, 1000);
+    }, 1000) as any;
 
     this.countdownIntervals.set(countdownKey, interval);
 
     // Main timer for turn end
-    const timer = setTimeout(() => {
+    const timer = global.setTimeout(() => {
       this.handleTurnEnd(roomId);
-    }, duration);
+    }, duration) as any;
 
     this.turnTimers.set(roomId, timer);
   }
