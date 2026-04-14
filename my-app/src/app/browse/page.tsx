@@ -2,23 +2,20 @@ import type { Metadata } from "next";
 import { BrowseClient } from "./browse-client";
 
 export const metadata: Metadata = {
-  title: "Browse Peers & Study Rooms",
-  description: "Discover and connect with peers who share your interests. Find study rooms on topics like programming, design, languages, and more. Join the learning community today.",
+  title: "Community Feed",
+  description: "Explore Webyalaya's premium community feed with live study rooms, trending debates, cover-led posts, and personalized discovery.",
   keywords: [
-    "find tutors",
+    "community feed",
     "study rooms",
+    "debate rooms",
     "peer learning",
-    "online tutors",
-    "skill sharing",
-    "find study partner",
+    "live learning feed",
     "learning community",
-    "programming tutors",
-    "language exchange",
-    "design mentors",
+    "personalized study feed",
   ],
   openGraph: {
-    title: "Browse Peers & Study Rooms | Webyalaya",
-    description: "Discover and connect with peers who share your interests. Find study rooms and learning partners.",
+    title: "Community Feed | Webyalaya",
+    description: "Discover live study rooms, trending debates, and premium post-style updates across Webyalaya.",
     url: "/browse",
     type: "website",
     images: [
@@ -26,14 +23,14 @@ export const metadata: Metadata = {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Browse Peers and Study Rooms on Webyalaya",
+        alt: "Webyalaya Community Feed",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Browse Peers & Study Rooms | Webyalaya",
-    description: "Discover and connect with peers who share your interests.",
+    title: "Community Feed | Webyalaya",
+    description: "Discover live study rooms, trending debates, and premium post-style updates.",
     images: ["/og-image.png"],
   },
   alternates: {
@@ -45,8 +42,8 @@ export const metadata: Metadata = {
 const jsonLd = {
   "@context": "https://schema.org",
   "@type": "CollectionPage",
-  "name": "Browse Peers and Study Rooms",
-  "description": "Find tutors, mentors, and study rooms on Webyalaya",
+  "name": "Webyalaya Community Feed",
+  "description": "Discover live study rooms, debates, and personalized learning updates on Webyalaya",
   "url": "https://webyalaya.com/browse",
   "mainEntity": {
     "@type": "ItemList",
@@ -54,14 +51,14 @@ const jsonLd = {
       {
         "@type": "ListItem",
         "position": 1,
-        "name": "Find Peer Tutors",
-        "description": "Connect with knowledgeable peers who can help you learn new skills",
+        "name": "Live Study Rooms",
+        "description": "Discover cover-led posts for peer-led rooms and upcoming learning sessions",
       },
       {
         "@type": "ListItem",
         "position": 2,
-        "name": "Join Study Rooms",
-        "description": "Participate in collaborative study sessions on various topics",
+        "name": "Trending Debates",
+        "description": "Follow the most active debate rooms and community-led discussions",
       },
     ],
   },

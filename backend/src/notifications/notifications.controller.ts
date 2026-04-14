@@ -14,7 +14,7 @@ import { PushNotificationService } from './push-notification.service';
 import type { PushSubscriptionDto } from './push-notification.service';
 import { ClerkAuthGuard } from '../common/guards/clerk-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { NotifType } from '../generated/prisma/client';
+import { NotifType } from '../generated/prisma';
 import { MarkNotificationsReadDto } from './dto/notification.dto';
 
 @Controller('api/notifications')

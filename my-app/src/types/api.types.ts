@@ -629,6 +629,8 @@ export interface ActivityFeedItem {
   subheadline: string;
   title: string;
   description?: string | null;
+  coverImageUrl?: string | null;
+  topicTags?: string[];
   href: string;
   ctaLabel: string;
   reasons: ActivityFeedReason[];

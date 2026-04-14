@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { DateTime } from 'luxon';
-import { Prisma, UserRewardEvent } from '../generated/prisma/client';
+import { Prisma, UserRewardEvent } from '../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
 import { LoggerService } from '../common/logger';
 import { CacheService } from '../redis/cache.service';

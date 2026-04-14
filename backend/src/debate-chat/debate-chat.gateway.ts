@@ -10,7 +10,7 @@ import {
 import { Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { DebateChatService } from './debate-chat.service';
-import { DebateSide } from '../generated/prisma/client';
+import { DebateSide } from '../generated/prisma';
 import { corsOriginDelegate } from '../common/cors';
 
 @WebSocketGateway({

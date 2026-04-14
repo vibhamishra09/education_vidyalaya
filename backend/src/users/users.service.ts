@@ -6,7 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { createClerkClient } from '@clerk/backend';
-import { Prisma, SessionStatus, NotifType } from '../generated/prisma/client';
+import { Prisma, SessionStatus, NotifType } from '../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
 
 /** Generated Prisma `User` / `UserFindUniqueArgs` are unreliable here; infer delegate args instead. */

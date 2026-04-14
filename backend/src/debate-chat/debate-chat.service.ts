@@ -4,7 +4,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { DebateSide, MessageVisibility } from '../generated/prisma/client';
+import { DebateSide, MessageVisibility } from '../generated/prisma';
 
 @Injectable()
 export class DebateChatService {
