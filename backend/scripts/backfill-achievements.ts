@@ -50,7 +50,7 @@ async function mintAchievementIfEligible(params: {
   });
 
   console.log(
-    `    Minted: ${params.title} NFT (+${achievement.coinReward} points)`,
+    `    Minted: ${params.title} NFT (+${achievement.pointReward} points)`,
   );
 
   return true;
