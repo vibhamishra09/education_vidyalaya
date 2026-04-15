@@ -20,7 +20,7 @@ export class SpamService {
 
     try {
       const startTime = Date.now()
-      const azureUrl = 'http://127.0.0.1:8000/check';
+      const azureUrl = `${process.env.OLLAMA_PROXY_URL}/api/validate/check`;
 
       const currentPenalty = await this.cacheService.get<number>(penaltyKey) || 0;
 
@@ -31,12 +31,12 @@ export class SpamService {
       const response = await lastValueFrom(request$);
       const data = response.data;
 
-      if (!data.valid) {
-        const newPenalty = Math.min(currentPenalty + 5, 15);
-        await this.cacheService.set(penaltyKey, newPenalty, 300);
-        console.log(`Abuse detected from ${ip}. Applying ${newPenalty}s delay.`);
-        await new Promise((resolve) => setTimeout(resolve, newPenalty * 1000));
-      }
+      // if (!data.valid) {
+      //   const newPenalty = Math.min(currentPenalty + 5, 15);
+      //   await this.cacheService.set(penaltyKey, newPenalty, 300);
+      //   console.log(`Abuse detected from ${ip}. Applying ${newPenalty}s delay.`);
+      //   await new Promise((resolve) => setTimeout(resolve, newPenalty * 1000));
+      // }
 
       data.time = Date.now() - startTime
       return data;
