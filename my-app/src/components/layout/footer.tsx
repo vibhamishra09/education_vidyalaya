@@ -96,39 +96,21 @@ export function Footer() {
             <div className="pointer-events-none absolute -left-10 top-0 h-28 w-28 rounded-full bg-primary/10 blur-3xl" />
             <div className="pointer-events-none absolute -right-8 bottom-0 h-32 w-32 rounded-full bg-secondary/10 blur-3xl" />
 
-            <div className="relative grid gap-5 lg:grid-cols-[minmax(0,260px)_1fr] lg:items-center">
-              <div className="max-w-sm">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/80">
-                  Incubated At & Recognized By
-                </p>
-                <h3 className="mt-2 text-lg font-semibold tracking-tight text-foreground sm:text-xl">
-                  Trusted by India&apos;s startup ecosystem
-                </h3>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                  The original partner icons stay visible, now anchored in a
-                  more intentional composition instead of a flat footer strip.
-                </p>
-              </div>
+            <div className="relative">
+              <p className="mb-4 text-center text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/80 sm:text-left">
+                Incubated At & Recognized By
+              </p>
 
-              <div className="relative">
-                <div className="absolute -top-3 left-4 z-10 inline-flex rounded-full border border-primary/15 bg-white/90 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-primary shadow-[0_12px_28px_-24px_rgba(0,78,50,0.55)] backdrop-blur-sm sm:left-6">
-                  Incubated At
-                </div>
-                <div className="absolute -bottom-3 right-4 z-10 inline-flex rounded-full border border-secondary/15 bg-white/90 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-secondary shadow-[0_12px_28px_-24px_rgba(0,86,130,0.55)] backdrop-blur-sm sm:right-6">
-                  Recognized By
-                </div>
-
-                <div className="rounded-[24px] border border-white/80 bg-white/85 p-4 shadow-[0_24px_55px_-36px_rgba(15,23,42,0.55)] backdrop-blur-sm sm:p-5">
-                  <div className="rounded-[20px] border border-black/5 bg-[linear-gradient(180deg,rgba(255,255,255,0.94),rgba(243,244,246,0.86))] p-3 sm:p-4">
-                    <Image
-                      src="/incubated-recognized-strip.png"
-                      alt="Incubated at and recognized by JIIT, UIML EIC, STPI, Shiv Nadar Atal Incubation Centre, DPIIT Startup India, and MeitY Startup Hub"
-                      width={1360}
-                      height={114}
-                      className="h-auto w-full object-contain"
-                      sizes="(max-width: 768px) 100vw, 900px"
-                    />
-                  </div>
+              <div className="mx-auto max-w-5xl rounded-[24px] border border-white/80 bg-white/85 p-4 shadow-[0_24px_55px_-36px_rgba(15,23,42,0.55)] backdrop-blur-sm sm:p-5">
+                <div className="rounded-[20px] border border-black/5 bg-[linear-gradient(180deg,rgba(255,255,255,0.94),rgba(243,244,246,0.86))] p-3 sm:p-4">
+                  <Image
+                    src="/incubated-recognized-strip.png"
+                    alt="Incubated at and recognized by JIIT, UIML EIC, STPI, Shiv Nadar Atal Incubation Centre, DPIIT Startup India, and MeitY Startup Hub"
+                    width={1360}
+                    height={114}
+                    className="h-auto w-full object-contain"
+                    sizes="(max-width: 768px) 100vw, 900px"
+                  />
                 </div>
               </div>
             </div>
