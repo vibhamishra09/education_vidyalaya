@@ -13,6 +13,7 @@ import { CoinDropdown } from "./coin-dropdown";
 import { useCurrentUser } from "@/hooks/use-users";
 import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ChatNotificationBadge } from "@/components/chat/ChatNotificationBadge";
 
 export function Navigation() {
   const { isSignedIn, user } = useUser();
@@ -49,6 +50,7 @@ export function Navigation() {
         { href: "/how-it-works", label: "How it works" },
         { href: "/pricing", label: "Pricing" },
         { href: "/dashboard", label: "Dashboard" },
+        { href: "/chat", label: "Chat" },
         { href: "https://www.webyalaya.com/updates", label: "Webya Updates", external: true },
       ]
     : [
@@ -120,6 +122,7 @@ export function Navigation() {
                 <>
                   <CoinDropdown coins={userCoins} isLoading={isUserLoading} />
                   <div className="w-px h-6 bg-white/10 mx-1" />
+                  <ChatNotificationBadge />
                   <NotificationDropdown />
                   <UserDropdown user={user} signOut={signOut} />
                 </>

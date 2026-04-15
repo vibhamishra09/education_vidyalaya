@@ -17,9 +17,11 @@ export function BrowseClient() {
       <Navigation />
 
       <main className="flex-1">
-        <div className="container mx-auto max-w-7xl px-4 py-8 sm:px-6 md:py-12 lg:px-8">
-          <section className="relative mb-8 overflow-hidden rounded-[36px] border border-slate-200/80 bg-[linear-gradient(135deg,rgba(255,255,255,0.95),rgba(240,249,255,0.98))] p-6 shadow-[0_34px_100px_-52px_rgba(15,23,42,0.35)] sm:p-8 lg:p-10">
-            <div className="absolute inset-x-0 top-0 h-40 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.18),transparent_50%),radial-gradient(circle_at_top_right,rgba(14,165,233,0.16),transparent_55%)]" />
+        <div className="container mx-auto max-w-7xl px-4 py-8 sm:px-6 md:py-16 lg:px-8">
+          <section className="relative mb-12 overflow-hidden rounded-[48px] border border-white/40 bg-white/30 p-8 shadow-[0_40px_100px_-40px_rgba(15,23,42,0.25)] backdrop-blur-2xl sm:p-10 lg:p-14 glass-premium transition-all duration-700">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(16,185,129,0.15),transparent_40%),radial-gradient(circle_at_70%_80%,rgba(14,165,233,0.12),transparent_45%)]" />
+            <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-emerald-400/10 blur-[80px]" />
+            <div className="absolute -bottom-24 -left-24 h-64 w-64 rounded-full bg-sky-400/10 blur-[80px]" />
 
             <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
               <div className="max-w-3xl space-y-4">
@@ -33,43 +35,46 @@ export function BrowseClient() {
                       Back to Dashboard
                     </Link>
                   ) : null}
-                  <Badge className="rounded-full border border-emerald-200 bg-white/90 px-3 py-1 text-[11px] font-semibold text-emerald-700">
-                    Feed replaces Browse
-                  </Badge>
+
                 </div>
 
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-slate-900">
-                    <Flame className="h-5 w-5 text-orange-500" />
-                    <p className="font-tagline text-xs uppercase tracking-[0.24em] text-slate-500">
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 text-slate-900">
+                    <div className="flex h-10 w-10 animate-float items-center justify-center rounded-2xl bg-orange-500/10 text-orange-600 shadow-inner">
+                      <Flame className="h-6 w-6" />
+                    </div>
+                    <p className="font-tagline text-xs font-bold uppercase tracking-[0.3em] text-slate-500">
                       Premium dashboard stream
                     </p>
                   </div>
-                  <h1 className="font-tagline text-4xl font-bold tracking-tight text-slate-950 sm:text-5xl">
-                    Community Feed
+                  <h1 className="font-tagline text-5xl font-extrabold tracking-tight text-slate-950 sm:text-6xl lg:text-7xl">
+                    Community <span className="text-gradient">Feed</span>
                   </h1>
-                  <p className="max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
+                  <p className="max-w-xl text-base leading-relaxed text-slate-600/90 sm:text-lg">
                     A richer, post-style stream for study rooms and debates, with cover
                     visuals, live context, host credibility, and infinite scrolling built in.
                   </p>
                 </div>
 
-                <div className="flex flex-wrap gap-2 text-xs text-slate-500">
-                  <span className="rounded-full bg-white/90 px-3 py-1 shadow-sm">Cover-led cards</span>
-                  <span className="rounded-full bg-white/90 px-3 py-1 shadow-sm">Live room discovery</span>
-                  <span className="rounded-full bg-white/90 px-3 py-1 shadow-sm">Creator signals</span>
-                  <span className="rounded-full bg-white/90 px-3 py-1 shadow-sm">Infinite feed</span>
+                <div className="flex flex-wrap gap-3 text-[11px] font-semibold text-slate-500">
+                  <span className="rounded-full bg-white/60 px-4 py-1.5 shadow-sm ring-1 ring-slate-200/50 backdrop-blur transition hover:bg-white hover:ring-emerald-200">Cover-led cards</span>
+                  <span className="rounded-full bg-white/60 px-4 py-1.5 shadow-sm ring-1 ring-slate-200/50 backdrop-blur transition hover:bg-white hover:ring-emerald-200">Live room discovery</span>
+                  <span className="rounded-full bg-white/60 px-4 py-1.5 shadow-sm ring-1 ring-slate-200/50 backdrop-blur transition hover:bg-white hover:ring-emerald-200">Creator signals</span>
+                  <span className="rounded-full bg-white/60 px-4 py-1.5 shadow-sm ring-1 ring-slate-200/50 backdrop-blur transition hover:bg-white hover:ring-emerald-200">Infinite feed</span>
                 </div>
               </div>
 
               {!isSignedIn ? (
-                <div className="flex flex-col gap-3 lg:items-end">
-                  <p className="flex items-center gap-2 text-sm text-slate-600">
+                <div className="flex flex-col gap-4 lg:items-end">
+                  <div className="flex items-center gap-2 rounded-2xl bg-emerald-50/50 px-4 py-2 text-sm text-emerald-800 ring-1 ring-emerald-100">
                     <Sparkles className="h-4 w-4 text-emerald-600" />
                     Sign in to unlock your personalized stream.
-                  </p>
+                  </div>
                   <SignInButton mode="modal">
-                    <Button className="h-11 rounded-full px-5">Open your feed</Button>
+                    <Button className="group h-14 rounded-full bg-slate-950 px-8 text-base shadow-[0_20px_40px_-15px_rgba(0,0,0,0.3)] transition-all hover:bg-slate-800 hover:shadow-[0_25px_50px_-20px_rgba(0,0,0,0.4)] hover:-translate-y-1 active:translate-y-0">
+                      Open your feed
+                      <ArrowLeft className="ml-2 h-4 w-4 rotate-180 transition-transform group-hover:translate-x-1" />
+                    </Button>
                   </SignInButton>
                 </div>
               ) : null}
