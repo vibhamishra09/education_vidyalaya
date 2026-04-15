@@ -8,6 +8,7 @@ import { Toaster } from "sonner";
 import { QueryProvider } from "@/providers/query-provider";
 import { ToastProvider } from "@/contexts/toast-context";
 import { NotificationProvider } from "@/contexts/notification-context";
+import { ChatProvider } from "@/contexts/chat-context";
 import { AchievementNotificationProvider } from "@/contexts/achievement-notification-context";
 import { BottomNav } from "@/components/layout/bottom-nav";
 import { FloatingActionButtons } from "@/components/ui/floating-action-buttons";
@@ -261,6 +262,7 @@ export default function RootLayout({
           <QueryProvider>
             <AuthTokenSync />
             <NotificationProvider>
+              <ChatProvider>
               <ToastProvider>
                 <AchievementNotificationProvider>
                   <RemoteControlSync />
@@ -278,6 +280,7 @@ export default function RootLayout({
                   <Toaster position="top-center" richColors closeButton duration={4000} />
                 </AchievementNotificationProvider>
               </ToastProvider>
+              </ChatProvider>
             </NotificationProvider>
           </QueryProvider>
           

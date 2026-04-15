@@ -11,8 +11,9 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { DashboardQueryDto } from './dto/dashboard-query.dto';
 import { UsersService } from '../users/users.service';
 
+import { OptionalClerkAuthGuard } from '../common/guards/optional-clerk-auth.guard';
+
 @Controller('api/dashboard')
-@UseGuards(ClerkAuthGuard)
 export class DashboardController {
   constructor(
     private dashboardService: DashboardService,
@@ -36,6 +37,7 @@ export class DashboardController {
   }
 
   @Get()
+  @UseGuards(ClerkAuthGuard)
   async getDashboardData(
     @CurrentUser('dbUserId') dbUserId: string | undefined,
     @CurrentUser('clerkId') clerkUserId: string,
@@ -58,6 +60,7 @@ export class DashboardController {
   }
 
   @Get('session-activity')
+  @UseGuards(ClerkAuthGuard)
   async getSessionActivity(
     @CurrentUser('dbUserId') dbUserId: string | undefined,
     @CurrentUser('clerkId') clerkUserId: string,
@@ -70,6 +73,7 @@ export class DashboardController {
   }
 
   @Get('wallet-activity')
+  @UseGuards(ClerkAuthGuard)
   async getWalletActivity(
     @CurrentUser('dbUserId') dbUserId: string | undefined,
     @CurrentUser('clerkId') clerkUserId: string,
@@ -82,16 +86,22 @@ export class DashboardController {
   }
 
   @Get('feed')
+  @UseGuards(OptionalClerkAuthGuard)
   async getActivityFeed(
     @CurrentUser('dbUserId') dbUserId: string | undefined,
-    @CurrentUser('clerkId') clerkUserId: string,
+    @CurrentUser('clerkId') clerkUserId: string | undefined,
     @Query('mode') mode?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ): Promise<ActivityFeedResponse> {
-    const userId = await this.resolveDbUserId(dbUserId, clerkUserId);
+    let userId: string | undefined;
+    if (clerkUserId) {
+      userId = await this.resolveDbUserId(dbUserId, clerkUserId);
+    }
+    
+    // Default to 'for_you' if user is not logged in and tried to access 'following'
     const normalizedMode: ActivityFeedMode =
-      mode === 'following' ? 'following' : 'for_you';
+      (mode === 'following' && userId) ? 'following' : 'for_you';
 
     return this.dashboardService.getActivityFeed(
       userId,

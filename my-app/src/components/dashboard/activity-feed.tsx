@@ -406,7 +406,7 @@ export function ActivityFeed({
   useEffect(() => {
     const node = loadMoreRef.current;
     const root = scrollContainerRef.current;
-    if (!node || !root || !hasNextPage || !isSignedIn) {
+    if (!node || !root || !hasNextPage) {
       return;
     }
 
@@ -424,7 +424,7 @@ export function ActivityFeed({
 
     observer.observe(node);
     return () => observer.disconnect();
-  }, [fetchNextPage, hasNextPage, isFetchingNextPage, isSignedIn]);
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
   const isPage = variant === "page";
   const feedViewportClassName = isPage
@@ -498,9 +498,9 @@ export function ActivityFeed({
               </>
             ) : null}
 
-            {isLoaded && !isSignedIn ? <SignedOutFeedState variant={variant} /> : null}
+            {isLoaded && !isSignedIn && mode === "following" ? <SignedOutFeedState variant={variant} /> : null}
 
-            {isLoaded && isSignedIn && !isLoading && items.length === 0 ? (
+            {isLoaded && (!isSignedIn ? mode === "for_you" : true) && !isLoading && items.length === 0 ? (
               <div className="rounded-[28px] border border-dashed border-slate-300 bg-slate-50/70 p-10 text-center">
                 <p className="text-base font-semibold text-slate-900">
                   {mode === "following"
@@ -514,11 +514,11 @@ export function ActivityFeed({
               </div>
             ) : null}
 
-            {isLoaded && isSignedIn && !isLoading
+            {isLoaded && (!isSignedIn ? mode === "for_you" : true) && !isLoading
               ? items.map((item) => <FeedPostCard key={item.id} item={item} />)
               : null}
 
-            {isLoaded && isSignedIn ? <div ref={loadMoreRef} className="h-4" /> : null}
+            {isLoaded && (!isSignedIn ? mode === "for_you" : true) ? <div ref={loadMoreRef} className="h-4" /> : null}
 
             {isFetchingNextPage ? (
               <div className="space-y-6 pb-2">

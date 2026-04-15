@@ -979,4 +979,38 @@ export class UsersService {
       followingCount,
     };
   }
+
+  /**
+   * Search users by name for the chat "New Conversation" modal.
+   * Returns lightweight user objects (id, name, avatar, bio).
+   */
+  async searchUsers(query: string, limit: number, currentUserIdOrClerkId: string) {
+    const currentUser = await this.findUserByIdOrClerkId(currentUserIdOrClerkId, {
+      select: { id: true },
+    });
+
+    const where: Prisma.UserWhereInput = {
+      onboarded: true,
+      ...(currentUser ? { id: { not: currentUser.id } } : {}),
+      ...(query.trim()
+        ? {
+            name: { contains: query.trim(), mode: 'insensitive' as const },
+          }
+        : {}),
+    };
+
+    const users = await this.prisma.user.findMany({
+      where,
+      select: {
+        id: true,
+        name: true,
+        avatar: true,
+        bio: true,
+      },
+      take: Math.min(limit, 50),
+      orderBy: { name: 'asc' },
+    });
+
+    return users;
+  }
 }

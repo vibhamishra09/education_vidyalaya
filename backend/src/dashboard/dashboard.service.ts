@@ -647,13 +647,13 @@ export class DashboardService {
   }
 
   async getActivityFeed(
-    userId: string,
+    userId: string | undefined,
     mode: ActivityFeedMode = 'for_you',
     page: number = 1,
     limit: number = 10,
   ): Promise<ActivityFeedResponse> {
     const cacheKey = this.cacheService.createKey('dashboard:feed', {
-      userId,
+      userId: userId || 'anonymous',
       mode,
       page,
       limit,
@@ -668,37 +668,41 @@ export class DashboardService {
         const debatePastCutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
         const futureCutoff = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
 
-        const viewer = await this.prisma.user.findUnique({
-          where: { id: userId },
-          select: {
-            id: true,
-            userSkills: {
-              include: {
-                skill: {
-                  select: { name: true },
+        const interestNames: string[] = [];
+        const followingIds = new Set<string>();
+
+        if (userId) {
+          const viewer = await this.prisma.user.findUnique({
+            where: { id: userId },
+            select: {
+              id: true,
+              userSkills: {
+                include: {
+                  skill: {
+                    select: { name: true },
+                  },
                 },
               },
+              following: {
+                select: { followingId: true },
+              },
             },
-            following: {
-              select: { followingId: true },
-            },
-          },
-        });
+          });
 
-        if (!viewer) {
-          throw new NotFoundException('User not found');
+          if (!viewer) {
+            throw new NotFoundException('User not found');
+          }
+
+          Array.from(
+            new Set(
+              viewer.userSkills
+                .map((userSkill) => userSkill.skill.name.trim().toLowerCase())
+                .filter(Boolean),
+            ),
+          ).forEach(name => interestNames.push(name));
+          
+          viewer.following.forEach((follow) => followingIds.add(follow.followingId));
         }
-
-        const interestNames = Array.from(
-          new Set(
-            viewer.userSkills
-              .map((userSkill) => userSkill.skill.name.trim().toLowerCase())
-              .filter(Boolean),
-          ),
-        );
-        const followingIds = new Set(
-          viewer.following.map((follow) => follow.followingId),
-        );
 
         const [studyRooms, debateRooms] = await Promise.all([
           this.prisma.studyRoom.findMany({

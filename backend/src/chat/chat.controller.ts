@@ -47,6 +47,43 @@ export class ChatController {
   }
 
   @UseGuards(ClerkAuthGuard)
+  @Get('channels/with-messages')
+  async listChannelsWithMessages(
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
+  ) {
+    let resolvedId = dbUserId;
+    if (!resolvedId) {
+      const user = await this.chatService.getUserByClerkId(clerkUserId);
+      if (!user) throw new Error('User not found');
+      resolvedId = user.id;
+    }
+    return this.chatService.listChannelsWithLastMessage(resolvedId);
+  }
+
+  @UseGuards(ClerkAuthGuard)
+  @Get('channels/:id')
+  async getChannel(@Param('id') channelId: string) {
+    return this.chatService.getChannel(channelId);
+  }
+
+  @UseGuards(ClerkAuthGuard)
+  @Post('dm')
+  async getOrCreateDM(
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
+    @Body() body: { targetUserId: string },
+  ) {
+    let resolvedId = dbUserId;
+    if (!resolvedId) {
+      const user = await this.chatService.getUserByClerkId(clerkUserId);
+      if (!user) throw new Error('User not found');
+      resolvedId = user.id;
+    }
+    return this.chatService.getOrCreateDirectChannel(resolvedId, body.targetUserId);
+  }
+
+  @UseGuards(ClerkAuthGuard)
   @Post('channels/:id/members')
   async addMember(
     @Param('id') channelId: string,

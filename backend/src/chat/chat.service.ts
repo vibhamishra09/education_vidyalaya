@@ -143,6 +143,129 @@ export class ChatService {
     }
   }
 
+  /**
+   * Get a single channel with its members and user details.
+   */
+  async getChannel(channelId: string) {
+    return this.prisma.channel.findUnique({
+      where: { id: channelId },
+      include: {
+        members: {
+          include: {
+            user: {
+              select: { id: true, name: true, avatar: true },
+            },
+          },
+        },
+      },
+    });
+  }
+
+  /**
+   * Get or create a direct channel between two users (not tied to a peer session).
+   */
+  async getOrCreateDirectChannel(userIdA: string, userIdB: string) {
+    // Look for an existing direct channel between these two users
+    const existing = await this.prisma.channel.findFirst({
+      where: {
+        isDirect: true,
+        externalType: 'dm',
+        members: {
+          every: {
+            userId: { in: [userIdA, userIdB] },
+          },
+        },
+        AND: [
+          { members: { some: { userId: userIdA } } },
+          { members: { some: { userId: userIdB } } },
+        ],
+      },
+      include: {
+        members: {
+          include: {
+            user: {
+              select: { id: true, name: true, avatar: true },
+            },
+          },
+        },
+      },
+    });
+    if (existing) return existing;
+
+    // Create a new direct channel
+    const channel = await this.prisma.channel.create({
+      data: {
+        name: `dm:${userIdA}:${userIdB}`,
+        isDirect: true,
+        externalType: 'dm',
+        externalId: [userIdA, userIdB].sort().join(':'),
+        members: {
+          create: [{ userId: userIdA }, { userId: userIdB }],
+        },
+      },
+      include: {
+        members: {
+          include: {
+            user: {
+              select: { id: true, name: true, avatar: true },
+            },
+          },
+        },
+      },
+    });
+    return channel;
+  }
+
+  /**
+   * List channels for a user with the last message preview (for conversation list).
+   */
+  async listChannelsWithLastMessage(userId: string) {
+    try {
+      const channels = await this.prisma.channel.findMany({
+        where: {
+          members: { some: { userId } },
+          isDirect: true,
+          externalType: 'dm',
+        },
+        include: {
+          members: {
+            include: {
+              user: {
+                select: { id: true, name: true, avatar: true },
+              },
+            },
+          },
+          messages: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            include: {
+              sender: {
+                select: { id: true, name: true, avatar: true },
+              },
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      // Sort by last message time (channels with recent messages first)
+      return channels.sort((a, b) => {
+        const aTime = a.messages[0]?.createdAt?.getTime() ?? a.createdAt.getTime();
+        const bTime = b.messages[0]?.createdAt?.getTime() ?? b.createdAt.getTime();
+        return bTime - aTime;
+      });
+    } catch (error) {
+      if (isConnectionError(error)) {
+        this.logger.error(
+          `Database connection error in listChannelsWithLastMessage for user ${userId}:`,
+          error instanceof Error ? error.message : String(error),
+        );
+        return [];
+      }
+      throw error;
+    }
+  }
+
   async addMember(channelId: string, userId: string) {
     const existingMember = await this.prisma.channelMember.findFirst({
       where: { channelId, userId },
