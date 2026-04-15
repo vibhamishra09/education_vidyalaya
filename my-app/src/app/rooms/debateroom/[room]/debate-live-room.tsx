@@ -86,6 +86,8 @@ import { useParticipantEvaluations, useUpsertModeratorEvaluation } from '@/hooks
 import { useRemoteControl } from '@/hooks/use-remote-control';
 import { RemoteControlOverlay } from '@/components/livekit/RemoteControlOverlay';
 import { useBluetoothMicRecovery } from '@/hooks/use-bluetooth-mic-recovery';
+import { BypassModal } from '@/components/spamguard/dialog';
+import { SpamShield } from '@/components/spamguard/spamguard';
 
 interface ChatMessage {
   id: string;
@@ -394,6 +396,10 @@ function DebateLiveContent({
   const [isLoadingMessages, setIsLoadingMessages] = useState(true);
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<Socket | null>(null);
+  const [spamRegistry, setSpamRegistry] = useState<Record<string, { isSafe: boolean, isVerifying: boolean }>>({});
+  const isAnythingSpam = Object.values(spamRegistry).some(s => !s.isSafe);
+  const isAnythingVerifying = Object.values(spamRegistry).some(s => s.isVerifying);
+  const [showBypassDialog, setShowBypassDialog] = useState(false);
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -411,6 +417,25 @@ function DebateLiveContent({
     denyControl,
     revokeControl
   } = useRemoteControl()
+
+  const preSubmit = () => {
+      if(isAnythingSpam){
+      setShowBypassDialog(true)
+      return
+      }
+      sendChatMessage()
+    }
+  
+  const handleSpamChange = useCallback((field: string, status: { isSafe: boolean; isVerifying: boolean }) => {
+    setSpamRegistry((prev) => {
+      const current = prev[field];
+      if (current && current.isSafe === status.isSafe && current.isVerifying === status.isVerifying) {
+      return prev; 
+      }
+      
+      return { ...prev, [field]: status };
+    });
+    }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -659,6 +684,7 @@ function DebateLiveContent({
 
   // Send chat message via API
   const sendChatMessage = useCallback(async () => {
+    setShowBypassDialog(false)
     if (!chatInput.trim()) return;
 
     try {
@@ -704,6 +730,7 @@ function DebateLiveContent({
         }
         
         setChatInput('');
+        setSpamRegistry({})
         setIsModeratorOnly(false); // Reset moderator-only flag
       } else {
         console.error('[DebateRoom] Failed to send message:', response.status, response.statusText);
@@ -1804,7 +1831,7 @@ function DebateLiveContent({
                   </ScrollArea>
                   
                   {/* Chat Input */}
-                  <div className="border-t border-white/10 p-2 sm:p-3 flex-shrink-0">
+                  <div className="border-t border-white/10 p-2 sm:p-3 flex-shrink-0 mb-4">
                     {/* Moderator-only toggle */}
                     {(userRole === 'host' || userRole === 'moderator') && (
                       <div className="mb-1.5 sm:mb-2 flex items-center gap-1.5 sm:gap-2">
@@ -1822,28 +1849,30 @@ function DebateLiveContent({
                     )}
                     
                     <div className="flex items-center gap-1.5 sm:gap-2">
-                      <Input
-                        value={chatInput}
-                        onChange={(e) => setChatInput(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault();
-                            sendChatMessage();
-                          }
-                        }}
-                        placeholder="Type a message..."
-                        className="flex-1 bg-white/5 border-white/10 text-white placeholder:text-white/40 focus:border-green-500/50 focus:ring-green-500/20 text-sm sm:text-base h-8 sm:h-9"
-                      />
+                      <SpamShield context='chat' onStatusChange={s => handleSpamChange("chat", s)}>
+                        <Input
+                          value={chatInput}
+                          onChange={(e) => setChatInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                              e.preventDefault();
+                              preSubmit();
+                            }
+                          }}
+                          placeholder="Type a message..."
+                          className="flex-1 bg-white/5 border-white/10 text-white placeholder:text-white/40 focus:border-green-500/50 focus:ring-green-500/20 text-sm sm:text-base h-8 sm:h-9"
+                        />
+                      </SpamShield>
                       <Button
-                        onClick={sendChatMessage}
-                        disabled={!chatInput.trim()}
+                        onClick={preSubmit}
+                        disabled={!chatInput.trim() || isAnythingVerifying}
                         size="sm"
                         className="bg-green-600 hover:bg-green-700 text-white h-8 w-8 sm:h-9 sm:w-auto sm:px-3 p-0 sm:p-2"
                       >
                         <Send className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                       </Button>
                     </div>
-                    <p className="text-[10px] sm:text-xs text-white/40 mt-1.5 sm:mt-2">
+                    <p className="text-[10px] sm:text-xs text-white/40 mt-1.5 sm:mt-2 pt-4">
                       {(userRole === 'host' || userRole === 'moderator')
                         ? isModeratorOnly
                           ? "Sending private message to moderators only" 
@@ -2070,6 +2099,7 @@ function DebateLiveContent({
           <span className="hidden sm:inline">Leave</span>
         </Button>
       </div>
+     <BypassModal isOpen={showBypassDialog} onClose={() => setShowBypassDialog(false)} onConfirm={() => sendChatMessage()}/>    
     </div>
   );
 }

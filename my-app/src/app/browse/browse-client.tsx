@@ -10,6 +10,7 @@ import { StudyRoomCard as StudyRoomCardComponent } from "@/components/cards/stud
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useCallback } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
@@ -47,6 +48,8 @@ import { useTabPersistence, useLocalStorage } from "@/hooks/use-local-storage";
 import { cn } from "@/lib/utils";
 import { studyRoomCardDisplayLive } from "@/lib/utils/study-room-edit";
 import { getStudyRoomPagePathWithJoinIntent } from "@/lib/utils/study-room-share";
+import { BypassModal } from "@/components/spamguard/dialog";
+import { SpamShield } from "@/components/spamguard/spamguard";
 
 const BROWSE_TABS = ["peers", "studyRooms", "debateRooms"] as const;
 type BrowseTab = typeof BROWSE_TABS[number];
@@ -146,6 +149,10 @@ function BrowsePageContent() {
   const [isCreateDebateOpen, setIsCreateDebateOpen] = useState(false);
   const [newDebateTopic, setNewDebateTopic] = useState("");
   const [newDebateDescription, setNewDebateDescription] = useState("");
+  const [showBypassDialog, setShowBypassDialog] = useState(false);
+  const [spamRegistry, setSpamRegistry] = useState<Record<string, { isSafe: boolean, isVerifying: boolean }>>({});
+  const isAnythingSpam = Object.values(spamRegistry).some(s => !s.isSafe);
+  const isAnythingVerifying = Object.values(spamRegistry).some(s => s.isVerifying);
 
   // Get current user for recommendations
   const { data: currentUserData } = useCurrentUser();
@@ -296,8 +303,31 @@ function BrowsePageContent() {
     return visible;
   }, [debateData?.debateRooms, debateStatusFilter]);
 
+
+  const preSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if(isAnythingSpam){
+      setShowBypassDialog(true)
+      return
+    }
+
+		handleCreateDebate()
+  }
+
+   const handleSpamChange = useCallback((field: string, status: { isSafe: boolean; isVerifying: boolean }) => {
+      setSpamRegistry((prev) => {
+          const current = prev[field];
+          if (current && current.isSafe === status.isSafe && current.isVerifying === status.isVerifying) {
+            return prev; 
+          }
+          
+          return { ...prev, [field]: status };
+        });
+      }, []);
+
   const handleCreateDebate = async () => {
     const topic = newDebateTopic.trim();
+    setShowBypassDialog(false)
     if (!topic) {
       showError("Validation Error", "Debate topic is required.");
       return;
@@ -622,24 +652,28 @@ function BrowsePageContent() {
                       </DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-3 py-2">
-                      <div className="space-y-2">
+                      <div className="space-y-2 mb-4">
                         <Label htmlFor="browse-debate-topic">Topic *</Label>
-                        <Input
-                          id="browse-debate-topic"
-                          value={newDebateTopic}
-                          onChange={(e) => setNewDebateTopic(e.target.value)}
-                          placeholder="e.g., Is AI good for education?"
-                        />
+                        <SpamShield context="debate topic" onStatusChange={(s) => handleSpamChange("debate", s)}>
+                          <Input
+                            id="browse-debate-topic"
+                            value={newDebateTopic}
+                            onChange={(e) => setNewDebateTopic(e.target.value)}
+                            placeholder="e.g., Is AI good for education?"
+                          />
+                        </SpamShield>
                       </div>
-                      <div className="space-y-2">
+                      <div className="space-y-2 mb-4">
                         <Label htmlFor="browse-debate-desc">Description</Label>
-                        <Textarea
-                          id="browse-debate-desc"
-                          value={newDebateDescription}
-                          onChange={(e) => setNewDebateDescription(e.target.value)}
-                          placeholder="Optional context..."
-                          rows={3}
-                        />
+                        <SpamShield context="debate description" onStatusChange={(s) => handleSpamChange("description", s)}>
+                          <Textarea
+                            id="browse-debate-desc"
+                            value={newDebateDescription}
+                            onChange={(e) => setNewDebateDescription(e.target.value)}
+                            placeholder="Optional context..."
+                            rows={3}
+                          />
+                        </SpamShield>
                       </div>
                     </div>
                     <DialogFooter>
@@ -650,8 +684,8 @@ function BrowsePageContent() {
                         Cancel
                       </Button>
                       <Button
-                        onClick={handleCreateDebate}
-                        disabled={createDebateRoom.isPending}
+                        onClick={preSubmit}
+                        disabled={createDebateRoom.isPending || isAnythingVerifying}
                         className="bg-green-600 hover:bg-green-700 text-white"
                       >
                         {createDebateRoom.isPending ? (
@@ -668,8 +702,11 @@ function BrowsePageContent() {
                 </Dialog>
               </>
             )}
-          </div>
 
+
+           <BypassModal isOpen={showBypassDialog} onClose={() => setShowBypassDialog(false)} onConfirm={() => handleCreateDebate()}/>
+          </div>
+            
           {activeTab !== "debateRooms" && (
           <div className="flex flex-wrap gap-2 mb-4">
             {skillsLoading ? (

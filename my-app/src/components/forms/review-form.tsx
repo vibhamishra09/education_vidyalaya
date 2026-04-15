@@ -10,6 +10,9 @@ import { Star, Loader2 } from "lucide-react";
 import { useCreateReview } from "@/hooks/use-reviews";
 import { CreateReviewDto } from "@/types/api.types";
 import { toast } from "sonner";
+import { SpamShield } from '../spamguard/spamguard'
+import { useCallback } from 'react'
+import { BypassModal } from "@/components/spamguard/dialog";
 
 interface ReviewFormProps {
   sessionId: string;
@@ -36,9 +39,34 @@ export function ReviewForm({
   const [rating, setRating] = useState(0);
   const [hoveredRating, setHoveredRating] = useState(0);
   const [review, setReview] = useState("");
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  const [showBypassDialog, setShowBypassDialog] = useState(false);
+  const [spamRegistry, setSpamRegistry] = useState<Record<string, { isSafe: boolean, isVerifying: boolean }>>({});
+  const isAnythingSpam = Object.values(spamRegistry).some(s => !s.isSafe);
+  const isAnythingVerifying = Object.values(spamRegistry).some(s => s.isVerifying);
+    
+  const preSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+      if(isAnythingSpam){
+        setShowBypassDialog(true)
+        return
+      }
+
+    handleSubmit()
+  }
+
+   const handleSpamChange = useCallback((field: string, status: { isSafe: boolean; isVerifying: boolean }) => {
+      setSpamRegistry((prev) => {
+        const current = prev[field];
+        if (current && current.isSafe === status.isSafe && current.isVerifying === status.isVerifying) {
+        return prev; 
+        }
+        
+        return { ...prev, [field]: status };
+    });
+    }, []);
+
+  const handleSubmit = async () => {
+    setShowBypassDialog(false)
     
     if (rating === 0) {
       toast.error("Please provide a rating");
@@ -96,6 +124,7 @@ export function ReviewForm({
       // Fallback error message
       toast.error("Failed to submit review. Please try again.");
     }
+    setSpamRegistry({})
   };
 
   const handleCancel = () => {
@@ -112,7 +141,7 @@ export function ReviewForm({
         <CardTitle>Rate Your Experience</CardTitle>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={preSubmit} className="space-y-6">
           {/* Session Info */}
           <div className="bg-muted p-4 rounded-lg">
             <h3 className="font-semibold mb-1">{sessionTitle}</h3>
@@ -159,14 +188,16 @@ export function ReviewForm({
           {/* Review */}
           <div className="space-y-2">
             <Label htmlFor="review">Review (optional)</Label>
-            <Textarea
-              id="review"
-              placeholder="Share your experience, what you learned, and how the session helped you..."
-              value={review}
-              onChange={(e) => setReview(e.target.value)}
-              rows={6}
-              disabled={createReviewMutation.isPending}
-            />
+            <SpamShield context="session review" onStatusChange={(s) => handleSpamChange("review", s)}>
+              <Textarea
+                id="review"
+                placeholder="Share your experience, what you learned, and how the session helped you..."
+                value={review}
+                onChange={(e) => setReview(e.target.value)}
+                rows={6}
+                disabled={createReviewMutation.isPending}
+              />
+            </SpamShield>
           </div>
 
           {/* Tips */}
@@ -196,7 +227,7 @@ export function ReviewForm({
             <Button
               type="submit"
               className="flex-1"
-              disabled={rating === 0 || createReviewMutation.isPending}
+              disabled={rating === 0 || createReviewMutation.isPending || isAnythingVerifying}
             >
               {createReviewMutation.isPending ? (
                 <>
@@ -210,6 +241,8 @@ export function ReviewForm({
           </div>
         </form>
       </CardContent>
+
+      <BypassModal isOpen={showBypassDialog} onClose={() => setShowBypassDialog(false)} onConfirm={() => handleSubmit()}/>
     </Card>
   );
 }

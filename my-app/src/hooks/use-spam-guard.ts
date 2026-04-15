@@ -10,23 +10,8 @@ export const useSpamLogic = (context: string) => {
 
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  const checkSpam = useCallback(
-    debounce(async (text: string) => {
-      if (!text || text.trim().length < 3) {
-        setIsSafe(true);
-        setScore(0);
-        return;
-      }
-
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-
-      const controller = new AbortController();
-      abortControllerRef.current = controller;
-
-      setIsVerifying(true);
-
+  const debouncedCheck = useCallback(
+    debounce(async (text: string, controller: AbortController) => {
       try {
         const { data } = await axios.post(
           '/api/spam/check', 
@@ -40,16 +25,13 @@ export const useSpamLogic = (context: string) => {
 
         if (data.score > 0.6) {
           setTimeout(() => {
-             if (abortControllerRef.current === controller) {
-                setIsVerifying(false);
-             }
-          }, 3000);
+             if (!controller.signal.aborted) setIsVerifying(false);
+          }, 1500);
         } else {
           setIsVerifying(false);
         }
       } catch (e) {
         if (axios.isCancel(e)) {
-          console.log("Request cancelled: a newer one is flying.");
         } else {
           console.error("Spam check failed", e);
           setIsVerifying(false);
@@ -58,6 +40,30 @@ export const useSpamLogic = (context: string) => {
     }, 500),
     [context]
   );
+
+  const checkSpam = useCallback((text: string) => {
+    if (!text || text.trim().length < 3) {
+      debouncedCheck.cancel(); 
+      
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+
+      setIsVerifying(false);
+      setIsSafe(true);
+      setSuggestion('');
+      setScore(0);
+      return;
+    }
+
+    setIsVerifying(true);
+    
+    if (abortControllerRef.current) abortControllerRef.current.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    debouncedCheck(text, controller);
+  }, [debouncedCheck]);
 
   return { suggestion, isSafe, isVerifying, checkSpam, score };
 };

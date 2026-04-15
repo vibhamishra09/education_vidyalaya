@@ -5,7 +5,7 @@ import { Loader2 } from 'lucide-react';
 interface SpamShieldProps {
   children: React.ReactElement;
   context: string;
-  onStatusChange?: (status: { isSafe: boolean; isVerifying: boolean }) => void;
+  onStatusChange?: (status: { isSafe: boolean; isVerifying: boolean, suggestion: string }) => void;
 }
 
 interface ChildProps {
@@ -17,12 +17,13 @@ export const SpamShield: React.FC<SpamShieldProps> = ({ children, context, onSta
   const { suggestion, isSafe, isVerifying, checkSpam, score } = useSpamLogic(context);
 
   React.useEffect(() => {
-    onStatusChange?.({ isSafe, isVerifying });
-  }, [isSafe, isVerifying, onStatusChange]);
+    onStatusChange?.({ isSafe, isVerifying, suggestion });
+  }, [isSafe, isVerifying, suggestion, onStatusChange]);
 
   const child = children as React.ReactElement<ChildProps>;
   const protectedInput = React.cloneElement(children, {
     onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
+      
       checkSpam(e.target.value);
       const childProps = children.props as ChildProps;
       childProps.onChange?.(e);
@@ -55,11 +56,18 @@ export const SpamShield: React.FC<SpamShieldProps> = ({ children, context, onSta
           </div>
         )}
 
+
         {!isSafe && suggestion && !isVerifying && (
-          <div className="px-2 py-1.5 rounded border border-amber-500/10 bg-background/95 backdrop-blur-sm w-fit animate-in fade-in slide-in-from-top-1 duration-200 shadow-sm">
-            <p className="text-[10px] md:text-[11px] font-medium text-amber-600 leading-tight">
-              {suggestion}
-            </p>
+          <div className="relative mt-2 animate-in fade-in slide-in-from-top-1 duration-200">
+            <div className="absolute -top-1 left-4 w-2 h-2 rotate-45 border-t border-l border-amber-500/20 bg-amber-50" />
+            
+            <div className="px-3 py-2 rounded-lg border border-amber-500/20 bg-amber-50 backdrop-blur-sm w-fit shadow-sm">
+              <div className="flex items-center gap-1.5">
+                <p className="text-[10px] md:text-[11px] font-medium text-amber-700 leading-tight">
+                  {suggestion}
+                </p>
+              </div>
+            </div>
           </div>
         )}
       </div>

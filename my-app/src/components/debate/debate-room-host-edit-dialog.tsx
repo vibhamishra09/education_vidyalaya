@@ -31,6 +31,8 @@ import {
   TurnOrderType,
   type UpdateDebateRoomDto,
 } from "@/types/debate.types";
+import { BypassModal } from "../spamguard/dialog";
+import { SpamShield } from "../spamguard/spamguard";
 
 export type DebateRoomHostEditDialogProps = {
   roomId: string;
@@ -60,6 +62,8 @@ export function DebateRoomHostEditDialog({
   const [schedDate, setSchedDate] = useState("");
   const [schedTime, setSchedTime] = useState("");
   const [debateSessionMinutes, setDebateSessionMinutes] = useState(60);
+  const [spamStatus, setSpamStatus] = useState({ isSafe: true, isVerifying: false });
+  const [showBypassDialog, setShowBypassDialog] = useState(false);
 
   useEffect(() => {
     if (!open || !room) return;
@@ -89,7 +93,17 @@ export function DebateRoomHostEditDialog({
     }
   }, [open, room]);
 
+  const preSubmit = () => {
+		if(!spamStatus.isSafe){
+      setShowBypassDialog(true)
+      return
+		}
+
+		handleSave()
+  }
+
   const handleSave = async () => {
+    setShowBypassDialog(false)
     if (!room) return;
     if (!topic.trim()) {
       showError("Validation", "Topic is required");
@@ -158,22 +172,26 @@ export function DebateRoomHostEditDialog({
         <div className="grid gap-4 py-2">
           <div className="space-y-2">
             <Label htmlFor={fieldId("topic")}>Topic</Label>
-            <Input
-              id={fieldId("topic")}
-              value={topic}
-              onChange={(e) => setTopic(e.target.value)}
-              placeholder="Debate topic / motion"
-            />
+            <SpamShield context="debate topic" onStatusChange={setSpamStatus} >
+              <Input
+                id={fieldId("topic")}
+                value={topic}
+                onChange={(e) => setTopic(e.target.value)}
+                placeholder="Debate topic / motion"
+              />
+            </SpamShield>
           </div>
           <div className="space-y-2">
             <Label htmlFor={fieldId("desc")}>Description</Label>
-            <Textarea
-              id={fieldId("desc")}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={3}
-              placeholder="Optional context or rules"
-            />
+            <SpamShield context="debate description" onStatusChange={setSpamStatus} >
+              <Textarea
+                id={fieldId("desc")}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={3}
+                placeholder="Optional context or rules"
+              />
+            </SpamShield>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
@@ -314,7 +332,7 @@ export function DebateRoomHostEditDialog({
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button type="button" onClick={() => void handleSave()} disabled={updateDebateRoom.isPending}>
+          <Button type="button" onClick={() => void preSubmit()} disabled={updateDebateRoom.isPending || spamStatus.isVerifying}>
             {updateDebateRoom.isPending ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -326,6 +344,9 @@ export function DebateRoomHostEditDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
+
+       <BypassModal isOpen={showBypassDialog} onClose={() => setShowBypassDialog(false)} onConfirm={() => handleSave()}/>
+      
     </Dialog>
   );
 }
