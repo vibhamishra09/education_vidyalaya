@@ -16,6 +16,11 @@ export class AppController {
     return this.appService.getHello();
   }
 
+  @Get('health')
+  checkHealth() {
+    return { status: 'ok', timestamp: new Date().toISOString() };
+  }
+
   @Get('api/stats/platform')
   async getPlatformStats() {
     const startTime = Date.now();
