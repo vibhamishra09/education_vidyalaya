@@ -1,8 +1,6 @@
 import { ImageResponse } from "next/og";
 import { NextRequest } from "next/server";
 
-export const runtime = "edge";
-
 // Type for skill in API response
 interface SkillData {
   name?: string;
