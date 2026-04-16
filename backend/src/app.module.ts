@@ -39,6 +39,7 @@ import { CacheModule } from './redis/cache.module';
 import { ScratchPadModule } from './scratch-pad/scratch-pad.module';
 import { RecordingModule } from './recording/recording.module';
 import { MeetingLogModule } from './meeting-log/meeting-log.module';
+import { SpamGuardModule } from './spam-guard/spam-guard.module';
 
 @Module({
   imports: [
@@ -82,6 +83,7 @@ import { MeetingLogModule } from './meeting-log/meeting-log.module';
     RecordingModule,
     EngagementModule,
     MeetingLogModule,
+    SpamGuardModule
   ],
   controllers: [AppController],
   providers: [

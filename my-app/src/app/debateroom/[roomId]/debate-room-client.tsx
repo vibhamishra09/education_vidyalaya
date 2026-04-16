@@ -86,6 +86,9 @@ import {
 } from '@/components/debate';
 import { ShareButton } from '@/components/share/share-button';
 import { extractHttpErrorMessage } from '@/lib/utils/error-handling';
+import { BypassModal } from '@/components/spamguard/dialog';
+import { SpamShield } from '@/components/spamguard/spamguard';
+import { useCallback } from 'react';
 
 interface DebateRoomClientProps {
   roomId: string;
@@ -226,6 +229,10 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
   const [selectedSide, setSelectedSide] = useState<DebateSide | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [calculatedPrepCountdown, setCalculatedPrepCountdown] = useState<number | null>(null);
+  const [spamRegistry, setSpamRegistry] = useState<Record<string, { isSafe: boolean, isVerifying: boolean }>>({});
+  const isAnythingSpam = Object.values(spamRegistry).some(s => !s.isSafe);
+  const isAnythingVerifying = Object.values(spamRegistry).some(s => s.isVerifying);
+  const [showBypassDialog, setShowBypassDialog] = useState(false);
 
   // Queries
   const { data: room, isLoading, error, refetch } = useDebateRoomDetails(roomId);
@@ -414,7 +421,28 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
     setEditTurnOrder(room.turnOrder);
   }, [editOpen, room]);
 
+    const preSubmit = () => {
+      if(isAnythingSpam){
+      setShowBypassDialog(true)
+      return
+      }
+      
+
+		handleSaveEdits()
+    }
+  
+  const handleSpamChange = useCallback((field: string, status: { isSafe: boolean; isVerifying: boolean }) => {
+    setSpamRegistry((prev) => {
+      const current = prev[field];
+      if (current && current.isSafe === status.isSafe && current.isVerifying === status.isVerifying) {
+      return prev; 
+      }
+      
+      return { ...prev, [field]: status };
+    });
+    }, []);
   const handleSaveEdits = async () => {
+    setShowBypassDialog(false)
     if (!editTopic.trim()) {
       showError('Validation', 'Topic is required');
       return;
@@ -1374,24 +1402,28 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-2">
-            <div className="space-y-2">
+            <div className="space-y-2 mb-3">
               <Label htmlFor="debate-edit-topic">Topic</Label>
-              <Input
-                id="debate-edit-topic"
-                value={editTopic}
-                onChange={(e) => setEditTopic(e.target.value)}
-                placeholder="Debate topic / motion"
-              />
+              <SpamShield context="debate topic" onStatusChange={s => handleSpamChange("debate", s)} >
+                <Input
+                  id="debate-edit-topic"
+                  value={editTopic}
+                  onChange={(e) => setEditTopic(e.target.value)}
+                  placeholder="Debate topic / motion"
+                />
+              </SpamShield>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-2 mb-3">
               <Label htmlFor="debate-edit-desc">Description</Label>
-              <Textarea
-                id="debate-edit-desc"
-                value={editDescription}
-                onChange={(e) => setEditDescription(e.target.value)}
-                rows={3}
-                placeholder="Optional context or rules"
-              />
+              <SpamShield context="debate description" onStatusChange={s => handleSpamChange("description", s)} >
+                <Textarea
+                  id="debate-edit-desc"
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  rows={3}
+                  placeholder="Optional context or rules"
+                />
+              </SpamShield>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
@@ -1457,14 +1489,14 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
               </div>
             </div>
           </div>
-          <DialogFooter className="gap-2 sm:gap-0">
+          <DialogFooter className="gap-2 sm:gap-2">
             <Button type="button" variant="outline" onClick={() => setEditOpen(false)}>
               Cancel
             </Button>
             <Button
               type="button"
-              onClick={() => void handleSaveEdits()}
-              disabled={updateDebateRoom.isPending}
+              onClick={() => void preSubmit()}
+              disabled={updateDebateRoom.isPending || isAnythingVerifying}
             >
               {updateDebateRoom.isPending ? (
                 <>
@@ -1477,6 +1509,9 @@ export default function DebateRoomClient({ roomId }: DebateRoomClientProps) {
             </Button>
           </DialogFooter>
         </DialogContent>
+
+        <BypassModal isOpen={showBypassDialog} onClose={() => setShowBypassDialog(false)} onConfirm={() => handleSaveEdits()}/>
+        
       </Dialog>
     </div>
   );

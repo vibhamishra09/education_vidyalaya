@@ -50,6 +50,8 @@ import {
   getStudyRoomShareUrl,
 } from "@/lib/utils/study-room-share";
 import { getDisplayAppOrigin } from "@/lib/utils/public-url";
+import { SpamShield } from "@/components/spamguard/spamguard";
+import { BypassModal } from "@/components/spamguard/dialog";
 
 interface StudyRoomFormData {
   title: string;
@@ -70,9 +72,9 @@ interface StudyRoomFormData {
 }
 
 const initialFormData: StudyRoomFormData = {
-  title: "",
+  title: "Discussion",
   description: "",
-  skills: [],
+  skills: ["Communication"],
   date: "",
   time: "",
   duration: "60",
@@ -185,6 +187,10 @@ export function CreateStudyRoomClient() {
   const { isLoaded: isAuthLoaded, getToken } = useAuth();
   const createStudyRoomMutation = useCreateStudyRoom();
   const createRecurringRoomMutation = useCreateRecurringRoom()
+  const [spamRegistry, setSpamRegistry] = useState<Record<string, { isSafe: boolean, isVerifying: boolean }>>({});
+  const [showBypassDialog, setShowBypassDialog] = useState(false);
+  const isAnythingSpam = Object.values(spamRegistry).some(s => !s.isSafe);
+  const isAnythingVerifying = Object.values(spamRegistry).some(s => s.isVerifying);
 
   const { formData, setFormData, updateField, clearForm, hasStoredData } = useFormPersistence<StudyRoomFormData>(
     "create_study_room",
@@ -196,7 +202,7 @@ export function CreateStudyRoomClient() {
     }
   );
 
-  const [isInstantRoom, setIsInstantRoom] = useState(false);
+  const [isInstantRoom, setIsInstantRoom] = useState(true);
   const [sessionMode, setSessionMode] = useState<StudyRoomSessionMode>("STANDARD");
 
   useEffect(() => {
@@ -250,6 +256,8 @@ export function CreateStudyRoomClient() {
     defaultsHydratedRef.current = true;
     setFormData((prev) => ({
       ...prev,
+      title: prev.title?.trim() ? prev.title : "Discussion",
+      skills: prev.skills?.length > 0 ? prev.skills : ["Communication"],
       duration: prev.duration?.trim() ? prev.duration : initialFormData.duration,
       maxParticipants: prev.maxParticipants?.trim()
         ? prev.maxParticipants
@@ -288,6 +296,7 @@ export function CreateStudyRoomClient() {
     clearForm();
     setFormData(initialFormData);
     setImagePreview(null);
+    setSpamRegistry({})
   }, [clearForm, setFormData]);
 
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -336,8 +345,19 @@ export function CreateStudyRoomClient() {
     updateField("imageUrl", undefined);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const preSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if(isAnythingSpam){
+      setShowBypassDialog(true)
+      return
+    }
+
+    handleSubmit(e)
+  }
+
+  const handleSubmit = async (e: React.FormEvent | undefined) => {
+    setShowBypassDialog(false)
+    if(e) e.preventDefault();
     if (!isAuthLoaded) {
       setError('Please wait for authentication to load');
       return;
@@ -511,6 +531,17 @@ export function CreateStudyRoomClient() {
       ? 0
       : maxParticipantsClamped * (parseInt(formData.joiningFee, 10) || 0);
 
+  const handleSpamChange = useCallback((field: string, status: { isSafe: boolean; isVerifying: boolean }) => {
+  setSpamRegistry((prev) => {
+      const current = prev[field];
+      if (current && current.isSafe === status.isSafe && current.isVerifying === status.isVerifying) {
+        return prev; 
+      }
+      
+      return { ...prev, [field]: status };
+    });
+  }, []);
+
   return (
     <div className="flex flex-col min-h-screen bg-muted/5 selection:bg-primary/10">
       <Navigation />
@@ -582,7 +613,7 @@ export function CreateStudyRoomClient() {
           )}
         </div>
 
-        <form onSubmit={handleSubmit} className="max-w-7xl mx-auto">
+        <form onSubmit={preSubmit} className="max-w-7xl mx-auto">
           {/* Stack title above the 2-col grid — avoids grid col-span quirks on small breakpoints */}
           <div className="flex flex-col gap-8 lg:gap-12">
             <div className="w-full space-y-2 shrink-0">
@@ -592,6 +623,7 @@ export function CreateStudyRoomClient() {
               <div className="relative group transition-all duration-200">
                 <div className="absolute -inset-0.5 bg-gradient-to-r from-primary/20 to-primary/0 rounded-xl blur opacity-0 group-focus-within:opacity-100 transition duration-500" />
                 <div className="relative bg-card border-2 border-dashed border-muted group-hover:border-primary/30 group-focus-within:border-primary/50 group-focus-within:border-solid rounded-xl transition-all duration-200 flex items-center">
+                 <SpamShield context="title" onStatusChange={(status) => handleSpamChange("title", status)}>
                   <Input
                     id="title"
                     placeholder="Enter a catchy title..."
@@ -600,6 +632,7 @@ export function CreateStudyRoomClient() {
                     className="h-auto py-4 px-4 text-2xl md:text-3xl font-bold border-none shadow-none focus-visible:ring-0 bg-transparent text-foreground placeholder:text-muted-foreground/30 w-full"
                     autoFocus
                   />
+                </SpamShield>
                   <div className="absolute right-4 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                     <span className="text-[10px] uppercase font-semibold text-muted-foreground bg-muted/50 px-2 py-1 rounded border">
                       Edit
@@ -846,14 +879,16 @@ export function CreateStudyRoomClient() {
                         Description{" "}
                         <span className="text-[10px] normal-case bg-muted px-1.5 rounded-sm">Optional</span>
                       </Label>
-                      <Textarea
-                        id="description"
-                        placeholder="Provide a brief agenda or learning outcomes..."
-                        value={formData.description}
-                        onChange={(e) => updateField("description", e.target.value)}
-                        rows={4}
-                        className="resize-none bg-background/50 focus:bg-background transition-colors"
-                      />
+                      <SpamShield context="description" onStatusChange={(status) => handleSpamChange("description", status)}>
+                        <Textarea
+                          id="description"
+                          placeholder="Provide a brief agenda or learning outcomes..."
+                          value={formData.description}
+                          onChange={(e) => updateField("description", e.target.value)}
+                          rows={4}
+                          className="resize-none bg-background/50 focus:bg-background transition-colors mb-8"
+                        />
+                      </SpamShield>
                     </div>
 
                     {/* Image Upload */}
@@ -960,7 +995,7 @@ export function CreateStudyRoomClient() {
                 </CardHeader>
                 <CardContent className="space-y-6">
                   
-                  {/* Instant Room Switch */}
+                  Instant Room Switch
                   <div className="flex items-center justify-between p-4 rounded-xl border bg-gradient-to-r from-background to-muted/20">
                     <div className="space-y-0.5">
                       <Label htmlFor="instant-room" className="text-base font-semibold cursor-pointer flex items-center gap-2">
@@ -1367,7 +1402,7 @@ export function CreateStudyRoomClient() {
                         className="w-full h-14 text-base font-bold shadow-sm hover:shadow-md transition-all rounded-lg bg-green-100 text-green-800 hover:bg-green-200 border border-green-300 dark:bg-green-900/40 dark:text-green-300 dark:border-green-800 dark:hover:bg-green-900/60"
                         disabled={
                           createStudyRoomMutation.isPending || createRecurringRoomMutation.isPending ||
-                          !isAuthLoaded
+                          !isAuthLoaded || isAnythingVerifying 
                         }
                       >
                         {(createStudyRoomMutation.isPending || createRecurringRoomMutation.isPending) ? (
@@ -1398,6 +1433,8 @@ export function CreateStudyRoomClient() {
         </form>
       </main>
 
+      <BypassModal isOpen={showBypassDialog} onClose={() => setShowBypassDialog(false)} onConfirm={() => handleSubmit(undefined)}/>
+
       {/* Success Dialog */}
       <Dialog open={showSuccessDialog} onOpenChange={(open) => {
         if (!open) {
@@ -1405,6 +1442,7 @@ export function CreateStudyRoomClient() {
           router.push("/dashboard");
         }
       }}>
+
         <DialogContent className="w-[92vw] max-w-md p-0 overflow-hidden border border-border/40 shadow-2xl rounded-[20px] bg-background">
           <div className="p-4 sm:p-6 flex flex-col items-center text-center space-y-4 sm:space-y-6">
             

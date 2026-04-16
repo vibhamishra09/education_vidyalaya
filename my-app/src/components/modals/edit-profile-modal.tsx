@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { SkillInput } from "@/components/ui/skill-input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useCallback } from "react";
 import {
   Select,
   SelectContent,
@@ -27,6 +28,8 @@ import { Loader2, Upload, Plus, X, Linkedin, Github, Globe, Youtube, Instagram }
 import { usersApi } from "@/lib/api";
 import { User, UpdateUserDto, SocialLink, SOCIAL_PLATFORMS } from "@/types/api.types";
 import { uploadFile, validateImageFile } from "@/lib/upload";
+import { BypassModal } from "../spamguard/dialog";
+import { SpamShield } from "../spamguard/spamguard";
 
 interface EditProfileModalProps {
   isOpen: boolean;
@@ -251,6 +254,10 @@ export function EditProfileModal({
   const [usernameError, setUsernameError] = useState<string | null>(null);
   const [checkingUsername, setCheckingUsername] = useState(false);
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
+  const [spamRegistry, setSpamRegistry] = useState<Record<string, { isSafe: boolean, isVerifying: boolean }>>({});
+  const [showBypassDialog, setShowBypassDialog] = useState(false);
+  const isAnythingSpam = Object.values(spamRegistry).some(s => !s.isSafe);
+  const isAnythingVerifying = Object.values(spamRegistry).some(s => s.isVerifying);
 
   // Reset form when user changes
   useEffect(() => {
@@ -378,8 +385,29 @@ export function EditProfileModal({
     setSocialLinks(updated);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const preSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if(isAnythingSpam){
+      setShowBypassDialog(true)
+      return
+    }
+
+    handleSubmit(e)
+  }
+
+  const handleSpamChange = useCallback((field: string, status: { isSafe: boolean; isVerifying: boolean }) => {
+    setSpamRegistry((prev) => {
+        const current = prev[field];
+        if (current && current.isSafe === status.isSafe && current.isVerifying === status.isVerifying) {
+          return prev; 
+        }
+        
+        return { ...prev, [field]: status };
+      });
+    }, []);
+  const handleSubmit = async (e: React.FormEvent | undefined) => {
+    if(e) e.preventDefault();
+    setShowBypassDialog(false)
     
     try {
       setLoading(true);
@@ -437,10 +465,12 @@ export function EditProfileModal({
       setError('Failed to update profile. Please try again.');
     } finally {
       setLoading(false);
+      setSpamRegistry({})
     }
   };
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -450,7 +480,7 @@ export function EditProfileModal({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={preSubmit} className="space-y-6">
           {/* Avatar Upload */}
           <div className="flex flex-col items-center space-y-4">
             <Avatar className="h-24 w-24 border-2 border-primary-200">
@@ -488,14 +518,16 @@ export function EditProfileModal({
           {/* Name */}
           <div className="space-y-2">
             <Label htmlFor="name">Display Name</Label>
-            <Input
-              id="name"
-              placeholder="Your name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              maxLength={100}
-            />
-            <p className="text-xs text-muted-foreground">
+            <SpamShield context="fullname" onStatusChange={(s) => handleSpamChange("name", s)}>
+              <Input
+                id="name"
+                placeholder="Your name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                maxLength={100}
+              />
+            </SpamShield>
+            <p className="text-xs mt-5 text-muted-foreground">
               This is how other users will see your name
             </p>
           </div>
@@ -504,30 +536,29 @@ export function EditProfileModal({
           <div className="space-y-2">
             <Label htmlFor="username">Username</Label>
             <div className="relative">
-              <Input
-                id="username"
-                placeholder="e.g., johndoe123"
-                value={username}
-                onChange={(e) => {
-                  const value = e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '');
-                  setUsername(value);
-                }}
-                maxLength={30}
-                className={usernameError ? "border-destructive" : usernameAvailable === true ? "border-green-500" : ""}
-              />
-              {checkingUsername && (
-                <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
-              )}
-              {!checkingUsername && usernameAvailable === true && username.trim() && (
+              <SpamShield context="username" onStatusChange={(s) => handleSpamChange("username", s)}>
+                <Input
+                  id="username"
+                  placeholder="e.g., johndoe123"
+                  value={username}
+                  onChange={(e) => {
+                    const value = e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '');
+                    setUsername(value);
+                  }}
+                  maxLength={30}
+                  className={usernameError ? "border-destructive" : usernameAvailable === true ? "border-green-500" : ""}
+                />
+              </SpamShield>
+              {!checkingUsername && usernameAvailable === true && username.trim() && !spamRegistry["username"].isVerifying && spamRegistry["username"].isSafe  && (
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-green-500 text-sm">✓</span>
               )}
             </div>
             {usernameError ? (
-              <p className="text-xs text-destructive">{usernameError}</p>
-            ) : username.trim() && usernameAvailable === true ? (
-              <p className="text-xs text-green-600">Username is available</p>
+              <p className="text-xs mt-5 text-destructive">{usernameError}</p>
+            ) : username.trim() && usernameAvailable === true  && !spamRegistry["username"].isVerifying && spamRegistry["username"].isSafe ? (
+              <p className="text-xs mt-5 text-green-600">Username is available</p>
             ) : (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs mt-5 text-muted-foreground">
                 3-30 characters, letters, numbers, underscores, and hyphens only
               </p>
             )}
@@ -536,25 +567,29 @@ export function EditProfileModal({
           {/* Bio */}
           <div className="space-y-2">
             <Label htmlFor="bio">Bio</Label>
-            <Textarea
-              id="bio"
-              placeholder="Tell us about yourself..."
-              value={bio}
-              onChange={(e) => setBio(e.target.value)}
-              rows={3}
-            />
+            <SpamShield context="biography" onStatusChange={(s) => handleSpamChange("bio", s)}>
+              <Textarea
+                id="bio"
+                placeholder="Tell us about yourself..."
+                value={bio}
+                onChange={(e) => setBio(e.target.value)}
+                rows={3}
+              />
+            </SpamShield>
           </div>
 
           {/* Location */}
           <div className="space-y-2">
             <Label htmlFor="location">Location</Label>
-            <Input
-              id="location"
-              placeholder="e.g., New York, USA"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-            />
-            <p className="text-xs text-muted-foreground">
+            <SpamShield context="location" onStatusChange={(s) => handleSpamChange("location", s)}>
+              <Input
+                id="location"
+                placeholder="e.g., New York, USA"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+              />
+            </SpamShield>
+            <p className="text-xs mt-5 text-muted-foreground">
               Your city or general location
             </p>
           </div>
@@ -562,13 +597,15 @@ export function EditProfileModal({
           {/* School/Institution */}
           <div className="space-y-2">
             <Label htmlFor="school">School/Institution</Label>
-            <Input
-              id="school"
-              placeholder="e.g., MIT, Harvard University"
-              value={school}
-              onChange={(e) => setSchool(e.target.value)}
-            />
-            <p className="text-xs text-muted-foreground">
+            <SpamShield context="Education" onStatusChange={(s) => handleSpamChange("school", s)}>
+              <Input
+                id="school"
+                placeholder="e.g., MIT, Harvard University"
+                value={school}
+                onChange={(e) => setSchool(e.target.value)}
+              />
+            </SpamShield>
+            <p className="text-xs mt-5 text-muted-foreground">
               Your school, university, or institution name
             </p>
           </div>
@@ -722,13 +759,17 @@ export function EditProfileModal({
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" disabled={loading}>
-              {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            <Button type="submit" disabled={loading || isAnythingVerifying}>
+              {(loading) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Save Changes
             </Button>
           </DialogFooter>
         </form>
+
       </DialogContent>
+       <BypassModal isOpen={showBypassDialog} onClose={() => setShowBypassDialog(false)} onConfirm={() => handleSubmit(undefined)}/>
+
     </Dialog>
+    </>
   );
 }

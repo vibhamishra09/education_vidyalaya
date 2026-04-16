@@ -2,6 +2,9 @@
 import { useState, useRef, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Send, Search, ChevronDown } from 'lucide-react'
+import { SpamShield } from '../spamguard/spamguard'
+import { useCallback } from 'react'
+import { BypassModal } from "@/components/spamguard/dialog";
 
 export type MessageAudienceType = 'EVERYONE' | 'HOST' | 'USER'
 
@@ -43,7 +46,12 @@ export function MessageInput({
 	const [showUserDropdown, setShowUserDropdown] = useState(false)
 	const userDropdownRef = useRef<HTMLDivElement>(null)
 	const searchInputRef = useRef<HTMLInputElement>(null)
-
+  	const [showBypassDialog, setShowBypassDialog] = useState(false);
+	const [spamRegistry, setSpamRegistry] = useState<Record<string, { isSafe: boolean, isVerifying: boolean }>>({});
+	const isAnythingSpam = Object.values(spamRegistry).some(s => !s.isSafe);
+	const isAnythingVerifying = Object.values(spamRegistry).some(s => s.isVerifying);
+	const [key, setKey] = useState(0)
+	
 	// Filter out the current user (no self-messaging) and host (host has its own option)
 	const availableRecipients = recipients.filter(
 		(recipient) => {
@@ -125,40 +133,66 @@ export function MessageInput({
 		setShowUserDropdown(false)
 	}
 
+	const preSubmit = (e: React.FormEvent) => {
+		e.preventDefault();
+		if(isAnythingSpam){
+		setShowBypassDialog(true)
+		return
+		}
+
+		handleSubmit(e)
+	}
+
+	 const handleSpamChange = useCallback((field: string, status: { isSafe: boolean; isVerifying: boolean }) => {
+		  setSpamRegistry((prev) => {
+			  const current = prev[field];
+			  if (current && current.isSafe === status.isSafe && current.isVerifying === status.isVerifying) {
+				return prev; 
+			  }
+			  
+			  return { ...prev, [field]: status };
+			});
+		  }, []);
+	
+	const handleSubmit = (e: React.FormEvent | undefined) => {
+		if(e) e.preventDefault()
+		setShowBypassDialog(false)
+		if (disabled) return
+		const t = text.trim()
+		if (t) {
+			const normalizedAudience =
+				audienceType === 'USER' && !canUseSpecificUser
+					? 'EVERYONE'
+					: audienceType
+			const fallbackAudience: MessageAudienceType = canSendEveryone
+				? 'EVERYONE'
+				: canSendHost
+					? 'HOST'
+					: 'USER'
+			const finalAudience =
+				normalizedAudience === 'EVERYONE' && !canSendEveryone
+					? fallbackAudience
+					: normalizedAudience === 'HOST' && !canSendHost
+						? fallbackAudience
+						: normalizedAudience === 'USER' && !canSendUser
+							? fallbackAudience
+							: normalizedAudience
+			const normalizedTargetUserId =
+				finalAudience === 'HOST'
+					? hostUserId || undefined
+					: finalAudience === 'USER'
+						? targetUserId || undefined
+						: undefined
+			onSend(t, finalAudience, normalizedTargetUserId)
+			setText('')
+			setSpamRegistry({})
+			setKey(key => key + 1)
+		}
+	}
+
 	return (
 		<form
-			onSubmit={(e) => {
-				e.preventDefault()
-				if (disabled) return
-				const t = text.trim()
-				if (t) {
-					const normalizedAudience =
-						audienceType === 'USER' && !canUseSpecificUser
-							? 'EVERYONE'
-							: audienceType
-					const fallbackAudience: MessageAudienceType = canSendEveryone
-						? 'EVERYONE'
-						: canSendHost
-							? 'HOST'
-							: 'USER'
-					const finalAudience =
-						normalizedAudience === 'EVERYONE' && !canSendEveryone
-							? fallbackAudience
-							: normalizedAudience === 'HOST' && !canSendHost
-								? fallbackAudience
-								: normalizedAudience === 'USER' && !canSendUser
-									? fallbackAudience
-									: normalizedAudience
-					const normalizedTargetUserId =
-						finalAudience === 'HOST'
-							? hostUserId || undefined
-							: finalAudience === 'USER'
-								? targetUserId || undefined
-								: undefined
-					onSend(t, finalAudience, normalizedTargetUserId)
-					setText('')
-				}
-			}}
+			onSubmit={preSubmit}
 			className="flex flex-col gap-2 p-3 md:p-4 bg-gradient-to-t from-[#1a1a1a] to-[#1f1f1f] backdrop-blur-sm"
 		>
 			<div className="flex gap-2">
@@ -249,20 +283,23 @@ export function MessageInput({
 				)}
 			</div>
 
-			<div className="flex gap-2">
-				<input
-					value={text}
-					onChange={(e) => setText(e.target.value)}
-					placeholder={disabled ? 'Chat is disabled...' : 'Type a message...'}
-					disabled={disabled}
-					className="flex-1 bg-[#1f1f1f] border border-white/10 rounded-full px-4 py-2.5 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-					autoComplete="off"
-				/>
+			<div className="flex gap-2 mb-6">
+				<SpamShield key={`text-${key}`} onStatusChange={(s) => handleSpamChange("chat", s)} context='chat_message'>
+					<input
+						value={text}
+						onChange={(e) => setText(e.target.value)}
+						placeholder={disabled || isAnythingVerifying ? 'Chat is disabled...' : 'Type a message...'}
+						disabled={disabled}
+						className="flex-1 bg-[#1f1f1f] border border-white/10 rounded-full px-4 py-2.5 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+						autoComplete="off"
+					/>
+				</SpamShield>
 				<Button
 					type="submit"
 					disabled={
 						!text.trim() ||
 						disabled ||
+						isAnythingVerifying ||
 						(audienceType === 'USER' && !targetUserId) ||
 						(audienceType === 'EVERYONE' && !canSendEveryone) ||
 						(audienceType === 'HOST' && !canSendHost) ||
@@ -274,6 +311,9 @@ export function MessageInput({
 					<Send className="h-4 w-4" />
 				</Button>
 			</div>
+
+       		<BypassModal isOpen={showBypassDialog} onClose={() => setShowBypassDialog(false)} onConfirm={() => handleSubmit(undefined)}/>
+			
 		</form>
 	)
 }

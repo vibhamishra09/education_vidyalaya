@@ -2557,6 +2557,10 @@ async updateStudyRoom(
     const newTime      = updateDto.time ?? oldTime;
 
     const newUtc = convertLocalToUTC(newLocalDate, newTime, timezone); //converts back to utc
+    
+    const isPartOfSeries = !!studyRoom.seriesId;
+    const duration = updateDto.duration ?? studyRoom.duration;
+    this.validateRoomTiming(newUtc, duration, isPartOfSeries);
 
     const duration = updateDto.duration ?? studyRoom.duration;
     const isPartOfSeries = !!studyRoom.seriesId; 
