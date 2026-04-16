@@ -13,6 +13,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { formatCoins } from "@/lib/utils/coin-format";
 import type { DashboardEngagementSummary, DashboardMission } from "@/types/api.types";
@@ -94,29 +95,28 @@ function MissionCard({ mission }: { mission: DashboardMission }) {
 
   return (
     <div className="flex h-full min-h-[320px] flex-col overflow-hidden rounded-[28px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,250,252,0.94))] p-5 text-slate-900 shadow-[0_24px_60px_-42px_rgba(15,23,42,0.28)] backdrop-blur">
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2">
-          <div
-            className={cn(
-              "rounded-2xl border p-2.5 shadow-sm",
-              tone.iconShell,
-            )}
-          >
-            <Icon className="h-4 w-4" />
-          </div>
-          <div className="min-w-0">
-            <p className="!text-lg !font-semibold !leading-tight !text-slate-900">
-              {mission.title}
-            </p>
-            <p className="!text-xs !font-medium !text-slate-500">{mission.progressLabel}</p>
-          </div>
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div
+          className={cn(
+            "rounded-2xl border p-2.5 shadow-sm shrink-0",
+            tone.iconShell,
+          )}
+        >
+          <Icon className="h-5 w-5" />
         </div>
         <Badge className={cn("shrink-0 border", missionStatusStyles(mission.status))}>
           {missionStatusLabel(mission.status)}
         </Badge>
       </div>
 
-      <p className="min-h-[112px] flex-1 !text-sm !leading-7 !text-slate-600">
+      <div className="mb-3">
+        <p className="!text-lg !font-semibold !leading-tight !text-slate-900 break-words">
+          {mission.title}
+        </p>
+        <p className="mt-1.5 !text-xs !font-medium !text-slate-500">{mission.progressLabel}</p>
+      </div>
+
+      <p className="min-h-[100px] flex-1 !text-sm !leading-7 !text-slate-600">
         {mission.description}
       </p>
 
@@ -159,7 +159,39 @@ export function DailyMomentumCard({
   isLoading = false,
 }: DailyMomentumCardProps) {
   if (isLoading && !engagement) {
-    return null;
+    return (
+      <Card className="relative overflow-hidden rounded-[34px] border border-emerald-200/40 bg-white/40 p-6 sm:p-7 shadow-[0_34px_90px_-48px_rgba(34,197,94,0.15)]">
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(340px,0.8fr)]">
+          <div>
+            <div className="flex items-center gap-2">
+              <Skeleton className="h-6 w-32 rounded-full" />
+              <Skeleton className="h-6 w-48 rounded-full" />
+            </div>
+            <div className="mt-4">
+              <Skeleton className="h-8 w-3/4 rounded-lg" />
+              <Skeleton className="mt-2 h-4 w-2/3 rounded-lg" />
+            </div>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:max-w-2xl">
+              <Skeleton className="h-24 rounded-[24px]" />
+              <Skeleton className="h-24 rounded-[24px]" />
+            </div>
+            <div className="mt-6 grid gap-4 md:grid-cols-3">
+              <Skeleton className="h-[320px] rounded-[28px]" />
+              <Skeleton className="h-[320px] rounded-[28px]" />
+              <Skeleton className="h-[320px] rounded-[28px]" />
+            </div>
+          </div>
+          <div className="rounded-[30px] border border-emerald-100/50 bg-slate-50/50 p-5">
+            <Skeleton className="h-5 w-40 rounded-lg" />
+            <Skeleton className="mt-2 h-4 w-56 rounded-lg" />
+            <div className="mt-5 space-y-3">
+              <Skeleton className="h-24 rounded-[24px]" />
+              <Skeleton className="h-24 rounded-[24px]" />
+            </div>
+          </div>
+        </div>
+      </Card>
+    );
   }
 
   if (!engagement) {

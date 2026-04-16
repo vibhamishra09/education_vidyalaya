@@ -53,4 +53,10 @@ export const usersApi = {
     );
     return response.data;
   },
+
+  searchUsers: async (query: string = '', limit: number = 5): Promise<Partial<User>[]> => {
+    const params = cleanQueryParams({ q: query, limit: limit.toString() });
+    const response = await apiClient.get<Partial<User>[]>('/api/users-search', { params });
+    return response.data;
+  },
 };

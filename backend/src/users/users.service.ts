@@ -991,7 +991,12 @@ export class UsersService {
 
     const where: Prisma.UserWhereInput = {
       onboarded: true,
-      ...(currentUser ? { id: { not: currentUser.id } } : {}),
+      ...(currentUser ? {
+        id: { not: currentUser.id },
+        followers: {
+          none: { followerId: currentUser.id }
+        }
+      } : {}),
       ...(query.trim()
         ? {
             name: { contains: query.trim(), mode: 'insensitive' as const },
@@ -1007,10 +1012,11 @@ export class UsersService {
         avatar: true,
         bio: true,
       },
-      take: Math.min(limit, 50),
+      take: limit,
       orderBy: { name: 'asc' },
     });
 
     return users;
   }
 }
+

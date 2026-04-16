@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import { Plus, MessageCircle } from "lucide-react";
 import { motion } from "framer-motion";
 import { useRouter, usePathname } from "next/navigation";
 import { useRequireAuth } from "@/hooks/use-require-auth";
@@ -32,13 +32,32 @@ export function FloatingActionButtons() {
     });
   };
 
+  const handleOpenChat = () => {
+    requireAuth(() => {
+      router.push("/chat");
+    });
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.8 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.3 }}
-      className="fixed bottom-20 right-6 md:bottom-10 z-40"
+      className="fixed bottom-20 right-6 md:bottom-10 z-50 flex flex-col gap-4 items-center"
     >
+      <motion.div
+        whileHover={{ scale: 1.1 }}
+        whileTap={{ scale: 0.9 }}
+      >
+        <Button
+          size="icon"
+          className="h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-shadow bg-white text-emerald-600 border border-emerald-200 hover:bg-emerald-50/80"
+          onClick={handleOpenChat}
+          aria-label="Messages"
+        >
+          <MessageCircle className="h-6 w-6" />
+        </Button>
+      </motion.div>
       <motion.div
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.9 }}
