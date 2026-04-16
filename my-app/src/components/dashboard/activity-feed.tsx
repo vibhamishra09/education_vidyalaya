@@ -6,14 +6,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { SignInButton, useUser } from "@clerk/nextjs";
 import {
   ArrowRight,
+  Check,
   Flame,
   Loader2,
   Radio,
   Sparkles,
   Star,
   TrendingUp,
+  UserPlus,
 } from "lucide-react";
 import { useDashboardFeed } from "@/hooks/use-dashboard";
+import { useSearchUsers, useFollowUser, useCurrentUser } from "@/hooks/use-users";
 import {
   ActivityFeedItem,
   ActivityFeedReason,
@@ -381,15 +384,92 @@ function SignedOutFeedState({ variant }: { variant: "dashboard" | "page" }) {
   );
 }
 
+function SuggestedPeersList() {
+  const { data: peers, isLoading } = useSearchUsers("", 100);
+  const { mutate: followUser, isPending } = useFollowUser();
+  const [followedIds, setFollowedIds] = useState<Set<string>>(new Set());
+
+  if (isLoading) {
+    return (
+      <div className="mt-6 space-y-3 text-left">
+        <Skeleton className="h-[68px] w-full rounded-2xl" />
+        <Skeleton className="h-[68px] w-full rounded-2xl" />
+        <Skeleton className="h-[68px] w-full rounded-2xl" />
+      </div>
+    );
+  }
+
+  if (!peers || peers.length === 0) {
+    return <p className="mt-4 text-sm text-slate-500">No peers found right now.</p>;
+  }
+
+  const handleFollow = (id: string) => {
+    if (followedIds.has(id)) return;
+    followUser(id, {
+      onSuccess: () => {
+        setFollowedIds((prev) => {
+          const newSet = new Set(prev);
+          newSet.add(id);
+          return newSet;
+        });
+      },
+    });
+  };
+
+  return (
+    <div className="mt-6 flex flex-col gap-3 text-left">
+      {peers.map((peer) => {
+        const isFollowed = followedIds.has(peer.id!);
+        return (
+          <div key={peer.id} className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+            <div className="flex min-w-0 items-center gap-3">
+              <Avatar className="h-10 w-10 border border-slate-100">
+                <AvatarImage src={peer.avatar || undefined} />
+                <AvatarFallback>{peer.name?.charAt(0)?.toUpperCase() || "U"}</AvatarFallback>
+              </Avatar>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-slate-900">{peer.name}</p>
+                <p className="truncate text-xs text-slate-500">{peer.bio || "No bio available"}</p>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              variant={isFollowed ? "secondary" : "default"}
+              className="ml-2 shrink-0 rounded-full"
+              onClick={() => handleFollow(peer.id!)}
+              disabled={isFollowed || isPending}
+            >
+              {isFollowed ? (
+                <>
+                  <Check className="mr-1.5 h-3.5 w-3.5" />
+                  Followed
+                </>
+              ) : (
+                <>
+                  <UserPlus className="mr-1.5 h-3.5 w-3.5" />
+                  Follow
+                </>
+              )}
+            </Button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function ActivityFeed({
   variant = "dashboard",
   limit = 8,
   className,
 }: ActivityFeedProps) {
   const [mode, setMode] = useState<FeedMode>("for_you");
+  const [isFindingPeers, setIsFindingPeers] = useState(false);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const { isLoaded, isSignedIn } = useUser();
+  const { data: currentUserData } = useCurrentUser();
+  const followingCount = currentUserData?.user?.followingCount || 0;
   const {
     data,
     isLoading,
@@ -404,6 +484,8 @@ export function ActivityFeed({
   );
 
   useEffect(() => {
+    if (variant === "dashboard") return;
+
     const node = loadMoreRef.current;
     const root = scrollContainerRef.current;
     if (!node || !root || !hasNextPage) {
@@ -477,7 +559,6 @@ export function ActivityFeed({
             </div>
             <div className="flex flex-wrap gap-2 text-xs text-slate-500 sm:justify-end">
               <span className="rounded-full bg-slate-100 px-3 py-1">Cover stories</span>
-              <span className="rounded-full bg-slate-100 px-3 py-1">Infinite scroll</span>
               <span className="rounded-full bg-slate-100 px-3 py-1">Live signals</span>
             </div>
           </div>
@@ -486,11 +567,12 @@ export function ActivityFeed({
         <div
           ref={scrollContainerRef}
           className={cn(
-            "mt-6 overflow-y-auto pr-1 sm:pr-2",
+            "mt-8 overflow-y-auto px-1 pr-2 pb-8 sm:px-3 sm:pr-4",
+            "[mask-image:linear-gradient(to_bottom,transparent,black_24px,black_calc(100%-24px),transparent)]",
             feedViewportClassName,
           )}
         >
-          <div className="space-y-6">
+          <div className="space-y-8 py-6">
             {!isLoaded || isLoading ? (
               <>
                 <FeedSkeletonCard />
@@ -504,23 +586,76 @@ export function ActivityFeed({
               <div className="rounded-[28px] border border-dashed border-slate-300 bg-slate-50/70 p-10 text-center">
                 <p className="text-base font-semibold text-slate-900">
                   {mode === "following"
-                    ? "Follow a few peers to build your network feed."
+                    ? followingCount > 0
+                      ? "Your network hasn't posted anything lately."
+                      : "Follow a few peers to build your network feed."
                     : "Fresh community posts will land here as new rooms and debates open."}
                 </p>
-                <p className="mt-2 text-sm text-slate-500">
-                  We will surface live sessions, strong hosts, low-cost rooms, and topics
-                  aligned with what you want to learn.
+                <p className={cn("mt-2 text-sm text-slate-500", mode === "following" ? "mb-6" : "")}>
+                  {mode === "following" && followingCount > 0
+                    ? "Check the 'For You' feed for trending content, or follow more people below to grow your network!"
+                    : "We will surface live sessions, strong hosts, low-cost rooms, and topics aligned with what you want to learn."}
                 </p>
+                {mode === "following" ? (
+                  !isFindingPeers ? (
+                    <Button
+                      variant="outline"
+                      className="rounded-full border-slate-300 shadow-sm"
+                      onClick={() => setIsFindingPeers(true)}
+                    >
+                      <UserPlus className="mr-2 h-4 w-4" />
+                      {followingCount > 0 ? "Find more peers to follow" : "Find peers to follow"}
+                    </Button>
+                  ) : (
+                    <div className="text-left w-full"><SuggestedPeersList /></div>
+                  )
+                ) : null}
+              </div>
+            ) : null}
+
+            {isLoaded && isSignedIn && !isLoading && items.length > 0 && mode === "following" ? (
+              <div className="mb-6 flex flex-col items-stretch gap-4 rounded-3xl border border-slate-200/60 bg-white/60 p-5 backdrop-blur">
+                <div className="flex w-full items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">Grow your network</p>
+                    <p className="text-xs text-slate-500">Follow more peers to see their updates here.</p>
+                  </div>
+                  {!isFindingPeers && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="rounded-full border-slate-300 shadow-sm"
+                      onClick={() => setIsFindingPeers(true)}
+                    >
+                      <UserPlus className="mr-2 h-4 w-4" />
+                      Find peers
+                    </Button>
+                  )}
+                </div>
+                {isFindingPeers && <SuggestedPeersList />}
               </div>
             ) : null}
 
             {isLoaded && (!isSignedIn ? mode === "for_you" : true) && !isLoading
-              ? items.map((item) => <FeedPostCard key={item.id} item={item} />)
+              ? (variant === "dashboard" ? items.slice(0, 4) : items).map((item) => <FeedPostCard key={item.id} item={item} />)
               : null}
 
-            {isLoaded && (!isSignedIn ? mode === "for_you" : true) ? <div ref={loadMoreRef} className="h-4" /> : null}
+            {isLoaded && (!isSignedIn ? mode === "for_you" : true) && items.length > 0 ? (
+              variant === "dashboard" ? (
+                <div className="mt-8 flex justify-center pb-4">
+                  <Link href="/browse">
+                    <Button variant="outline" className="h-12 rounded-full border-slate-300 px-8 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
+                      Show more activity
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </Link>
+                </div>
+              ) : (
+                <div ref={loadMoreRef} className="h-4" />
+              )
+            ) : null}
 
-            {isFetchingNextPage ? (
+            {variant === "page" && isFetchingNextPage ? (
               <div className="space-y-6 pb-2">
                 <div className="flex items-center justify-center gap-2 py-2 text-sm text-slate-500">
                   <Loader2 className="h-4 w-4 animate-spin" />

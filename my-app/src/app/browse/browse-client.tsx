@@ -60,7 +60,6 @@ export function BrowseClient() {
                   <span className="rounded-full bg-white/60 px-4 py-1.5 shadow-sm ring-1 ring-slate-200/50 backdrop-blur transition hover:bg-white hover:ring-emerald-200">Cover-led cards</span>
                   <span className="rounded-full bg-white/60 px-4 py-1.5 shadow-sm ring-1 ring-slate-200/50 backdrop-blur transition hover:bg-white hover:ring-emerald-200">Live room discovery</span>
                   <span className="rounded-full bg-white/60 px-4 py-1.5 shadow-sm ring-1 ring-slate-200/50 backdrop-blur transition hover:bg-white hover:ring-emerald-200">Creator signals</span>
-                  <span className="rounded-full bg-white/60 px-4 py-1.5 shadow-sm ring-1 ring-slate-200/50 backdrop-blur transition hover:bg-white hover:ring-emerald-200">Infinite feed</span>
                 </div>
               </div>
 

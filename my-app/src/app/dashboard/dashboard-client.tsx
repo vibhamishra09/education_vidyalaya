@@ -271,10 +271,10 @@ export function DashboardClient() {
           </div>
         </div>
 
-        {dashboardData?.engagement ? (
+        {dashboardLoading || dashboardData?.engagement ? (
           <div className="mb-8">
             <DailyMomentumCard
-              engagement={dashboardData.engagement}
+              engagement={dashboardData?.engagement}
               isLoading={dashboardLoading}
             />
           </div>

@@ -127,3 +127,11 @@ export function useUnfollowUser() {
     },
   });
 }
+
+export function useSearchUsers(query: string = '', limit: number = 5, enabled: boolean = true) {
+  return useQuery({
+    queryKey: [...userKeys.all, 'search', query, limit],
+    queryFn: () => usersApi.searchUsers(query, limit),
+    enabled,
+  });
+}
