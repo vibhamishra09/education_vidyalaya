@@ -42,7 +42,7 @@ import {
   PaymentStatus,
   StudyRoomParticipantRole,
   StudyRoomSessionMode,
-} from '../generated/prisma/client';
+} from '../generated/prisma';
 import { convertLocalToUTC } from '../utils/timezone';
 import { buildStudyRoomOccurrences } from './recurrence.util';
 import { StudyRoomParticipantRoleDto } from './dto/study-room.dto';
@@ -201,14 +201,15 @@ export class StudyRoomsService {
     if (explicit && /^https?:\/\//i.test(explicit)) {
       return explicit.replace(/\/$/, '');
     }
-    if (process.env.NODE_ENV === 'production') {
-      return this.resolveAppPublicBaseUrl().replace(/\/$/, '');
-    }
     const fe = process.env.FRONTEND_URL?.trim();
     if (fe && /^https?:\/\//i.test(fe) && isLocalDevOrigin(fe)) {
       return fe.replace(/\/$/, '');
     }
-    return 'http://localhost:3000';
+    const apiUrl = process.env.API_URL?.trim() || '';
+    if (/^https?:\/\/127\.0\.0\.1:\d+/i.test(apiUrl) || /^https?:\/\/localhost:\d+/i.test(apiUrl)) {
+      return 'http://localhost:3000';
+    }
+    return this.resolveAppPublicBaseUrl().replace(/\/$/, '');
   }
 
   private buildWebinarJoinUrl(studyRoomId: string, joinLinkToken: string): string {
@@ -2438,23 +2439,19 @@ export class StudyRoomsService {
 private assertSessionNotExpired(startTime: Date, durationMinutes: number) {
   const completionTime = startTime.getTime() + durationMinutes * 60000;
   if (completionTime <= Date.now()) {
-  throw new BadRequestException(
-  'The requested time change would result in a session that has already ended.',
-  );
+    throw new BadRequestException(
+      'The requested time change would result in a session that has already ended.',
+    );
   }
 }
 
-  
-
 private validateRoomTiming(startTime: Date, duration: number, isPartOfSeries: boolean) {
   const now = Date.now();
-
+  
   if (isPartOfSeries) {
-
-  const completionTime = startTime.getTime() + duration * 60000;
-
-  if (completionTime <= now) {
-    throw new BadRequestException('Recurring room sessions cannot be updated to a time that has already ended.');
+    const completionTime = startTime.getTime() + duration * 60000;
+    if (completionTime <= now) {
+      throw new BadRequestException('Recurring room sessions cannot be updated to a time that has already ended.');
     }
   } else {
     if (startTime.getTime() <= now) {
@@ -2565,6 +2562,10 @@ async updateStudyRoom(
     const duration = updateDto.duration ?? studyRoom.duration;
     this.validateRoomTiming(newUtc, duration, isPartOfSeries);
 
+    const duration = updateDto.duration ?? studyRoom.duration;
+    const isPartOfSeries = !!studyRoom.seriesId; 
+      
+    this.validateRoomTiming(newUtc, duration, isPartOfSeries);
     const existingRoom = await this.prisma.studyRoom.findFirst({
         where: {
           slug: studyRoom.slug,
@@ -2660,9 +2661,7 @@ if (isSeriesEdit && (dateChanged || timeChanged)) {
   const anchorNewUtc = convertLocalToUTC(anchorNewLocalDate, newTime, timezone);
   
   const duration = updateDto.duration ?? studyRoom.duration;
-
   this.assertSessionNotExpired(anchorNewUtc, duration);
-
   if (timeChanged && !dateChanged) {
     const newTimeInterval = `${newTime}:00`;
     const oldTimeInterval = `${oldTime}:00`;

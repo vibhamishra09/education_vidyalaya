@@ -829,7 +829,7 @@ export function EnhancedVideoRoom({
 					showModeratorControls={showModeratorControls}
 					formattedTime={formattedTime}
 					minutesLeft={minutesLeft}
-					sessionTitle={sessionData?.title as string | undefined}
+					roomTitle={sessionData?.title as string || 'Study Room'}
 					isHost={isHost}
 					hasExtended={hasExtended}
 					onRequestExtension={requestExtension}
@@ -990,7 +990,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	showModeratorControls,
 	formattedTime,
 	minutesLeft,
-	sessionTitle,
+	roomTitle,
 	isHost,
 	hasExtended,
 	onRequestExtension,
@@ -1056,7 +1056,6 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	onDismissFlashMessage,
 	mediaCaptureBlockedReason = null,
 	sessionStableId,
-	sessionData: _sessionData,
 	webinarChatMode,
 	webinarChatLive,
 	liveKitServerUrl = '',
@@ -1079,7 +1078,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 	showModeratorControls: boolean
 	formattedTime: string
 	minutesLeft: number
-	sessionTitle?: string
+	roomTitle?: string
 	isHost: boolean
 	hasExtended: boolean
 	onRequestExtension: (minutes?: number) => void
@@ -1179,7 +1178,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 				participantIdentity: currentUserId || 'host',
 				event: 'recording_error',
 				details: { error: recordingError },
-			}).catch(() => { })
+			}, { skipClerkAuth: true }).catch(() => { })
 			showError('Recording Error', recordingError)
 		}
 	}, [recordingError, sessionInfo?.id, currentUserId, showError])
@@ -1259,7 +1258,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 					participantIdentity: localParticipant?.identity || 'unknown',
 					event: step,
 					details: detail,
-				}).catch(() => {
+				}, { skipClerkAuth: true }).catch(() => {
 					// Fail silently to not impact meeting performance
 				})
 			}
@@ -1286,7 +1285,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 					participantIdentity: localParticipant.identity,
 					event: 'connection_quality_drop',
 					details: { quality },
-				}).catch(() => {})
+				}, { skipClerkAuth: true }).catch(() => {})
 			}
 		}
 
@@ -2658,7 +2657,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			isMounted = false
 			clearTimeout(timer)
 		}
-	}, [isMobileViewport, allParticipants, localParticipant, getTrackFromReference, drawAvatarToCanvas, isScreenShareEnabled])
+	}, [isMobileViewport, participantIdentitiesKey, localParticipant?.identity, getTrackFromReference, drawAvatarToCanvas, isScreenShareEnabled])
 
 	const togglePiP = useCallback(async (isAuto = false) => {
 		try {
@@ -2961,7 +2960,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 								</div>
 								<div className="flex items-center gap-1.5 md:gap-2">
 									<span className="text-white text-[10px] md:text-xs font-semibold tracking-wide truncate max-w-[120px] md:max-w-none">
-										{sessionTitle || 'Webyalaya Meeting'}
+										{roomTitle || 'Webyalaya Meeting'}
 									</span>
 									<div className="w-px h-3 bg-white/10" />
 									<span className="text-white/50 text-[9px] md:text-xs font-mono whitespace-nowrap">
@@ -4576,7 +4575,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 							<button
 								onClick={async () => {
 										try {
-											await navigator.clipboard.writeText(window.location.origin + '/studyroom/' + _sessionData?.slug)
+											await navigator.clipboard.writeText(window.location.origin + '/studyroom/' + sessionInfo?.slug)
 											showSuccess("URL Copied to Clipboard")
 										} catch (err) {
 											console.error('Failed to copy:', err)
@@ -4796,7 +4795,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 									<div className="space-y-2">
 										<h3 className="text-white font-semibold text-lg">Session Clock</h3>
 										<p className="text-white/50 text-sm max-w-[200px]">
-											Tracking your progress in <span className="text-sky-400">{sessionTitle || 'this session'}</span>
+											Tracking your progress in <span className="text-sky-400">{roomTitle || 'this session'}</span>
 										</p>
 									</div>
 
@@ -5257,11 +5256,11 @@ const VideoRoomContent = memo(function VideoRoomContent({
 						{/* ScratchPad Component handles its own internal toolbar/save logic */}
 						<div className="flex-1 bg-[#0f0f0f] relative overflow-hidden">
 							<ScratchPad
-								roomId={channelId || 'temp-room'}
+								roomId={sessionInfo?.id || sessionStableId || 'temp-room'}
 								room={room}
 								isHost={isHost}
 								canEdit={permissions?.allowScratchPad !== false}
-								roomTitle={sessionTitle}
+								roomTitle={roomTitle}
 								enabled={showScratchPad}
 								isGuest={isGuest}
 							/>

@@ -12,7 +12,7 @@ import {
 } from '@nestjs/common';
 import { DebateChatService } from './debate-chat.service';
 import { ClerkAuthGuard } from '../common/guards/clerk-auth.guard';
-import { DebateSide } from '../generated/prisma/client';
+import { DebateSide } from '../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Controller('debate-rooms/:roomId/messages')

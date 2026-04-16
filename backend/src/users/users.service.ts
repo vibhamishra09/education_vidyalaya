@@ -6,7 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { createClerkClient } from '@clerk/backend';
-import { Prisma, SessionStatus, NotifType } from '../generated/prisma/client';
+import { Prisma, SessionStatus, NotifType } from '../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
 
 /** Generated Prisma `User` / `UserFindUniqueArgs` are unreliable here; infer delegate args instead. */
@@ -978,5 +978,39 @@ export class UsersService {
       followerCount,
       followingCount,
     };
+  }
+
+  /**
+   * Search users by name for the chat "New Conversation" modal.
+   * Returns lightweight user objects (id, name, avatar, bio).
+   */
+  async searchUsers(query: string, limit: number, currentUserIdOrClerkId: string) {
+    const currentUser = await this.findUserByIdOrClerkId(currentUserIdOrClerkId, {
+      select: { id: true },
+    });
+
+    const where: Prisma.UserWhereInput = {
+      onboarded: true,
+      ...(currentUser ? { id: { not: currentUser.id } } : {}),
+      ...(query.trim()
+        ? {
+            name: { contains: query.trim(), mode: 'insensitive' as const },
+          }
+        : {}),
+    };
+
+    const users = await this.prisma.user.findMany({
+      where,
+      select: {
+        id: true,
+        name: true,
+        avatar: true,
+        bio: true,
+      },
+      take: Math.min(limit, 50),
+      orderBy: { name: 'asc' },
+    });
+
+    return users;
   }
 }

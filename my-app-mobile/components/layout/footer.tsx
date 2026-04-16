@@ -64,6 +64,16 @@ export function Footer() {
              </TouchableOpacity>
         </View>
 
+        <View className="mt-4 border-t border-black/5 pt-3">
+          <Text className="mb-2 text-[10px] uppercase tracking-[1.4px] text-muted-foreground">
+            Incubated At & Recognized By
+          </Text>
+          <Image
+            source={require('../../assets/incubated-recognized-strip.png')}
+            style={{ width: '100%', height: 30, resizeMode: 'contain' }}
+          />
+        </View>
+
       </View>
     </View>
   );

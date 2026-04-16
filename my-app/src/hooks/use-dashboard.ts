@@ -64,7 +64,7 @@ export function useDashboardFeed(
       lastPage.pagination.hasMore
         ? lastPage.pagination.page + 1
         : undefined,
-    enabled: isLoaded && isSignedIn,
+    enabled: isLoaded && (!isSignedIn ? mode === 'for_you' : true),
     staleTime: 30 * 1000,
     refetchOnWindowFocus: true,
   });

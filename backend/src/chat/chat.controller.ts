@@ -11,7 +11,7 @@ import { ChatService } from './chat.service';
 import { ClerkAuthGuard } from '../common/guards/clerk-auth.guard';
 import { OptionalClerkAuthGuard } from '../common/guards/optional-clerk-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { MessageAudienceType } from '../generated/prisma/client';
+import { MessageAudienceType } from '../generated/prisma';
 
 @Controller('api/chat')
 export class ChatController {
@@ -44,6 +44,43 @@ export class ChatController {
       throw new Error('User not found');
     }
     return this.chatService.listChannels(user.id);
+  }
+
+  @UseGuards(ClerkAuthGuard)
+  @Get('channels/with-messages')
+  async listChannelsWithMessages(
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
+  ) {
+    let resolvedId = dbUserId;
+    if (!resolvedId) {
+      const user = await this.chatService.getUserByClerkId(clerkUserId);
+      if (!user) throw new Error('User not found');
+      resolvedId = user.id;
+    }
+    return this.chatService.listChannelsWithLastMessage(resolvedId);
+  }
+
+  @UseGuards(ClerkAuthGuard)
+  @Get('channels/:id')
+  async getChannel(@Param('id') channelId: string) {
+    return this.chatService.getChannel(channelId);
+  }
+
+  @UseGuards(ClerkAuthGuard)
+  @Post('dm')
+  async getOrCreateDM(
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
+    @Body() body: { targetUserId: string },
+  ) {
+    let resolvedId = dbUserId;
+    if (!resolvedId) {
+      const user = await this.chatService.getUserByClerkId(clerkUserId);
+      if (!user) throw new Error('User not found');
+      resolvedId = user.id;
+    }
+    return this.chatService.getOrCreateDirectChannel(resolvedId, body.targetUserId);
   }
 
   @UseGuards(ClerkAuthGuard)

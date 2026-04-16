@@ -12,7 +12,7 @@ function normalizeLiveKitUrl(url: string): string {
 import { PrismaService } from '../prisma/prisma.service';
 import { ClerkAuthGuard } from '../common/guards/clerk-auth.guard';
 import { StudyRoomsService } from '../study-rooms/study-rooms.service';
-import { StudyRoomParticipantRole } from '../generated/prisma/client';
+import { StudyRoomParticipantRole } from '../generated/prisma';
 import { UsersService } from '../users/users.service';
 
 @Controller('api/livekit')

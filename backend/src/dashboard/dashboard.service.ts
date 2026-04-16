@@ -10,7 +10,7 @@ import {
   DebateStatus,
   Prisma,
   SessionStatus,
-} from '../generated/prisma/client';
+} from '../generated/prisma';
 import { StreaksService } from '../streaks/streaks.service';
 import { AchievementsService } from '../achievements/achievements.service';
 import { EngagementService } from '../engagement/engagement.service';
@@ -54,6 +54,8 @@ export interface ActivityFeedItem {
   subheadline: string;
   title: string;
   description: string | null;
+  coverImageUrl: string | null;
+  topicTags: string[];
   href: string;
   ctaLabel: string;
   reasons: ActivityFeedReason[];
@@ -645,13 +647,13 @@ export class DashboardService {
   }
 
   async getActivityFeed(
-    userId: string,
+    userId: string | undefined,
     mode: ActivityFeedMode = 'for_you',
     page: number = 1,
     limit: number = 10,
   ): Promise<ActivityFeedResponse> {
     const cacheKey = this.cacheService.createKey('dashboard:feed', {
-      userId,
+      userId: userId || 'anonymous',
       mode,
       page,
       limit,
@@ -666,37 +668,41 @@ export class DashboardService {
         const debatePastCutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
         const futureCutoff = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
 
-        const viewer = await this.prisma.user.findUnique({
-          where: { id: userId },
-          select: {
-            id: true,
-            userSkills: {
-              include: {
-                skill: {
-                  select: { name: true },
+        const interestNames: string[] = [];
+        const followingIds = new Set<string>();
+
+        if (userId) {
+          const viewer = await this.prisma.user.findUnique({
+            where: { id: userId },
+            select: {
+              id: true,
+              userSkills: {
+                include: {
+                  skill: {
+                    select: { name: true },
+                  },
                 },
               },
+              following: {
+                select: { followingId: true },
+              },
             },
-            following: {
-              select: { followingId: true },
-            },
-          },
-        });
+          });
 
-        if (!viewer) {
-          throw new NotFoundException('User not found');
+          if (!viewer) {
+            throw new NotFoundException('User not found');
+          }
+
+          Array.from(
+            new Set(
+              viewer.userSkills
+                .map((userSkill) => userSkill.skill.name.trim().toLowerCase())
+                .filter(Boolean),
+            ),
+          ).forEach(name => interestNames.push(name));
+          
+          viewer.following.forEach((follow) => followingIds.add(follow.followingId));
         }
-
-        const interestNames = Array.from(
-          new Set(
-            viewer.userSkills
-              .map((userSkill) => userSkill.skill.name.trim().toLowerCase())
-              .filter(Boolean),
-          ),
-        );
-        const followingIds = new Set(
-          viewer.following.map((follow) => follow.followingId),
-        );
 
         const [studyRooms, debateRooms] = await Promise.all([
           this.prisma.studyRoom.findMany({
@@ -886,6 +892,47 @@ export class DashboardService {
     return parts.filter(Boolean).join(' • ');
   }
 
+  private composeSubheadline(parts: Array<string | null | undefined>): string {
+    return parts.filter(Boolean).join(' | ');
+  }
+
+  private extractTopicTags(
+    source: string,
+    fallback: string[] = [],
+    limit: number = 3,
+  ): string[] {
+    const stopWords = new Set([
+      'the',
+      'and',
+      'for',
+      'with',
+      'from',
+      'that',
+      'this',
+      'into',
+      'your',
+      'will',
+      'have',
+      'about',
+      'should',
+      'would',
+      'could',
+      'room',
+      'study',
+      'debate',
+    ]);
+
+    const extracted = source
+      .split(/[^a-zA-Z0-9]+/)
+      .map((token) => token.trim())
+      .filter(
+        (token) =>
+          token.length >= 4 && !stopWords.has(token.toLowerCase()),
+      );
+
+    return Array.from(new Set([...fallback, ...extracted])).slice(0, limit);
+  }
+
   private buildStudyRoomFeedItem(
     room: any,
     followingIds: Set<string>,
@@ -956,7 +1003,7 @@ export class DashboardService {
       entityId: room.id,
       entityType: 'study_room',
       headline,
-      subheadline: this.buildSubheadline([
+      subheadline: this.composeSubheadline([
         isLive
           ? 'Live now'
           : startAt.toLocaleString('en-IN', {
@@ -974,6 +1021,8 @@ export class DashboardService {
       ]),
       title: room.title,
       description: room.description ?? null,
+      coverImageUrl: room.imageUrl ?? null,
+      topicTags: skillNames.slice(0, 3),
       href: `/studyroom/${encodeURIComponent(room.slug || room.id)}`,
       ctaLabel: isLive ? 'Join now' : 'View room',
       reasons,
@@ -1073,7 +1122,7 @@ export class DashboardService {
       entityId: room.id,
       entityType: 'debate_room',
       headline,
-      subheadline: this.buildSubheadline([
+      subheadline: this.composeSubheadline([
         isLive
           ? 'Live debate'
           : startsAt
@@ -1092,6 +1141,8 @@ export class DashboardService {
       ]),
       title: room.topic,
       description: room.description ?? null,
+      coverImageUrl: null,
+      topicTags: this.extractTopicTags(room.topic, ['Debate']),
       href: `/debateroom/${room.id}`,
       ctaLabel: isLive ? 'Join debate' : 'View debate',
       reasons,

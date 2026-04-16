@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { NotifType } from '../generated/prisma/client';
+import { NotifType } from '../generated/prisma';
 import { PushNotificationService } from './push-notification.service';
 import { EmailService } from '../email/email.service';
 import { CacheService } from '../redis/cache.service';

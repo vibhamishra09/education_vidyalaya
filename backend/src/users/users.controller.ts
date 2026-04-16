@@ -123,4 +123,19 @@ export class UsersController {
     this.logger.log(`Onboarding user ${clerkUserId}`);
     return this.usersService.onboardUser(clerkUserId, onboardingDto);
   }
+
+  @Get('users-search')
+  @UseGuards(ClerkAuthGuard)
+  async searchUsers(
+    @Query('q') query: string,
+    @Query('limit') limit: string,
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
+  ) {
+    return this.usersService.searchUsers(
+      query || '',
+      parseInt(limit, 10) || 20,
+      clerkUserId || dbUserId || '',
+    );
+  }
 }
