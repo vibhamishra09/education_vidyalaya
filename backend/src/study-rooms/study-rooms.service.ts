@@ -2562,10 +2562,6 @@ async updateStudyRoom(
     const duration = updateDto.duration ?? studyRoom.duration;
     this.validateRoomTiming(newUtc, duration, isPartOfSeries);
 
-    const duration = updateDto.duration ?? studyRoom.duration;
-    const isPartOfSeries = !!studyRoom.seriesId; 
-      
-    this.validateRoomTiming(newUtc, duration, isPartOfSeries);
     const existingRoom = await this.prisma.studyRoom.findFirst({
         where: {
           slug: studyRoom.slug,
