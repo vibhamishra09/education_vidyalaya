@@ -50,6 +50,7 @@ export function MessageInput({
 	const [spamRegistry, setSpamRegistry] = useState<Record<string, { isSafe: boolean, isVerifying: boolean }>>({});
 	const isAnythingSpam = Object.values(spamRegistry).some(s => !s.isSafe);
 	const isAnythingVerifying = Object.values(spamRegistry).some(s => s.isVerifying);
+	const [key, setKey] = useState(0)
 	
 	// Filter out the current user (no self-messaging) and host (host has its own option)
 	const availableRecipients = recipients.filter(
@@ -185,6 +186,7 @@ export function MessageInput({
 			onSend(t, finalAudience, normalizedTargetUserId)
 			setText('')
 			setSpamRegistry({})
+			setKey(key => key + 1)
 		}
 	}
 
@@ -282,7 +284,7 @@ export function MessageInput({
 			</div>
 
 			<div className="flex gap-2 mb-6">
-				<SpamShield onStatusChange={(s) => handleSpamChange("chat", s)} context='chat_message'>
+				<SpamShield key={`text-${key}`} onStatusChange={(s) => handleSpamChange("chat", s)} context='chat_message'>
 					<input
 						value={text}
 						onChange={(e) => setText(e.target.value)}

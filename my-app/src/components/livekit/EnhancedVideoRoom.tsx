@@ -631,8 +631,6 @@ export function EnhancedVideoRoom({
 		onWarning: handleWarning,
 		extendedEndTime,
 	})
-	console.log(minutesLeft, formattedTime, currentEndTime);
-	
 
 	// Handle approving extension request from the dialog
 	const handleApproveExtension = useCallback(() => {
@@ -4629,7 +4627,6 @@ const VideoRoomContent = memo(function VideoRoomContent({
 													}
 													// Host directly extends the session
 													onExtendSession(mins);
-													showSuccess('⏱️ Session Extended!', `Session extended by ${mins} minutes`);
 													setShowExtendMenu(false);
 												}}
 												disabled={hasExtended}

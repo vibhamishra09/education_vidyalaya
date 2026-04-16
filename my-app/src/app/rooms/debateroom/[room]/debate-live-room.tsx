@@ -401,6 +401,7 @@ function DebateLiveContent({
   const isAnythingVerifying = Object.values(spamRegistry).some(s => s.isVerifying);
   const [showBypassDialog, setShowBypassDialog] = useState(false);
 
+  const [key, setKey] = useState(0)
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
   // Remote Control Hook
@@ -731,6 +732,7 @@ function DebateLiveContent({
         
         setChatInput('');
         setSpamRegistry({})
+        setKey(key => key + 1)
         setIsModeratorOnly(false); // Reset moderator-only flag
       } else {
         console.error('[DebateRoom] Failed to send message:', response.status, response.statusText);
@@ -1849,7 +1851,7 @@ function DebateLiveContent({
                     )}
                     
                     <div className="flex items-center gap-1.5 sm:gap-2">
-                      <SpamShield context='chat' onStatusChange={s => handleSpamChange("chat", s)}>
+                      <SpamShield key={`chat-${key}`} context='chat' onStatusChange={s => handleSpamChange("chat", s)}>
                         <Input
                           value={chatInput}
                           onChange={(e) => setChatInput(e.target.value)}
