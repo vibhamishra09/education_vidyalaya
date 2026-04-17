@@ -8,6 +8,8 @@ export interface ChatChannelMember {
     id: string;
     name: string;
     avatar: string | null;
+    isOnline?: boolean;
+    deviceType?: 'app' | 'website' | 'unknown';
   };
 }
 

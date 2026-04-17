@@ -28,7 +28,7 @@ export class SpamService {
         headers: { 'Content-Type': 'application/json' },
       });
 
-      const response = await lastValueFrom(request$);
+      const response: any = await lastValueFrom(request$);
       const data = response.data;
 
       // if (!data.valid) {
