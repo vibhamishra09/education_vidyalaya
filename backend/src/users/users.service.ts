@@ -1018,5 +1018,31 @@ export class UsersService {
 
     return users;
   }
+
+  /**
+   * Retrieves or creates the system account used for logging platform rewards.
+   */
+  async getSystemAccount(): Promise<string> {
+    const systemEmail = 'system@webyalaya.com';
+    let systemUser = await this.prisma.user.findUnique({
+      where: { email: systemEmail },
+      select: { id: true },
+    });
+
+    if (!systemUser) {
+      systemUser = await this.prisma.user.create({
+        data: {
+          clerkId: 'system_account_clerk_id',
+          email: systemEmail,
+          name: 'Webyalaya Platform',
+          onboarded: true,
+          coins: 1000000000,
+        },
+        select: { id: true },
+      });
+    }
+
+    return systemUser.id;
+  }
 }
 

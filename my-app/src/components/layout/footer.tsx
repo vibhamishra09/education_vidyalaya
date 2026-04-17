@@ -102,15 +102,17 @@ export function Footer() {
               </p>
 
               <div className="mx-auto max-w-5xl rounded-[24px] border border-white/80 bg-white/85 p-4 shadow-[0_24px_55px_-36px_rgba(15,23,42,0.55)] backdrop-blur-sm sm:p-5">
-                <div className="rounded-[20px] border border-black/5 bg-[linear-gradient(180deg,rgba(255,255,255,0.94),rgba(243,244,246,0.86))] p-3 sm:p-4">
-                  <Image
-                    src="/incubated-recognized-strip.png"
-                    alt="Incubated at and recognized by JIIT, UIML EIC, STPI, Shiv Nadar Atal Incubation Centre, DPIIT Startup India, and MeitY Startup Hub"
-                    width={1360}
-                    height={114}
-                    className="h-auto w-full object-contain"
-                    sizes="(max-width: 768px) 100vw, 900px"
-                  />
+                <div className="rounded-[20px] border border-black/5 bg-[linear-gradient(180deg,rgba(255,255,255,0.94),rgba(243,244,246,0.86))] p-3 sm:p-4 overflow-x-auto pb-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                  <div className="w-[700px] sm:w-full">
+                    <Image
+                      src="/incubated-recognized-strip.png"
+                      alt="Incubated at and recognized by JIIT, UIML EIC, STPI, Shiv Nadar Atal Incubation Centre, DPIIT Startup India, and MeitY Startup Hub"
+                      width={1360}
+                      height={114}
+                      className="h-auto w-full object-contain pointer-events-none"
+                      sizes="(max-width: 768px) 700px, 900px"
+                    />
+                  </div>
                 </div>
               </div>
             </div>

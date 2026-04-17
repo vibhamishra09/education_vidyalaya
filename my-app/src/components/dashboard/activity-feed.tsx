@@ -14,6 +14,7 @@ import {
   Star,
   TrendingUp,
   UserPlus,
+  Search,
 } from "lucide-react";
 import { useDashboardFeed } from "@/hooks/use-dashboard";
 import { useSearchUsers, useFollowUser, useCurrentUser } from "@/hooks/use-users";
@@ -468,6 +469,7 @@ export function ActivityFeed({
   className,
 }: ActivityFeedProps) {
   const [mode, setMode] = useState<FeedMode>("for_you");
+  const [searchQuery, setSearchQuery] = useState("");
   const [isFindingPeers, setIsFindingPeers] = useState(false);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
@@ -482,10 +484,22 @@ export function ActivityFeed({
     fetchNextPage,
   } = useDashboardFeed(mode, limit);
 
-  const items = useMemo(
+  const rawItems = useMemo(
     () => data?.pages.flatMap((page) => page.items) ?? [],
     [data?.pages],
   );
+
+  const items = useMemo(() => {
+    if (!searchQuery.trim()) return rawItems;
+    const lowerQuery = searchQuery.toLowerCase();
+    return rawItems.filter(
+      (item) =>
+        item.title?.toLowerCase().includes(lowerQuery) ||
+        item.headline?.toLowerCase().includes(lowerQuery) ||
+        item.subheadline?.toLowerCase().includes(lowerQuery) ||
+        item.host?.name?.toLowerCase().includes(lowerQuery)
+    );
+  }, [rawItems, searchQuery]);
 
   useEffect(() => {
     if (variant === "dashboard") return;
@@ -544,22 +558,34 @@ export function ActivityFeed({
           </div>
 
           <div className="flex flex-col gap-3 sm:items-end">
-            <div className="grid h-11 w-full grid-cols-2 rounded-full border border-slate-200 bg-white/85 p-1 shadow-sm sm:w-[220px]">
-              {FEED_TABS.map((tab) => (
-                <button
-                  key={tab.value}
-                  type="button"
-                  className={cn(
-                    "rounded-full px-4 text-sm font-medium transition-all",
-                    mode === tab.value
-                      ? "bg-slate-950 text-white shadow-sm"
-                      : "text-slate-500 hover:text-slate-900",
-                  )}
-                  onClick={() => setMode(tab.value)}
-                >
-                  {tab.label}
-                </button>
-              ))}
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+              <div className="relative w-full sm:w-[240px]">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search rooms or hosts..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="h-11 w-full rounded-full border border-slate-200 bg-white/85 pl-9 pr-4 text-sm shadow-sm outline-none transition focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400"
+                />
+              </div>
+              <div className="grid h-11 w-full flex-shrink-0 grid-cols-2 rounded-full border border-slate-200 bg-white/85 p-1 shadow-sm sm:w-[220px]">
+                {FEED_TABS.map((tab) => (
+                  <button
+                    key={tab.value}
+                    type="button"
+                    className={cn(
+                      "rounded-full px-4 text-sm font-medium transition-all",
+                      mode === tab.value
+                        ? "bg-slate-950 text-white shadow-sm"
+                        : "text-slate-500 hover:text-slate-900",
+                    )}
+                    onClick={() => setMode(tab.value)}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
             </div>
             <div className="flex flex-wrap gap-2 text-xs text-slate-500 sm:justify-end">
               <span className="rounded-full bg-slate-100 px-3 py-1">Cover stories</span>
