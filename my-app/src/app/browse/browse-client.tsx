@@ -56,11 +56,7 @@ export function BrowseClient() {
                   </p>
                 </div>
 
-                <div className="flex flex-wrap gap-3 text-[11px] font-semibold text-slate-500">
-                  <span className="rounded-full bg-white/60 px-4 py-1.5 shadow-sm ring-1 ring-slate-200/50 backdrop-blur transition hover:bg-white hover:ring-emerald-200">Cover-led cards</span>
-                  <span className="rounded-full bg-white/60 px-4 py-1.5 shadow-sm ring-1 ring-slate-200/50 backdrop-blur transition hover:bg-white hover:ring-emerald-200">Live room discovery</span>
-                  <span className="rounded-full bg-white/60 px-4 py-1.5 shadow-sm ring-1 ring-slate-200/50 backdrop-blur transition hover:bg-white hover:ring-emerald-200">Creator signals</span>
-                </div>
+
               </div>
 
               {!isSignedIn ? (
@@ -70,7 +66,7 @@ export function BrowseClient() {
                     Sign in to unlock your personalized stream.
                   </div>
                   <SignInButton mode="modal">
-                    <Button className="group h-14 rounded-full bg-slate-950 px-8 text-base shadow-[0_20px_40px_-15px_rgba(0,0,0,0.3)] transition-all hover:bg-slate-800 hover:shadow-[0_25px_50px_-20px_rgba(0,0,0,0.4)] hover:-translate-y-1 active:translate-y-0">
+                    <Button className="group h-14 rounded-full bg-emerald-600 px-8 text-base text-white shadow-[0_20px_40px_-15px_rgba(16,185,129,0.4)] transition-all hover:bg-emerald-700 hover:shadow-[0_25px_50px_-20px_rgba(16,185,129,0.5)] hover:-translate-y-1 active:translate-y-0">
                       Open your feed
                       <ArrowLeft className="ml-2 h-4 w-4 rotate-180 transition-transform group-hover:translate-x-1" />
                     </Button>

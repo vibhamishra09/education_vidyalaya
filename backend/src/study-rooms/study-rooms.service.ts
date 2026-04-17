@@ -1550,6 +1550,8 @@ export class StudyRoomsService {
         });
       }
 
+
+
       return rows;
     });
 
@@ -3035,6 +3037,9 @@ if (isSeriesEdit && (dateChanged || timeChanged)) {
             data: skillMappings,
           });
         }
+
+
+
         return rooms;
       }, {
         timeout: 10000
@@ -3490,15 +3495,32 @@ if (isSeriesEdit && (dateChanged || timeChanged)) {
       );
     }
 
-    // Update study room status to COMPLETED
+    // Update study room status to COMPLETED and reward creator
     this.logger.debug(
-      '📝 [completeStudyRoom] Updating study room status to DONE...',
+      '📝 [completeStudyRoom] Updating study room status to DONE and rewarding creator 50 coins...',
     );
-    const updatedRoom = await this.prisma.studyRoom.update({
-      where: { id: studyRoom.id },
-      data: { sessionStatus: SessionStatus.DONE },
-    });
-    this.logger.log('✅ [completeStudyRoom] Study room status updated to DONE');
+    const systemUserId = await this.usersService.getSystemAccount();
+    const [updatedRoom] = await this.prisma.$transaction([
+      this.prisma.studyRoom.update({
+        where: { id: studyRoom.id },
+        data: { sessionStatus: SessionStatus.DONE },
+      }),
+      this.prisma.user.update({
+        where: { id: studyRoom.createdById },
+        data: { coins: { increment: 50 } },
+      }),
+      this.prisma.payment.create({
+        data: {
+          paymentStatus: PaymentStatus.RECEIVED,
+          madeById: systemUserId,
+          receivedById: studyRoom.createdById,
+          amountMade: 50,
+          amountReceived: 50,
+          studyRoomId: studyRoom.id,
+        },
+      }),
+    ]);
+    this.logger.log('✅ [completeStudyRoom] Study room status updated to DONE and creator rewarded 50 coins logged in payments');
 
     // Background the rest of the post-session processing
     (async () => {
