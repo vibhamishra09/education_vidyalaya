@@ -22,7 +22,8 @@ const isPublicRoute = createRouteMatcher([
   '/careers',
   '/offline',
   '/manifest.json',
-  '/(.*).webmanifest'
+  '/(.*).webmanifest',
+  '/profile(.*)'
 ]);
 const isApiRoute = createRouteMatcher(['/api(.*)']);
 

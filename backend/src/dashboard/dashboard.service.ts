@@ -793,7 +793,18 @@ export class DashboardService {
           }),
         ]);
 
-        const studyItems = studyRooms
+        const uniqueStudyRooms: typeof studyRooms = [];
+        const seenSeries = new Set<string>();
+
+        for (const room of studyRooms) {
+          if (room.seriesId) {
+            if (seenSeries.has(room.seriesId)) continue;
+            seenSeries.add(room.seriesId);
+          }
+          uniqueStudyRooms.push(room);
+        }
+
+        const studyItems = uniqueStudyRooms
           .map((room) =>
             this.buildStudyRoomFeedItem(room, followingIds, interestNames, now),
           )

@@ -50,10 +50,7 @@ export function BrowseClient() {
                   <h1 className="font-tagline text-5xl font-extrabold tracking-tight text-slate-950 sm:text-6xl lg:text-7xl">
                     Community <span className="text-gradient">Feed</span>
                   </h1>
-                  <p className="max-w-xl text-base leading-relaxed text-slate-600/90 sm:text-lg">
-                    A richer, post-style stream for study rooms and debates, with cover
-                    visuals, live context, host credibility, and infinite scrolling built in.
-                  </p>
+
                 </div>
 
 
