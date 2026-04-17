@@ -232,15 +232,19 @@ function FeedPostCard({ item }: { item: ActivityFeedItem }) {
     <article className="rounded-[32px] border border-emerald-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(245,255,249,0.95))] p-4 shadow-[0_28px_70px_-42px_rgba(34,197,94,0.28)] backdrop-blur sm:p-5">
       <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 items-center gap-3">
-          <Avatar className="h-12 w-12 ring-2 ring-white shadow-sm">
-            <AvatarImage src={item.host.avatar || undefined} alt={item.host.name} />
-            <AvatarFallback>{avatarFallback}</AvatarFallback>
-          </Avatar>
+          <Link href={`/profile/${item.host.id}`}>
+            <Avatar className="h-12 w-12 ring-2 ring-white shadow-sm hover:ring-emerald-100 transition-all">
+              <AvatarImage src={item.host.avatar || undefined} alt={item.host.name} />
+              <AvatarFallback>{avatarFallback}</AvatarFallback>
+            </Avatar>
+          </Link>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <p className="truncate text-sm font-semibold text-slate-900">
-                {item.host.name}
-              </p>
+              <Link href={`/profile/${item.host.id}`}>
+                <p className="truncate text-sm font-semibold text-slate-900 hover:text-emerald-700 hover:underline transition-colors">
+                  {item.host.name}
+                </p>
+              </Link>
               {item.host.reviewCount > 0 ? (
                 <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
                   {item.host.avgRating.toFixed(1)} rating
