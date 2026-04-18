@@ -248,7 +248,7 @@ export function CreateStudyRoomClient() {
         time: now.toTimeString().slice(0, 5),
       }));
     }
-  }, [isInstantRoom, setFormData]);
+  }, [isInstantRoom]);
 
   // Backfill persisted drafts that may have blank numeric defaults.
   useEffect(() => {
@@ -266,7 +266,7 @@ export function CreateStudyRoomClient() {
         ? prev.joiningFee
         : initialFormData.joiningFee,
     }));
-  }, [setFormData]);
+  }, []);
 
   useEffect(() => {
     if (!formData.date || formData.recurrenceRepeatUntil) return;
@@ -274,7 +274,7 @@ export function CreateStudyRoomClient() {
     date.setDate(date.getDate() + 30);
     const repeatUntil = date.toISOString().split("T")[0];
     updateField("recurrenceRepeatUntil", repeatUntil);
-  }, [formData.date, formData.recurrenceRepeatUntil, updateField]);
+  }, [formData.date,]);
 
   // Load image preview from persisted form data
   useEffect(() => {
@@ -1007,7 +1007,12 @@ export function CreateStudyRoomClient() {
                     <Switch
                       id="instant-room"
                       checked={isInstantRoom}
-                      onCheckedChange={setIsInstantRoom}
+                      onCheckedChange={(checked) => {
+                        if (checked === isInstantRoom) return;
+
+                        setIsInstantRoom(checked);
+                       
+                      }}
                     />
                   </div>
 
@@ -1065,7 +1070,9 @@ export function CreateStudyRoomClient() {
                         </div>
                         <Switch
                           checked={formData.recurrenceEnabled}
-                          onCheckedChange={(checked) => updateField("recurrenceEnabled", checked)}
+                          onCheckedChange={(checked) => {
+                            if (checked === formData.recurrenceEnabled) return;
+                            updateField("recurrenceEnabled", checked)}}
                         />
                       </div>
 

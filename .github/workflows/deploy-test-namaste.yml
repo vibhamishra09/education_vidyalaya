@@ -225,3 +225,63 @@ jobs:
           echo "Preview deployment is in progress. Check Vercel dashboard for status."
           echo "Project ID: ${{ secrets.VERCEL_PROJECT_ID_TEST2 }}"
 
+  e2e-tests:
+    name: Run E2E Tests (Test Environment)
+    runs-on: ubuntu-latest
+    needs: [deploy-backend, deploy-frontend]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install deps (dev-e2e)
+        working-directory: ./dev-e2e
+        run: pnpm install
+
+      - name: Install Playwright browsers
+        working-directory: ./dev-e2e
+        run: npx playwright install --with-deps
+
+      - name: Wait for test site to be ready
+        run: |
+          # Update this URL to match your Test environment's public URL
+          echo "Waiting for test.webyalaya.com..."
+          for i in {1..30}; do
+            if curl -s https://webyalaya.com > /dev/null; then
+              echo "Test site is up!"
+              exit 0
+            fi
+            echo "Waiting for site to stabilize..."
+            sleep 10
+          done
+          echo "Site did not come up in time"
+          exit 1
+
+      - name: Run Playwright tests
+        working-directory: ./dev-e2e
+        env:
+          BASE_URL: https://webyalaya.com
+        run: |
+          npx playwright test
+
+      - name: Check 50% pass threshold
+        working-directory: ./dev-e2e
+        run: node check-results.js
+
+      - name: Upload Playwright HTML Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-test
+          path: dev-e2e/playwright-report
+

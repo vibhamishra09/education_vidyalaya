@@ -549,13 +549,13 @@ export function EditProfileModal({
                   className={usernameError ? "border-destructive" : usernameAvailable === true ? "border-green-500" : ""}
                 />
               </SpamShield>
-              {!checkingUsername && usernameAvailable === true && username.trim() && !spamRegistry["username"].isVerifying && spamRegistry["username"].isSafe  && (
+              {!checkingUsername && usernameAvailable === true && username.trim() && !spamRegistry["username"]?.isVerifying && spamRegistry["username"]?.isSafe  && (
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-green-500 text-sm">✓</span>
               )}
             </div>
             {usernameError ? (
               <p className="text-xs mt-5 text-destructive">{usernameError}</p>
-            ) : username.trim() && usernameAvailable === true  && !spamRegistry["username"].isVerifying && spamRegistry["username"].isSafe ? (
+            ) : username.trim() && usernameAvailable === true  && !spamRegistry["username"]?.isVerifying && spamRegistry["username"]?.isSafe ? (
               <p className="text-xs mt-5 text-green-600">Username is available</p>
             ) : (
               <p className="text-xs mt-5 text-muted-foreground">
