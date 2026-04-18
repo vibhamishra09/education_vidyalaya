@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import { ArrowRight, Flame, Gem, GraduationCap, Lock, Medal, Sparkles, Target, Trophy, Users, Zap, type LucideIcon } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ArrowRight, ChevronLeft, ChevronRight, Flame, Gem, GraduationCap, Lock, Medal, Sparkles, Target, Trophy, Users, Zap, type LucideIcon } from "lucide-react";
 import { AchievementProgress } from "./achievement-progress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -108,7 +108,7 @@ export function AchievementShowcase({
     "all" | "unlocked" | "progress" | "locked"
   >("all");
   const [activeCategory, setActiveCategory] = useState<CategoryFilter>("all");
-  const [showAll, setShowAll] = useState(false);
+  const [activeSlide, setActiveSlide] = useState(0);
 
   const enrichedAchievements = useMemo(
     () => achievements.map(enrichAchievement),
@@ -207,13 +207,22 @@ export function AchievementShowcase({
     });
   }, [filteredAchievements]);
 
-  const displayedAchievements = showAll
-    ? sortedAchievements
-    : sortedAchievements.slice(0, 6);
-  const hasMore = sortedAchievements.length > 6;
   const completeTodayCount = inProgress.filter(
     (achievement) => achievement.remaining <= 1,
   ).length;
+  const currentAchievement = sortedAchievements[activeSlide] ?? null;
+  const canGoPrevious = activeSlide > 0;
+  const canGoNext = activeSlide < sortedAchievements.length - 1;
+
+  useEffect(() => {
+    setActiveSlide(0);
+  }, [activeCategory, activeTab]);
+
+  useEffect(() => {
+    setActiveSlide((current) =>
+      Math.min(current, Math.max(sortedAchievements.length - 1, 0)),
+    );
+  }, [sortedAchievements.length]);
 
   return (
     <Card className="h-full overflow-hidden border-0 bg-[radial-gradient(circle_at_top_left,rgba(14,165,233,0.14),transparent_26%),radial-gradient(circle_at_top_right,rgba(168,85,247,0.14),transparent_24%),linear-gradient(145deg,#ffffff_0%,#f8fafc_45%,#ecfeff_100%)] shadow-[0_28px_90px_-42px_rgba(15,23,42,0.22)]">
@@ -486,37 +495,88 @@ export function AchievementShowcase({
           </div>
         </div>
 
-        <div className="space-y-3">
-          {displayedAchievements.length === 0 ? (
+        <div className="rounded-[28px] border border-white/80 bg-white/85 p-3 shadow-sm sm:p-4">
+          {sortedAchievements.length === 0 ? (
             <div className="rounded-2xl border border-dashed bg-white/70 py-12 text-center text-muted-foreground">
               <Lock className="mx-auto mb-3 h-5 w-5" />
               <p className="text-sm">No NFT collectibles match this filter yet.</p>
             </div>
           ) : (
-            displayedAchievements.map((achievement) => (
-              <AchievementProgress key={achievement.id} achievement={achievement} />
-            ))
+            <div className="space-y-4">
+              <div className="flex flex-col gap-3 rounded-2xl bg-slate-50/70 px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4">
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">
+                    Achievement {activeSlide + 1} of {sortedAchievements.length}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    One collectible per slide so the full card stays visible.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 self-start sm:self-auto">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-9 w-9 rounded-full"
+                    onClick={() => setActiveSlide((current) => Math.max(current - 1, 0))}
+                    disabled={!canGoPrevious}
+                    aria-label="Show previous achievement"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-9 w-9 rounded-full"
+                    onClick={() =>
+                      setActiveSlide((current) =>
+                        Math.min(current + 1, sortedAchievements.length - 1),
+                      )
+                    }
+                    disabled={!canGoNext}
+                    aria-label="Show next achievement"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+
+              {currentAchievement ? (
+                <div className="px-1 sm:px-2 lg:px-3">
+                  <AchievementProgress
+                    key={currentAchievement.id}
+                    achievement={currentAchievement}
+                  />
+                </div>
+              ) : null}
+
+              {sortedAchievements.length > 1 ? (
+                <div className="flex flex-wrap items-center justify-center gap-2 px-1">
+                  {sortedAchievements.map((achievement, index) => {
+                    const isActive = index === activeSlide;
+
+                    return (
+                      <button
+                        key={achievement.id}
+                        type="button"
+                        onClick={() => setActiveSlide(index)}
+                        aria-label={`Show achievement ${index + 1}`}
+                        aria-current={isActive ? "true" : undefined}
+                        className={cn(
+                          "h-2.5 rounded-full transition-all",
+                          isActive
+                            ? "w-8 bg-violet-600"
+                            : "w-2.5 bg-slate-300 hover:bg-slate-400",
+                        )}
+                      />
+                    );
+                  })}
+                </div>
+              ) : null}
+            </div>
           )}
-
-          {hasMore && !showAll ? (
-            <Button
-              variant="ghost"
-              className="w-full rounded-full"
-              onClick={() => setShowAll(true)}
-            >
-              Show {sortedAchievements.length - displayedAchievements.length} more
-            </Button>
-          ) : null}
-
-          {hasMore && showAll ? (
-            <Button
-              variant="ghost"
-              className="w-full rounded-full"
-              onClick={() => setShowAll(false)}
-            >
-              Collapse list
-            </Button>
-          ) : null}
         </div>
       </CardContent>
     </Card>
