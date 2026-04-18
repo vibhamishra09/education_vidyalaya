@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
-import { useAuth } from "@clerk/nextjs";
+import { SignInButton, useAuth } from "@clerk/nextjs";
 import { Navigation } from "@/components/layout/navigation";
 import { Footer } from "@/components/layout/footer";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -27,7 +27,7 @@ export default function PublicProfilePage({
   params: Promise<{ userId: string }>;
 }) {
   const { userId } = use(params);
-  const { getToken, isLoaded } = useAuth();
+  const { getToken, isLoaded, isSignedIn } = useAuth();
   const [user, setUser] = useState<User | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userReviews, setUserReviews] = useState<ReviewCard[]>([]);
@@ -168,7 +168,7 @@ export default function PublicProfilePage({
   const isOwnProfile = currentUser?.id === user.id;
 
   const handleFollowToggle = async () => {
-    if (!currentUser || isOwnProfile) return;
+    if (!isSignedIn || isOwnProfile) return;
 
     try {
       setIsFollowLoading(true);
@@ -262,32 +262,42 @@ export default function PublicProfilePage({
                     </div>
                   </div>
 
-                  {/* Only show Request Session button if not viewing own profile */}
-                  {currentUser && !isOwnProfile && (
+                  {!isOwnProfile && (
                     <div className="flex w-full flex-col gap-2 sm:w-auto">
-                      <Button
-                        variant={user.isFollowing ? "outline" : "default"}
-                        className="w-full sm:w-auto"
-                        onClick={handleFollowToggle}
-                        disabled={isFollowLoading}
-                      >
-                        {user.isFollowing ? (
-                          <UserCheck className="mr-2 h-4 w-4" />
-                        ) : (
-                          <UserPlus className="mr-2 h-4 w-4" />
-                        )}
-                        {isFollowLoading
-                          ? "Updating..."
-                          : user.isFollowing
-                            ? "Following"
-                            : "Follow"}
-                      </Button>
-                      <Link href={`/request-session/${userId}`}>
-                        <Button className="w-full sm:w-auto">
-                          <MessageCircle className="h-4 w-4 mr-2" />
-                          Request Session
+                      {isSignedIn ? (
+                        <Button
+                          variant={user.isFollowing ? "outline" : "default"}
+                          className="w-full sm:w-auto"
+                          onClick={handleFollowToggle}
+                          disabled={isFollowLoading}
+                        >
+                          {user.isFollowing ? (
+                            <UserCheck className="mr-2 h-4 w-4" />
+                          ) : (
+                            <UserPlus className="mr-2 h-4 w-4" />
+                          )}
+                          {isFollowLoading
+                            ? "Updating..."
+                            : user.isFollowing
+                              ? "Following"
+                              : "Follow"}
                         </Button>
-                      </Link>
+                      ) : (
+                        <SignInButton mode="modal" forceRedirectUrl={`/profile/${userId}`}>
+                          <Button className="w-full sm:w-auto">
+                            <UserPlus className="mr-2 h-4 w-4" />
+                            Follow
+                          </Button>
+                        </SignInButton>
+                      )}
+                      {currentUser ? (
+                        <Link href={`/request-session/${userId}`}>
+                          <Button className="w-full sm:w-auto">
+                            <MessageCircle className="h-4 w-4 mr-2" />
+                            Request Session
+                          </Button>
+                        </Link>
+                      ) : null}
                     </div>
                   )}
                 </div>

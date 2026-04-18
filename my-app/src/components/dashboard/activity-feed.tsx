@@ -26,6 +26,13 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
@@ -389,8 +396,9 @@ function SignedOutFeedState({ variant }: { variant: "dashboard" | "page" }) {
   );
 }
 
-function SuggestedPeersList() {
-  const { data: peers, isLoading } = useSearchUsers("", 100);
+function SuggestedPeersList({ enabled = true }: { enabled?: boolean }) {
+  const { isLoaded, isSignedIn } = useUser();
+  const { data: peers, isLoading } = useSearchUsers("", 100, enabled);
   const { mutate: followUser, isPending } = useFollowUser();
   const [followedIds, setFollowedIds] = useState<Set<string>>(new Set());
 
@@ -409,7 +417,7 @@ function SuggestedPeersList() {
   }
 
   const handleFollow = (id: string) => {
-    if (followedIds.has(id)) return;
+    if (!isSignedIn || followedIds.has(id)) return;
     followUser(id, {
       onSuccess: () => {
         setFollowedIds((prev) => {
@@ -437,25 +445,34 @@ function SuggestedPeersList() {
                 <p className="truncate text-xs text-slate-500">{peer.bio || "No bio available"}</p>
               </div>
             </div>
-            <Button
-              size="sm"
-              variant={isFollowed ? "secondary" : "default"}
-              className="ml-2 shrink-0 rounded-full"
-              onClick={() => handleFollow(peer.id!)}
-              disabled={isFollowed || isPending}
-            >
-              {isFollowed ? (
-                <>
-                  <Check className="mr-1.5 h-3.5 w-3.5" />
-                  Followed
-                </>
-              ) : (
-                <>
+            {!isLoaded || isSignedIn ? (
+              <Button
+                size="sm"
+                variant={isFollowed ? "secondary" : "default"}
+                className="ml-2 shrink-0 rounded-full"
+                onClick={() => handleFollow(peer.id!)}
+                disabled={!isLoaded || isFollowed || isPending}
+              >
+                {isFollowed ? (
+                  <>
+                    <Check className="mr-1.5 h-3.5 w-3.5" />
+                    Followed
+                  </>
+                ) : (
+                  <>
+                    <UserPlus className="mr-1.5 h-3.5 w-3.5" />
+                    Follow
+                  </>
+                )}
+              </Button>
+            ) : (
+              <SignInButton mode="modal">
+                <Button size="sm" className="ml-2 shrink-0 rounded-full">
                   <UserPlus className="mr-1.5 h-3.5 w-3.5" />
                   Follow
-                </>
-              )}
-            </Button>
+                </Button>
+              </SignInButton>
+            )}
           </div>
         );
       })}
@@ -470,7 +487,7 @@ export function ActivityFeed({
 }: ActivityFeedProps) {
   const [mode, setMode] = useState<FeedMode>("for_you");
   const [searchQuery, setSearchQuery] = useState("");
-  const [isFindingPeers, setIsFindingPeers] = useState(false);
+  const [isPeerDialogOpen, setIsPeerDialogOpen] = useState(false);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const { isLoaded, isSignedIn } = useUser();
@@ -500,6 +517,12 @@ export function ActivityFeed({
         item.host?.name?.toLowerCase().includes(lowerQuery)
     );
   }, [rawItems, searchQuery]);
+
+  useEffect(() => {
+    if (mode !== "following") {
+      setIsPeerDialogOpen(false);
+    }
+  }, [mode]);
 
   useEffect(() => {
     if (variant === "dashboard") return;
@@ -627,18 +650,14 @@ export function ActivityFeed({
                     : "We will surface live sessions, strong hosts, low-cost rooms, and topics aligned with what you want to learn."}
                 </p>
                 {mode === "following" ? (
-                  !isFindingPeers ? (
-                    <Button
-                      variant="outline"
-                      className="rounded-full border-slate-300 shadow-sm"
-                      onClick={() => setIsFindingPeers(true)}
-                    >
-                      <UserPlus className="mr-2 h-4 w-4" />
-                      {followingCount > 0 ? "Find more peers to follow" : "Find peers to follow"}
-                    </Button>
-                  ) : (
-                    <div className="text-left w-full"><SuggestedPeersList /></div>
-                  )
+                  <Button
+                    variant="outline"
+                    className="rounded-full border-slate-300 shadow-sm"
+                    onClick={() => setIsPeerDialogOpen(true)}
+                  >
+                    <UserPlus className="mr-2 h-4 w-4" />
+                    {followingCount > 0 ? "Find more peers to follow" : "Find peers to follow"}
+                  </Button>
                 ) : null}
               </div>
             ) : null}
@@ -650,19 +669,16 @@ export function ActivityFeed({
                     <p className="text-sm font-semibold text-slate-900">Grow your network</p>
                     <p className="text-xs text-slate-500">Follow more peers to see their updates here.</p>
                   </div>
-                  {!isFindingPeers && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="rounded-full border-slate-300 shadow-sm"
-                      onClick={() => setIsFindingPeers(true)}
-                    >
-                      <UserPlus className="mr-2 h-4 w-4" />
-                      Find peers
-                    </Button>
-                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="rounded-full border-slate-300 shadow-sm"
+                    onClick={() => setIsPeerDialogOpen(true)}
+                  >
+                    <UserPlus className="mr-2 h-4 w-4" />
+                    Find peers
+                  </Button>
                 </div>
-                {isFindingPeers && <SuggestedPeersList />}
               </div>
             ) : null}
 
@@ -697,6 +713,22 @@ export function ActivityFeed({
           </div>
         </div>
       </div>
+
+      <Dialog open={isPeerDialogOpen} onOpenChange={setIsPeerDialogOpen}>
+        <DialogContent className="max-w-[92vw] rounded-[28px] border border-emerald-100 bg-[linear-gradient(180deg,rgba(255,255,255,0.99),rgba(240,253,244,0.98))] p-0 shadow-[0_32px_90px_-50px_rgba(16,185,129,0.5)] sm:max-w-2xl">
+          <DialogHeader className="border-b border-emerald-100 px-6 pt-6 pb-4 text-left">
+            <DialogTitle className="font-tagline text-2xl font-bold text-slate-950">
+              Find peers to follow
+            </DialogTitle>
+            <DialogDescription className="max-w-xl text-sm leading-6 text-slate-600">
+              Build your network faster by following peers whose profiles you want to keep up with.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[70vh] overflow-y-auto px-6 pb-6">
+            <SuggestedPeersList enabled={isPeerDialogOpen} />
+          </div>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }
