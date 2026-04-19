@@ -124,6 +124,12 @@ export class UsersController {
     return this.usersService.onboardUser(clerkUserId, onboardingDto);
   }
 
+  @Get('users/recommendations')
+  @UseGuards(ClerkAuthGuard)
+  async getRecommendations(@CurrentUser('clerkId') clerkUserId: string, @Query('limit') limit?: string) {
+    return this.usersService.getRecommendedPeers(clerkUserId, parseInt(limit, 10) || 6);
+  }
+
   @Get('users-search')
   @UseGuards(ClerkAuthGuard)
   async searchUsers(

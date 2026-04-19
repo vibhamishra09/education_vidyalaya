@@ -59,4 +59,10 @@ export const usersApi = {
     const response = await apiClient.get<Partial<User>[]>('/api/users-search', { params });
     return response.data;
   },
+
+  getRecommendedPeers: async (limit: number = 10): Promise<any[]> => {
+    const params = cleanQueryParams({ limit: limit.toString() });
+    const response = await apiClient.get<any[]>('/api/users/recommendations', { params });
+    return response.data;
+  },
 };

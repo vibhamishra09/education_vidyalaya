@@ -1019,8 +1019,99 @@ export class UsersService {
     return users;
   }
 
+  async getRecommendedPeers(userIdOrClerkId: string, limit: number = 6) {
+    try {
+      const viewer = await this.findUserByIdOrClerkId(userIdOrClerkId, {
+        include: {
+          userSkills: {
+            include: { skill: true },
+          },
+          following: true,
+        },
+      });
+
+      if (!viewer) return [];
+
+      const viewerWants = viewer.userSkills
+        .filter((us) => us.type === 'WANTS')
+        .map((us) => us.skillId);
+
+      const excludingUserIds = [
+        viewer.id,
+        ...viewer.following.map((f) => f.followingId),
+      ];
+
+      // Recommendation Formula:
+      // (Skill Match * 0.6) + (Availability * 0.3) + (Rating * 0.1)
+
+      const candidates = await this.prisma.user.findMany({
+        where: {
+          id: { notIn: excludingUserIds },
+          onboarded: true,
+          userSkills: {
+            some: {
+              type: 'HAS',
+            },
+          },
+        },
+        include: {
+          userSkills: {
+            include: { skill: true },
+          },
+          receivedReviews: {
+            select: { rating: true },
+          },
+        },
+        take: 50, // Fetch a pool to rank
+      });
+
+      const ranked = candidates.map((user) => {
+        // 1. Skill Score (0.6)
+        const userHas = user.userSkills
+          .filter((us) => us.type === 'HAS')
+          .map((us) => us.skillId);
+        
+        const matchingSkills = userHas.filter((id) => viewerWants.includes(id));
+        const skillScore = viewerWants.length > 0 
+          ? (matchingSkills.length / viewerWants.length) * 0.6
+          : 0;
+
+        // 2. Rating Score (0.1) - fallback to 0.8 (4 stars) for new users
+        const avgRating = user.receivedReviews.length > 0
+          ? user.receivedReviews.reduce((acc, r) => acc + r.rating, 0) / user.receivedReviews.length
+          : 4;
+        const ratingScore = (avgRating / 5) * 0.1;
+
+        // 3. Availability Score (0.3) - Simplified placeholder for MVP
+        const availabilityScore = 0.3;
+
+        return {
+          user: {
+            id: user.id,
+            name: user.name,
+            username: user.username,
+            avatar: user.avatar,
+            bio: user.bio,
+            location: user.location,
+            school: user.school,
+            userSkills: user.userSkills,
+          },
+          score: skillScore + ratingScore + availabilityScore,
+        };
+      });
+
+      return ranked
+        .sort((a, b) => b.score - a.score)
+        .slice(0, limit)
+        .map((r) => r.user);
+    } catch (error) {
+      this.logger.error(`Error fetching recommendations: ${error.message}`);
+      return [];
+    }
+  }
+
   /**
-   * Retrieves or creates the system account used for logging platform rewards.
+   * Returns the system account ID for platform rewards.
    */
   async getSystemAccount(): Promise<string> {
     const systemEmail = 'system@webyalaya.com';
@@ -1030,14 +1121,16 @@ export class UsersService {
     });
 
     if (!systemUser) {
+      const data: any = {
+        clerkId: 'system_account_clerk_id',
+        email: systemEmail,
+        name: 'Webyalaya Platform',
+        onboarded: true,
+        coins: new Prisma.Decimal(1000000000),
+      };
+      
       systemUser = await this.prisma.user.create({
-        data: {
-          clerkId: 'system_account_clerk_id',
-          email: systemEmail,
-          name: 'Webyalaya Platform',
-          onboarded: true,
-          coins: 1000000000,
-        },
+        data,
         select: { id: true },
       });
     }

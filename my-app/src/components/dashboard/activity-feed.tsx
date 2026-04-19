@@ -15,9 +15,11 @@ import {
   TrendingUp,
   UserPlus,
   Search,
+  Zap,
 } from "lucide-react";
 import { useDashboardFeed } from "@/hooks/use-dashboard";
 import { useSearchUsers, useFollowUser, useCurrentUser } from "@/hooks/use-users";
+import { RecommendedPeersList } from "./recommended-peers-list";
 import {
   ActivityFeedItem,
   ActivityFeedReason,
@@ -626,6 +628,18 @@ export function ActivityFeed({
           )}
         >
           <div className="space-y-8 py-6">
+            {/* Recommended Matches Section */}
+            {isLoaded && isSignedIn && !isLoading && mode === "for_you" && !searchQuery && (
+              <div className="mb-8">
+                <div className="mb-4 flex items-center gap-2">
+                  <Zap className="h-4 w-4 text-emerald-500 fill-emerald-500" />
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                    Recommended for you
+                  </h3>
+                </div>
+                <RecommendedPeersList limit={6} enabled={true} />
+              </div>
+            )}
             {!isLoaded || isLoading ? (
               <>
                 <FeedSkeletonCard />

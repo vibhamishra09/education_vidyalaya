@@ -135,3 +135,11 @@ export function useSearchUsers(query: string = '', limit: number = 5, enabled: b
     enabled,
   });
 }
+
+export function useRecommendedPeers(limit: number = 10, enabled: boolean = true) {
+  return useQuery({
+    queryKey: [...userKeys.all, 'recommendations', limit],
+    queryFn: () => usersApi.getRecommendedPeers(limit),
+    enabled,
+  });
+}
