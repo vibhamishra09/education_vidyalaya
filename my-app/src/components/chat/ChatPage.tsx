@@ -17,7 +17,7 @@ export function ChatPage() {
   const { user, isLoaded } = useUser()
   const { data: currentUserData } = useCurrentUser()
   const currentDbUserId = currentUserData?.user?.id
-  const { channels, isLoading, refetchChannels, activeChannelId, setActiveChannelId } = useChatContext()
+  const { channels, isLoading, refetchChannels, activeChannelId, setActiveChannelId, onlineUserIds } = useChatContext()
   const [showNewChat, setShowNewChat] = useState(false)
   const [mobileShowChat, setMobileShowChat] = useState(false)
   const [isCreatingDM, setIsCreatingDM] = useState(false)
@@ -125,6 +125,7 @@ export function ChatPage() {
                 onSelectChannel={handleSelectChannel}
                 onNewChat={() => setShowNewChat(true)}
                 isLoading={isLoading}
+                onlineUserIds={onlineUserIds}
               />
             </div>
 
@@ -155,10 +156,21 @@ export function ChatPage() {
                       <h3 className="text-[14px] font-semibold text-gray-900 truncate">{activeChannelName}</h3>
                       <p className="text-[11px] text-gray-400">Direct message</p>
                     </div>
-                    <div className="flex h-6 items-center rounded-full bg-emerald-50 px-2.5 text-[10px] font-semibold text-emerald-600">
-                      <span className="mr-1 h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      Active
-                    </div>
+                    {(() => {
+                      const otherUserId = otherMember?.user?.id
+                      const isOtherOnline = otherUserId ? onlineUserIds.has(otherUserId) : false
+                      return isOtherOnline ? (
+                        <div className="flex h-6 items-center rounded-full bg-emerald-50 px-2.5 text-[10px] font-semibold text-emerald-600">
+                          <span className="mr-1 h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          Online
+                        </div>
+                      ) : (
+                        <div className="flex h-6 items-center rounded-full bg-gray-100 px-2.5 text-[10px] font-semibold text-gray-400">
+                          <span className="mr-1 h-1.5 w-1.5 rounded-full bg-gray-400" />
+                          Offline
+                        </div>
+                      )
+                    })()}
                   </div>
 
                   {/* DM Chat area */}

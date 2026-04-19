@@ -24,6 +24,9 @@ import { UsersService } from '../users/users.service';
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private readonly logger = new Logger(ChatGateway.name);
 
+  /** Map of dbUserId → set of connected socket IDs (a user may have multiple tabs). */
+  private readonly onlineUsers = new Map<string, Set<string>>();
+
   @WebSocketServer()
   server!: Server;
 
@@ -192,6 +195,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
         client.data.dbUserId = user.id;
         client.join(`user:${user.id}`);
+        this.addToPresence(user.id, client.id);
         client.emit('chat:authenticated');
         this.logger.debug('WebSocket authenticated for user:', auth.userId);
       } catch (verifyError: any) {
@@ -221,7 +225,47 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
-  handleDisconnect(client: Socket) {}
+  handleDisconnect(client: Socket) {
+    const dbUserId = client.data.dbUserId as string | undefined;
+    if (dbUserId) {
+      this.removeFromPresence(dbUserId, client.id);
+    }
+  }
+
+  // ─── Presence helpers ──────────────────────────────────────────────
+
+  private addToPresence(dbUserId: string, socketId: string) {
+    let sockets = this.onlineUsers.get(dbUserId);
+    if (!sockets) {
+      sockets = new Set();
+      this.onlineUsers.set(dbUserId, sockets);
+    }
+    sockets.add(socketId);
+    // Broadcast to ALL connected sockets so conversation lists update
+    this.server.emit('presence:update', {
+      userId: dbUserId,
+      status: 'online',
+    });
+  }
+
+  private removeFromPresence(dbUserId: string, socketId: string) {
+    const sockets = this.onlineUsers.get(dbUserId);
+    if (!sockets) return;
+    sockets.delete(socketId);
+    if (sockets.size === 0) {
+      this.onlineUsers.delete(dbUserId);
+      this.server.emit('presence:update', {
+        userId: dbUserId,
+        status: 'offline',
+      });
+    }
+  }
+
+  @SubscribeMessage('presence:query')
+  handlePresenceQuery(client: Socket) {
+    const onlineIds = Array.from(this.onlineUsers.keys());
+    client.emit('presence:list', { onlineUserIds: onlineIds });
+  }
 
   @SubscribeMessage('join:channel')
   async handleJoinChannel(client: Socket, payload: { channelId: string }) {

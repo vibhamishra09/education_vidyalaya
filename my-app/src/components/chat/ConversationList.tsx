@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Search, Plus, MessageCircle, Smartphone, Monitor } from 'lucide-react'
+import { Search, Plus, MessageCircle } from 'lucide-react'
 import type { ChatChannel } from '@/lib/api/chat.api'
 
 interface ConversationListProps {
@@ -12,6 +12,8 @@ interface ConversationListProps {
   onSelectChannel: (channelId: string) => void
   onNewChat: () => void
   isLoading: boolean
+  /** Set of user IDs currently online */
+  onlineUserIds?: Set<string>
 }
 
 export function ConversationList({
@@ -21,6 +23,7 @@ export function ConversationList({
   onSelectChannel,
   onNewChat,
   isLoading,
+  onlineUserIds,
 }: ConversationListProps) {
   const [search, setSearch] = useState('')
 
@@ -108,6 +111,9 @@ export function ConversationList({
               const lastMessage = channel.messages?.[0]
               const isActive = activeChannelId === channel.id
 
+              const otherUserId = otherMember?.user?.id
+              const isUserOnline = otherUserId ? (onlineUserIds?.has(otherUserId) ?? false) : false
+
               return (
                 <button
                   key={channel.id}
@@ -126,14 +132,12 @@ export function ConversationList({
                       </AvatarFallback>
                     </Avatar>
                     {/* Online indicator dot */}
-                    <span className={`absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white ${otherMember?.user?.isOnline === false ? 'bg-gray-400' : 'bg-emerald-400'}`} />
+                    <span className={`absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white ${isUserOnline ? 'bg-emerald-400' : 'bg-gray-300'}`} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
-                      <span className={`text-[13px] font-semibold truncate flex items-center gap-1 ${isActive ? 'text-primary-700' : 'text-gray-900'}`}>
+                      <span className={`text-[13px] font-semibold truncate ${isActive ? 'text-primary-700' : 'text-gray-900'}`}>
                         {displayName}
-                        {(otherMember?.user?.deviceType === 'app' || !otherMember?.user?.deviceType) && <span title="Using mobile app"><Smartphone className="h-3.5 w-3.5 text-gray-400" /></span>}
-                        {otherMember?.user?.deviceType === 'website' && <span title="Using website"><Monitor className="h-3.5 w-3.5 text-gray-400" /></span>}
                       </span>
                       {lastMessage && (
                         <span className="text-[10px] text-gray-400 flex-shrink-0 font-medium tabular-nums">
