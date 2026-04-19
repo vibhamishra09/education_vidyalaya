@@ -5,7 +5,7 @@ import { io, Socket } from 'socket.io-client'
 import { useAuth } from '@clerk/nextjs'
 import apiClient from '@/lib/api-client'
 import { getSocketIoBaseUrl } from '@/lib/socket-base-url'
-import { Send, Loader2 } from 'lucide-react'
+import { Send, Loader2, Check, CheckCheck } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 
 interface DMMessage {
@@ -26,9 +26,10 @@ interface DMChatAreaProps {
   currentUserDbId: string | undefined
   otherUserName: string
   otherUserAvatar: string | null | undefined
+  otherUserLastReadAt?: string | null
 }
 
-export function DMChatArea({ channelId, currentUserDbId, otherUserName, otherUserAvatar }: DMChatAreaProps) {
+export function DMChatArea({ channelId, currentUserDbId, otherUserName, otherUserAvatar, otherUserLastReadAt }: DMChatAreaProps) {
   const { getToken } = useAuth()
   const [messages, setMessages] = useState<DMMessage[]>([])
   const [inputValue, setInputValue] = useState('')
@@ -205,7 +206,7 @@ export function DMChatArea({ channelId, currentUserDbId, otherUserName, otherUse
   return (
     <div className="flex flex-col h-full">
       {/* Messages area */}
-      <div className="flex-1 overflow-y-auto px-5 py-4">
+      <div className="flex-1 overflow-y-auto px-5 py-4 scroll-smooth [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-200/50 hover:[&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-thumb]:rounded-full transition-colors">
         {isConnecting && messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full">
             <div className="h-8 w-8 border-[2.5px] border-gray-200 border-t-primary rounded-full animate-spin" />
@@ -265,10 +266,17 @@ export function DMChatArea({ channelId, currentUserDbId, otherUserName, otherUse
                       >
                         {msg.content}
                       </div>
-                      <p className={`text-[10px] text-gray-400 mt-0.5 px-1 opacity-0 group-hover:opacity-100 transition-opacity ${
-                        isMine ? 'text-right' : 'text-left'
+                      <p className={`flex items-center gap-1 text-[10px] text-gray-400 mt-0.5 px-1 opacity-0 group-hover:opacity-100 transition-opacity ${
+                        isMine ? 'justify-end' : 'justify-start'
                       }`}>
                         {formatTime(msg.createdAt)}
+                        {isMine && (
+                          otherUserLastReadAt && new Date(otherUserLastReadAt).getTime() >= new Date(msg.createdAt).getTime() ? (
+                            <span title="Read"><CheckCheck className="h-3.5 w-3.5 text-blue-500" /></span>
+                          ) : (
+                            <span title="Delivered"><Check className="h-3.5 w-3.5" /></span>
+                          )
+                        )}
                       </p>
                     </div>
                   </div>

@@ -50,7 +50,6 @@ export function Navigation() {
         { href: "/how-it-works", label: "How it works" },
         { href: "/pricing", label: "Pricing" },
         { href: "/dashboard", label: "Dashboard" },
-        { href: "/chat", label: "Chat" },
         { href: "https://www.webyalaya.com/updates", label: "Webya Updates", external: true },
       ]
     : [
@@ -136,6 +135,7 @@ export function Navigation() {
               {isSignedIn ? (
                 <>
                   <CoinDropdown coins={userCoins} isLoading={isUserLoading} />
+                  <ChatNotificationBadge />
                   <NotificationDropdown />
                 </>
               ) : (
