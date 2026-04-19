@@ -17,7 +17,7 @@ export function ChatPage() {
   const { user, isLoaded } = useUser()
   const { data: currentUserData } = useCurrentUser()
   const currentDbUserId = currentUserData?.user?.id
-  const { channels, isLoading, refetchChannels, activeChannelId, setActiveChannelId, onlineUserIds } = useChatContext()
+  const { channels, isLoading, refetchChannels, activeChannelId, setActiveChannelId, onlineUserIds, markAsRead } = useChatContext()
   const [showNewChat, setShowNewChat] = useState(false)
   const [mobileShowChat, setMobileShowChat] = useState(false)
   const [isCreatingDM, setIsCreatingDM] = useState(false)
@@ -25,7 +25,8 @@ export function ChatPage() {
   const handleSelectChannel = useCallback((channelId: string) => {
     setActiveChannelId(channelId)
     setMobileShowChat(true)
-  }, [setActiveChannelId])
+    void markAsRead(channelId)
+  }, [setActiveChannelId, markAsRead])
 
   const handleNewChatUser = useCallback(async (targetUserId: string) => {
     setIsCreatingDM(true)

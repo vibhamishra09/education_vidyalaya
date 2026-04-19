@@ -3,11 +3,10 @@
 import Link from "next/link";
 import { MessageCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { useChatContext } from "@/contexts/chat-context";
 
 export function ChatNotificationBadge() {
-  // For now unread count is a placeholder — full implementation requires
-  // server-side read cursors. The icon links to /chat.
-  const unreadCount = 0;
+  const { unreadCount } = useChatContext();
 
   return (
     <Link

@@ -32,6 +32,7 @@ export interface ChatChannel {
   externalId: string | null;
   members: ChatChannelMember[];
   messages?: ChatChannelMessage[];
+  unreadCount?: number;
 }
 
 export const chatApi = {
@@ -67,5 +68,16 @@ export const chatApi = {
       isDirect,
     });
     return response.data;
+  },
+
+  /** Mark a channel as read */
+  markChannelAsRead: async (channelId: string): Promise<void> => {
+    await apiClient.post(`/api/chat/channels/${channelId}/read`);
+  },
+
+  /** Get total unread message count across all DM channels */
+  getUnreadCount: async (): Promise<number> => {
+    const response = await apiClient.get<{ unreadCount: number }>('/api/chat/unread-count');
+    return response.data.unreadCount;
   },
 };

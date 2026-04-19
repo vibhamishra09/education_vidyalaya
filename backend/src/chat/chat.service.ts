@@ -218,6 +218,7 @@ export class ChatService {
 
   /**
    * List channels for a user with the last message preview (for conversation list).
+   * Includes `unreadCount` per channel based on the member's `lastReadAt` cursor.
    */
   async listChannelsWithLastMessage(userId: string) {
     try {
@@ -248,8 +249,24 @@ export class ChatService {
         orderBy: { createdAt: 'desc' },
       });
 
+      // Compute unread count per channel
+      const channelsWithUnread = await Promise.all(
+        channels.map(async (ch) => {
+          const myMember = ch.members.find((m) => m.userId === userId);
+          const lastReadAt = myMember?.lastReadAt;
+          const unreadCount = await this.prisma.message.count({
+            where: {
+              channelId: ch.id,
+              senderId: { not: userId },
+              ...(lastReadAt ? { createdAt: { gt: lastReadAt } } : {}),
+            },
+          });
+          return { ...ch, unreadCount };
+        }),
+      );
+
       // Sort by last message time (channels with recent messages first)
-      return channels.sort((a, b) => {
+      return channelsWithUnread.sort((a, b) => {
         const aTime = a.messages[0]?.createdAt?.getTime() ?? a.createdAt.getTime();
         const bTime = b.messages[0]?.createdAt?.getTime() ?? b.createdAt.getTime();
         return bTime - aTime;
@@ -261,6 +278,55 @@ export class ChatService {
           error instanceof Error ? error.message : String(error),
         );
         return [];
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Mark a channel as read for a user (set lastReadAt to now).
+   */
+  async markChannelAsRead(channelId: string, userId: string) {
+    return this.prisma.channelMember.updateMany({
+      where: { channelId, userId },
+      data: { lastReadAt: new Date() },
+    });
+  }
+
+  /**
+   * Get total unread message count across all DM channels for a user.
+   */
+  async getTotalUnreadCount(userId: string): Promise<number> {
+    try {
+      const memberships = await this.prisma.channelMember.findMany({
+        where: {
+          userId,
+          channel: { isDirect: true, externalType: 'dm' },
+        },
+        select: { channelId: true, lastReadAt: true },
+      });
+
+      if (memberships.length === 0) return 0;
+
+      let total = 0;
+      for (const m of memberships) {
+        const count = await this.prisma.message.count({
+          where: {
+            channelId: m.channelId,
+            senderId: { not: userId },
+            ...(m.lastReadAt ? { createdAt: { gt: m.lastReadAt } } : {}),
+          },
+        });
+        total += count;
+      }
+      return total;
+    } catch (error) {
+      if (isConnectionError(error)) {
+        this.logger.error(
+          `Database connection error in getTotalUnreadCount for user ${userId}:`,
+          error instanceof Error ? error.message : String(error),
+        );
+        return 0;
       }
       throw error;
     }
