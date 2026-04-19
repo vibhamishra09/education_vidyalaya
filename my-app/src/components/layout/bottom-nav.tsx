@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Compass, LayoutDashboard, User, CircleHelp, MessageCircle } from "lucide-react";
+import { Compass, LayoutDashboard, User, CircleHelp } from "lucide-react";
 import { useUser } from "@clerk/nextjs";
 
 export function BottomNav() {
@@ -33,12 +33,6 @@ export function BottomNav() {
       isActive: pathname === "/how-it-works",
     },
     {
-      href: "/chat",
-      label: "Chat",
-      icon: MessageCircle,
-      isActive: pathname === "/chat" || pathname.startsWith("/chat/"),
-    },
-    {
       href: "/dashboard",
       label: "Dashboard",
       icon: LayoutDashboard,
@@ -55,7 +49,7 @@ export function BottomNav() {
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden">
       <div className="bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-t">
-        <div className="grid grid-cols-5 h-16">
+        <div className="grid grid-cols-4 h-16">
           {navItems.map((item) => {
             const Icon = item.icon;
             return (

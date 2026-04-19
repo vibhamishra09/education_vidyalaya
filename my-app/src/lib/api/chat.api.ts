@@ -4,6 +4,7 @@ export interface ChatChannelMember {
   id: string;
   channelId: string;
   userId: string;
+  lastReadAt?: string | null;
   user: {
     id: string;
     name: string;

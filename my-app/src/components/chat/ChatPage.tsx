@@ -179,8 +179,9 @@ export function ChatPage() {
                     <DMChatArea
                       channelId={activeChannelId}
                       currentUserDbId={currentDbUserId}
-                      otherUserName={activeChannelName}
+                      otherUserName={activeChannelName || 'Chat'}
                       otherUserAvatar={activeChannelAvatar}
+                      otherUserLastReadAt={otherMember?.lastReadAt}
                     />
                   </div>
                 </>
