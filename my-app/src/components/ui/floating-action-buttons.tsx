@@ -19,7 +19,7 @@ export function FloatingActionButtons() {
   const [popoverOpen, setPopoverOpen] = useState(false);
   const { data: currentUserData } = useCurrentUser();
   const currentDbUserId = currentUserData?.user?.id;
-  const { channels, isLoading, activeChannelId, setActiveChannelId } = useChatContext();
+  const { channels, isLoading, activeChannelId, setActiveChannelId, onlineUserIds } = useChatContext();
 
   // Avoid hydration-pathname flicker on initial mount.
   if (!pathname) {
@@ -95,6 +95,7 @@ export function FloatingActionButtons() {
                 setPopoverOpen(false);
               }}
               isLoading={isLoading}
+              onlineUserIds={onlineUserIds}
             />
           </div>
           <div className="p-3 bg-gray-50/50">
