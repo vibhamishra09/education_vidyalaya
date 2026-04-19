@@ -17,6 +17,8 @@ interface ChatContextType {
   setActiveChannelId: (id: string | null) => void;
   /** Set of user IDs that are currently online (connected to the chat gateway). */
   onlineUserIds: Set<string>;
+  /** Mark a channel as read and refresh unread counts. */
+  markAsRead: (channelId: string) => Promise<void>;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -30,12 +32,14 @@ export function ChatProvider({ children }: ChatProviderProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
   const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
+  const [unreadCount, setUnreadCount] = useState(0);
   const { isLoaded, isSignedIn, getToken } = useAuth();
   const presenceSocketRef = useRef<Socket | null>(null);
 
   const fetchChannels = useCallback(async (opts?: { silent?: boolean }) => {
     if (!isLoaded || !isSignedIn) {
       setChannels([]);
+      setUnreadCount(0);
       return;
     }
 
@@ -48,6 +52,9 @@ export function ChatProvider({ children }: ChatProviderProps) {
       if (!silent) setIsLoading(true);
       const data = await chatApi.listChannelsWithMessages();
       setChannels(data);
+      // Compute total unread from the per-channel unreadCount
+      const total = data.reduce((sum, ch) => sum + (ch.unreadCount ?? 0), 0);
+      setUnreadCount(total);
     } catch {
       // silently fail
     } finally {
@@ -62,6 +69,7 @@ export function ChatProvider({ children }: ChatProviderProps) {
       fetchChannels();
     } else {
       setChannels([]);
+      setUnreadCount(0);
     }
   }, [isLoaded, isSignedIn, fetchChannels]);
 
@@ -79,6 +87,24 @@ export function ChatProvider({ children }: ChatProviderProps) {
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, [isLoaded, isSignedIn, fetchChannels]);
+
+  // ─── Mark as read ───────────────────────────────────────────────────
+  const markAsRead = useCallback(async (channelId: string) => {
+    try {
+      await chatApi.markChannelAsRead(channelId);
+      // Optimistically update local state
+      setChannels((prev) =>
+        prev.map((ch) => (ch.id === channelId ? { ...ch, unreadCount: 0 } : ch)),
+      );
+      setUnreadCount((prev) => {
+        const channel = channels.find((c) => c.id === channelId);
+        const channelUnread = channel?.unreadCount ?? 0;
+        return Math.max(0, prev - channelUnread);
+      });
+    } catch {
+      // silently fail
+    }
+  }, [channels]);
 
   // ─── Presence socket ────────────────────────────────────────────────
   useEffect(() => {
@@ -151,10 +177,6 @@ export function ChatProvider({ children }: ChatProviderProps) {
     [fetchChannels],
   );
 
-  // Simple unread count: count DM channels that have messages (placeholder — 
-  // full unread requires server-side read cursors; for now we count 0)
-  const unreadCount = 0;
-
   const value: ChatContextType = {
     channels,
     unreadCount,
@@ -163,6 +185,7 @@ export function ChatProvider({ children }: ChatProviderProps) {
     activeChannelId,
     setActiveChannelId,
     onlineUserIds,
+    markAsRead,
   };
 
   return (

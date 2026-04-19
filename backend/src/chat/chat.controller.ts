@@ -176,4 +176,37 @@ export class ChatController {
   async getChannelByRoomName(@Param('roomName') roomName: string) {
     return this.chatService.getChannelByRoomName(roomName);
   }
+
+  @UseGuards(ClerkAuthGuard)
+  @Post('channels/:id/read')
+  async markChannelAsRead(
+    @Param('id') channelId: string,
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
+  ) {
+    let resolvedId = dbUserId;
+    if (!resolvedId) {
+      const user = await this.chatService.getUserByClerkId(clerkUserId);
+      if (!user) throw new Error('User not found');
+      resolvedId = user.id;
+    }
+    await this.chatService.markChannelAsRead(channelId, resolvedId);
+    return { success: true };
+  }
+
+  @UseGuards(ClerkAuthGuard)
+  @Get('unread-count')
+  async getUnreadCount(
+    @CurrentUser('dbUserId') dbUserId: string | undefined,
+    @CurrentUser('clerkId') clerkUserId: string,
+  ) {
+    let resolvedId = dbUserId;
+    if (!resolvedId) {
+      const user = await this.chatService.getUserByClerkId(clerkUserId);
+      if (!user) throw new Error('User not found');
+      resolvedId = user.id;
+    }
+    const count = await this.chatService.getTotalUnreadCount(resolvedId);
+    return { unreadCount: count };
+  }
 }

@@ -407,6 +407,7 @@ model ChannelMember {
   id        String @id @default(cuid())
   channelId String
   userId    String
+  lastReadAt DateTime?
 
   channel   Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
   user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)

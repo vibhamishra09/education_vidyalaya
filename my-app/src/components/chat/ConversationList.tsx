@@ -139,11 +139,18 @@ export function ConversationList({
                       <span className={`text-[13px] font-semibold truncate ${isActive ? 'text-primary-700' : 'text-gray-900'}`}>
                         {displayName}
                       </span>
-                      {lastMessage && (
-                        <span className="text-[10px] text-gray-400 flex-shrink-0 font-medium tabular-nums">
-                          {formatTime(lastMessage.createdAt)}
-                        </span>
-                      )}
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {(channel.unreadCount ?? 0) > 0 && (
+                          <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-white">
+                            {(channel.unreadCount ?? 0) > 99 ? '99+' : channel.unreadCount}
+                          </span>
+                        )}
+                        {lastMessage && (
+                          <span className="text-[10px] text-gray-400 font-medium tabular-nums">
+                            {formatTime(lastMessage.createdAt)}
+                          </span>
+                        )}
+                      </div>
                     </div>
                     {lastMessage ? (
                       <p className="text-[12px] text-gray-500 truncate mt-0.5 leading-snug">
