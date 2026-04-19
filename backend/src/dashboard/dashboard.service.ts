@@ -1,9 +1,9 @@
 /* eslint-disable prettier/prettier */
 /* eslint-disable @typescript-eslint/no-unsafe-return */
- 
- 
- 
- 
+
+
+
+
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -76,6 +76,35 @@ export interface ActivityFeedItem {
     reviewCount: number;
   };
 }
+
+const FEED_RANKING_WEIGHTS = {
+  // Base weights per unit
+  PARTICIPANT: 6,
+  INTEREST_MATCH: 16,
+  KEYWORD_MATCH: 14,
+
+  // Event features boosts
+  FOLLOWING: 90,
+  LIVE_NOW: 34,
+  TRENDING_STUDY_ROOM: 24,
+  TRENDING_DEBATE: 26,
+  NEW_DEBATE: 16,
+
+  // Scarcity or access boosts
+  FREE_ENTRY: 20,
+  LOW_COST_ENTRY: 10,
+  LIMITED_SEATS: 18,
+  HIGH_RATED_MENTOR: 15,
+
+  // Specific debate adjustments
+  DEBATE_PARTICIPANT_BUMP: 1,
+  DEBATE_FOLLOWING_BUMP: 6,
+  DEBATE_LIVE_ADJUST: -2,
+  DEBATE_MENTOR_ADJUST: -1,
+
+  // Penalties
+  HOURS_AWAY_PENALTY: 1,
+};
 
 export interface ActivityFeedResponse {
   items: ActivityFeedItem[];
@@ -700,7 +729,7 @@ export class DashboardService {
                 .filter(Boolean),
             ),
           ).forEach(name => interestNames.push(name));
-          
+
           viewer.following.forEach((follow) => followingIds.add(follow.followingId));
         }
 
@@ -728,9 +757,6 @@ export class DashboardService {
                   id: true,
                   name: true,
                   avatar: true,
-                  reviewsReceived: {
-                    select: { rating: true },
-                  },
                 },
               },
               skills: {
@@ -777,9 +803,6 @@ export class DashboardService {
                   id: true,
                   name: true,
                   avatar: true,
-                  reviewsReceived: {
-                    select: { rating: true },
-                  },
                 },
               },
               teams: {
@@ -792,6 +815,29 @@ export class DashboardService {
             },
           }),
         ]);
+
+        // Aggregate review ratings to prevent N+1 and massive memory loads
+        const hostIds = Array.from(
+          new Set([
+            ...studyRooms.map((room) => room.createdBy.id),
+            ...debateRooms.map((room) => room.host.id),
+          ]),
+        );
+
+        const hostReviewStats = await this.prisma.review.groupBy({
+          by: ['revieweeId'],
+          where: { revieweeId: { in: hostIds } },
+          _avg: { rating: true },
+          _count: { id: true },
+        });
+
+        const hostReviewMap = new Map<string, { avgRating: number; reviewCount: number }>();
+        for (const stat of hostReviewStats) {
+          hostReviewMap.set(stat.revieweeId, {
+            avgRating: stat._avg.rating ?? 0,
+            reviewCount: stat._count.id ?? 0,
+          });
+        }
 
         const uniqueStudyRooms: typeof studyRooms = [];
         const seenSeries = new Set<string>();
@@ -806,12 +852,12 @@ export class DashboardService {
 
         const studyItems = uniqueStudyRooms
           .map((room) =>
-            this.buildStudyRoomFeedItem(room, followingIds, interestNames, now),
+            this.buildStudyRoomFeedItem(room, followingIds, interestNames, now, hostReviewMap),
           )
           .filter((item): item is ActivityFeedItem => Boolean(item));
         const debateItems = debateRooms
           .map((room) =>
-            this.buildDebateRoomFeedItem(room, followingIds, interestNames, now),
+            this.buildDebateRoomFeedItem(room, followingIds, interestNames, now, hostReviewMap),
           )
           .filter((item): item is ActivityFeedItem => Boolean(item));
 
@@ -873,7 +919,7 @@ export class DashboardService {
     const avgRating =
       reviewCount > 0
         ? safeReviews.reduce((total, review) => total + review.rating, 0) /
-          reviewCount
+        reviewCount
         : 0;
 
     return { avgRating, reviewCount };
@@ -949,6 +995,7 @@ export class DashboardService {
     followingIds: Set<string>,
     interests: string[],
     now: Date,
+    hostReviewMap: Map<string, { avgRating: number; reviewCount: number }>,
   ): ActivityFeedItem | null {
     const startAt = new Date(room.date);
     const endsAt = new Date(startAt.getTime() + room.duration * 60 * 1000);
@@ -965,9 +1012,9 @@ export class DashboardService {
       (startAt.getTime() <= now.getTime() && endsAt.getTime() > now.getTime());
     const skillNames = room.skills.map((skillLink: any) => skillLink.skill.name);
     const interestMatches = this.countSkillMatches(skillNames, interests);
-    const { avgRating, reviewCount } = this.averageRatings(
-      room.createdBy.reviewsReceived,
-    );
+    const reviewStats = hostReviewMap.get(room.createdBy.id) ?? { avgRating: 0, reviewCount: 0 };
+    const avgRating = reviewStats.avgRating;
+    const reviewCount = reviewStats.reviewCount;
     const trendingThreshold = Math.max(4, Math.ceil(room.maxParticipants * 0.45));
 
     const reasons: ActivityFeedReason[] = [];
@@ -981,16 +1028,19 @@ export class DashboardService {
     if (interestMatches > 0) reasons.push('interest_match');
     if (!isLive && startAt.getTime() > now.getTime()) reasons.push('upcoming');
 
-    const trendScore =
-      participantCount * 6 +
-      interestMatches * 16 +
-      (isFollowed ? 90 : 0) +
-      (isLive ? 34 : 0) +
-      (price === 0 ? 20 : price <= 99 ? 10 : 0) +
-      (seatsLeft > 0 && seatsLeft <= 2 ? 18 : 0) +
-      (avgRating >= 4.6 && reviewCount >= 5 ? 15 : 0) +
-      (participantCount >= trendingThreshold ? 24 : 0) -
-      Math.max(0, Math.floor((startAt.getTime() - now.getTime()) / 3_600_000));
+    let trendScore = 0;
+    trendScore += participantCount * FEED_RANKING_WEIGHTS.PARTICIPANT;
+    trendScore += interestMatches * FEED_RANKING_WEIGHTS.INTEREST_MATCH;
+    if (isFollowed) trendScore += FEED_RANKING_WEIGHTS.FOLLOWING;
+    if (isLive) trendScore += FEED_RANKING_WEIGHTS.LIVE_NOW;
+    if (price === 0) trendScore += FEED_RANKING_WEIGHTS.FREE_ENTRY;
+    else if (price > 0 && price <= 99) trendScore += FEED_RANKING_WEIGHTS.LOW_COST_ENTRY;
+    if (seatsLeft > 0 && seatsLeft <= 2) trendScore += FEED_RANKING_WEIGHTS.LIMITED_SEATS;
+    if (avgRating >= 4.6 && reviewCount >= 5) trendScore += FEED_RANKING_WEIGHTS.HIGH_RATED_MENTOR;
+    if (participantCount >= trendingThreshold) trendScore += FEED_RANKING_WEIGHTS.TRENDING_STUDY_ROOM;
+
+    const penaltyHours = Math.max(0, Math.floor((startAt.getTime() - now.getTime()) / 3_600_000));
+    trendScore -= penaltyHours * FEED_RANKING_WEIGHTS.HOURS_AWAY_PENALTY;
 
     let headline = `${room.createdBy.name} started ${room.title}`;
     if (isFollowed && isLive) {
@@ -1018,11 +1068,11 @@ export class DashboardService {
         isLive
           ? 'Live now'
           : startAt.toLocaleString('en-IN', {
-              month: 'short',
-              day: 'numeric',
-              hour: 'numeric',
-              minute: '2-digit',
-            }),
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+          }),
         `${participantCount}/${room.maxParticipants} joined`,
         seatsLeft > 0 && seatsLeft <= 2 ? `${seatsLeft} seats left` : null,
         price === 0 ? 'Free' : `₹${price}`,
@@ -1061,6 +1111,7 @@ export class DashboardService {
     followingIds: Set<string>,
     interests: string[],
     now: Date,
+    hostReviewMap: Map<string, { avgRating: number; reviewCount: number }>,
   ): ActivityFeedItem | null {
     const startsAt = room.scheduledAt ? new Date(room.scheduledAt) : null;
     const participantCount = room.teams.reduce(
@@ -1076,9 +1127,9 @@ export class DashboardService {
       `${room.topic} ${room.description || ''}`,
       interests,
     );
-    const { avgRating, reviewCount } = this.averageRatings(
-      room.host.reviewsReceived,
-    );
+    const reviewStats = hostReviewMap.get(room.host.id) ?? { avgRating: 0, reviewCount: 0 };
+    const avgRating = reviewStats.avgRating;
+    const reviewCount = reviewStats.reviewCount;
 
     const reasons: ActivityFeedReason[] = [];
     if (isFollowed) reasons.push('following');
@@ -1096,14 +1147,14 @@ export class DashboardService {
     if (avgRating >= 4.6 && reviewCount >= 5) reasons.push('mentor');
     if (keywordMatches > 0) reasons.push('interest_match');
 
-    const trendScore =
-      participantCount * 7 +
-      keywordMatches * 14 +
-      (isFollowed ? 96 : 0) +
-      (isLive ? 32 : 0) +
-      (reasons.includes('trending') ? 26 : 0) +
-      (reasons.includes('new') ? 16 : 0) +
-      (avgRating >= 4.6 && reviewCount >= 5 ? 14 : 0);
+    let trendScore = 0;
+    trendScore += participantCount * (FEED_RANKING_WEIGHTS.PARTICIPANT + FEED_RANKING_WEIGHTS.DEBATE_PARTICIPANT_BUMP);
+    trendScore += keywordMatches * FEED_RANKING_WEIGHTS.KEYWORD_MATCH;
+    if (isFollowed) trendScore += FEED_RANKING_WEIGHTS.FOLLOWING + FEED_RANKING_WEIGHTS.DEBATE_FOLLOWING_BUMP;
+    if (isLive) trendScore += FEED_RANKING_WEIGHTS.LIVE_NOW + FEED_RANKING_WEIGHTS.DEBATE_LIVE_ADJUST;
+    if (reasons.includes('trending')) trendScore += FEED_RANKING_WEIGHTS.TRENDING_DEBATE;
+    if (reasons.includes('new')) trendScore += FEED_RANKING_WEIGHTS.NEW_DEBATE;
+    if (avgRating >= 4.6 && reviewCount >= 5) trendScore += FEED_RANKING_WEIGHTS.HIGH_RATED_MENTOR + FEED_RANKING_WEIGHTS.DEBATE_MENTOR_ADJUST;
 
     let headline = `${room.host.name} started a debate on ${room.topic}`;
     if (isFollowed && isLive) {
@@ -1138,11 +1189,11 @@ export class DashboardService {
           ? 'Live debate'
           : startsAt
             ? startsAt.toLocaleString('en-IN', {
-                month: 'short',
-                day: 'numeric',
-                hour: 'numeric',
-                minute: '2-digit',
-              })
+              month: 'short',
+              day: 'numeric',
+              hour: 'numeric',
+              minute: '2-digit',
+            })
             : 'Open now',
         `${participantCount}/${maxParticipants} joined`,
         seatsLeft > 0 ? `${seatsLeft} seats left` : 'Full lobby',
