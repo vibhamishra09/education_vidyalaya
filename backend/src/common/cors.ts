@@ -1,5 +1,5 @@
 const STATIC_ALLOWED_ORIGINS = [
-  'https://webyalaya-main-3pav6whkp-debanshu-ghoshs-projects.vercel.app',
+  'https://education-vidyalaya-zucj-97v5nxxmi-vibhas-projects-4a294544.vercel.app',
   'https://www.webyalaya.com',
   'https://webyalaya.com',
   'https://webyalaya-next.vercel.app',
@@ -29,17 +29,25 @@ const PRIVATE_NETWORK_ORIGIN_PATTERNS = [
 ]
 
 export function getAllowedOrigins(): string[] {
-  const envUrls =
-    process.env.FRONTEND_URLS?.split(',')
-      .map((url) => url.trim())
-      .filter(Boolean) || []
+  const envFrontendUrl = process.env.FRONTEND_URL;
 
-  // Support single FRONTEND_URL as well
-  if (process.env.FRONTEND_URL) {
-    envUrls.push(process.env.FRONTEND_URL.trim());
+  const origins = [
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://localhost:3002',
+    'https://clerk.webyalaya.com',
+    'https://webyalaya.com',
+  ];
+
+  if (envFrontendUrl) {
+    // If set to '*', allow all for testing
+    if (envFrontendUrl === '*') {
+      return ['*'];
+    }
+    origins.push(envFrontendUrl.replace(/\/$/, ''));
   }
 
-  return [...new Set([...envUrls, ...STATIC_ALLOWED_ORIGINS])]
+  return origins;
 }
 
 export function isAllowedOrigin(origin?: string): boolean {
