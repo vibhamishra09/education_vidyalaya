@@ -1,8 +1,8 @@
-# Webyalaya MVP - Comprehensive Documentation
+Education Vidyalaya
 
 ## 🎓 Overview
 
-Webyalaya is a peer-to-peer learning platform that connects students and facilitates collaborative study sessions. The platform enables real-time video interactions, study room creation, peer matching, and comprehensive progress tracking through achievements and streaks.
+Education Vidyalaya is a peer-to-peer learning platform that connects students and facilitates collaborative study sessions. The platform enables real-time video interactions, study room creation, peer matching, and comprehensive progress tracking through achievements and streaks.
 
 ## 📋 Table of Contents
 
@@ -81,7 +81,7 @@ Webyalaya is a peer-to-peer learning platform that connects students and facilit
 ## 📁 Project Structure
 
 ```
-webyalaya-mvp-1/
+education_vidyalaya/
 ├── backend/                    # NestJS Backend Service
 │   ├── src/
 │   │   ├── achievements/       # Achievement tracking system
@@ -316,26 +316,20 @@ The project includes GitHub Actions workflows for automated deployment:
 └── deploy.yml              # Deploy to production
 ```
 
-### Deployment Environments
 
-- **Development**: `dev.webyalaya.com`
-- **Testing**: `test.webyalaya.com`
-- **Production**: `webyalaya.com`
 
 ### Manual Deployment
 
 ```bash
 # Build backend
 cd backend
-docker build -t webyalaya-backend .
+
 
 # Build frontend
 cd my-app
-docker build -t webyalaya-frontend .
 
-# Push to registry
-docker push your-registry/webyalaya-backend
-docker push your-registry/webyalaya-frontend
+
+
 ```
 
 See [deployment documentation](docs/05-deployment/) for detailed guides.
@@ -446,9 +440,6 @@ cd backend/scripts
 pnpm tsx test-achievement-flow.ts
 ```
 
-## 🤝 Contributing
-
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ### Development Workflow
 
@@ -466,14 +457,7 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guid
 - Update documentation
 - Follow existing code style
 
-## 📄 License
 
-This project is proprietary and confidential.
-
-## 👥 Team
-
-- **Development Team**: Webyalaya Team
-- **Contact**: support@webyalaya.com
 
 ## 🔗 Related Documentation
 
@@ -495,4 +479,4 @@ For support, email support@webyalaya.com or join our community Discord.
 
 ---
 
-**Built with ❤️ by the Webyalaya Team**
+
