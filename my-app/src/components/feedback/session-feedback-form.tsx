@@ -252,23 +252,23 @@ export function SessionFeedbackForm({
               "valueScore",
               1,
               10,
-              "Q1. On a scale of 1–10, how valuable does Webyalaya feel to you right now?"
+              "Q1. On a scale of 1–10, how valuable does We feel to you right now?"
             )}
             {renderScaleInput(
               "npsScore",
               0,
               10,
-              "Q2. How likely are you to recommend Webyalaya to a friend or colleague?"
+              "Q2. How likely are you to recommend We to a friend or colleague?"
             )}
             {renderRadioGroup(
               "clarityOfPurpose",
               CLARITY_OPTIONS,
-              "Q3. How clear was it to understand what Webyalaya does within the first 30 seconds?"
+              "Q3. How clear was it to understand what We does within the first 30 seconds?"
             )}
             {renderRadioGroup(
               "likelihoodToContinue",
               CONTINUE_USING_OPTIONS,
-              "Q4. How likely are you to continue using Webyalaya after beta?"
+              "Q4. How likely are you to continue using We after beta?"
             )}
           </div>
         );
@@ -278,17 +278,17 @@ export function SessionFeedbackForm({
           <div className="space-y-8">
             {renderTextInput(
               "problemHopingToSolve",
-              "Q5. What problem were you hoping Webyalaya would solve for you?",
+              "Q5. What problem were you hoping We would solve for you?",
               "Describe the problem you were trying to solve..."
             )}
             {renderRadioGroup(
               "problemSolvedExtent",
               PROBLEM_SOLVED_OPTIONS,
-              "Q6. To what extent does Webyalaya currently solve that problem?"
+              "Q6. To what extent does We currently solve that problem?"
             )}
             {renderTextInput(
               "whatMakeMustUse",
-              "Q7. What would make Webyalaya a must-use platform for you?",
+              "Q7. What would make We a must-use platform for you?",
               "What features or improvements would make it essential..."
             )}
             {renderRadioGroup(
@@ -351,7 +351,7 @@ export function SessionFeedbackForm({
           </div>
           <div className="flex-1">
             <div className="flex items-center gap-2">
-              <h2 className="text-2xl font-bold text-white">Help Shape Webyalaya</h2>
+              <h2 className="text-2xl font-bold text-white">Help Shape We</h2>
               <Sparkles className="h-5 w-5 text-yellow-500" />
             </div>
             <p className="text-white/60 mt-1">

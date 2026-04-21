@@ -54,7 +54,7 @@ export function WebinarRegisterClient({
       });
       if (res.debugEmailPreview) {
         console.group(
-          "%c[Webyalaya] Webinar registration email (dev / preview API)",
+          "%c[We] Webinar registration email (dev / preview API)",
           "color:#16a34a;font-weight:bold",
         );
         console.log("To:", res.debugEmailPreview.to);
@@ -64,7 +64,7 @@ export function WebinarRegisterClient({
         console.groupEnd();
       } else if (process.env.NODE_ENV === "development") {
         console.info(
-          "[Webyalaya] No email preview in API response. If the Nest API runs with NODE_ENV=production, set WEBINAR_EXPOSE_EMAIL_PREVIEW_IN_API=true (or LOG_WEBINAR_REGISTRATION_EMAIL=true) in backend .env, or use NODE_ENV=development for local API.",
+          "[We] No email preview in API response. If the Nest API runs with NODE_ENV=production, set WEBINAR_EXPOSE_EMAIL_PREVIEW_IN_API=true (or LOG_WEBINAR_REGISTRATION_EMAIL=true) in backend .env, or use NODE_ENV=development for local API.",
         );
       }
       setDone({

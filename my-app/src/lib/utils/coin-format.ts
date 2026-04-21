@@ -3,9 +3,9 @@
  */
 
 /**
- * Formats Webya Coins value for display - shows actual value with up to 2 decimal places
+ * Formats We Coins value for display - shows actual value with up to 2 decimal places
  * No conversion is done - displays the raw value as stored
- * @param coins - The Webya Coins value to format
+ * @param coins - The We Coins value to format
  * @returns Formatted string with up to 2 decimal places
  */
 export function formatCoins(coins: number | string | null | undefined): string {

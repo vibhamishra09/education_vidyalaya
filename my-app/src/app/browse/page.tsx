@@ -3,7 +3,7 @@ import { BrowseClient } from "./browse-client";
 
 export const metadata: Metadata = {
   title: "Community Feed",
-  description: "Explore Webyalaya's premium community feed with live study rooms, trending debates, cover-led posts, and personalized discovery.",
+  description: "Explore We's premium community feed with live study rooms, trending debates, cover-led posts, and personalized discovery.",
   keywords: [
     "community feed",
     "study rooms",
@@ -14,8 +14,8 @@ export const metadata: Metadata = {
     "personalized study feed",
   ],
   openGraph: {
-    title: "Community Feed | Webyalaya",
-    description: "Discover live study rooms, trending debates, and premium post-style updates across Webyalaya.",
+    title: "Community Feed | We",
+    description: "Discover live study rooms, trending debates, and premium post-style updates across We.",
     url: "/browse",
     type: "website",
     images: [
@@ -23,13 +23,13 @@ export const metadata: Metadata = {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Webyalaya Community Feed",
+        alt: "We Community Feed",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Community Feed | Webyalaya",
+    title: "Community Feed | We",
     description: "Discover live study rooms, trending debates, and premium post-style updates.",
     images: ["/og-image.png"],
   },
@@ -42,8 +42,8 @@ export const metadata: Metadata = {
 const jsonLd = {
   "@context": "https://schema.org",
   "@type": "CollectionPage",
-  "name": "Webyalaya Community Feed",
-  "description": "Discover live study rooms, debates, and personalized learning updates on Webyalaya",
+  "name": "We Community Feed",
+  "description": "Discover live study rooms, debates, and personalized learning updates on We",
   "url": "https://webyalaya.com/browse",
   "mainEntity": {
     "@type": "ItemList",

@@ -1,22 +1,22 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { Navigation } from "@/components/layout/navigation";
-import { Footer } from "@/components/layout/footer";
+
 import { PricingClient } from "./pricing-client";
 
 export const metadata: Metadata = {
   title: "Pricing",
   description:
-    "Webyalaya plans: Basic free tier, Plus at ₹29/month with unlimited rooms, and free Student Access with your school or college code.",
+    "We plans: Basic free tier, Plus at ₹29/month with unlimited rooms, and free Student Access with your school or college code.",
   keywords: [
-    "webyalaya pricing",
+    "we pricing",
     "study room plans",
     "student access code",
     "plus subscription",
     "peer learning pricing",
   ],
   openGraph: {
-    title: "Pricing | Webyalaya",
+    title: "Pricing | We",
     description:
       "Learn together, grow together. Choose Basic, Plus, or unlock Student Access with your campus code.",
     url: "/pricing",
@@ -24,7 +24,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Pricing | Webyalaya",
+    title: "Pricing | We",
     description: "Plans for study rooms, debate rooms, and campus-wide access.",
   },
   alternates: {
@@ -35,8 +35,8 @@ export const metadata: Metadata = {
 const jsonLd = {
   "@context": "https://schema.org",
   "@type": "WebPage",
-  name: "Webyalaya Pricing",
-  description: "Pricing and plans for Webyalaya peer learning.",
+  name: "We Pricing",
+  description: "Pricing and plans for We peer learning.",
   url: "https://webyalaya.com/pricing",
 };
 
@@ -55,7 +55,7 @@ export default function PricingPage() {
         <PricingClient />
       </main>
 
-      <Footer />
+
     </div>
   );
 }

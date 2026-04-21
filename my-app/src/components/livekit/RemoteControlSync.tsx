@@ -15,7 +15,7 @@ export function RemoteControlSync() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    const channel = new BroadcastChannel('webyalaya-remote-control');
+    const channel = new BroadcastChannel('we-remote-control');
 
     const handleMessage = (event: MessageEvent<RemoteControlMessage & { isControlled?: boolean }>) => {
       const { type, x, y, deltaY, button, key, isControlled } = event.data;

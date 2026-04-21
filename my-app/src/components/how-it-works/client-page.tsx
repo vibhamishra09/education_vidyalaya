@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import { CheckCircle2, ArrowRight } from "lucide-react";
 import Link from "next/link";
 
-type FeatureTab = "study-rooms" | "peer-sessions" | "debate-rooms" | "webya-coins" | "streaks";
+type FeatureTab = "study-rooms" | "peer-sessions" | "debate-rooms" | "we-coins" | "streaks";
 
 const FEATURES = {
   "study-rooms": {
@@ -54,7 +54,7 @@ const FEATURES = {
     cta: "Browse Debates",
     href: "/debateroom"
   },
-  "webya-coins": {
+  "we-coins": {
     label: "Coins",
     title: "Earn rewards for your learning journey.",
     description: "Our virtual currency system rewards you for being an active and helpful member of the community. Invest in your learning growth.",
@@ -64,7 +64,7 @@ const FEATURES = {
       "Spend wisely: Use Coins to highlight your requests or join premium rooms.",
       "Transparent wallet: Track every earning and spending transaction easily."
     ],
-    image: "https://placehold.co/800x500/fff7ed/ea580c?text=Webya+Demo",
+    image: "https://placehold.co/800x500/fff7ed/ea580c?text=We+Demo",
     cta: "Check Wallet",
     href: "/profile?tab=wallet"
   },
@@ -190,10 +190,10 @@ export function HowItWorksClient() {
               <div className="absolute -bottom-6 -left-6 bg-background rounded-xl p-4 shadow-xl border hidden md:block animate-bounce-slow">
                  <div className="flex items-center gap-3">
                     <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold">
-                      {activeTab === "webya-coins" ? "🪙" : "🚀"}
+                      {activeTab === "we-coins" ? "🪙" : "🚀"}
                     </div>
                     <div>
-                      <div className="text-sm font-semibold">Webyalaya</div>
+                      <div className="text-sm font-semibold">We</div>
                       <div className="text-xs text-muted-foreground">Level up your learning</div>
                     </div>
                  </div>

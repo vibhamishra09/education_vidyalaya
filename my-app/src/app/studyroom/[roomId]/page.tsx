@@ -60,12 +60,12 @@ export async function generateMetadata({
   // Default metadata if room not found
   if (!room) {
     return {
-      title: "Study Room | Webyalaya",
-      description: "Join a peer-to-peer learning session on Webyalaya",
+      title: "Study Room | We",
+      description: "Join a peer-to-peer learning session on We",
       openGraph: {
-        title: "Study Room | Webyalaya",
-        description: "Join a peer-to-peer learning session on Webyalaya",
-        siteName: "Webyalaya",
+        title: "Study Room | We",
+        description: "Join a peer-to-peer learning session on We",
+        siteName: "We",
         type: "website",
       },
     };
@@ -108,13 +108,13 @@ export async function generateMetadata({
   const ogImageUrl = room.imageUrl || generatedOgImageUrl;
 
   return {
-    title: `${room.title} | Study Room - Webyalaya`,
+    title: `${room.title} | Study Room - We`,
     description: room.description || description,
     openGraph: {
       title: room.title,
       description: description,
       url: pageUrl,
-      siteName: "Webyalaya",
+      siteName: "We",
       type: "website",
       images: [
         {

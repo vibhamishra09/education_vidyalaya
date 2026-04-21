@@ -620,8 +620,8 @@ export class UsersService {
         try {
           const viewer = viewerIdOrClerkId
             ? await this.findUserByIdOrClerkId(viewerIdOrClerkId, {
-                select: { id: true },
-              })
+              select: { id: true },
+            })
             : null;
 
           const user = await withQueryTimeout(
@@ -718,14 +718,14 @@ export class UsersService {
               }),
               viewer?.id
                 ? this.prisma.userFollow.findUnique({
-                    where: {
-                      followerId_followingId: {
-                        followerId: viewer.id,
-                        followingId: profile.id,
-                      },
+                  where: {
+                    followerId_followingId: {
+                      followerId: viewer.id,
+                      followingId: profile.id,
                     },
-                    select: { id: true },
-                  })
+                  },
+                  select: { id: true },
+                })
                 : Promise.resolve(null),
             ]),
             25000, // 25 second timeout
@@ -999,8 +999,8 @@ export class UsersService {
       } : {}),
       ...(query.trim()
         ? {
-            name: { contains: query.trim(), mode: 'insensitive' as const },
-          }
+          name: { contains: query.trim(), mode: 'insensitive' as const },
+        }
         : {}),
     };
 
@@ -1044,7 +1044,7 @@ export class UsersService {
       // Recommendation Formula:
       // (Skill Match * 0.6) + (Availability * 0.3) + (Rating * 0.1)
 
-      const candidates = await this.prisma.user.findMany({
+      const candidates = (await this.prisma.user.findMany({
         where: {
           id: { notIn: excludingUserIds },
           onboarded: true,
@@ -1058,27 +1058,27 @@ export class UsersService {
           userSkills: {
             include: { skill: true },
           },
-          receivedReviews: {
+          reviewsReceived: {
             select: { rating: true },
           },
         },
-        take: 50, // Fetch a pool to rank
-      });
+        take: 50,
+      })) as any[];
 
       const ranked = candidates.map((user) => {
         // 1. Skill Score (0.6)
         const userHas = user.userSkills
           .filter((us) => us.type === 'HAS')
           .map((us) => us.skillId);
-        
+
         const matchingSkills = userHas.filter((id) => viewerWants.includes(id));
-        const skillScore = viewerWants.length > 0 
+        const skillScore = viewerWants.length > 0
           ? (matchingSkills.length / viewerWants.length) * 0.6
           : 0;
 
         // 2. Rating Score (0.1) - fallback to 0.8 (4 stars) for new users
-        const avgRating = user.receivedReviews.length > 0
-          ? user.receivedReviews.reduce((acc, r) => acc + r.rating, 0) / user.receivedReviews.length
+        const avgRating = (user.reviewsReceived?.length || 0) > 0
+          ? user.reviewsReceived.reduce((acc: number, r: any) => acc + (r.rating || 0), 0) / user.reviewsReceived.length
           : 4;
         const ratingScore = (avgRating / 5) * 0.1;
 
@@ -1128,7 +1128,7 @@ export class UsersService {
         onboarded: true,
         coins: new Prisma.Decimal(1000000000),
       };
-      
+
       systemUser = await this.prisma.user.create({
         data,
         select: { id: true },

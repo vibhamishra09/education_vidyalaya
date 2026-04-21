@@ -8,8 +8,8 @@ export async function generateMetadata({
   await params; // Channel ID not needed for metadata
 
   return {
-    title: `Chat Channel | Webyalaya`,
-    description: "Connect with peers through chat on Webyalaya. Message other learners and collaborate on your learning journey.",
+    title: `Chat Channel | We`,
+    description: "Connect with peers through chat on We. Message other learners and collaborate on your learning journey.",
     robots: {
       index: false, // Chat channels are private
       follow: false,

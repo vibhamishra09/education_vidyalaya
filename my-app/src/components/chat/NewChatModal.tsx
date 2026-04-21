@@ -147,7 +147,7 @@ export function NewChatModal({ open, onClose, onSelectUser, isCreating }: NewCha
                   {search ? 'No users found' : 'Start typing to search'}
                 </p>
                 <p className="mt-1 text-[11px] text-gray-400">
-                  {search ? 'Try a different name' : 'Find people on Webyalaya'}
+                  {search ? 'Try a different name' : 'Find people on We'}
                 </p>
               </div>
             ) : (

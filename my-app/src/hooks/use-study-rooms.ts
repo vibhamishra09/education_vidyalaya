@@ -137,7 +137,7 @@ export function useJoinStudyRoom() {
       queryClient.invalidateQueries({ queryKey: studyRoomKeys.detail(studyRoomId) });
       queryClient.invalidateQueries({ queryKey: studyRoomKeys.detail(slug) });
       queryClient.invalidateQueries({ queryKey: studyRoomKeys.lists() });
-      // Invalidate current user to refresh webya balance
+      // Invalidate current user to refresh we balance
       queryClient.invalidateQueries({ queryKey: ['users', 'current'] });
       // Invalidate transaction history to show the new payment
       queryClient.invalidateQueries({ queryKey: ['transactions'] });

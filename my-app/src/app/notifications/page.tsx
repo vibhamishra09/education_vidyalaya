@@ -4,7 +4,7 @@ import { NotificationsClient } from "./notifications-client";
 
 export const metadata: Metadata = {
   title: "Notifications",
-  description: "View and manage your Webyalaya notifications. Stay updated on session requests, reviews, and more.",
+  description: "View and manage your We notifications. Stay updated on session requests, reviews, and more.",
   robots: {
     index: false,
     follow: false,

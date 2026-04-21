@@ -127,7 +127,7 @@ export class UsersController {
   @Get('users/recommendations')
   @UseGuards(ClerkAuthGuard)
   async getRecommendations(@CurrentUser('clerkId') clerkUserId: string, @Query('limit') limit?: string) {
-    return this.usersService.getRecommendedPeers(clerkUserId, parseInt(limit, 10) || 6);
+    return this.usersService.getRecommendedPeers(clerkUserId, parseInt(limit || '6', 10));
   }
 
   @Get('users-search')

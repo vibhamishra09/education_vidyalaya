@@ -40,10 +40,10 @@ export function useRemoteControl() {
   const [targetScreenShareId, setTargetScreenShareId] = useState<string | null>(null);
   const [isRequestPending, setIsRequestPending] = useState(false);
   
-  // Broadcast channel to sync events across all open Webyalaya tabs/windows
+  // Broadcast channel to sync events across all open We tabs/windows
   const broadcastRef = useRef<BroadcastChannel | null>(null);
   useEffect(() => {
-    broadcastRef.current = new BroadcastChannel('webyalaya-remote-control');
+    broadcastRef.current = new BroadcastChannel('we-remote-control');
     // Sync base state initially
     broadcastRef.current.postMessage({ isControlled: !!controllerId });
     return () => broadcastRef.current?.close();

@@ -4,21 +4,21 @@ import { Navigation } from "@/components/layout/navigation";
 import { Suspense } from "react";
 
 export const metadata: Metadata = {
-  title: "Terms & Conditions | Webyalaya",
-  description: "Read Webyalaya's Terms & Conditions. Understand the rules, responsibilities, and guidelines for using our peer-to-peer learning platform. Learn about acceptable use, content rights, and platform policies.",
+  title: "Terms & Conditions | We",
+  description: "Read We's Terms & Conditions. Understand the rules, responsibilities, and guidelines for using our peer-to-peer learning platform. Learn about acceptable use, content rights, and platform policies.",
   keywords: [
     "terms and conditions",
     "terms of service",
     "user agreement",
     "platform rules",
     "acceptable use policy",
-    "webyalaya terms",
+    "we terms",
     "legal terms",
     "service agreement",
   ],
   openGraph: {
-    title: "Terms & Conditions | Webyalaya",
-    description: "Read the terms and conditions for using Webyalaya's peer-to-peer learning platform.",
+    title: "Terms & Conditions | We",
+    description: "Read the terms and conditions for using We's peer-to-peer learning platform.",
     url: "/terms-of-use",
     type: "website",
     images: [
@@ -26,14 +26,14 @@ export const metadata: Metadata = {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Webyalaya Terms & Conditions",
+        alt: "We Terms & Conditions",
       },
     ],
   },
   twitter: {
     card: "summary",
-    title: "Terms & Conditions | Webyalaya",
-    description: "Read the terms and conditions for using Webyalaya's peer-to-peer learning platform.",
+    title: "Terms & Conditions | We",
+    description: "Read the terms and conditions for using We's peer-to-peer learning platform.",
   },
   robots: {
     index: true,
@@ -71,7 +71,7 @@ export default function TermsOfUsePage() {
           <div className="prose prose-slate dark:prose-invert max-w-none space-y-6">
             <p>
               These Terms & Conditions govern your access to and use of It
-              Webyalaya. By using the Platform, you agree to be bound by these
+              We. By using the Platform, you agree to be bound by these
               Terms.
             </p>
 
@@ -80,7 +80,7 @@ export default function TermsOfUsePage() {
                 1. Platform Nature & Role
               </h3>
               <p>
-                Webyalaya is a peer‑to‑peer learning facilitation platform. We
+                We is a peer‑to‑peer learning facilitation platform. We
                 are not a university, coaching institute, employer, or
                 government‑recognized certification authority. We do not
                 guarantee learning outcomes, employment, academic success, or
@@ -132,7 +132,7 @@ export default function TermsOfUsePage() {
                   Users retain ownership of original content they create or share
                 </li>
                 <li>
-                  Webyalaya retains rights over platform infrastructure,
+                  We retains rights over platform infrastructure,
                   AI‑generated outputs, and aggregated, anonymized learning
                   insights
                 </li>
@@ -145,14 +145,14 @@ export default function TermsOfUsePage() {
               </h3>
               <ul className="list-disc pl-5 mt-2 space-y-1">
                 <li>
-                  Certain features or sessions may require payment or Webya Coins
+                  Certain features or sessions may require payment or We Coins
                 </li>
                 <li>Refund eligibility is governed by platform‑specific policies</li>
                 <li>
                   No‑shows or late cancellations may result in forfeiture of
                   credits
                 </li>
-                <li>Webya Coins are non‑refundable and non‑redeemable</li>
+                <li>We Coins are non‑refundable and non‑redeemable</li>
               </ul>
             </section>
 
@@ -161,7 +161,7 @@ export default function TermsOfUsePage() {
                 6. No Degree or Formal Certification Claim
               </h3>
               <p>
-                Webyalaya does not award formal academic degrees. Certificates
+                We does not award formal academic degrees. Certificates
                 or recognitions issued are participation‑based or skill‑based
                 acknowledgements and should not be interpreted as
                 government‑recognized academic qualifications unless explicitly
@@ -175,7 +175,7 @@ export default function TermsOfUsePage() {
               </h3>
               <p>
                 AI tools are used for moderation, summaries, and recommendations.
-                AI outputs are assistive and not authoritative. Webyalaya reserves
+                AI outputs are assistive and not authoritative. We reserves
                 the right to override AI‑based decisions.
               </p>
               <p className="mt-2">
@@ -190,7 +190,7 @@ export default function TermsOfUsePage() {
               <h3 className="text-xl font-semibold text-foreground mb-3">
                 8. Suspension & Termination
               </h3>
-              <p>Webyalaya may suspend or terminate access if:</p>
+              <p>We may suspend or terminate access if:</p>
               <ul className="list-disc pl-5 mt-2 space-y-1">
                 <li>These Terms are violated</li>
                 <li>Fraud, misuse, or abuse is detected</li>
@@ -202,7 +202,7 @@ export default function TermsOfUsePage() {
               <h3 className="text-xl font-semibold text-foreground mb-3">
                 9. Limitation of Liability
               </h3>
-              <p>Webyalaya is not liable for:</p>
+              <p>We is not liable for:</p>
               <ul className="list-disc pl-5 mt-2 space-y-1">
                 <li>Accuracy or reliability of peer‑shared content</li>
                 <li>Learning outcomes or career impact</li>
@@ -211,7 +211,7 @@ export default function TermsOfUsePage() {
                 </li>
               </ul>
               <p className="mt-2">
-                Webyalaya does not guarantee the factual accuracy of statements
+                We does not guarantee the factual accuracy of statements
                 made in Debate Rooms. Users are encouraged to verify information
                 independently. Repeated dissemination of knowingly false or
                 misleading information may result in moderation or suspension.
@@ -223,7 +223,7 @@ export default function TermsOfUsePage() {
                 10. Indemnity
               </h3>
               <p>
-                Users agree to indemnify and hold harmless Webyalaya and Humitra
+                Users agree to indemnify and hold harmless We and Humitra
                 Private Limited from claims arising from misuse, violations of
                 these Terms, or unlawful conduct.
               </p>
@@ -234,7 +234,7 @@ export default function TermsOfUsePage() {
                 11. Force Majeure
               </h3>
               <p>
-                Webyalaya shall not be liable for failure or delay in performance
+                We shall not be liable for failure or delay in performance
                 due to events beyond reasonable control, including natural
                 disasters, government actions, network failures, or system
                 outages.

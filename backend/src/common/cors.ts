@@ -34,6 +34,11 @@ export function getAllowedOrigins(): string[] {
       .map((url) => url.trim())
       .filter(Boolean) || []
 
+  // Support single FRONTEND_URL as well
+  if (process.env.FRONTEND_URL) {
+    envUrls.push(process.env.FRONTEND_URL.trim());
+  }
+
   return [...new Set([...envUrls, ...STATIC_ALLOWED_ORIGINS])]
 }
 

@@ -2,7 +2,7 @@
 
 import { Navigation } from "@/components/layout/navigation";
 import { RecordingsList } from "@/components/dashboard/RecordingsList";
-import { Footer } from "@/components/layout/footer";
+
 import { MetricCardComponent } from "@/components/cards/metric-card";
 import { SessionRequestCard } from "@/components/cards/session-request-card";
 import { EnhancedCalendarWidget } from "@/components/dashboard/enhanced-calendar-widget";
@@ -524,7 +524,7 @@ export function DashboardClient() {
         </div>
       </main>
 
-      <Footer />
+
     </div>
   );
 }

@@ -5,7 +5,7 @@
  * (requires dev server or CHAT_FLOW_LOG_API=1 on the API route)
  */
 
-const CLIENT_KEY = 'webyalaya_chat_flow_client_id'
+const CLIENT_KEY = 'we_chat_flow_client_id'
 
 function getOrCreateClientId(): string {
 	if (typeof window === 'undefined') return 'ssr'

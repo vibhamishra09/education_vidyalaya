@@ -4,21 +4,21 @@ import { Navigation } from "@/components/layout/navigation";
 import { Suspense } from "react";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy | Webyalaya",
-  description: "Read Webyalaya's Privacy Policy. Learn how we collect, use, store, and protect your personal information on our peer-to-peer learning platform. Compliant with Indian data protection laws.",
+  title: "Privacy Policy | We",
+  description: "Read We's Privacy Policy. Learn how we collect, use, store, and protect your personal information on our peer-to-peer learning platform. Compliant with Indian data protection laws.",
   keywords: [
     "privacy policy",
     "data protection",
     "user privacy",
     "data security",
     "personal information",
-    "webyalaya privacy",
+    "we privacy",
     "Indian data protection",
     "IT Act compliance",
   ],
   openGraph: {
-    title: "Privacy Policy | Webyalaya",
-    description: "Learn how Webyalaya protects your privacy and handles your personal information.",
+    title: "Privacy Policy | We",
+    description: "Learn how We protects your privacy and handles your personal information.",
     url: "/privacy-policy",
     type: "website",
     images: [
@@ -26,14 +26,14 @@ export const metadata: Metadata = {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Webyalaya Privacy Policy",
+        alt: "We Privacy Policy",
       },
     ],
   },
   twitter: {
     card: "summary",
-    title: "Privacy Policy | Webyalaya",
-    description: "Learn how Webyalaya protects your privacy and handles your personal information.",
+    title: "Privacy Policy | We",
+    description: "Learn how We protects your privacy and handles your personal information.",
   },
   robots: {
     index: true,
@@ -70,11 +70,11 @@ export default function PrivacyPolicyPage() {
 
           <div className="prose prose-slate dark:prose-invert max-w-none space-y-6">
             <p>
-              Webyalaya (“Webyalaya”, “we”, “our”, “us”) is a Human + AI powered
+              We (“We”, “we”, “our”, “us”) is a Human + AI powered
               peer‑to‑peer learning platform operated by Humitra Private
               Limited, incorporated under the laws of India. This Privacy Policy
               explains how we collect, use, store, disclose, and safeguard
-              information when you access or use the Webyalaya platform (the
+              information when you access or use the We platform (the
               “Platform”).
             </p>
             <p>
@@ -88,7 +88,7 @@ export default function PrivacyPolicyPage() {
                 1. Regulatory & Policy Alignment
               </h3>
               <p>
-                Webyalaya is designed and operated in alignment with applicable
+                We is designed and operated in alignment with applicable
                 Indian laws and government frameworks, including but not limited
                 to the Information Technology Act, 2000, applicable IT Rules,
                 data‑protection best practices, Startup India and DPIIT
@@ -156,7 +156,7 @@ export default function PrivacyPolicyPage() {
                     2.4 Wallet & Digital Credit Data
                   </h4>
                   <ul className="list-disc pl-5 mt-2 space-y-1">
-                    <li>Webya Coins wallet balance</li>
+                    <li>We Coins wallet balance</li>
                     <li>Transaction and usage history</li>
                     <li>Credits earned, spent, or rewarded within the Platform</li>
                   </ul>
@@ -189,7 +189,7 @@ export default function PrivacyPolicyPage() {
                 3. Lawful Processing & User Consent
               </h3>
               <p>
-                All personal data collected by Webyalaya is processed lawfully,
+                All personal data collected by We is processed lawfully,
                 fairly, and transparently, with explicit user consent obtained
                 at the time of registration and continued platform usage. Users
                 are informed of the purpose, scope, and retention of their data
@@ -230,13 +230,13 @@ export default function PrivacyPolicyPage() {
                 5. Live Session Recording & Content Usage
               </h3>
               <p>
-                By accessing or using Webyalaya, you acknowledge and agree that
+                By accessing or using We, you acknowledge and agree that
                 live sessions, study rooms, and debate rooms may be recorded.
                 Recordings may include audio, video, chat messages, and shared
                 content.
               </p>
               <p className="mt-2">
-                You grant Webyalaya a non‑exclusive, royalty‑free, worldwide,
+                You grant We a non‑exclusive, royalty‑free, worldwide,
                 perpetual license to store, use, reproduce, modify, anonymize,
                 distribute, and display such recordings or excerpts for:
               </p>
@@ -264,7 +264,7 @@ export default function PrivacyPolicyPage() {
                 hateful, or unlawful speech.
               </p>
               <p className="mt-2">
-                Webyalaya reserves the right to monitor, moderate, restrict, or
+                We reserves the right to monitor, moderate, restrict, or
                 remove content and participants in Debate Rooms to maintain
                 safety, learning integrity, and compliance with applicable laws.
               </p>
@@ -279,14 +279,14 @@ export default function PrivacyPolicyPage() {
 
             <section>
               <h3 className="text-xl font-semibold text-foreground mb-3">
-                7. Webya Coins & Wallet System
+                7. We Coins & Wallet System
               </h3>
               <p>
-                Webya Coins are a closed‑loop, platform‑specific digital credit
+                We Coins are a closed‑loop, platform‑specific digital credit
                 system intended solely to facilitate learning interactions
-                within Webyalaya.
+                within We.
               </p>
-              <p className="mt-2">Webya Coins:</p>
+              <p className="mt-2">We Coins:</p>
               <ul className="list-disc pl-5 mt-2 space-y-1">
                 <li>Do not represent real currency or monetary value</li>
                 <li>Are not transferable, tradable, or redeemable for cash</li>
@@ -294,10 +294,10 @@ export default function PrivacyPolicyPage() {
                   Do not constitute cryptocurrency, securities, or financial
                   instruments
                 </li>
-                <li>Are usable only within the Webyalaya Platform</li>
+                <li>Are usable only within the We Platform</li>
               </ul>
               <p className="mt-2">
-                Webyalaya does not provide financial services, investment
+                We does not provide financial services, investment
                 products, or payment guarantees of any kind.
               </p>
             </section>
@@ -307,7 +307,7 @@ export default function PrivacyPolicyPage() {
                 8. Data Sharing & Disclosure
               </h3>
               <p>
-                Webyalaya does not sell personal data. Information may be shared
+                We does not sell personal data. Information may be shared
                 only:
               </p>
               <ul className="list-disc pl-5 mt-2 space-y-1">
@@ -321,7 +321,7 @@ export default function PrivacyPolicyPage() {
                 </li>
                 <li>
                   To protect the rights, safety, integrity, or security of
-                  Webyalaya and its users
+                  We and its users
                 </li>
               </ul>
             </section>
@@ -370,15 +370,15 @@ export default function PrivacyPolicyPage() {
                 11. Content Neutrality Disclaimer
               </h3>
               <p>
-                Webyalaya acts as a neutral technology platform facilitating
+                We acts as a neutral technology platform facilitating
                 peer‑to‑peer learning. The views, opinions, and content shared
-                by users do not represent the views of Webyalaya or Humitra
+                by users do not represent the views of We or Humitra
                 Private Limited.
               </p>
               <p className="mt-2">
                 The views, opinions, and arguments expressed by participants in
                 Debate Rooms are solely those of the users and do not represent
-                the views of Webyalaya or Humitra Private Limited. Webyalaya
+                the views of We or Humitra Private Limited. We
                 does not endorse any position discussed in Debate Rooms.
               </p>
             </section>
@@ -388,14 +388,14 @@ export default function PrivacyPolicyPage() {
                 12. AI Ethics & Transparency
               </h3>
               <p>
-                Webyalaya uses AI responsibly to assist learning through
+                We uses AI responsibly to assist learning through
                 moderation, summaries, and recommendations. AI systems are
                 designed to augment human learning and decision‑making, not
                 replace them.
               </p>
               <p className="mt-2">
                 AI‑generated outputs are advisory in nature and subject to human
-                oversight. Webyalaya follows principles of transparency,
+                oversight. We follows principles of transparency,
                 fairness, and non‑discrimination in AI usage.
               </p>
             </section>
@@ -416,7 +416,7 @@ export default function PrivacyPolicyPage() {
               </h3>
               <p>
                 In accordance with the Information Technology Act and applicable
-                rules, Webyalaya has appointed a Grievance Officer.
+                rules, We has appointed a Grievance Officer.
               </p>
               <div className="mt-2 bg-muted p-4 rounded-lg">
                 <p>

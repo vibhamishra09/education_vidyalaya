@@ -51,7 +51,7 @@ function isLocalDevHostname(hostname: string): boolean {
 }
 
 /** Public website origin — not the Nest API. Using it as NEXT_PUBLIC_API_URL breaks local dev. */
-function looksLikeWebyalayaMarketingOrigin(url: string): boolean {
+function looksLikeWeMarketingOrigin(url: string): boolean {
   try {
     const u = new URL(url);
     const host = u.hostname.replace(/^www\./i, "");
@@ -76,7 +76,7 @@ function resolveApiBaseURL(): string {
     if (
       env &&
       isLocalDevHostname(window.location.hostname) &&
-      looksLikeWebyalayaMarketingOrigin(env)
+      looksLikeWeMarketingOrigin(env)
     ) {
       if (process.env.NODE_ENV === "development") {
         // eslint-disable-next-line no-console -- intentional misconfiguration hint

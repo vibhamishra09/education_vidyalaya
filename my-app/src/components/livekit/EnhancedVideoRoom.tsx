@@ -2682,7 +2682,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 					pipWindowRef.current = pipWindow
 
 					const doc = pipWindow.document
-					doc.title = 'Webyalaya Session'
+					doc.title = 'We Session'
 					doc.body.style.background = '#000'
 					doc.body.style.margin = '0'
 					doc.body.style.padding = '0'
@@ -2850,7 +2850,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 			// Optional: Update MediaSession for conferencing mode
 			if ('mediaSession' in navigator) {
 				navigator.mediaSession.metadata = new MediaMetadata({
-					title: 'Webyalaya Session',
+					title: 'We Session',
 					artist: 'Live Session',
 				});
 
@@ -2960,7 +2960,7 @@ const VideoRoomContent = memo(function VideoRoomContent({
 								</div>
 								<div className="flex items-center gap-1.5 md:gap-2">
 									<span className="text-white text-[10px] md:text-xs font-semibold tracking-wide truncate max-w-[120px] md:max-w-none">
-										{roomTitle || 'Webyalaya Meeting'}
+										{roomTitle || 'We Meeting'}
 									</span>
 									<div className="w-px h-3 bg-white/10" />
 									<span className="text-white/50 text-[9px] md:text-xs font-mono whitespace-nowrap">

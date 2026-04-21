@@ -18,7 +18,7 @@ export function ServiceWorkerRegistration() {
       if ("caches" in window) {
         void caches.keys().then((cacheKeys) => {
           cacheKeys.forEach((cacheKey) => {
-            if (cacheKey.startsWith("webyalaya-")) {
+            if (cacheKey.startsWith("we-")) {
               void caches.delete(cacheKey);
             }
           });

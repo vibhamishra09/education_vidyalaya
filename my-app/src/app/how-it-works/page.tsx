@@ -7,19 +7,19 @@ import { Sparkles } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "How It Works",
-  description: "Learn how Webyalaya works. Create study rooms, send peer requests, understand Webya, and start your collaborative learning journey in minutes.",
+  description: "Learn how We works. Create study rooms, send peer requests, understand We, and start your collaborative learning journey in minutes.",
   keywords: [
-    "how webyalaya works",
+    "how we works",
     "create study room",
     "peer request",
-    "Webya explained",
+    "We explained",
     "peer learning guide",
     "online tutoring tutorial",
     "study room tutorial",
   ],
   openGraph: {
-    title: "How It Works | Webyalaya",
-    description: "A simple guide to creating study rooms, sending peer requests, and using Webya on Webyalaya.",
+    title: "How It Works | We",
+    description: "A simple guide to creating study rooms, sending peer requests, and using We on We.",
     url: "/how-it-works",
     type: "article",
     images: [
@@ -27,14 +27,14 @@ export const metadata: Metadata = {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "How Webyalaya Works",
+        alt: "How We Works",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "How It Works | Webyalaya",
-    description: "A simple guide to using Webyalaya for peer-to-peer learning.",
+    title: "How It Works | We",
+    description: "A simple guide to using We for peer-to-peer learning.",
     images: ["/og-image.png"],
   },
   alternates: {
@@ -49,7 +49,7 @@ const jsonLd = {
   "mainEntity": [
     {
       "@type": "Question",
-      "name": "How do I create a study room on Webyalaya?",
+      "name": "How do I create a study room on We?",
       "acceptedAnswer": {
         "@type": "Answer",
         "text": "Open Create Study Room from the navbar or dashboard. Describe the topic, pick the time, and set participant limits. Publish it and we instantly share the invite in Browse so peers can join.",
@@ -65,10 +65,10 @@ const jsonLd = {
     },
     {
       "@type": "Question",
-      "name": "What is Webya?",
+      "name": "What is We?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Webya is the virtual currency on Webyalaya. Earn Webya by hosting sessions, completing streaks, or finishing challenges. Spend Webya to join premium rooms, send highlighted peer requests, or unlock add-ons.",
+        "text": "We is the virtual currency on We. Earn We by hosting sessions, completing streaks, or finishing challenges. Spend We to join premium rooms, send highlighted peer requests, or unlock add-ons.",
       },
     },
   ],
@@ -100,7 +100,7 @@ export default function HowItWorksPage() {
                 </span>
               </h1>
               <p className="text-lg sm:text-xl lg:text-2xl text-slate-600 dark:text-slate-400 max-w-4xl mx-auto font-light leading-relaxed text-center">
-                At Webyalaya, knowledge flows both ways — you’re a learner and a teacher
+                At We, knowledge flows both ways — you’re a learner and a teacher
               </p>
             </div>
           </section>

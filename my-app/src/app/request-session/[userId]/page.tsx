@@ -311,7 +311,7 @@ export default function RequestSessionPage({
         setError(
           "You do not have enough Coins to book this session. Please add funds to your wallet.",
         );
-        toast.error("Insufficient funds", { description: "You do not have enough Webya tokens." });
+        toast.error("Insufficient funds", { description: "You do not have enough We tokens." });
       } else if (code === "PAST_TIME_NOT_ALLOWED") {
         setError(msg);
         toast.error("Invalid time", { description: msg });
@@ -657,7 +657,7 @@ export default function RequestSessionPage({
                       <div className="flex items-center gap-1">
                         <Coins className="h-4 w-4 text-yellow-600" />
                         <span className="font-semibold">
-                          {peer?.hourlyRate ? <>{formatCoins(calculatedCost)} Webya</> : 'N/A'}
+                          {peer?.hourlyRate ? <>{formatCoins(calculatedCost)} We</> : 'N/A'}
                         </span>
                       </div>
                     </div>

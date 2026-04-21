@@ -50,13 +50,13 @@ export function Navigation() {
         { href: "/how-it-works", label: "How it works" },
         { href: "/pricing", label: "Pricing" },
         { href: "/dashboard", label: "Dashboard" },
-        { href: "https://www.webyalaya.com/updates", label: "Webya Updates", external: true },
+
       ]
     : [
         { href: "/browse", label: "Feed" },
         { href: "/how-it-works", label: "How it works" },
         { href: "/pricing", label: "Pricing" },
-        { href: "https://www.webyalaya.com/updates", label: "Webya Updates", external: true },
+
       ];
 
   return (
@@ -74,31 +74,15 @@ export function Navigation() {
           <div className="flex h-14 items-center justify-between px-3 sm:px-4 md:px-6">
             {/* Left: logo + links */}
             <div className="flex items-center gap-3 sm:gap-6 min-w-0 flex-1">
-              <Link href="/" className="flex items-center gap-2 relative group shrink-0">
-                <Image
-                  src="/webyalaya-main-logo.svg"
-                  alt="Webyalaya"
-                  width={140}
-                  height={140}
-                  className="object-contain w-auto h-5 sm:h-6 md:h-8 transition-all duration-300 group-hover:scale-105 opacity-95 group-hover:opacity-100"
-                />
-              </Link>
 
               <nav className="hidden md:flex items-center gap-1" aria-label="Primary">
                 {links.map((link) => {
                   const isActive = pathname === link.href;
-                  const linkProps = link.external
-                    ? {
-                        href: link.href,
-                        target: "_blank",
-                        rel: "noopener noreferrer",
-                      }
-                    : { href: link.href };
                   
                   return (
                     <Link
                       key={link.href}
-                      {...linkProps}
+                      href={link.href}
                       className={cn(
                         "relative rounded-full px-4 py-2 text-sm font-medium transition-all duration-300",
                         "text-muted-foreground hover:text-foreground",

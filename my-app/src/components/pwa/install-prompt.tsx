@@ -87,7 +87,7 @@ export function InstallPrompt() {
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
       if (isIOS) {
         alert(
-          "To install Webyalaya on iOS:\n\n" +
+          "To install We on iOS:\n\n" +
           "1. Tap the Share button (square with arrow)\n" +
           "2. Scroll down and tap 'Add to Home Screen'\n" +
           "3. Tap 'Add' to confirm"
@@ -165,7 +165,7 @@ export function InstallPrompt() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <h3 className="font-semibold text-foreground mb-1">
-                    Install Webyalaya
+                    Install We
                   </h3>
                   <p className="text-sm text-muted-foreground mb-4">
                     Install our app for a better experience. Get quick access, offline support, and push notifications.

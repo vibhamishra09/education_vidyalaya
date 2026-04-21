@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { HomeClient } from "./home-client";
 
 export const metadata: Metadata = {
-  title: "Webyalaya - Peer to Peer Learning Platform | Learn & Teach Together",
-  description: "Join Webyalaya, the collaborative learning platform where you can connect with peers, host study rooms, attend live sessions, and earn Webya while learning and teaching skills.",
+  title: "We - Peer to Peer Learning Platform | Learn & Teach Together",
+  description: "Join We, the collaborative learning platform where you can connect with peers, host study rooms, attend live sessions, and earn We while learning and teaching skills.",
   keywords: [
     "peer learning platform",
     "online study rooms",
@@ -14,10 +14,10 @@ export const metadata: Metadata = {
     "learn programming online",
     "teach skills online",
     "Coins",
-    "webyalaya",
+    "we",
   ],
   openGraph: {
-    title: "Webyalaya - Peer to Peer Learning Platform",
+    title: "We - Peer to Peer Learning Platform",
     description: "Connect with peers to learn and teach. Join study rooms, host sessions, and grow together.",
     url: "/",
     type: "website",
@@ -26,13 +26,13 @@ export const metadata: Metadata = {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Webyalaya - Learn and Teach Together",
+        alt: "We - Learn and Teach Together",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Webyalaya - Peer to Peer Learning Platform",
+    title: "We - Peer to Peer Learning Platform",
     description: "Connect with peers to learn and teach. Join study rooms, host sessions, and grow together.",
     images: ["/og-image.png"],
   },
@@ -45,7 +45,7 @@ export const metadata: Metadata = {
 const jsonLd = {
   "@context": "https://schema.org",
   "@type": "WebApplication",
-  "name": "Webyalaya",
+  "name": "We",
   "description": "Peer to peer learning platform for collaborative education",
   "url": "https://webyalaya.com",
   "applicationCategory": "EducationalApplication",

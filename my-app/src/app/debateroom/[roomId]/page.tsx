@@ -27,14 +27,14 @@ export async function generateMetadata({
 
   if (!room) {
     return {
-      title: "Debate Room | Webyalaya",
-      description: "Join a structured debate on Webyalaya.",
+      title: "Debate Room | We",
+      description: "Join a structured debate on We.",
     };
   }
 
   return {
-    title: `${room.topic} | Debate Room | Webyalaya`,
-    description: room.description || `Join the debate: ${room.topic}. Improve your argumentation skills with peers on Webyalaya.`,
+    title: `${room.topic} | Debate Room | We`,
+    description: room.description || `Join the debate: ${room.topic}. Improve your argumentation skills with peers on We.`,
     keywords: [
       "debate",
       "argumentation",
@@ -43,7 +43,7 @@ export async function generateMetadata({
       "intellectual discourse",
     ],
     openGraph: {
-      title: `${room.topic} | Debate Room | Webyalaya`,
+      title: `${room.topic} | Debate Room | We`,
       description: room.description || `Join the debate: ${room.topic}`,
       url: `/debaterooms/${roomId}`,
       type: "website",
@@ -58,7 +58,7 @@ export async function generateMetadata({
     },
     twitter: {
       card: "summary_large_image",
-      title: `${room.topic} | Debate Room | Webyalaya`,
+      title: `${room.topic} | Debate Room | We`,
       description: room.description || `Join the debate: ${room.topic}`,
       images: ["/og-image.png"],
     },

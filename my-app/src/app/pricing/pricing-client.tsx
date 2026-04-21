@@ -231,7 +231,7 @@ export function PricingClient() {
             <Card>
               <CardHeader>
                 <CardTitle id="request-heading" className="text-2xl">
-                  Bring Webyalaya to your campus.
+                  Bring We to your campus.
                 </CardTitle>
                 <CardDescription>
                   Tell us about your institution and we’ll help onboard your students.

@@ -172,7 +172,7 @@ export function WalletChart({ className }: WalletChartProps) {
               Wallet Activity
             </CardTitle>
             <p className="text-sm text-muted-foreground mt-1">
-              Your Webya Coins flow over the last 6 months
+              Your We Coins flow over the last 6 months
             </p>
           </div>
         </div>

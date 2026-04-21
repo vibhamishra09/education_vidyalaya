@@ -292,7 +292,7 @@ export default function SessionFeedbackPage() {
           <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-[#00DC6E] to-[#00DC6E]/80 flex items-center justify-center">
             <MessageSquareHeart className="h-5 w-5 text-white" />
           </div>
-          <span className="text-xl font-bold text-white">Webyalaya</span>
+          <span className="text-xl font-bold text-white">We</span>
         </div>
       </div>
 

@@ -25,8 +25,8 @@ export async function generateMetadata({
   }
 
   return {
-    title: `${sessionTitle} | Peer Session | Webyalaya`,
-    description: `View and manage your peer session on Webyalaya. Connect with peers for one-on-one learning sessions.`,
+    title: `${sessionTitle} | Peer Session | We`,
+    description: `View and manage your peer session on We. Connect with peers for one-on-one learning sessions.`,
     robots: {
       index: false, // Sessions are private
       follow: false,

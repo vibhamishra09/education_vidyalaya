@@ -389,7 +389,7 @@ function SignedOutFeedState({ variant }: { variant: "dashboard" | "page" }) {
           </SignInButton>
           <Link href="/how-it-works">
             <Button variant="outline" className="h-11 rounded-full px-5">
-              See how Webyalaya works
+              See how We works
             </Button>
           </Link>
         </div>

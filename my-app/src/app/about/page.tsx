@@ -3,10 +3,10 @@ import { Navigation } from "@/components/layout/navigation";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "About Webyalaya | Peer-to-Peer Learning Platform",
-  description: "Webyalaya is designed to make learning social again. Instead of learning alone, you learn with peers. Join a community where knowledge flows both ways. Learn about our mission to make education collaborative, accessible, and engaging.",
+  title: "About We | Peer-to-Peer Learning Platform",
+  description: "We is designed to make learning social again. Instead of learning alone, you learn with peers. Join a community where knowledge flows both ways. Learn about our mission to make education collaborative, accessible, and engaging.",
   keywords: [
-    "about webyalaya",
+    "about we",
     "peer learning platform",
     "collaborative learning",
     "social learning",
@@ -16,8 +16,8 @@ export const metadata: Metadata = {
     "peer education",
   ],
   openGraph: {
-    title: "About Webyalaya | Peer-to-Peer Learning Platform",
-    description: "Webyalaya is designed to make learning social again. Instead of learning alone, you learn with peers. Join a community where knowledge flows both ways.",
+    title: "About We | Peer-to-Peer Learning Platform",
+    description: "We is designed to make learning social again. Instead of learning alone, you learn with peers. Join a community where knowledge flows both ways.",
     url: "/about",
     type: "website",
     images: [
@@ -25,14 +25,14 @@ export const metadata: Metadata = {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "About Webyalaya - Peer-to-Peer Learning Platform",
+        alt: "About We - Peer-to-Peer Learning Platform",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "About Webyalaya | Peer-to-Peer Learning Platform",
-    description: "Webyalaya is designed to make learning social again. Instead of learning alone, you learn with peers.",
+    title: "About We | Peer-to-Peer Learning Platform",
+    description: "We is designed to make learning social again. Instead of learning alone, you learn with peers.",
     images: ["/og-image.png"],
   },
   robots: {
@@ -52,7 +52,7 @@ export default function AboutPage() {
       <main className="flex-1 py-12 px-4">
         <div className="container mx-auto max-w-3xl">
           <h1 className="text-3xl font-bold mb-8 text-foreground">
-            About Webyalaya
+            About We
           </h1>
           
           <div className="space-y-6 text-base text-muted-foreground leading-relaxed">
@@ -78,11 +78,11 @@ export default function AboutPage() {
 
             <p>
               That’s the problem we felt personally.
-              And that’s why we built Webyalaya.
+              And that’s why we built We.
             </p>
 
             <p>
-              Webyalaya is designed to make learning social again.
+              We is designed to make learning social again.
               Instead of learning alone from a screen, you learn with peers.
               You talk, ask, explain, debate, and practice together, often in the language you’re most comfortable with.
             </p>

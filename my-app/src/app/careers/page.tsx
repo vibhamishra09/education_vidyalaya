@@ -4,20 +4,20 @@ import { Metadata } from "next";
 import { Suspense } from "react";
 
 export const metadata: Metadata = {
-  title: "Careers | Webyalaya",
-  description: "Join the Webyalaya team and help us revolutionize peer-to-peer learning. Explore open positions and opportunities to make learning social again.",
+  title: "Careers | We",
+  description: "Join the We team and help us revolutionize peer-to-peer learning. Explore open positions and opportunities to make learning social again.",
   keywords: [
     "careers",
     "jobs",
-    "webyalaya careers",
-    "work at webyalaya",
+    "we careers",
+    "work at we",
     "job opportunities",
     "hiring",
     "join our team",
   ],
   openGraph: {
-    title: "Careers | Webyalaya",
-    description: "Join the Webyalaya team and help us revolutionize peer-to-peer learning.",
+    title: "Careers | We",
+    description: "Join the We team and help us revolutionize peer-to-peer learning.",
     url: "/careers",
     type: "website",
     images: [
@@ -25,14 +25,14 @@ export const metadata: Metadata = {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Careers at Webyalaya",
+        alt: "Careers at We",
       },
     ],
   },
   twitter: {
     card: "summary",
-    title: "Careers | Webyalaya",
-    description: "Join the Webyalaya team and help us revolutionize peer-to-peer learning.",
+    title: "Careers | We",
+    description: "Join the We team and help us revolutionize peer-to-peer learning.",
   },
   robots: {
     index: true,
@@ -54,7 +54,7 @@ export default function CareersPage() {
         <div className="space-y-8">
           <div className="text-center">
             <h1 className="text-3xl font-bold tracking-tight md:text-4xl text-foreground">
-              Careers at Webyalaya
+              Careers at We
             </h1>
             <p className="text-muted-foreground mt-2">
               Join us in making learning social again
@@ -63,14 +63,14 @@ export default function CareersPage() {
 
           <div className="prose prose-slate dark:prose-invert max-w-none space-y-6">
             <p>
-              At Webyalaya, we&apos;re building a platform that makes learning collaborative, 
+              At We, we&apos;re building a platform that makes learning collaborative, 
               accessible, and engaging. We believe that real learning happens when people 
               come together to share knowledge, ask questions, and grow together.
             </p>
 
             <section>
               <h2 className="text-2xl font-semibold text-foreground mb-4">
-                Why Join Webyalaya?
+                Why Join We?
               </h2>
               <ul className="list-disc pl-5 mt-2 space-y-2">
                 <li>Work on a mission-driven product that impacts millions of learners</li>
@@ -99,7 +99,7 @@ export default function CareersPage() {
                 >
                   namaste@webyalaya.com
                 </a>
-                {" "}with your resume and a brief note about why you&apos;d like to join Webyalaya.
+                {" "}with your resume and a brief note about why you&apos;d like to join We.
               </p>
             </section>
 

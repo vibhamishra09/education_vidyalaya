@@ -3,7 +3,7 @@ import { DashboardClient } from "./dashboard-client";
 
 export const metadata: Metadata = {
   title: "Dashboard",
-  description: "Your personalized learning dashboard. Track your sessions, manage requests, view achievements, and monitor your learning progress on Webyalaya.",
+  description: "Your personalized learning dashboard. Track your sessions, manage requests, view achievements, and monitor your learning progress on We.",
   keywords: [
     "learning dashboard",
     "session management",
@@ -13,14 +13,14 @@ export const metadata: Metadata = {
     "peer sessions",
   ],
   openGraph: {
-    title: "Dashboard | Webyalaya",
+    title: "Dashboard | We",
     description: "Track your learning journey with your personalized dashboard.",
     url: "/dashboard",
     type: "website",
   },
   twitter: {
     card: "summary",
-    title: "Dashboard | Webyalaya",
+    title: "Dashboard | We",
     description: "Track your learning journey with your personalized dashboard.",
   },
   robots: {

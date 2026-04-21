@@ -585,6 +585,15 @@
     background-clip: text;
   }
 
+  .bg-grid-pattern {
+    background-image: radial-gradient(circle, currentColor 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  .perspective-1000 {
+    perspective: 1000px;
+  }
+
   /* Progress bar styles */
   .progress-bar {
     @apply h-2 bg-gray-200 rounded-full overflow-hidden;
@@ -739,3 +748,11 @@
   from { width: 100%; }
   to   { width: 0%; }
 }
+
+/* ===== CLERK INFINITY THEME OVERRIDES ===== */
+.cl-provider { background: transparent !important; }
+.cl-header { display: none !important; }
+.cl-card { padding: 0 !important; border: none !important; box-shadow: none !important; }
+.cl-main { padding: 0 !important; }
+.cl-internal-kn9v0f, .cl-internal-16p6ue8 { display: none !important; }
+.cl-socialButtonsBlockButton { border-radius: 1rem !important; }

@@ -4,7 +4,7 @@ import { CreateStudyRoomClient } from "./create-study-room-client";
 
 export const metadata: Metadata = {
   title: "Create Study Room",
-  description: "Host a group learning session on Webyalaya. Set your topic, schedule, and participant limit to start teaching and earning Webya coins.",
+  description: "Host a group learning session on We. Set your topic, schedule, and participant limit to start teaching and earning We coins.",
   keywords: [
     "create study room",
     "host study session",
@@ -15,14 +15,14 @@ export const metadata: Metadata = {
     "study group",
   ],
   openGraph: {
-    title: "Create Study Room | Webyalaya",
+    title: "Create Study Room | We",
     description: "Host a group learning session and share your knowledge with peers.",
     url: "/create-study-room",
     type: "website",
   },
   twitter: {
     card: "summary",
-    title: "Create Study Room | Webyalaya",
+    title: "Create Study Room | We",
     description: "Host a group learning session and share your knowledge.",
   },
   robots: {

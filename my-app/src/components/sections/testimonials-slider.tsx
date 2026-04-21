@@ -190,7 +190,7 @@ export function TestimonialsSlider() {
             What Our Community Says
           </h2>
           <p className="text-sm sm:text-base text-muted-foreground max-w-2xl mx-auto font-tagline">
-            Real stories from learners who love using Webyalaya
+            Real stories from learners who love using We
           </p>
         </motion.div>
 

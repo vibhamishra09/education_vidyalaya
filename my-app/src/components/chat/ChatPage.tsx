@@ -78,7 +78,7 @@ export function ChatPage() {
             </div>
             <h2 className="text-xl font-bold text-gray-900 mb-2">Sign in to chat</h2>
             <p className="text-sm text-gray-500 leading-relaxed">
-              You need to be signed in to send and receive messages on Webyalaya.
+              You need to be signed in to send and receive messages on We.
             </p>
           </div>
         </div>
@@ -100,7 +100,7 @@ export function ChatPage() {
             </div>
             <div>
               <h1 className="text-2xl font-bold tracking-tight text-gray-900">Messages</h1>
-              <p className="text-[13px] text-gray-500">Chat privately with anyone on Webyalaya</p>
+              <p className="text-[13px] text-gray-500">Chat privately with anyone on We</p>
             </div>
           </div>
         </div>
@@ -199,7 +199,7 @@ export function ChatPage() {
                       Your Messages
                     </h3>
                     <p className="text-[13px] text-gray-500 mb-7 leading-relaxed">
-                      Send private messages to anyone on Webyalaya. Collaborate, learn, and connect with peers around the world.
+                      Send private messages to anyone on We. Collaborate, learn, and connect with peers around the world.
                     </p>
                     <button
                       onClick={() => setShowNewChat(true)}

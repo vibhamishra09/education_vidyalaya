@@ -11,8 +11,8 @@ export function OfflineClient() {
         {/* Logo */}
         <div className="mb-8">
           <Image
-            src="/webyalaya-main-logo.svg"
-            alt="Webyalaya"
+            src="/we-main-logo.svg"
+            alt="We"
             width={200}
             height={50}
             className="mx-auto h-12 w-auto"
@@ -77,7 +77,7 @@ export function OfflineClient() {
 
       {/* Footer */}
       <p className="mt-8 text-xs text-gray-500 dark:text-gray-500">
-        Webyalaya will automatically reconnect when you&apos;re back online.
+        We will automatically reconnect when you&apos;re back online.
       </p>
     </div>
   );

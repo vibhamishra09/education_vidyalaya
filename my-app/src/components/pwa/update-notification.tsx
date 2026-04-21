@@ -131,7 +131,7 @@ export function UpdateNotification() {
                     Update Available
                   </h3>
                   <p className="text-sm text-muted-foreground mb-4">
-                    A new version of Webyalaya is available. Update now to get the latest features and improvements.
+                    A new version of We is available. Update now to get the latest features and improvements.
                   </p>
                   <div className="flex gap-2">
                     <Button

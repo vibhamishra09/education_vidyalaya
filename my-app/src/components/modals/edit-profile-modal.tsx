@@ -635,7 +635,7 @@ export function EditProfileModal({
               />
             </div>
             <p className="text-xs text-muted-foreground">
-              Set your hourly rate in Webya for teaching sessions. Leave empty or 0 to not display a rate.
+              Set your hourly rate in We for teaching sessions. Leave empty or 0 to not display a rate.
             </p>
           </div>
 

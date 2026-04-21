@@ -10,7 +10,7 @@ import { ToastProvider } from "@/contexts/toast-context";
 import { NotificationProvider } from "@/contexts/notification-context";
 import { ChatProvider } from "@/contexts/chat-context";
 import { AchievementNotificationProvider } from "@/contexts/achievement-notification-context";
-import { BottomNav } from "@/components/layout/bottom-nav";
+
 import { FloatingActionButtons } from "@/components/ui/floating-action-buttons";
 import { PushNotificationPrompt } from "@/components/notifications/push-notification-prompt";
 import { PushNotificationListener } from "@/components/notifications/push-notification-listener";
@@ -81,8 +81,8 @@ export const metadata: Metadata = {
   
   // Basic SEO
   title: {
-    default: "Webyalaya - Peer to Peer Learning Platform",
-    template: "%s | Webyalaya",
+    default: "We - Peer to Peer Learning Platform",
+    template: "%s | We",
   },
   description: "Connect with peers to learn and teach. Join study rooms, host sessions, earn Coins, and grow together in a collaborative learning community. Free peer-to-peer education platform.",
   keywords: [
@@ -99,11 +99,11 @@ export const metadata: Metadata = {
     "skill exchange",
     "knowledge sharing",
     "Coins",
-    "webyalaya",
+    "we",
   ],
-  authors: [{ name: "Webyalaya Team" }],
-  creator: "Webyalaya",
-  publisher: "Webyalaya",
+  authors: [{ name: "We Team" }],
+  creator: "We",
+  publisher: "We",
   
   // Robots - conditionally set based on environment
   // For test/dev environments, set noindex to prevent search engine indexing
@@ -140,15 +140,15 @@ export const metadata: Metadata = {
     type: "website",
     locale: "en_US",
     url: siteUrl,
-    siteName: "Webyalaya",
-    title: "Webyalaya - Peer to Peer Learning Platform",
+    siteName: "We",
+    title: "We - Peer to Peer Learning Platform",
     description: "Connect with peers to learn and teach. Join study rooms, host sessions, and grow together in a collaborative learning community.",
     images: [
       {
         url: "/og-image.svg",
         width: 1200,
         height: 630,
-        alt: "Webyalaya - Peer to Peer Learning Platform",
+        alt: "We - Peer to Peer Learning Platform",
         type: "image/svg+xml",
       },
     ],
@@ -157,28 +157,28 @@ export const metadata: Metadata = {
   // Twitter Card
   twitter: {
     card: "summary_large_image",
-    title: "Webyalaya - Peer to Peer Learning Platform",
+    title: "We - Peer to Peer Learning Platform",
     description: "Connect with peers to learn and teach. Join study rooms, host sessions, and grow together.",
     images: ["/og-image.svg"],
-    creator: "@webyalaya",
-    site: "@webyalaya",
+    creator: "@we",
+    site: "@we",
   },
   
   // Icons
   icons: {
     icon: [
-      { url: "/webyalaya-main-logo.svg", sizes: "any", type: "image/svg+xml" },
+      { url: "/we-main-logo.svg", sizes: "any", type: "image/svg+xml" },
       { url: "/icons/icon-192x192.svg", sizes: "192x192", type: "image/svg+xml" },
       { url: "/icons/icon-512x512.svg", sizes: "512x512", type: "image/svg+xml" },
     ],
-    shortcut: "/webyalaya-main-logo.svg",
+    shortcut: "/we-main-logo.svg",
     apple: [
       { url: "/apple-touch-icon.svg", sizes: "180x180", type: "image/svg+xml" },
     ],
     other: [
       {
         rel: "mask-icon",
-        url: "/webyalaya-main-logo.svg",
+        url: "/we-main-logo.svg",
         color: "#16a34a",
       },
     ],
@@ -191,7 +191,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Webyalaya",
+    title: "We",
   },
   
   // Format Detection
@@ -211,7 +211,7 @@ export const metadata: Metadata = {
   category: "education",
   
   // Additional
-  applicationName: "Webyalaya",
+  applicationName: "We",
   referrer: "origin-when-cross-origin",
   generator: "Next.js",
 };
@@ -226,16 +226,16 @@ export default function RootLayout({
       <html lang="en" suppressHydrationWarning>
         <head>
           {/* PWA Meta Tags */}
-          <meta name="application-name" content="Webyalaya" />
+          <meta name="application-name" content="We" />
           <meta name="mobile-web-app-capable" content="yes" />
           <meta name="apple-mobile-web-app-capable" content="yes" />
           <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-          <meta name="apple-mobile-web-app-title" content="Webyalaya" />
+          <meta name="apple-mobile-web-app-title" content="We" />
           <meta name="msapplication-TileColor" content="#16a34a" />
           <meta name="msapplication-tap-highlight" content="no" />
           
           {/* Explicit favicon to override defaults / cache issues */}
-          <link rel="icon" type="image/svg+xml" href="/webyalaya-main-logo.svg?v=3" />
+          <link rel="icon" type="image/svg+xml" href="/we-main-logo.svg?v=3" />
           <link rel="alternate icon" type="image/png" href="/favicon.png?v=3" />
           <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
           
@@ -256,7 +256,7 @@ export default function RootLayout({
         </head>
         <body
           suppressHydrationWarning={true}
-          className={`${inter.variable} ${harabara.variable} ${gotham.variable} relative min-h-screen bg-background text-foreground antialiased font-sans pb-16 md:pb-0`}
+          className={`${inter.variable} ${harabara.variable} ${gotham.variable} relative min-h-screen bg-background text-foreground antialiased font-sans`}
         >
           <BackgroundGradient />
           <QueryProvider>
@@ -267,7 +267,6 @@ export default function RootLayout({
                 <AchievementNotificationProvider>
                   <RemoteControlSync />
                   {children}
-                  <BottomNav />
                   <FloatingActionButtons />
                   <PushNotificationPrompt />
                   <PushNotificationListener />

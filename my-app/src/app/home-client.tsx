@@ -8,7 +8,7 @@ import { PlatformStats } from "@/components/sections/platform-stats";
 import { TestimonialsSlider } from "@/components/sections/testimonials-slider";
 import { StudyRoomCard } from "@/components/cards/study-room-card";
 import { DebateRoomCard } from "@/components/cards/debate-room-card";
-import { Footer } from "@/components/layout/footer";
+
 import { FadeIn } from "@/components/ui/fade-in";
 import { Button } from "@/components/ui/button";
 import { useStudyRooms, useJoinStudyRoom } from "@/hooks/use-study-rooms";
@@ -308,7 +308,7 @@ export function HomeClient() {
         <TestimonialsSlider />
       </main>
 
-      <Footer />
+
     </div>
   );
 }

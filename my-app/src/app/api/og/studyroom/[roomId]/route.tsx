@@ -123,7 +123,7 @@ export async function GET(
                 letterSpacing: "-0.5px",
               }}
             >
-              Webyalaya
+              We
             </span>
           </div>
           <div

@@ -25,25 +25,25 @@ export async function generateMetadata({
   }
 
   return {
-    title: `${userName}'s Profile | Webyalaya`,
-    description: `View ${userName}'s profile on Webyalaya. See their skills, ratings, reviews, and upcoming study rooms. Connect with peers for peer-to-peer learning.`,
+    title: `${userName}'s Profile | We`,
+    description: `View ${userName}'s profile on We. See their skills, ratings, reviews, and upcoming study rooms. Connect with peers for peer-to-peer learning.`,
     keywords: [
       "user profile",
       "peer profile",
       "tutor profile",
       "learner profile",
-      "webyalaya profile",
+      "we profile",
       "peer learning",
     ],
     openGraph: {
-      title: `${userName}'s Profile | Webyalaya`,
+      title: `${userName}'s Profile | We`,
       description: `View ${userName}'s profile and connect for peer-to-peer learning.`,
       url: `/profile/${userId}`,
       type: "profile",
     },
     twitter: {
       card: "summary",
-      title: `${userName}'s Profile | Webyalaya`,
+      title: `${userName}'s Profile | We`,
       description: `View ${userName}'s profile and connect for peer-to-peer learning.`,
     },
     robots: {

@@ -1055,7 +1055,7 @@ function DebateLiveContent({
       <div className="h-12 sm:h-14 bg-[#1f1f1f] border-b border-white/10 flex items-center justify-between gap-4 sm:gap-6 px-2 sm:px-4 flex-shrink-0">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
           <div className="relative h-6 w-6 sm:h-8 sm:w-8 flex-shrink-0">
-            <Image src="/webyalaya-main-logo.svg" alt="Webyalaya" fill className="object-contain" priority />
+            <Image src="/we-main-logo.svg" alt="We" fill className="object-contain" priority />
           </div>
           <div className="flex flex-col min-w-0 flex-1">
             <span className="text-white font-medium text-xs sm:text-sm truncate">{debateRoom.topic}</span>

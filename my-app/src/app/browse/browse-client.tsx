@@ -4,7 +4,7 @@ import Link from "next/link";
 import { SignInButton, useUser } from "@clerk/nextjs";
 import { ArrowLeft, Flame, Sparkles } from "lucide-react";
 import { Navigation } from "@/components/layout/navigation";
-import { Footer } from "@/components/layout/footer";
+
 import { ActivityFeed } from "@/components/dashboard/activity-feed";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -77,7 +77,7 @@ export function BrowseClient() {
         </div>
       </main>
 
-      <Footer />
+
     </div>
   );
 }

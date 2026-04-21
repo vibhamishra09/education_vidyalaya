@@ -450,7 +450,7 @@ export function AchievementArtwork({
       >
         <div className="min-w-0">
           <p className="truncate text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">
-            Webyalaya vault
+            We vault
           </p>
           <p className="mt-1 truncate text-sm font-semibold text-slate-900">
             {achievement.category} collectible

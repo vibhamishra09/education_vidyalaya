@@ -79,7 +79,7 @@ export function CoinDropdown({ coins = 0, isLoading = false }: CoinDropdownProps
               <Card className="shadow-lg">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-lg">
-                    <span>Webya Coins</span>
+                    <span>We Coins</span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
