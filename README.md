@@ -469,13 +469,8 @@ pnpm tsx test-achievement-flow.ts
 - [Backend Architecture](docs/02-backend/)
 - [Frontend Architecture](docs/03-frontend/)
 
-## 🐛 Known Issues & Roadmap
 
-See GitHub Issues for current bugs and feature requests.
 
-## 📞 Support
-
-For support, email support@webyalaya.com or join our community Discord.
 
 ---
 
